@@ -1,0 +1,268 @@
+"use client";
+
+import { Calculator, CircleDollarSign, Flame, PiggyBank, TrendingUp } from "lucide-react";
+import { NumericMoneyInput } from "@/components/NumericMoneyInput";
+import { useFireCalculator, type FireDisplayCurrency } from "@/components/FireCalculatorContext";
+
+/** Left column: inputs + drawdown controls (desktop 3-column layout). */
+export function FireCalculatorInputs() {
+  const {
+    currency,
+    setCurrency,
+    rateLoading,
+    currentSavingsNpr,
+    setCurrentSavingsNpr,
+    monthlySavingsNpr,
+    setMonthlySavingsNpr,
+    currentAge,
+    setCurrentAge,
+    annualReturnPct,
+    setAnnualReturnPct,
+    monthlyExpenseNpr,
+    setMonthlyExpenseNpr,
+    expenseInflationAnnualPct,
+    setExpenseInflationAnnualPct,
+    safeWithdrawalRatePct,
+    setSafeWithdrawalRatePct,
+    legacyMode,
+    setLegacyMode,
+    spenddownTargetAge,
+    setSpenddownTargetAge,
+    toNprFromKrw,
+    fromNprToKrw,
+  } = useFireCalculator();
+
+  const symbol = currency === "KRW" ? "₩" : "रु";
+
+  const displayAmount = (npr: number | undefined): number | undefined => {
+    if (npr == null || !Number.isFinite(npr)) return undefined;
+    return currency === "KRW" ? fromNprToKrw(npr) : npr;
+  };
+  const commitAmount = (displayVal: number | undefined): number | undefined => {
+    if (displayVal == null || !Number.isFinite(displayVal)) return undefined;
+    return currency === "KRW" ? toNprFromKrw(displayVal) : displayVal;
+  };
+
+  const savingsRateEstimate =
+    (monthlyExpenseNpr ?? 0) > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((monthlySavingsNpr ?? 0) / ((monthlySavingsNpr ?? 0) + (monthlyExpenseNpr ?? 0))) * 100,
+          ),
+        )
+      : 0;
+
+  return (
+    <section id="calculator" className="glass-card soft-gradient-border hover-lift rounded-[1.7rem] p-4 sm:p-5">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Calculator className="text-emerald-700" size={20} />
+          <div>
+            <h2 className="text-lg font-black leading-snug tracking-tight text-emerald-950 sm:text-xl">FIRE Calculator</h2>
+            <p className="text-xs font-bold leading-snug text-slate-500 sm:text-sm">
+              Live KRW + NPR retirement planning
+              {rateLoading ? <span className="ml-1 text-emerald-600"> · updating rate…</span> : null}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 rounded-full border border-emerald-100 bg-white/75 p-1 shadow-sm backdrop-blur">
+          {(["KRW", "NPR"] as FireDisplayCurrency[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setCurrency(item)}
+              className={`rounded-full px-3 py-1.5 text-xs font-black transition sm:py-2 sm:text-sm ${
+                currency === item ? "bg-emerald-700 text-white shadow-lg shadow-emerald-900/15" : "text-emerald-800 hover:bg-emerald-50"
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3.5 sm:space-y-4">
+        <NumericMoneyInput
+          label="Current savings"
+          prefix={symbol}
+          value={displayAmount(currentSavingsNpr)}
+          onChange={(value) => setCurrentSavingsNpr(commitAmount(value))}
+          placeholder="Enter amount"
+          variant="amount"
+        />
+        <NumericMoneyInput
+          label="Monthly savings"
+          prefix={symbol}
+          value={displayAmount(monthlySavingsNpr)}
+          onChange={(value) => setMonthlySavingsNpr(commitAmount(value))}
+          placeholder="Enter amount"
+          variant="amount"
+        />
+        <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-4">
+          <NumericMoneyInput
+            label="Current age"
+            value={currentAge}
+            onChange={setCurrentAge}
+            suffix="years"
+            variant="integer"
+            placeholder="Enter age"
+          />
+          <NumericMoneyInput
+            label="Annual return"
+            value={annualReturnPct}
+            onChange={setAnnualReturnPct}
+            suffix="%"
+            variant="percent"
+            placeholder="e.g. 10"
+          />
+        </div>
+        <NumericMoneyInput
+          label="Nepal monthly expense after retirement"
+          prefix={symbol}
+          value={displayAmount(monthlyExpenseNpr)}
+          onChange={(value) => setMonthlyExpenseNpr(commitAmount(value))}
+          placeholder="Enter amount"
+          variant="amount"
+        />
+
+        <div className="space-y-3 rounded-2xl border border-white/70 bg-white/65 p-3.5 shadow-sm backdrop-blur sm:space-y-4 sm:p-4">
+          <p className="text-[11px] font-black uppercase tracking-wide text-emerald-900">Wealth simulator (drawdown)</p>
+          <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-4">
+            <NumericMoneyInput
+              label="Retirement expense inflation (annual)"
+              value={expenseInflationAnnualPct}
+              onChange={setExpenseInflationAnnualPct}
+              suffix="%"
+              variant="percent"
+              placeholder="e.g. 3"
+            />
+            <NumericMoneyInput
+              label="Safe withdrawal rate (planning)"
+              value={safeWithdrawalRatePct}
+              onChange={setSafeWithdrawalRatePct}
+              suffix="% / yr"
+              variant="percent"
+              placeholder="e.g. 4"
+            />
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-slate-500 sm:text-sm">Legacy mode</span>
+            <select
+              value={legacyMode}
+              onChange={(e) => setLegacyMode(e.target.value as "default" | "perpetual" | "spenddown")}
+              className="w-full rounded-2xl border border-white/70 bg-white/90 px-3 py-2.5 text-xs font-black text-emerald-950 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:px-4 sm:py-3 sm:text-sm"
+            >
+              <option value="default">Default — full inflation-tracked spending</option>
+              <option value="perpetual">Preserve — cap monthly draw to SWR × portfolio</option>
+              <option value="spenddown">Spend down — raise draws to target emptying by age</option>
+            </select>
+          </label>
+          {legacyMode === "spenddown" ? (
+            <NumericMoneyInput
+              label="Spend-down target age"
+              value={spenddownTargetAge}
+              onChange={(n) =>
+                setSpenddownTargetAge(
+                  n === undefined ? undefined : Math.round(Math.max((currentAge ?? 30) + 2, n)),
+                )
+              }
+              suffix="years"
+              variant="integer"
+              placeholder="e.g. 92"
+            />
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-emerald-100/70 bg-emerald-50/80 p-3 sm:p-3.5">
+          <div className="mb-1.5 flex justify-between text-xs font-black text-emerald-900 sm:text-sm">
+            <span>Estimated savings strength</span>
+            <span>{savingsRateEstimate}%</span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-white sm:h-3">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-700 to-lime-400 transition-all duration-700 ease-out"
+              style={{ width: `${savingsRateEstimate}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Center column: FIRE age, 2×2 metrics, progress (desktop 3-column layout). */
+export function FireRetirementProjection() {
+  const { result, formatMoney, wealthParams } = useFireCalculator();
+  const passiveMonthlyNpr = (result.projectedCorpusNpr * wealthParams.safeWithdrawalRatePct) / 100 / 12;
+
+  return (
+    <section className="glass-card soft-gradient-border hover-lift rounded-[1.7rem] p-4 sm:p-5">
+      <div className="w-full space-y-4 text-center">
+        <p className="text-sm font-black text-emerald-950 sm:text-base">Your Retirement Projection</p>
+
+        <div className="rounded-2xl border border-white/60 bg-gradient-to-br from-emerald-50/90 to-white/75 p-3.5 text-center shadow-inner shadow-emerald-950/5 backdrop-blur sm:p-4">
+          <p className="text-xs font-bold text-slate-500 sm:text-sm">Dynamic FIRE age</p>
+          <p className="mt-0.5 text-3xl font-black tracking-tight text-emerald-800 sm:text-4xl lg:text-[2.35rem] lg:leading-tight xl:text-4xl">
+            {result.fireAge}{" "}
+            <span className="text-sm font-bold text-slate-500 sm:text-base">years old</span>
+          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
+            {result.monthsToFire === 0
+              ? "You are already at your FIRE corpus target."
+              : `${result.yearsToFire.toFixed(1)} years until financial independence in Nepal.`}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+          {[
+            ["Required corpus", formatMoney(result.requiredCorpusNpr), CircleDollarSign],
+            ["Projected corpus", formatMoney(result.projectedCorpusNpr), TrendingUp],
+            ["Monthly passive income (at SWR)", formatMoney(passiveMonthlyNpr), PiggyBank],
+            ["Years until FIRE", result.monthsToFire === 0 ? "Ready now" : `${result.yearsToFire.toFixed(1)} years`, Flame],
+          ].map(([label, value, Icon]) => {
+            const MetricIcon = Icon as typeof CircleDollarSign;
+
+            return (
+              <div
+                key={label as string}
+                className="rounded-xl border border-white/70 bg-white/75 p-3 text-left shadow-sm backdrop-blur transition-shadow hover:bg-white hover:shadow-md sm:p-3.5"
+              >
+                <MetricIcon className="mb-1.5 text-emerald-700" size={16} />
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:text-[11px]">{label as string}</p>
+                <p className="mt-1 text-sm font-black leading-tight text-emerald-950 sm:text-base">{value as string}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-white/65 bg-white/55 p-2.5 text-left shadow-sm backdrop-blur-sm sm:p-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-black text-emerald-950 sm:text-xs">Progress toward FIRE</span>
+            <span className="shrink-0 tabular-nums text-xs font-black text-emerald-800 sm:text-sm">{result.progressPct}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/85 ring-1 ring-emerald-950/5 sm:h-2">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-600/85 via-emerald-500/75 to-lime-300/90 transition-all duration-700 ease-out"
+              style={{ width: `${result.progressPct}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500 sm:text-[11px]">
+            Required corpus = annual Nepal retirement expense × 25. Chart uses inflation on expenses after FIRE and your
+            SWR setting for passive-income display.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Stacked calculator + projection (e.g. narrow viewports). */
+export function FireCalculator() {
+  return (
+    <div className="flex min-w-0 flex-col gap-6">
+      <FireCalculatorInputs />
+      <FireRetirementProjection />
+    </div>
+  );
+}
