@@ -2,6 +2,9 @@
 
 export const FN_SESSION_COOKIE = "fn_session";
 
+/** Signed payload for legacy email OTP before account activation (httpOnly). */
+export const FN_PENDING_VERIFY_COOKIE = "fn_pending_verify";
+
 /** max-age seconds for httpOnly session cookie (remember me) */
 export const FN_SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30;
 

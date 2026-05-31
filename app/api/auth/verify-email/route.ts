@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { FN_SESSION_COOKIE, FN_SESSION_MAX_AGE_SEC } from "@/auth/constants";
+import { FN_PENDING_VERIFY_COOKIE, FN_SESSION_COOKIE, FN_SESSION_MAX_AGE_SEC } from "@/auth/constants";
 import { getAuthSecret } from "@/auth/server/env";
+import { parsePendingVerifyCookie } from "@/auth/server/pending-verify-cookie";
 import { signUserSession } from "@/auth/server/session-token";
 import { toPublicUser, toSessionClaims, verifyOtpAndActivate } from "@/auth/server/user-store";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
@@ -12,6 +14,16 @@ type Body = {
   code?: string;
 };
 
+function clearPendingCookie(res: NextResponse) {
+  res.cookies.set(FN_PENDING_VERIFY_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
 export async function POST(req: Request) {
   let body: Body;
   try {
@@ -22,14 +34,25 @@ export async function POST(req: Request) {
 
   const email = typeof body.email === "string" ? body.email : "";
   const code = typeof body.code === "string" ? body.code : "";
-  const result = verifyOtpAndActivate(email, code);
+  const secret = getAuthSecret();
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(FN_PENDING_VERIFY_COOKIE)?.value;
+  const pending = parsePendingVerifyCookie(raw, secret);
+
+  const result = verifyOtpAndActivate(email, code, pending, secret);
+
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    const res = NextResponse.json({ error: result.error }, { status: 400 });
+    if (!pending && raw) {
+      clearPendingCookie(res);
+    }
+    return res;
   }
 
   const user: ProductAuthUser = toPublicUser(result.user);
-  const token = signUserSession(toSessionClaims(result.user), getAuthSecret());
+  const token = signUserSession(toSessionClaims(result.user), secret);
   const res = NextResponse.json({ user });
+  clearPendingCookie(res);
   res.cookies.set(FN_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

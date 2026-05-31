@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { startOrRefreshSignup } from "@/auth/server/user-store";
+import { FN_PENDING_VERIFY_COOKIE } from "@/auth/constants";
+import { getAuthSecret } from "@/auth/server/env";
+import { buildPendingSignupCookie, OTP_TTL_MS } from "@/auth/server/pending-verify-cookie";
+import { sendSignupVerificationOtpEmail } from "@/auth/server/verification-email";
+import { isEmailRegistered } from "@/auth/server/user-store";
+import { isResendApiKeyConfigured } from "@/lib/resend-api";
 
 export const runtime = "nodejs";
 
@@ -12,6 +17,18 @@ type Body = {
   confirmPassword?: string;
   avatarUrl?: string | null;
 };
+
+const PENDING_COOKIE_BASE = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: Math.floor(OTP_TTL_MS / 1000),
+  secure: process.env.NODE_ENV === "production",
+};
+
+function pendingCookieOptions(): typeof PENDING_COOKIE_BASE {
+  return PENDING_COOKIE_BASE;
+}
 
 export async function POST(req: Request) {
   let body: Body;
@@ -44,13 +61,51 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
   }
 
-  const started = startOrRefreshSignup({ name, email, password, avatarUrl });
-  if (!started.ok) {
-    return NextResponse.json({ error: started.error }, { status: 400 });
+  if (isEmailRegistered(email)) {
+    return NextResponse.json({ error: "An account with this email already exists." }, { status: 400 });
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    console.info(`[FIRE Nepal auth] Email verification OTP for ${started.email}: ${started.otp}`);
+  const secret = getAuthSecret();
+  const built = buildPendingSignupCookie({ secret, name, email, password, avatarUrl });
+  if (!built.ok) {
+    return NextResponse.json({ error: built.error }, { status: 400 });
+  }
+
+  const isProd = process.env.NODE_ENV === "production";
+  const minutes = Math.ceil(OTP_TTL_MS / 60_000);
+
+  if (isProd && !isResendApiKeyConfigured()) {
+    console.error(
+      "[FIRE Nepal auth][signup]",
+      JSON.stringify({
+        event: "blocked_missing_resend",
+        reason: "RESEND_API_KEY is required in production to deliver verification OTPs.",
+      }),
+    );
+    return NextResponse.json(
+      {
+        error:
+          "Email verification is not configured on the server. Add RESEND_API_KEY and RESEND_FROM_EMAIL (or EMAIL_FROM) in Vercel project settings.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (!isProd && !isResendApiKeyConfigured()) {
+    console.info(`[FIRE Nepal auth][signup] dev OTP (no RESEND_API_KEY) for ${built.email}: ${built.otp}`);
+  } else {
+    const sendRes = await sendSignupVerificationOtpEmail({
+      toEmail: built.email,
+      name,
+      otp: built.otp,
+      expiresInMinutes: minutes,
+    });
+    if (!sendRes.ok) {
+      return NextResponse.json(
+        { error: `Verification email could not be sent. ${sendRes.message}` },
+        { status: 502 },
+      );
+    }
   }
 
   const resBody: {
@@ -60,12 +115,14 @@ export async function POST(req: Request) {
     devCode?: string;
   } = {
     needsVerification: true,
-    email: started.email,
-    expiresAt: started.expiresAt,
+    email: built.email,
+    expiresAt: built.expiresAt,
   };
   if (process.env.NODE_ENV !== "production") {
-    resBody.devCode = started.otp;
+    resBody.devCode = built.otp;
   }
 
-  return NextResponse.json(resBody);
+  const res = NextResponse.json(resBody);
+  res.cookies.set(FN_PENDING_VERIFY_COOKIE, built.cookieValue, pendingCookieOptions());
+  return res;
 }

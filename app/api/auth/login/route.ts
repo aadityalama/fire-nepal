@@ -1,8 +1,15 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { FN_SESSION_COOKIE, FN_SESSION_MAX_AGE_SEC, FN_SESSION_SHORT_AGE_SEC } from "@/auth/constants";
+import {
+  FN_PENDING_VERIFY_COOKIE,
+  FN_SESSION_COOKIE,
+  FN_SESSION_MAX_AGE_SEC,
+  FN_SESSION_SHORT_AGE_SEC,
+} from "@/auth/constants";
 import { getAuthSecret } from "@/auth/server/env";
+import { pendingCookieActiveForEmail } from "@/auth/server/pending-verify-cookie";
 import { signUserSession } from "@/auth/server/session-token";
-import { assertLogin, hasPendingVerification, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
+import { assertLogin, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
 
 export const runtime = "nodejs";
@@ -32,9 +39,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
   }
 
-  if (hasPendingVerification(email)) {
+  const secret = getAuthSecret();
+  const cookieStore = await cookies();
+  const pendingRaw = cookieStore.get(FN_PENDING_VERIFY_COOKIE)?.value;
+  if (pendingCookieActiveForEmail(pendingRaw, secret, email)) {
     return NextResponse.json(
-      { error: "Verify your email to activate this account. Use the link from sign up, or open the verification page." },
+      {
+        error:
+          "Verify your email to activate this account. Use the code we sent, or open the verification page and resend.",
+      },
       { status: 403 },
     );
   }
@@ -45,7 +58,7 @@ export async function POST(req: Request) {
   }
 
   const user: ProductAuthUser = toPublicUser(stored);
-  const token = signUserSession(toSessionClaims(stored), getAuthSecret());
+  const token = signUserSession(toSessionClaims(stored), secret);
   const maxAge = rememberMe ? FN_SESSION_MAX_AGE_SEC : FN_SESSION_SHORT_AGE_SEC;
   const res = NextResponse.json({ user });
   res.cookies.set(FN_SESSION_COOKIE, token, {

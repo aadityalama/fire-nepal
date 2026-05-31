@@ -32,13 +32,7 @@ export type SmartLoanReminderLog = {
   message: string;
 };
 
-type ResendEmailPayload = {
-  from: string;
-  to: string[];
-  subject: string;
-  html: string;
-  text: string;
-};
+import { resolveResendFromAddress, sendEmailViaResend } from "@/lib/resend-api";
 
 type EmailTheme = {
   name: "upcoming" | "today" | "overdue";
@@ -280,27 +274,6 @@ ${FIRE_NEPAL_SUPPORT_EMAIL}
   return { subject: buildSubject(loan), text, html };
 }
 
-async function sendResendEmail(payload: ResendEmailPayload) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return { ok: false, status: 0, message: "RESEND_API_KEY is not configured" };
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.ok) return { ok: true, status: response.status, message: "Email sent" };
-
-  const details = await response.text();
-  return { ok: false, status: response.status, message: details || "Email provider rejected the request" };
-}
-
 function makeLog(
   loan: SmartLoanReminderInput,
   recipient: string,
@@ -323,7 +296,7 @@ function makeLog(
 }
 
 export async function dispatchSmartLoanReminders(loans: SmartLoanReminderInput[]) {
-  const from = process.env.RESEND_FROM_EMAIL || "FIRE Nepal <reminders@fire-nepal.com>";
+  const from = resolveResendFromAddress();
   const dueLoans = loans.filter((loan) => loan.remainingAmount > 0 && shouldSendSmartLoanReminder(loan.daysUntilDue));
   const logs: SmartLoanReminderLog[] = [];
 
@@ -341,7 +314,7 @@ export async function dispatchSmartLoanReminders(loans: SmartLoanReminderInput[]
 
     for (const recipient of recipients) {
       try {
-        const result = await sendResendEmail({
+        const result = await sendEmailViaResend({
           from,
           to: [recipient.email],
           subject: email.subject,
