@@ -276,7 +276,7 @@ function buildSuggestions(s: UnifiedFireSummary, pillars: FinancialHealthPillars
     out.push("Diversify across asset classes — consider property, metals, or safer sleeves so growth isn't single-bucket concentrated.");
   }
   if (pillars.retirementReadiness < 55) {
-    out.push("Improve retirement readiness — consolidate Korea/NPS/SSF rows and bump employer + voluntary contributions.");
+    out.push("Improve retirement readiness — consolidate Korea/NPS/public pension rows and bump employer + voluntary contributions.");
   }
   if (out.length === 0) {
     out.push("Keep refreshing Portfolio + Cashflow monthly — small edits compound into clearer FIRE decisions.");

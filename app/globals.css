@@ -37,6 +37,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html[data-homepage-language="np"] body {
+  font-family:
+    var(--font-devanagari, "Noto Sans Devanagari"), "Noto Sans Devanagari", "Kohinoor Devanagari", "Mangal",
+    "Nirmala UI", Inter, "SF Pro Display", "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
 @media (max-width: 640px) {
   body {
     font-size: 1rem;
@@ -145,6 +152,21 @@ input {
 
 .glow-button:hover {
   box-shadow: 0 22px 48px rgba(0, 122, 61, 0.3), 0 0 0 7px rgba(16, 185, 129, 0.08);
+}
+
+.security-score-fill {
+  width: 96%;
+  animation: security-score-fill 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes security-score-fill {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 96%;
+  }
 }
 
 .floating-widget {

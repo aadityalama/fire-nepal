@@ -1,0 +1,12 @@
+import type { Metadata } from "next";
+import { LumpsumCalculatorDashboard } from "@/components/LumpsumCalculatorDashboard";
+
+export const metadata: Metadata = {
+  title: "Lumpsum Calculator | FIRE Nepal",
+  description:
+    "Premium FIRE Nepal lumpsum investment calculator with KRW/NPR support, compound growth charts, inflation-adjusted projections, and Nepal retirement planning.",
+};
+
+export default function LumpsumCalculatorPage() {
+  return <LumpsumCalculatorDashboard />;
+}

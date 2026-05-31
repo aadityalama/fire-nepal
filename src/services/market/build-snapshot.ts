@@ -91,7 +91,7 @@ export async function buildMarketSnapshot(opts: {
       const q = await fetchYahooLast(sym);
       if (q) {
         krOk++;
-        krEquities[sym] = { symbol: sym, lastKrw: q.last };
+        krEquities[sym] = { symbol: sym, lastKrw: q.last, changePct: q.changePct };
       }
     }),
   );

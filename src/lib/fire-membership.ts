@@ -208,6 +208,18 @@ export const BILLING_PIPELINE = [
   "Trials: subscription `trialing` + `trial_end` mirrored into `trialEndsAt`",
 ] as const;
 
+/** Elite tier — merged family + education positioning (card + comparison table). */
+export const ELITE_FAMILY_WEALTH_FEATURE_LABEL = "Family Wealth Planning + Child Education" as const;
+
+/** Conceptual scope shown in popover / tooltips (not separate card lines). */
+export const ELITE_FAMILY_WEALTH_DETAILS = [
+  "Child education planner",
+  "School fee reminders",
+  "Educational progress tracking",
+  "Family financial timeline",
+  "Education fund tracking",
+] as const;
+
 export const TIER_CATALOG: Record<
   FireMembershipTier,
   { tagline: string; bullets: string[]; priceLabel: string }
@@ -235,15 +247,16 @@ export const TIER_CATALOG: Record<
     ],
   },
   elite: {
-    tagline: "Prestige — HNW & power users.",
+    tagline: "Institutional depth · private-client controls.",
     priceLabel: "From ~ NPR 1,999 / mo (placeholder)",
     bullets: [
-      "Bloomberg-style terminal layer",
-      "Advanced AI wealth strategy",
-      "Retirement stress testing",
-      "Family wealth dashboard",
-      "Advanced automation & unlimited AI tools",
-      "Priority roadmap + support",
+      "AI Wealth Dashboard",
+      ELITE_FAMILY_WEALTH_FEATURE_LABEL,
+      "Nepal Return Simulator",
+      "Real Estate Intelligence",
+      "AI Portfolio Allocation",
+      "Private Advisory Tools",
+      "Business Finance Suite",
     ],
   },
 };

@@ -80,6 +80,7 @@ export type UsdInstrumentTick = {
 export type KrwInstrumentTick = {
   symbol: string;
   lastKrw: number;
+  changePct?: number;
 };
 
 export type CryptoTick = {

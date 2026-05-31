@@ -1,12 +1,14 @@
 "use client";
 
-import { BadgeCheck, Check, Crown, Gem, Sparkles, Zap } from "lucide-react";
+import { BadgeCheck, Check, Crown, Gem, Info, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   BILLING_PIPELINE,
+  ELITE_FAMILY_WEALTH_DETAILS,
+  ELITE_FAMILY_WEALTH_FEATURE_LABEL,
   STRIPE_PRICE_PLACEHOLDERS,
   TIER_CATALOG,
   TIER_DISPLAY,
@@ -33,22 +35,73 @@ const COMPARE_ROWS: { key: string; free: CompareCell; premium: CompareCell; elit
   { key: "sim", label: "Advanced simulations", free: false, premium: true, elite: true },
   { key: "sync", label: "Cloud sync", free: false, premium: true, elite: true },
   { key: "pdf", label: "PDF reports", free: false, premium: true, elite: true },
-  { key: "bbg", label: "Bloomberg-style terminal layer", free: false, premium: false, elite: true },
-  { key: "ailab", label: "AI scenario lab & forecasting", free: false, premium: false, elite: true },
-  { key: "stress", label: "Retirement stress testing", free: false, premium: false, elite: true },
-  { key: "family", label: "Family wealth dashboard", free: false, premium: false, elite: true },
-  { key: "auto", label: "Advanced automation", free: false, premium: false, elite: true },
-  { key: "support", label: "Priority support", free: false, premium: false, elite: true },
+  { key: "elite_ai_dash", label: "AI Wealth Dashboard", free: false, premium: false, elite: true },
+  { key: "elite_family", label: ELITE_FAMILY_WEALTH_FEATURE_LABEL, free: false, premium: false, elite: true },
+  { key: "elite_nepal", label: "Nepal Return Simulator", free: false, premium: false, elite: true },
+  { key: "elite_rei", label: "Real Estate Intelligence", free: false, premium: false, elite: true },
+  { key: "elite_alloc", label: "AI Portfolio Allocation", free: false, premium: false, elite: true },
+  { key: "elite_advisory", label: "Private Advisory Tools", free: false, premium: false, elite: true },
+  { key: "elite_biz", label: "Business Finance Suite", free: false, premium: false, elite: true },
 ];
 
-function CellIcon({ on }: { on: CompareCell }) {
+function EliteFamilyWealthBullet({ checkClass }: { checkClass: string }) {
+  const popoverId = `elite-family-scope-${useId().replace(/:/g, "")}`;
+
+  return (
+    <li className="relative flex min-h-[2.25rem] items-start gap-2.5 rounded-lg border-l border-amber-400/35 bg-amber-500/[0.04] py-2 pl-3 pr-1 sm:min-h-0">
+      <Check className={`mt-0.5 h-4 w-4 shrink-0 ${checkClass}`} size={16} strokeWidth={3} aria-hidden />
+      <span
+        className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug tracking-tight text-amber-50/95 sm:text-sm"
+        title={ELITE_FAMILY_WEALTH_FEATURE_LABEL}
+      >
+        {ELITE_FAMILY_WEALTH_FEATURE_LABEL}
+      </span>
+      <button
+        type="button"
+        popoverTarget={popoverId}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-amber-400/30 bg-amber-500/[0.08] text-amber-200/95 shadow-sm transition hover:border-amber-300/50 hover:bg-amber-500/18 hover:text-amber-50"
+        aria-label="View family & education planning scope"
+      >
+        <Info size={14} strokeWidth={2.5} aria-hidden />
+      </button>
+      <div
+        id={popoverId}
+        popover="auto"
+        className="z-[120] m-4 max-h-[min(70vh,22rem)] w-[min(18.5rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-amber-500/35 bg-[#060d0a]/95 p-4 text-left text-zinc-100 shadow-[0_28px_80px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+      >
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200/85">Inside this suite</p>
+        <ul className="mt-3 space-y-2 border-t border-amber-500/15 pt-3">
+          {ELITE_FAMILY_WEALTH_DETAILS.map((line) => (
+            <li key={line} className="flex gap-2 text-[11px] font-semibold leading-snug text-zinc-200 sm:text-xs">
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-400/80" aria-hidden />
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[10px] font-medium leading-relaxed text-zinc-500">
+          One line on your card — full desk depth when you need it.
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function CellIcon({ on, tone = "emerald" }: { on: CompareCell; tone?: "emerald" | "amber" }) {
   if (on === "limited")
     return (
       <span className="text-[10px] font-black uppercase text-amber-200/90" title="Limited on Free">
         Limited
       </span>
     );
-  if (on) return <Check className="mx-auto text-emerald-400" size={18} strokeWidth={3} aria-label="Included" />;
+  if (on)
+    return (
+      <Check
+        className={tone === "amber" ? "mx-auto text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.35)]" : "mx-auto text-emerald-400"}
+        size={18}
+        strokeWidth={3}
+        aria-label="Included"
+      />
+    );
   return <span className="text-zinc-600">—</span>;
 }
 
@@ -173,49 +226,83 @@ export function FireMembershipPage() {
 
       <div>
         <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-300/70">Choose your tier</h2>
-        <div className="mt-5 grid gap-5 lg:grid-cols-3">
+        <div className="mt-5 grid gap-6 sm:gap-5 lg:grid-cols-3 lg:items-stretch">
           {(["free", "premium", "elite"] as const).map((t, i) => {
             const cat = TIER_CATALOG[t];
             const activeCard = tier === t;
             const delay = i * 80;
+            const isElite = t === "elite";
+            const baseCard =
+              "animate-fade-up relative flex h-full min-h-0 flex-col rounded-[1.5rem] border p-6 sm:p-7 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-all duration-300 ease-out";
+            const eliteCard = isElite
+              ? activeCard
+                ? "border-amber-400/45 bg-gradient-to-b from-amber-500/[0.14] via-[#0a1610] to-[#04140f] ring-1 ring-amber-400/30 shadow-[0_28px_72px_rgba(0,0,0,0.5),0_0_0_1px_rgba(251,191,36,0.08)_inset] hover:-translate-y-1.5 hover:border-amber-300/50 hover:shadow-[0_36px_88px_rgba(0,0,0,0.55),0_0_42px_rgba(245,158,11,0.12)]"
+                : "border-amber-500/25 bg-gradient-to-b from-amber-950/40 via-[#07140f] to-[#04140f]/95 hover:-translate-y-1.5 hover:border-amber-400/40 hover:shadow-[0_32px_80px_rgba(0,0,0,0.5),0_0_36px_rgba(245,158,11,0.1)]"
+              : activeCard
+                ? "border-emerald-400/50 bg-gradient-to-b from-emerald-500/15 to-[#04140f]/95 ring-1 ring-emerald-400/30 hover:-translate-y-0.5"
+                : "border-white/10 bg-[#061912]/90 hover:-translate-y-0.5 hover:border-emerald-500/25";
             return (
-              <div
-                key={t}
-                style={{ animationDelay: `${delay}ms` }}
-                className={`animate-fade-up relative flex flex-col rounded-[1.5rem] border p-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:-translate-y-1 ${
-                  activeCard
-                    ? "border-emerald-400/50 bg-gradient-to-b from-emerald-500/15 to-[#04140f]/95 ring-1 ring-emerald-400/30"
-                    : "border-white/10 bg-[#061912]/90 hover:border-emerald-500/25"
-                }`}
-              >
-                {t === "elite" ? (
-                  <div className="absolute -top-3 right-4 rounded-full border border-amber-400/40 bg-amber-500/20 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-amber-100">
+              <div key={t} style={{ animationDelay: `${delay}ms` }} className={`${baseCard} ${eliteCard}`}>
+                {isElite ? (
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+                ) : null}
+                {isElite ? (
+                  <div className="absolute -top-3 right-4 rounded-full border border-amber-400/45 bg-gradient-to-r from-amber-500/30 to-amber-600/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-50 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
                     Top tier
                   </div>
                 ) : null}
-                <div className="flex items-center gap-2">
-                  {t === "elite" ? <Crown className="text-amber-300" size={22} /> : null}
-                  {t === "premium" ? <Gem className="text-emerald-300" size={22} /> : null}
-                  {t === "free" ? <Sparkles className="text-zinc-400" size={22} /> : null}
-                  <h3 className="text-xl font-black text-white">{TIER_DISPLAY[t].label}</h3>
+                <div className="flex min-w-0 items-center gap-2">
+                  {isElite ? <Crown className="shrink-0 text-amber-300 drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]" size={22} /> : null}
+                  {t === "premium" ? <Gem className="shrink-0 text-emerald-300" size={22} /> : null}
+                  {t === "free" ? <Sparkles className="shrink-0 text-zinc-400" size={22} /> : null}
+                  <h3 className="min-w-0 truncate text-xl font-black tracking-tight text-white">{TIER_DISPLAY[t].label}</h3>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-zinc-400">{cat.tagline}</p>
-                <p className="mt-4 text-2xl font-black text-white">{cat.priceLabel}</p>
-                <ul className="mt-5 flex-1 space-y-2.5 text-sm text-emerald-100/80">
-                  {cat.bullets.map((b) => (
-                    <li key={b} className="flex gap-2">
-                      <Check className="mt-0.5 shrink-0 text-emerald-400" size={16} strokeWidth={3} />
-                      <span>{b}</span>
-                    </li>
-                  ))}
+                <p className="mt-3 min-h-[2.75rem] text-sm font-semibold leading-snug text-zinc-400 sm:min-h-[2.5rem]">{cat.tagline}</p>
+                <p
+                  className={`mt-4 text-2xl font-black tracking-tight text-white tabular-nums ${isElite ? "text-amber-50/95" : ""}`}
+                >
+                  {cat.priceLabel}
+                </p>
+                <ul className="mt-6 flex flex-1 flex-col gap-3">
+                  {cat.bullets.map((b) =>
+                    b === ELITE_FAMILY_WEALTH_FEATURE_LABEL && isElite ? (
+                      <EliteFamilyWealthBullet key={b} checkClass="text-amber-400" />
+                    ) : (
+                      <li
+                        key={b}
+                        className={`flex min-h-[2.25rem] items-start gap-2.5 rounded-lg sm:min-h-0 ${
+                          isElite ? "border-l border-amber-400/35 bg-amber-500/[0.04] py-2 pl-3 pr-1" : ""
+                        }`}
+                      >
+                        <Check
+                          className={`mt-0.5 h-4 w-4 shrink-0 ${isElite ? "text-amber-400" : "text-emerald-400"}`}
+                          size={16}
+                          strokeWidth={3}
+                          aria-hidden
+                        />
+                        <span
+                          className={`min-w-0 flex-1 truncate text-[13px] font-semibold leading-snug tracking-tight sm:text-sm ${
+                            isElite ? "text-amber-50/95" : "text-emerald-100/85"
+                          }`}
+                          title={b}
+                        >
+                          {b}
+                        </span>
+                      </li>
+                    ),
+                  )}
                 </ul>
                 <button
                   type="button"
                   onClick={() => onSelectTier(t)}
-                  className={`mt-8 w-full rounded-xl py-3.5 text-sm font-black transition ${
-                    activeCard
-                      ? "border border-emerald-400/40 bg-emerald-500/20 text-emerald-50"
-                      : "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg hover:brightness-110"
+                  className={`mt-auto flex w-full items-center justify-center rounded-xl border px-4 pb-3.5 pt-8 text-sm font-black transition ${
+                    isElite
+                      ? activeCard
+                        ? "border border-amber-400/45 bg-amber-500/20 text-amber-50 hover:bg-amber-500/28"
+                        : "border border-amber-500/30 bg-gradient-to-r from-amber-500/25 to-amber-600/15 text-amber-50 shadow-[0_12px_32px_rgba(0,0,0,0.35)] hover:border-amber-400/45 hover:brightness-110"
+                      : activeCard
+                        ? "border border-emerald-400/40 bg-emerald-500/20 text-emerald-50"
+                        : "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg hover:brightness-110"
                   }`}
                 >
                   {activeCard ? "Current plan" : t === "free" ? "Use Free" : `Select ${TIER_DISPLAY[t].label}`}
@@ -260,7 +347,7 @@ export function FireMembershipPage() {
           </span>
         </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-left text-sm">
+          <table className="w-full min-w-[580px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 text-[10px] font-black uppercase tracking-wider text-zinc-500">
                 <th className="pb-3 pr-4">Capability</th>
@@ -270,20 +357,37 @@ export function FireMembershipPage() {
               </tr>
             </thead>
             <tbody className="text-zinc-200">
-              {COMPARE_ROWS.map((row) => (
-                <tr key={row.key} className="border-b border-white/5">
-                  <td className="py-3 pr-4 font-semibold text-white">{row.label}</td>
-                  <td className="py-3 pr-4 text-center">
-                    <CellIcon on={row.free} />
-                  </td>
-                  <td className="py-3 pr-4 text-center">
-                    <CellIcon on={row.premium} />
-                  </td>
-                  <td className="py-3 text-center">
-                    <CellIcon on={row.elite} />
-                  </td>
-                </tr>
-              ))}
+              {COMPARE_ROWS.map((row) => {
+                const eliteExclusive = row.free === false && row.premium === false && row.elite === true;
+                return (
+                  <tr
+                    key={row.key}
+                    className={`border-b border-white/5 ${eliteExclusive ? "bg-gradient-to-r from-amber-500/[0.07] via-transparent to-transparent" : ""}`}
+                  >
+                    <td className="min-w-[12rem] max-w-[min(52vw,20rem)] py-3 pr-4 font-semibold text-white sm:max-w-none sm:min-w-[16rem]">
+                      <span
+                        className={`block truncate sm:whitespace-nowrap ${eliteExclusive ? "text-amber-50/95" : ""}`}
+                        title={
+                          row.key === "elite_family"
+                            ? [ELITE_FAMILY_WEALTH_FEATURE_LABEL, "", ...ELITE_FAMILY_WEALTH_DETAILS.map((d) => `· ${d}`)].join("\n")
+                            : row.label
+                        }
+                      >
+                        {row.label}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-center">
+                      <CellIcon on={row.free} />
+                    </td>
+                    <td className="py-3 pr-4 text-center">
+                      <CellIcon on={row.premium} />
+                    </td>
+                    <td className="py-3 text-center">
+                      <CellIcon on={row.elite} tone={eliteExclusive ? "amber" : "emerald"} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

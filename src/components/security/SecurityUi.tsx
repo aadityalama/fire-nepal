@@ -52,7 +52,7 @@ export function SecurityShieldIcon({ className = "" }: { className?: string }) {
 
 export function TrustBullet({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) {
   return (
-    <div className="flex gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm transition hover:border-emerald-400/25 hover:bg-white/[0.07]">
+    <div className="flex h-full min-h-0 gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm transition hover:border-emerald-400/25 hover:bg-white/[0.07]">
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500/15 text-emerald-700">
         <Icon size={20} />
       </div>

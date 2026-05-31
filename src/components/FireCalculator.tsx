@@ -4,6 +4,10 @@ import { Calculator, CircleDollarSign, Flame, PiggyBank, TrendingUp } from "luci
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { useFireCalculator, type FireDisplayCurrency } from "@/components/FireCalculatorContext";
 
+/** Shared shell for homepage FIRE trio (inputs · projection · chart). */
+export const FIRE_CALCULATOR_PANEL_CLASS =
+  "glass-card soft-gradient-border hover-lift fire-calculator-panel ring-1 ring-emerald-950/[0.045] transition-[box-shadow,transform,border-color] duration-300 ease-out dark:ring-emerald-500/12 rounded-[1.65rem]";
+
 /** Left column: inputs + drawdown controls (desktop 3-column layout). */
 export function FireCalculatorInputs() {
   const {
@@ -54,19 +58,27 @@ export function FireCalculatorInputs() {
       : 0;
 
   return (
-    <section id="calculator" className="glass-card soft-gradient-border hover-lift rounded-[1.7rem] p-4 sm:p-5">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-center gap-2">
-          <Calculator className="text-emerald-700" size={20} />
-          <div>
-            <h2 className="text-lg font-black leading-snug tracking-tight text-emerald-950 sm:text-xl">FIRE Calculator</h2>
+    <section
+      aria-labelledby="fire-calculator-heading"
+      className={`${FIRE_CALCULATOR_PANEL_CLASS} flex h-full min-h-0 flex-col p-5 sm:p-6`}
+    >
+      <div className="mb-4 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+          <Calculator className="mt-0.5 shrink-0 text-emerald-700 sm:mt-0" size={20} />
+          <div className="min-w-0">
+            <h2
+              id="fire-calculator-heading"
+              className="text-lg font-black leading-snug tracking-tight text-emerald-950 sm:text-xl"
+            >
+              FIRE Calculator
+            </h2>
             <p className="text-xs font-bold leading-snug text-slate-500 sm:text-sm">
               Live KRW + NPR retirement planning
               {rateLoading ? <span className="ml-1 text-emerald-600"> · updating rate…</span> : null}
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 rounded-full border border-emerald-100 bg-white/75 p-1 shadow-sm backdrop-blur">
+        <div className="flex w-full shrink-0 rounded-full border border-emerald-100/90 bg-white/80 p-1 shadow-sm backdrop-blur sm:w-auto">
           {(["KRW", "NPR"] as FireDisplayCurrency[]).map((item) => (
             <button
               key={item}
@@ -82,7 +94,7 @@ export function FireCalculatorInputs() {
         </div>
       </div>
 
-      <div className="space-y-3.5 sm:space-y-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3.5 sm:gap-4">
         <NumericMoneyInput
           label="Current savings"
           prefix={symbol}
@@ -126,7 +138,7 @@ export function FireCalculatorInputs() {
           variant="amount"
         />
 
-        <div className="space-y-3 rounded-2xl border border-white/70 bg-white/65 p-3.5 shadow-sm backdrop-blur sm:space-y-4 sm:p-4">
+        <div className="space-y-3 rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-emerald-50/35 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_8px_28px_rgba(0,63,47,0.05)] backdrop-blur sm:space-y-4 sm:p-4">
           <p className="text-[11px] font-black uppercase tracking-wide text-emerald-900">Wealth simulator (drawdown)</p>
           <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-4">
             <NumericMoneyInput
@@ -174,7 +186,7 @@ export function FireCalculatorInputs() {
           ) : null}
         </div>
 
-        <div className="rounded-2xl border border-emerald-100/70 bg-emerald-50/80 p-3 sm:p-3.5">
+        <div className="mt-auto shrink-0 rounded-2xl border border-emerald-100/75 bg-gradient-to-r from-emerald-50/90 via-white/50 to-lime-50/40 p-3 shadow-[0_1px_0_rgba(255,255,255,0.65)_inset] sm:p-3.5">
           <div className="mb-1.5 flex justify-between text-xs font-black text-emerald-900 sm:text-sm">
             <span>Estimated savings strength</span>
             <span>{savingsRateEstimate}%</span>
@@ -197,11 +209,11 @@ export function FireRetirementProjection() {
   const passiveMonthlyNpr = (result.projectedCorpusNpr * wealthParams.safeWithdrawalRatePct) / 100 / 12;
 
   return (
-    <section className="glass-card soft-gradient-border hover-lift rounded-[1.7rem] p-4 sm:p-5">
-      <div className="w-full space-y-4 text-center">
-        <p className="text-sm font-black text-emerald-950 sm:text-base">Your Retirement Projection</p>
+    <section className={`${FIRE_CALCULATOR_PANEL_CLASS} flex h-full min-h-0 flex-col p-5 text-center sm:p-6`}>
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <p className="shrink-0 text-sm font-black leading-snug text-emerald-950 sm:text-base">Your Retirement Projection</p>
 
-        <div className="rounded-2xl border border-white/60 bg-gradient-to-br from-emerald-50/90 to-white/75 p-3.5 text-center shadow-inner shadow-emerald-950/5 backdrop-blur sm:p-4">
+        <div className="shrink-0 rounded-2xl border border-white/65 bg-gradient-to-br from-emerald-50/92 via-white/78 to-white/60 p-3.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_10px_36px_rgba(0,63,47,0.06)] backdrop-blur sm:p-4">
           <p className="text-xs font-bold text-slate-500 sm:text-sm">Dynamic FIRE age</p>
           <p className="mt-0.5 text-3xl font-black tracking-tight text-emerald-800 sm:text-4xl lg:text-[2.35rem] lg:leading-tight xl:text-4xl">
             {result.fireAge}{" "}
@@ -214,7 +226,7 @@ export function FireRetirementProjection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+        <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-2.5 sm:gap-3">
           {[
             ["Required corpus", formatMoney(result.requiredCorpusNpr), CircleDollarSign],
             ["Projected corpus", formatMoney(result.projectedCorpusNpr), TrendingUp],
@@ -226,17 +238,17 @@ export function FireRetirementProjection() {
             return (
               <div
                 key={label as string}
-                className="rounded-xl border border-white/70 bg-white/75 p-3 text-left shadow-sm backdrop-blur transition-shadow hover:bg-white hover:shadow-md sm:p-3.5"
+                className="flex h-full min-h-0 flex-col rounded-xl border border-white/72 bg-gradient-to-b from-white/88 to-white/65 p-3 text-left shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_6px_22px_rgba(0,63,47,0.05)] backdrop-blur transition-shadow hover:border-emerald-200/60 hover:shadow-[0_10px_32px_rgba(0,122,61,0.08)] sm:p-3.5"
               >
-                <MetricIcon className="mb-1.5 text-emerald-700" size={16} />
+                <MetricIcon className="mb-1.5 shrink-0 text-emerald-700" size={16} />
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:text-[11px]">{label as string}</p>
-                <p className="mt-1 text-sm font-black leading-tight text-emerald-950 sm:text-base">{value as string}</p>
+                <p className="mt-auto pt-1 text-sm font-black leading-tight text-emerald-950 sm:text-base">{value as string}</p>
               </div>
             );
           })}
         </div>
 
-        <div className="rounded-xl border border-white/65 bg-white/55 p-2.5 text-left shadow-sm backdrop-blur-sm sm:p-3">
+        <div className="mt-auto shrink-0 rounded-xl border border-white/68 bg-gradient-to-br from-white/62 to-emerald-50/35 p-2.5 text-left shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_8px_26px_rgba(0,63,47,0.05)] backdrop-blur sm:p-3">
           <div className="mb-1 flex items-center justify-between gap-2">
             <span className="text-[11px] font-black text-emerald-950 sm:text-xs">Progress toward FIRE</span>
             <span className="shrink-0 tabular-nums text-xs font-black text-emerald-800 sm:text-sm">{result.progressPct}%</span>
@@ -260,7 +272,7 @@ export function FireRetirementProjection() {
 /** Stacked calculator + projection (e.g. narrow viewports). */
 export function FireCalculator() {
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-4 sm:gap-5 md:gap-6">
       <FireCalculatorInputs />
       <FireRetirementProjection />
     </div>

@@ -42,6 +42,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, Pie } from "react-chartjs-2";
+import { toast } from "sonner";
 import { CurrencyConverterBar } from "@/components/CurrencyConverterBar";
 import { DualCurrencyAmount } from "@/components/DualCurrencyAmount";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
@@ -50,6 +51,7 @@ import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
 import { ExpenseReceiptUpload } from "@/components/ExpenseReceiptUpload";
 import { ExpenseTimeline } from "@/components/ExpenseTimeline";
 import { sanitizeDecimalTyping } from "@/components/NumericMoneyInput";
+import { RoommateShareSummaryModal } from "@/components/RoommateShareSummaryModal";
 import { SettlementCelebration } from "@/components/SettlementCelebration";
 import {
   formatExpenseAmountForInput,
@@ -72,6 +74,7 @@ import {
   saveDashboardState,
   type TimelineActivity,
 } from "@/lib/expense-storage";
+import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
 import {
   currentMonthKey,
   expenseAttributedShares,
@@ -506,6 +509,8 @@ export function ExpenseDashboard() {
   const [receiptOcrText, setReceiptOcrText] = useState("");
   const [showCelebration, setShowCelebration] = useState(false);
   const [settlementOverrides, setSettlementOverrides] = useState<Record<string, Record<string, number>>>({});
+  const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
+  const [shareModalKey, setShareModalKey] = useState(0);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
 
@@ -902,25 +907,48 @@ export function ExpenseDashboard() {
     });
   }
 
-  function shareSummary() {
-    const summary = transfers
-      .map((transfer) => `${transfer.from} -> ${transfer.to}: ${fmt(transfer.amount)}`)
-      .join("\n");
-    const text = [
-      "FIRE Nepal expense settlement",
-      `Total group expense: ${fmt(totalExpense)}`,
-      `Group average (total ÷ ${members.length}): ${fmt(equalSplitAmount)}`,
-      ...members.map((m) => `${m} attributed share: ${fmt(memberExpectedShare[m] ?? 0)}`),
-      summary || "All settled.",
-    ].join("\n");
+  const buildShareSummaryText = useCallback(() => {
+    return buildRoommateExpenseSummaryText({
+      monthKey: selectedMonthKey,
+      members,
+      memberExpectedShare,
+      totalExpenseNpr: totalExpense,
+      equalSplitNpr: equalSplitAmount,
+      transfers: transfers.map((t) => ({ from: t.from, to: t.to, amountNpr: t.amount })),
+      formatAmount: (n) => formatMoney(n, currency, krwPerNpr),
+    });
+  }, [
+    selectedMonthKey,
+    members,
+    memberExpectedShare,
+    totalExpense,
+    equalSplitAmount,
+    transfers,
+    currency,
+    krwPerNpr,
+  ]);
 
-    if (navigator.share) {
-      void navigator.share({ title: "Room expense settlement", text });
-      return;
+  const handleShareSummary = useCallback(async () => {
+    const text = buildShareSummaryText();
+    const pageUrl = typeof window !== "undefined" ? window.location.href : "";
+
+    if (!isDesktopShareUi() && typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Roommate Expense Summary",
+          text,
+          url: pageUrl,
+        });
+        toast.success("Summary shared successfully");
+        return;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+      }
     }
 
-    void navigator.clipboard.writeText(text);
-  }
+    setShareModalKey((k) => k + 1);
+    setShareModal({ text, pageUrl });
+  }, [buildShareSummaryText]);
 
   const selectedProfile = selectedMember ? profiles[selectedMember] ?? createProfile(selectedMember) : null;
 
@@ -977,7 +1005,8 @@ export function ExpenseDashboard() {
                   <Download size={17} /> Download monthly PDF
                 </button>
                 <button
-                  onClick={shareSummary}
+                  type="button"
+                  onClick={() => void handleShareSummary()}
                   className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-1 hover:bg-white/15"
                 >
                   <Share2 size={17} /> Share summary
@@ -1711,6 +1740,17 @@ export function ExpenseDashboard() {
           transfers={transfers}
         />
       )}
+
+      <RoommateShareSummaryModal
+        key={shareModal ? `share-${shareModalKey}` : "share-off"}
+        open={shareModal !== null}
+        onOpenChange={(next) => {
+          if (!next) setShareModal(null);
+        }}
+        summaryText={shareModal?.text ?? ""}
+        pageUrl={shareModal?.pageUrl ?? ""}
+        downloadBaseName={`roommate-expense-summary-${selectedMonthKey}`}
+      />
     </main>
   );
 }

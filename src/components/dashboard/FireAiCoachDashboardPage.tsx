@@ -460,7 +460,7 @@ export function FireAiCoachDashboardPage() {
 
         <FireFeatureGate
           feature="ai_scenario_lab"
-          title="Elite · AI scenario lab"
+          title="Elite · Nepal Return Simulator"
           description="Elite adds forward strategy overlays: multi-scenario sequencing, inflation sequencing, and export hooks (Stripe-gated later)."
         >
             <div className="mt-6 space-y-4">

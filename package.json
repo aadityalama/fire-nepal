@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H localhost",
+    "dev": "ulimit -n 8192 && WATCHPACK_POLLING=true next dev -H localhost --webpack",
+    "dev:3001": "next dev -H localhost -p 3001",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -12,16 +13,20 @@
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
+    "axios": "^1.16.1",
     "chart.js": "latest",
+    "framer-motion": "^12.40.0",
     "heic2any": "^0.0.4",
     "jspdf": "^4.2.1",
-    "lucide-react": "latest",
+    "lucide-react": "^1.17.0",
     "next": "latest",
     "react": "latest",
     "react-chartjs-2": "latest",
     "react-dom": "latest",
-    "recharts": "^2.15.0",
+    "react-pin-input": "^1.3.1",
+    "recharts": "^2.15.4",
     "sonner": "^2.0.7",
+    "swr": "^2.4.1",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {

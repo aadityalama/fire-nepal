@@ -116,6 +116,36 @@ const smartInsights: Array<[string, string, LucideIcon]> = [
   ["Currency Insight", "KRW/NPR is favorable today for planned remittance.", CircleDollarSign],
 ];
 
+const footerSections = [
+  {
+    heading: "Tools",
+    links: [
+      { label: "FIRE Calculator", href: "#dashboard" },
+      { label: "Savings Tracker", href: "/savings-tracker" },
+      { label: "Investment Planner", href: "#investments" },
+      { label: "AI Calculator", href: "/dashboard/ai-coach" },
+    ],
+  },
+  {
+    heading: "Learn",
+    links: [
+      { label: "Blog", href: "#learn" },
+      { label: "YouTube Videos", href: "#learn" },
+      { label: "FIRE Guide", href: "#learn" },
+      { label: "🇳🇵 Nepal Economy", href: "/learn/nepal-economy" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About Us", href: "/about" },
+      { label: "Contact Us", href: "/contact" },
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms of Service", href: "/terms-of-service" },
+    ],
+  },
+];
+
 function SectionCard({
   children,
   className = "",
@@ -321,11 +351,11 @@ export default function HomePage() {
       <div id="dashboard" className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10 lg:px-8">
         <FireDashboardSection />
 
-        <div id="investments" className="mt-8 grid gap-6 sm:mt-10 md:grid-cols-2 xl:grid-cols-5">
-          <SectionCard>
-            <Globe2 className="mb-4 text-emerald-700" />
+        <div id="investments" className="mt-8 grid auto-rows-fr gap-6 sm:mt-10 md:grid-cols-2 xl:grid-cols-5">
+          <SectionCard className="flex h-full flex-col">
+            <Globe2 className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Nepal Cost of Living</h3>
-            <div className="mt-4 space-y-3 text-sm">
+            <div className="mt-4 flex flex-1 flex-col justify-start gap-3 text-sm">
               {[
                 ["City life", "रु 50,000 / month"],
                 ["Village life", "रु 30,000 / month"],
@@ -337,15 +367,15 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <button className="glow-button mt-5 w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
+            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
               Calculate Now
             </button>
           </SectionCard>
 
-          <SectionCard>
-            <Coins className="mb-4 text-amber-600" />
+          <SectionCard className="flex h-full flex-col">
+            <Coins className="mb-4 h-6 w-6 text-amber-600" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Investment Planner</h3>
-            <div className="mt-4 space-y-3 text-sm">
+            <div className="mt-4 flex flex-1 flex-col justify-start gap-3 text-sm">
               {[
                 ["Mutual Funds", "12-15%"],
                 ["Stock Market", "15-20%"],
@@ -358,51 +388,57 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <button className="glow-button mt-5 w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
+            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
               Compare All
             </button>
           </SectionCard>
 
-          <SectionCard>
-            <PiggyBank className="mb-4 text-emerald-700" />
+          <SectionCard className="flex h-full flex-col">
+            <PiggyBank className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Savings Tracker</h3>
-            <p className="mt-3 text-sm font-bold text-slate-500">Monthly savings</p>
-            <p className="text-2xl font-black text-emerald-800">₩ 1,800,000</p>
-            <div className="mt-4 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur">
-              <p className="text-sm text-slate-500">Total saved</p>
-              <p className="text-xl font-black text-emerald-950">₩ 18,75,000</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">This month progress</p>
-              <div className="mt-2 h-3 rounded-full bg-emerald-100">
-                <div className="h-3 rounded-full bg-emerald-700" style={{ width: "72%" }} />
+            <div className="mt-4 flex flex-1 flex-col gap-4">
+              <div>
+                <p className="text-sm font-bold text-slate-500">Monthly savings</p>
+                <p className="text-2xl font-black text-emerald-800">₩ 1,800,000</p>
+              </div>
+              <div className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur">
+                <p className="text-sm text-slate-500">Total saved</p>
+                <p className="text-xl font-black text-emerald-950">₩ 18,75,000</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">This month progress</p>
+                <div className="mt-2 h-3 rounded-full bg-emerald-100">
+                  <div className="h-3 rounded-full bg-emerald-700" style={{ width: "72%" }} />
+                </div>
               </div>
             </div>
-            <button className="glow-button mt-5 w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
+            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
               Track Now
             </button>
           </SectionCard>
 
-          <SectionCard>
-            <Plane className="mb-4 text-emerald-700" />
+          <SectionCard className="flex h-full flex-col">
+            <Plane className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Can I Return to Nepal?</h3>
-            <div className="mt-4 flex items-center justify-center">
-              <ProgressRing value={82} size="sm" />
+            <div className="mt-4 flex flex-1 flex-col justify-start gap-5">
+              <div className="flex items-center justify-center">
+                <ProgressRing value={82} size="sm" />
+              </div>
+              <ul className="space-y-2 text-sm font-bold text-slate-600">
+                {["Emergency fund", "Passive income", "Target corpus"].map((item) => (
+                  <li key={item} className="flex items-center justify-between">
+                    {item} <CheckCircle2 size={16} className="text-emerald-700" />
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="mt-5 space-y-2 text-sm font-bold text-slate-600">
-              {["Emergency fund", "Passive income", "Target corpus"].map((item) => (
-                <li key={item} className="flex items-center justify-between">
-                  {item} <CheckCircle2 size={16} className="text-emerald-700" />
-                </li>
-              ))}
-            </ul>
-            <button className="glow-button mt-5 w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
+            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
               Check Details
             </button>
           </SectionCard>
 
-          <SectionCard>
-            <ShieldCheck className="mb-4 text-emerald-700" />
+          <SectionCard className="flex h-full flex-col">
+            <ShieldCheck className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Emergency Fund</h3>
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 flex flex-1 flex-col justify-start gap-4">
               <div>
                 <p className="text-sm font-bold text-slate-500">Recommended</p>
                 <p className="text-xl font-black text-emerald-950">रु 6,00,000</p>
@@ -421,7 +457,7 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <button className="glow-button mt-5 w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
+            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
               Calculate Mine
             </button>
           </SectionCard>
@@ -588,9 +624,9 @@ export default function HomePage() {
       </div>
 
       <footer className="relative overflow-hidden bg-gradient-to-br from-[#021f1a] via-[#063f31] to-[#0b5f43] text-white">
-        <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
-        <div className="absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-lime-300/10 blur-3xl" />
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-lime-300/10 blur-3xl" />
+        <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="glass-card mb-8 rounded-[1.7rem] bg-white/10 p-5 text-white">
             <div className="grid items-center gap-4 md:grid-cols-[1fr_auto]">
               <div>
@@ -622,16 +658,18 @@ export default function HomePage() {
                 in one premium dashboard.
               </p>
             </div>
-            {[
-              ["Tools", "FIRE Calculator", "Savings Tracker", "Investment Planner", "AI Calculator"],
-              ["Learn", "Blog", "YouTube Videos", "FIRE Guide", "Korean Economy"],
-              ["Company", "About Us", "Contact Us", "Privacy Policy", "Terms of Service"],
-            ].map(([heading, ...links]) => (
+            {footerSections.map(({ heading, links }) => (
               <div key={heading}>
                 <h4 className="mb-3 font-black">{heading}</h4>
                 <div className="space-y-2 text-sm text-emerald-50/70">
-                  {links.map((link) => (
-                    <p key={link}>{link}</p>
+                  {links.map(({ label, href }) => (
+                    <Link
+                      key={label}
+                      href={href}
+                      className="block w-fit cursor-pointer pointer-events-auto transition hover:translate-x-1 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                    >
+                      {label}
+                    </Link>
                   ))}
                 </div>
               </div>

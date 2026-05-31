@@ -1,11 +1,12 @@
 "use client";
 
-import { Flame, Menu, X } from "lucide-react";
+import { ChevronDown, Flame, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
 const ASSET_MODULE_PATHS = [
   "/portfolio/banking",
@@ -18,21 +19,162 @@ const ASSET_MODULE_PATHS = [
   "/portfolio/ledger",
 ] as const;
 
+const INVESTMENTS_HREF = "/portfolio/investments" as const;
+
 type ShellNavItem = { href: string; label: string; isActive: (pathname: string) => boolean };
 
-const NAV: readonly ShellNavItem[] = [
-  { href: "/portfolio", label: "🏠 Dashboard", isActive: (p) => p === "/portfolio" },
-  { href: "/fire-summary", label: "🔥 FIRE Goal", isActive: (p) => p === "/fire-summary" || p.startsWith("/fire-summary/") },
-  { href: "/cashflow-dashboard", label: "💸 Cashflow", isActive: (p) => p === "/cashflow-dashboard" || p.startsWith("/cashflow-dashboard/") },
-  { href: "/expense-dashboard", label: "📑 Transactions", isActive: (p) => p === "/expense-dashboard" || p.startsWith("/expense-dashboard/") },
+const SHELL_NAV_BEFORE_FAMILY: readonly ShellNavItem[] = [
+  { href: "/portfolio", label: "Dashboard", isActive: (p) => p === "/portfolio" },
+  { href: "/savings-tracker", label: "Savings", isActive: (p) => p === "/savings-tracker" || p.startsWith("/savings-tracker/") },
   {
-    href: "/portfolio/investments",
-    label: "💼 Assets",
-    isActive: (p) => ASSET_MODULE_PATHS.some((h) => p === h || p.startsWith(`${h}/`)),
+    href: "/return-to-nepal",
+    label: "Nepal Return",
+    isActive: (p) => p === "/return-to-nepal" || p.startsWith("/return-to-nepal/"),
   },
-  { href: "/portfolio/ai-insights", label: "🤖 AI Insights", isActive: (p) => p.startsWith("/portfolio/ai-insights") },
-  { href: "/dashboard/settings", label: "⚙️ Settings", isActive: (p) => p.startsWith("/dashboard/settings") || p.startsWith("/dashboard/profile") },
+  {
+    href: INVESTMENTS_HREF,
+    label: "Investments",
+    isActive: (p) => p === INVESTMENTS_HREF || p.startsWith(INVESTMENTS_HREF + "/"),
+  },
+  {
+    href: "/expense-dashboard",
+    label: "Transactions",
+    isActive: (p) => p === "/expense-dashboard" || p.startsWith("/expense-dashboard/"),
+  },
+  {
+    href: "/portfolio/banking",
+    label: "Assets",
+    isActive: (p) =>
+      ASSET_MODULE_PATHS.some((h) => {
+        if (h === INVESTMENTS_HREF) return false;
+        return p === h || p.startsWith(`${h}/`);
+      }),
+  },
+  { href: PENSION_BASE, label: "Pension", isActive: (p) => isPensionModulePath(p) },
 ] as const;
+
+const SHELL_NAV_AFTER_FAMILY: readonly ShellNavItem[] = [
+  { href: "/portfolio/ai-insights", label: "AI Insights", isActive: (p) => p.startsWith("/portfolio/ai-insights") },
+  {
+    href: "/dashboard/settings",
+    label: "Settings",
+    isActive: (p) => p.startsWith("/dashboard/settings") || p.startsWith("/dashboard/profile"),
+  },
+] as const;
+
+const FAMILY_HUB_LINKS: readonly ShellNavItem[] = [
+  { href: "/children", label: "👶 Children", isActive: (p) => p === "/children" || p.startsWith("/children/") },
+  { href: "/education", label: "🎓 Education", isActive: (p) => p === "/education" || p.startsWith("/education/") },
+  { href: "/health", label: "❤️ Health", isActive: (p) => p === "/health" || p.startsWith("/health/") },
+  {
+    href: "/family-calendar",
+    label: "📅 Calendar",
+    isActive: (p) => p === "/family-calendar" || p.startsWith("/family-calendar/"),
+  },
+  {
+    href: "/parenting-ai",
+    label: "🧠 Parenting AI",
+    isActive: (p) => p === "/parenting-ai" || p.startsWith("/parenting-ai/"),
+  },
+  {
+    href: "/family-ai-insights",
+    label: "🤖 Family AI Insights",
+    isActive: (p) => p === "/family-ai-insights" || p.startsWith("/family-ai-insights/"),
+  },
+  {
+    href: "/family-settings",
+    label: "⚙️ Family Settings",
+    isActive: (p) => p === "/family-settings" || p.startsWith("/family-settings/"),
+  },
+  {
+    href: "/child-records-vault",
+    label: "📁 Records Vault",
+    isActive: (p) => p === "/child-records-vault" || p.startsWith("/child-records-vault/"),
+  },
+] as const;
+
+function isFamilyHubActive(pathname: string): boolean {
+  if (pathname === "/family" || pathname.startsWith("/family/")) return true;
+  return FAMILY_HUB_LINKS.some((item) => item.isActive(pathname));
+}
+
+function familyHubTriggerClasses(active: boolean, light: boolean) {
+  const base =
+    "flex w-full min-h-[44px] items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold tracking-[-0.01em] transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99] sm:text-[0.8125rem] sm:leading-snug";
+  if (active) {
+    return light
+      ? `${base} border-emerald-400/55 bg-emerald-50 text-emerald-950`
+      : `${base} border-emerald-400/35 bg-emerald-500/[0.12] text-white`;
+  }
+  return light
+    ? `${base} border-transparent bg-white/55 text-slate-700 backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90`
+    : `${base} border-transparent bg-white/[0.04] text-zinc-300 backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
+}
+
+function familyHubSubLinkClasses(active: boolean, light: boolean) {
+  const base =
+    "flex min-h-[40px] items-center rounded-lg border px-3 py-2 text-[0.8125rem] font-medium leading-snug transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99] sm:pl-4";
+  if (active) {
+    return light
+      ? `${base} border-emerald-300/50 bg-emerald-50/95 text-emerald-950`
+      : `${base} border-emerald-400/30 bg-emerald-500/[0.1] text-white`;
+  }
+  return light
+    ? `${base} border-transparent bg-transparent text-slate-600 hover:border-emerald-200/60 hover:bg-emerald-50/70 hover:text-slate-900`
+    : `${base} border-transparent bg-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[0.05] hover:text-zinc-100`;
+}
+
+type FamilyHubNavSectionProps = {
+  pathname: string;
+  light: boolean;
+  close: () => void;
+};
+
+function FamilyHubNavSection({ pathname, light, close }: FamilyHubNavSectionProps) {
+  const [open, setOpen] = useState(true);
+
+  const hubActive = isFamilyHubActive(pathname);
+
+  return (
+    <div
+      className={`mt-2 border-t pt-2 ${light ? "border-emerald-200/60" : "border-emerald-400/10"}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={familyHubTriggerClasses(hubActive, light)}
+        aria-expanded={open}
+      >
+        <span className="min-w-0 flex-1 text-left font-semibold">👨‍👩‍👧 Family Hub</span>
+        <ChevronDown
+          size={18}
+          className={`shrink-0 opacity-80 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "rotate-180" : "rotate-0"}`}
+          aria-hidden
+        />
+      </button>
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-1 pt-1.5">
+            {FAMILY_HUB_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={familyHubSubLinkClasses(item.isActive(pathname), light)}
+                onClick={close}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export type WealthDashboardShellBrand = {
   tagline: string;
@@ -118,7 +260,7 @@ export function WealthDashboardShell({
     >
       <div className="wealth-dash-atmosphere wealth-dash-atmosphere-float pointer-events-none fixed inset-0" />
 
-      <div className="relative mx-auto flex w-full max-w-[1840px] min-h-0 flex-col xl:flex-row xl:items-start 2xl:max-w-[1920px]">
+      <div className="relative mx-auto flex w-full max-w-[2020px] min-h-0 flex-col xl:flex-row xl:items-start 2xl:max-w-[2200px]">
         <header
           className={`wealth-dash-mobile-bar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-emerald-400/10 px-4 py-3 backdrop-blur-xl xl:hidden ${
             light ? "bg-white/90" : "bg-[#021910]/90"
@@ -173,7 +315,7 @@ export function WealthDashboardShell({
         <aside
           id="wealth-dash-drawer"
           className={`wealth-dash-aside wealth-dash-sidebar-shell fixed inset-y-0 left-0 z-50 flex w-[min(90vw,300px)] max-w-[100vw] flex-col transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform xl:static xl:z-auto xl:max-w-none ${
-            wideAside ? "xl:w-[276px]" : "xl:w-[16.75rem]"
+            wideAside ? "xl:w-[252px]" : "xl:w-[14.75rem]"
           } xl:translate-x-0 xl:border-b-0 xl:shrink-0 ${
             light
               ? "border-r border-emerald-200/55 bg-gradient-to-b from-white/98 via-white/95 to-emerald-50/40 text-slate-800 shadow-none backdrop-blur-xl xl:shadow-[2px_0_32px_-16px_rgba(16,185,129,0.1)]"
@@ -232,7 +374,18 @@ export function WealthDashboardShell({
                 </div>
               </div>
               <nav className="mt-1 flex flex-col gap-1.5 xl:mt-0">
-                {NAV.map((item) => (
+                {SHELL_NAV_BEFORE_FAMILY.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={navLinkClasses(item.isActive(pathname ?? ""), light)}
+                    onClick={close}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                <FamilyHubNavSection pathname={pathname ?? ""} light={light} close={close} />
+                {SHELL_NAV_AFTER_FAMILY.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -262,7 +415,7 @@ export function WealthDashboardShell({
           </div>
         </aside>
 
-        <div className="relative min-h-0 w-full min-w-0 flex-1 self-start px-4 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-7 xl:px-8 xl:py-7 2xl:px-9 2xl:py-8">
+        <div className="relative min-h-0 w-full min-w-0 flex-1 self-start px-4 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-7 xl:px-6 xl:py-7 2xl:px-8 2xl:py-8">
           {children}
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import {
   BadgeCheck,
+  Bell,
   Brain,
   Briefcase,
   CreditCard,
@@ -15,12 +16,14 @@ import {
   Shield,
   Sparkles,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
+import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
@@ -28,6 +31,8 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/profile", label: "Profile", icon: UserRound },
   { href: "/portfolio", label: "Wealth dashboard", icon: Briefcase },
+  { href: "/family", label: "Family Hub", icon: UsersRound },
+  { href: "/smart-reminders", label: "Reminders", icon: Bell },
   { href: "/dashboard/ai-coach", label: "AI Coach", icon: Brain },
   { href: "/dashboard/security", label: "Security", icon: Shield },
   { href: "/dashboard/membership", label: "Plans & Billing", icon: CreditCard },
@@ -35,8 +40,23 @@ const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings2 },
 ];
 
+const FAMILY_MODULE_PATHS = [
+  "/family",
+  "/children",
+  "/education",
+  "/health",
+  "/family-calendar",
+  "/parenting-ai",
+  "/family-ai-insights",
+  "/family-settings",
+  "/child-records-vault",
+] as const;
+
 function navActive(href: string, pathname: string | null): boolean {
   if (!pathname) return false;
+  if (href === "/family") {
+    return FAMILY_MODULE_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -97,7 +117,7 @@ function DashboardMembershipUpsell() {
           }
         >
           <Crown className="mb-0.5 inline sm:mb-0 sm:mr-2" size={14} aria-hidden />
-          Go Elite — Bloomberg-style terminal, stress tests, family wealth & priority roadmap.
+          Go Elite — AI Wealth Dashboard, Nepal Return Simulator, and the full Elite suite.
         </p>
         <Link
           href="/dashboard/membership"
@@ -162,6 +182,7 @@ export function FireDashboardShell({ children }: { children: ReactNode }) {
             </div>
           </Link>
           <div className="flex items-center gap-2">
+            <SmartRemindersHeaderBell />
             <Link
               href="/hub"
               className={`hidden rounded-xl border px-3 py-2 text-xs font-black transition sm:inline-flex ${

@@ -20,7 +20,7 @@ export function EliteBloombergStrip() {
       <div className="pointer-events-none absolute -right-20 top-0 h-40 w-40 rounded-full bg-amber-400/10 blur-3xl" />
       <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-200/80">
-          Elite terminal · Bloomberg-style layer
+          Elite terminal · AI Wealth layer
         </p>
         <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-black text-amber-100">
           Prototype UI

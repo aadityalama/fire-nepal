@@ -98,7 +98,7 @@ export function FirePremiumProfilePage() {
         <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Profile dashboard</h1>
         <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed tracking-tight text-emerald-100/60 sm:text-base">
           {tier === "elite"
-            ? "Elite workspace — Bloomberg-style terminal layer, stress tests, and priority roadmap (UI previews ship incrementally)."
+            ? "Elite workspace — AI Wealth Dashboard, family & education planning, Nepal Return Simulator, real-estate intelligence, and private advisory tools (UI previews ship incrementally)."
             : tier === "premium"
               ? "Premium workspace — advanced analytics, AI coach, and OCR-ready flows. Upgrade to Elite for the terminal layer."
               : "Core workspace — edit your member record and track FIRE KPIs locally. Upgrade to Premium for AI, OCR, and advanced analytics."}

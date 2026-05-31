@@ -24,7 +24,7 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Bar, Line } from "react-chartjs-2";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import {
@@ -47,18 +47,55 @@ ChartJS.register(
 
 function StatCard({
   label,
+  nepaliLabel,
   value,
   hint,
 }: {
   label: string;
+  nepaliLabel?: string;
   value: string;
   hint?: string;
 }) {
   return (
     <div className="rounded-2xl border border-emerald-100/80 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
       <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      {nepaliLabel ? <NepaliSubLabel>{nepaliLabel}</NepaliSubLabel> : null}
       <p className="mt-2 text-xl font-black leading-tight tracking-tight text-emerald-950 sm:text-2xl">{value}</p>
       {hint ? <p className="mt-1.5 text-sm font-bold leading-snug text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function NepaliSubLabel({
+  children,
+  className = "",
+}: Readonly<{
+  children: ReactNode;
+  className?: string;
+}>) {
+  return (
+    <span className={`font-nepali block text-[0.72rem] font-semibold leading-snug tracking-normal text-slate-400 ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function BilingualInputLabel({
+  label,
+  nepaliLabel,
+  children,
+}: Readonly<{
+  label: string;
+  nepaliLabel: string;
+  children: ReactNode;
+}>) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-2">
+        <p className="text-sm font-bold text-zinc-600">{label}</p>
+        <NepaliSubLabel>{nepaliLabel}</NepaliSubLabel>
+      </div>
+      {children}
     </div>
   );
 }
@@ -256,17 +293,23 @@ export function SwpCalculator() {
                 <Wallet size={18} /> SWP Calculator
               </div>
               <h1 className="text-3xl font-black leading-[1.1] tracking-[-0.04em] sm:text-4xl md:text-5xl">
-                Systematic withdrawal planning for Korea ↔ Nepal life.
+                Systematic withdrawal planning
               </h1>
+              <p className="font-nepali mt-3 max-w-2xl text-lg font-semibold leading-snug text-emerald-50/70 sm:text-xl md:text-2xl">
+                नेपाल ↔ कोरिया जीवनको लागि व्यवस्थित निकासी योजना
+              </p>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-emerald-50/85 sm:text-lg">
                 Model inflation-linked spending, portfolio survival, and safe withdrawal pressure — in {currency} with
                 premium visuals built for FIRE Nepal.
               </p>
             </div>
             <div className="glass-card rounded-[1.7rem] p-6 text-emerald-950">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-500">
+              <div className="flex items-start gap-2 text-sm font-black text-slate-500">
                 <Gauge size={18} className="text-emerald-700" />
-                FIRE withdrawal safety
+                <div>
+                  <span>FIRE withdrawal safety</span>
+                  <NepaliSubLabel>FIRE निकासी सुरक्षा</NepaliSubLabel>
+                </div>
               </div>
               <div className="mt-4 flex items-end justify-between gap-4">
                 <div>
@@ -294,6 +337,7 @@ export function SwpCalculator() {
             <AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={22} />
             <div>
               <p className="font-black text-amber-950">Safe withdrawal warning</p>
+              <NepaliSubLabel className="text-amber-800/65">सुरक्षित निकासी चेतावनी</NepaliSubLabel>
               <p className="mt-1 text-sm font-bold leading-relaxed text-amber-900/90">
                 {result.depletionMonth
                   ? `Projected depletion in ${result.survivalYearsDisplay} — raise capital, lower monthly draws, or improve expected return assumptions.`
@@ -307,62 +351,75 @@ export function SwpCalculator() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="glass-card rounded-[1.7rem] p-5 sm:p-7">
-            <h2 className="flex items-center gap-2 text-xl font-black leading-snug text-emerald-950 sm:text-2xl">
+            <h2 className="flex items-start gap-2 text-xl font-black leading-snug text-emerald-950 sm:text-2xl">
               <LineChart className="text-emerald-700" size={22} />
-              Inputs
+              <span>
+                Inputs
+                <NepaliSubLabel>विवरण</NepaliSubLabel>
+              </span>
             </h2>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <NumericMoneyInput
-                label="Initial investment"
-                prefix={amountPrefix}
-                value={initialCorpus}
-                onChange={setInitialCorpus}
-                variant="amount"
-                placeholder="Enter amount"
-                wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
-                inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
-              />
-              <NumericMoneyInput
-                label="Monthly withdrawal"
-                prefix={amountPrefix}
-                value={monthlyWithdrawal}
-                onChange={setMonthlyWithdrawal}
-                variant="amount"
-                placeholder="Enter amount"
-                wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
-                inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
-              />
-              <NumericMoneyInput
-                label="Expected annual return %"
-                value={returnPct}
-                onChange={setReturnPct}
-                variant="percent"
-                suffix="%"
-                placeholder="e.g. 7"
-                wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
-                inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
-              />
-              <NumericMoneyInput
-                label="Inflation rate %"
-                value={inflationPct}
-                onChange={setInflationPct}
-                variant="percent"
-                suffix="%"
-                placeholder="e.g. 4"
-                wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
-                inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
-              />
-              <div className="sm:col-span-2">
+              <BilingualInputLabel label="Initial investment" nepaliLabel="प्रारम्भिक लगानी">
                 <NumericMoneyInput
-                  label="Investment horizon (years)"
-                  value={horizonYearsRaw}
-                  onChange={setHorizonYearsRaw}
-                  variant="integer"
-                  suffix="years"
-                  placeholder="e.g. 35"
-                  wrapperClassName="max-w-md rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
+                  aria-label="Initial investment"
+                  prefix={amountPrefix}
+                  value={initialCorpus}
+                  onChange={setInitialCorpus}
+                  variant="amount"
+                  placeholder="Enter amount"
+                  wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
                   inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
                 />
+              </BilingualInputLabel>
+              <BilingualInputLabel label="Monthly withdrawal" nepaliLabel="मासिक निकासी">
+                <NumericMoneyInput
+                  aria-label="Monthly withdrawal"
+                  prefix={amountPrefix}
+                  value={monthlyWithdrawal}
+                  onChange={setMonthlyWithdrawal}
+                  variant="amount"
+                  placeholder="Enter amount"
+                  wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
+                  inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
+                />
+              </BilingualInputLabel>
+              <BilingualInputLabel label="Expected annual return %" nepaliLabel="अपेक्षित वार्षिक प्रतिफल">
+                <NumericMoneyInput
+                  aria-label="Expected annual return percent"
+                  value={returnPct}
+                  onChange={setReturnPct}
+                  variant="percent"
+                  suffix="%"
+                  placeholder="e.g. 7"
+                  wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
+                  inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
+                />
+              </BilingualInputLabel>
+              <BilingualInputLabel label="Inflation rate %" nepaliLabel="मुद्रास्फीति दर">
+                <NumericMoneyInput
+                  aria-label="Inflation rate percent"
+                  value={inflationPct}
+                  onChange={setInflationPct}
+                  variant="percent"
+                  suffix="%"
+                  placeholder="e.g. 4"
+                  wrapperClassName="rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
+                  inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
+                />
+              </BilingualInputLabel>
+              <div className="sm:col-span-2">
+                <BilingualInputLabel label="Investment horizon (years)" nepaliLabel="लगानी अवधि">
+                  <NumericMoneyInput
+                    aria-label="Investment horizon years"
+                    value={horizonYearsRaw}
+                    onChange={setHorizonYearsRaw}
+                    variant="integer"
+                    suffix="years"
+                    placeholder="e.g. 35"
+                    wrapperClassName="max-w-md rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 shadow-sm ring-emerald-100 transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100"
+                    inputClassName="min-w-0 flex-1 bg-transparent text-base font-bold text-emerald-950 outline-none"
+                  />
+                </BilingualInputLabel>
               </div>
             </div>
           </div>
@@ -377,6 +434,7 @@ export function SwpCalculator() {
               />
               <div className="relative text-center">
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">Sustainability score</p>
+                <NepaliSubLabel>दिगोपन स्कोर</NepaliSubLabel>
                 <p className="mt-2 text-5xl font-black tracking-tight text-emerald-800">{result.sustainabilityScore}</p>
                 <p className="mt-2 text-sm font-bold text-slate-600">Higher is better — blends runway and ending strength.</p>
               </div>
@@ -384,7 +442,10 @@ export function SwpCalculator() {
             <div className="glass-card flex flex-1 flex-col rounded-[1.7rem] p-5 sm:p-6">
               <div className="flex items-center gap-2 text-emerald-800">
                 <Bot size={20} />
-                <p className="text-sm font-black uppercase tracking-wide">AI-style insight</p>
+                <div>
+                  <p className="text-sm font-black uppercase tracking-wide">AI-style insight</p>
+                  <NepaliSubLabel>एआई सुझाव</NepaliSubLabel>
+                </div>
               </div>
               <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">{aiText}</p>
             </div>
@@ -394,21 +455,25 @@ export function SwpCalculator() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total withdrawals (nominal)"
+            nepaliLabel="कुल निकासी"
             value={fmt(result.totalWithdrawalsNominal)}
             hint="Inflation-adjusted spending path"
           />
           <StatCard
             label="Passive monthly draw"
+            nepaliLabel="मासिक निकासी"
             value={fmt(parsed.monthly)}
             hint="Starting withdrawal — lifestyle funded from portfolio"
           />
           <StatCard
             label="Gross monthly return (start)"
+            nepaliLabel="सुरुको मासिक प्रतिफल"
             value={fmt(monthlyReturnMoney)}
             hint="Approx. first-month portfolio return before withdrawals"
           />
           <StatCard
             label="Survival horizon"
+            nepaliLabel="टिक्ने अवधि"
             value={result.survivalYearsDisplay}
             hint={result.depletionMonth ? "Until depletion in model" : "Across full projection"}
           />
@@ -417,7 +482,10 @@ export function SwpCalculator() {
         <section className="mt-10 grid gap-8 lg:grid-cols-2">
           <div className="glass-card rounded-[1.7rem] p-5 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Yearly balance projection</h2>
+              <div>
+                <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Yearly balance projection</h2>
+                <NepaliSubLabel>वार्षिक ब्यालेन्स प्रक्षेपण</NepaliSubLabel>
+              </div>
               <ShieldCheck className="shrink-0 text-emerald-600" size={22} />
             </div>
             <p className="mb-4 text-sm font-bold leading-relaxed text-slate-600">
@@ -430,7 +498,10 @@ export function SwpCalculator() {
           </div>
           <div className="glass-card rounded-[1.7rem] p-5 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Withdrawals & inflation</h2>
+              <div>
+                <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Withdrawals & inflation</h2>
+                <NepaliSubLabel>निकासी र मुद्रास्फीति</NepaliSubLabel>
+              </div>
               <TrendingDown className="shrink-0 text-amber-600" size={22} />
             </div>
             <p className="mb-4 text-sm font-bold leading-relaxed text-slate-600">
@@ -455,7 +526,10 @@ export function SwpCalculator() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="text-emerald-600" size={22} />
-              <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Ending balances (model)</h2>
+              <div>
+                <h2 className="text-lg font-black text-emerald-950 sm:text-xl">Ending balances (model)</h2>
+                <NepaliSubLabel>अन्तिम ब्यालेन्स</NepaliSubLabel>
+              </div>
             </div>
             <p className="text-sm font-bold text-slate-600">
               With inflation on spending: <span className="font-black text-emerald-800">{fmt(result.endingBalanceNominal)}</span>

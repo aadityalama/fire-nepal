@@ -15,4 +15,13 @@ export const FN_PROTECTED_PREFIXES = [
   "/account",
   "/dashboard",
   "/portfolio",
+  "/family",
+  "/children",
+  "/education",
+  "/health",
+  "/family-calendar",
+  "/parenting-ai",
+  "/family-ai-insights",
+  "/family-settings",
+  "/child-records-vault",
 ] as const;
