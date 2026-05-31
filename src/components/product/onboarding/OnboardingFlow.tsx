@@ -11,9 +11,9 @@ import {
   generateFireProfileFromOnboarding,
   loadProductOnboarding,
   saveProductOnboarding,
-  type FireTargetStyle,
   type ProductOnboardingState,
 } from "@/lib/product-onboarding-storage";
+import { FireLifestyleSelection } from "@/components/product/onboarding/FireLifestyleSelection";
 
 const COUNTRIES = [
   "South Korea",
@@ -158,35 +158,7 @@ export function OnboardingFlow() {
             </div>
           ) : null}
 
-          {step === 4 ? (
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-emerald-100/75">Choose the lifestyle band you are optimising for.</p>
-              {(
-                [
-                  ["lean_fire", "Lean FIRE", "Lower spend, earlier optionality."],
-                  ["traditional_fire", "Traditional FIRE", "Balanced runway and comfort."],
-                  ["fat_fire", "Fat FIRE", "Higher spend, larger safety buffers."],
-                ] as const
-              ).map(([key, title, hint]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => patch("fireTarget", key as FireTargetStyle)}
-                  className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
-                    form.fireTarget === key
-                      ? "border-emerald-400/50 bg-emerald-500/15"
-                      : "border-white/10 bg-black/25 hover:border-emerald-400/25"
-                  }`}
-                >
-                  <CheckCircle2 className={`mt-0.5 shrink-0 ${form.fireTarget === key ? "text-lime-300" : "text-zinc-600"}`} size={18} />
-                  <span>
-                    <span className="block text-sm font-black text-white">{title}</span>
-                    <span className="mt-0.5 block text-xs font-medium text-zinc-400">{hint}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {step === 4 ? <FireLifestyleSelection value={form.fireTarget} onChange={(next) => patch("fireTarget", next)} /> : null}
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <button

@@ -197,8 +197,8 @@ export type StripePriceRef = {
 };
 
 export const STRIPE_PRICE_PLACEHOLDERS: Record<"premium" | "elite", StripePriceRef> = {
-  premium: { lookupKey: "fn_premium_monthly", amountNprApprox: 799, interval: "month" },
-  elite: { lookupKey: "fn_elite_monthly", amountNprApprox: 1999, interval: "month" },
+  premium: { lookupKey: "fn_premium_yearly", amountNprApprox: 500, interval: "year" },
+  elite: { lookupKey: "fn_elite_yearly", amountNprApprox: 800, interval: "year" },
 };
 
 export const BILLING_PIPELINE = [
@@ -225,7 +225,7 @@ export const TIER_CATALOG: Record<
   { tagline: string; bullets: string[]; priceLabel: string }
 > = {
   free: {
-    tagline: "Entry — attract and onboard new savers.",
+    tagline: "Core workspace for tracking FIRE progress and exploring tools.",
     priceLabel: "NPR 0",
     bullets: [
       "Basic dashboard & FIRE calculator",
@@ -235,8 +235,8 @@ export const TIER_CATALOG: Record<
     ],
   },
   premium: {
-    tagline: "Revenue core — Korea / Gulf workers & serious FIRE users.",
-    priceLabel: "From ~ NPR 799 / mo (placeholder)",
+    tagline: "Full analytics, AI coach, OCR, and exports for serious savers abroad.",
+    priceLabel: "NPR 500 / year",
     bullets: [
       "Advanced FIRE dashboard & simulations",
       "AI financial coach",
@@ -247,8 +247,8 @@ export const TIER_CATALOG: Record<
     ],
   },
   elite: {
-    tagline: "Institutional depth · private-client controls.",
-    priceLabel: "From ~ NPR 1,999 / mo (placeholder)",
+    tagline: "Strategy lab, return planning, and institutional-grade desk tools.",
+    priceLabel: "NPR 800 / year",
     bullets: [
       "AI Wealth Dashboard",
       ELITE_FAMILY_WEALTH_FEATURE_LABEL,
