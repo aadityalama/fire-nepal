@@ -10,6 +10,14 @@ import {
   membershipActiveIso,
   membershipExpiryIso,
 } from "@/lib/fire-premium-profile";
+import {
+  ELITE_FAMILY_WEALTH_DETAILS,
+  ELITE_FAMILY_WEALTH_FEATURE_LABEL,
+  TIER_CATALOG,
+  TIER_DISPLAY,
+  USAGE_LIMITS,
+  type FireMembershipTier,
+} from "@/lib/fire-membership";
 
 type CompareCell = boolean | "limited";
 
@@ -31,6 +39,9 @@ const COMPARE_ROWS: { key: string; free: CompareCell; premium: CompareCell; elit
   { key: "elite_rei", label: "Real Estate Intelligence", free: false, premium: false, elite: true },
   { key: "elite_alloc", label: "AI Portfolio Allocation", free: false, premium: false, elite: true },
   { key: "elite_advisory", label: "Private Advisory Tools", free: false, premium: false, elite: true },
+  { key: "elite_biz", label: "Business Finance Suite", free: false, premium: false, elite: true },
+];
+
 const FOUNDER_MEMBER_CAP = 500;
 
 function formatNpr(amount: number): string {
@@ -85,6 +96,8 @@ function useFounderWindowCountdown() {
     return `${d}d ${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m`;
   }, [now]);
 }
+
+function EliteFamilyWealthBullet({ checkClass }: { checkClass: string }) {
   const popoverId = `elite-family-scope-${useId().replace(/:/g, "")}`;
 
   return (
