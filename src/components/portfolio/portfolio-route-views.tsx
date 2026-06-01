@@ -24,8 +24,7 @@ export function PortfolioBankingPage() {
     state,
     ledgerFx,
     applyPortfolioMutate,
-    updateLiquid,
-    addLiquid,
+    upsertLiquid,
     removeLiquid,
     updateFd,
     addFd,
@@ -44,8 +43,7 @@ export function PortfolioBankingPage() {
         ledger={state.ledger}
         ledgerFx={ledgerFx}
         onMutate={applyPortfolioMutate}
-        onChange={updateLiquid}
-        onAdd={addLiquid}
+        onUpsertLiquid={upsertLiquid}
         onRemove={removeLiquid}
         onFdChange={updateFd}
         onAddFd={addFd}

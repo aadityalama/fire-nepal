@@ -77,6 +77,8 @@ export type WealthPortfolioContextValue = {
   applyPortfolioMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
   updateLiquid: (id: string, patch: Partial<SimpleMoneyLine>) => void;
   addLiquid: () => void;
+  /** Insert or replace a liquid cash line by `id` (used by banking entry UX). */
+  upsertLiquid: (line: SimpleMoneyLine) => void;
   removeLiquid: (id: string) => void;
   updateFd: (id: string, patch: Partial<FixedDepositRow>) => void;
   addFd: () => void;
@@ -273,6 +275,17 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const addLiquid = useCallback(() => {
     setState((s) => ({ ...s, liquidCash: [...s.liquidCash, emptySimpleLine()] }));
   }, []);
+  const upsertLiquid = useCallback((line: SimpleMoneyLine) => {
+    setState((s) => {
+      const idx = s.liquidCash.findIndex((r) => r.id === line.id);
+      if (idx >= 0) {
+        const next = [...s.liquidCash];
+        next[idx] = { ...line };
+        return { ...s, liquidCash: next };
+      }
+      return { ...s, liquidCash: [...s.liquidCash, { ...line }] };
+    });
+  }, []);
   const removeLiquid = useCallback((id: string) => {
     setState((s) => ({
       ...s,
@@ -428,6 +441,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       applyPortfolioMutate,
       updateLiquid,
       addLiquid,
+      upsertLiquid,
       removeLiquid,
       updateFd,
       addFd,
@@ -471,6 +485,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       applyPortfolioMutate,
       updateLiquid,
       addLiquid,
+      upsertLiquid,
       removeLiquid,
       updateFd,
       addFd,

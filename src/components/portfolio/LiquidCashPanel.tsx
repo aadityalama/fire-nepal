@@ -1,7 +1,8 @@
 "use client";
 
-import { Building2, Landmark, PiggyBank, Plus, Trash2, Wallet } from "lucide-react";
+import { Building2, Landmark, Pencil, PiggyBank, Plus, Trash2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import {
   aggregateFdMonthlyInterestNpr,
@@ -28,6 +29,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
+import { emptySimpleLine } from "@/components/portfolio/storage";
 
 const LIQ_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "add", label: "Add cash", tone: "in" },
@@ -134,8 +136,7 @@ export function LiquidCashPanel({
   ledger,
   ledgerFx,
   onMutate,
-  onChange,
-  onAdd,
+  onUpsertLiquid,
   onRemove,
   onFdChange,
   onAddFd,
@@ -146,14 +147,54 @@ export function LiquidCashPanel({
   ledger: readonly PortfolioLedgerEntry[];
   ledgerFx: LedgerFx;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
-  onChange: (id: string, patch: Partial<SimpleMoneyLine>) => void;
-  onAdd: () => void;
+  onUpsertLiquid: (line: SimpleMoneyLine) => void;
   onRemove: (id: string) => void;
   onFdChange: (id: string, patch: Partial<FixedDepositRow>) => void;
   onAddFd: () => void;
   onRemoveFd: (id: string) => void;
 }) {
   const [tab, setTab] = useState<BankingTab>("liquid");
+  const [draft, setDraft] = useState<SimpleMoneyLine>(() => emptySimpleLine());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const patchDraft = (patch: Partial<SimpleMoneyLine>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+  };
+
+  const resetEntryForm = () => {
+    setFormError(null);
+    setDraft(emptySimpleLine());
+    setEditingId(null);
+  };
+
+  const saveDraft = () => {
+    setFormError(null);
+    const name = draft.name.trim();
+    if (!name) {
+      setFormError("Enter a bank or wallet name before saving.");
+      return;
+    }
+    onUpsertLiquid({
+      ...draft,
+      name,
+      accountNumber: draft.accountNumber?.trim() || undefined,
+      openedDate: draft.openedDate?.trim() || undefined,
+    });
+    toast.success(editingId ? "Bank account updated." : "Bank account saved.");
+    resetEntryForm();
+  };
+
+  const startEdit = (line: SimpleMoneyLine) => {
+    setFormError(null);
+    setDraft({ ...line });
+    setEditingId(line.id);
+  };
+
+  const removeLine = (id: string) => {
+    if (editingId === id) resetEntryForm();
+    onRemove(id);
+  };
 
   const { krwPerNpr, usdPerNpr } = ledgerFx;
   const totals = useMemo(
@@ -230,25 +271,31 @@ export function LiquidCashPanel({
         </div>
 
         {tab === "liquid" ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-emerald-200/55">
-                <PiggyBank size={14} className="text-sky-300" />
-                Accounts & wallets
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-sky-400/20 bg-gradient-to-br from-slate-950/65 via-black/40 to-sky-950/25 p-3 shadow-lg shadow-black/30 ring-1 ring-white/[0.05] backdrop-blur-md sm:p-4">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-sky-200/70">
+                    <PiggyBank size={14} className="text-sky-300" />
+                    {editingId ? "Edit bank account" : "New bank account"}
+                  </div>
+                  <p className="mt-1 text-xs font-semibold leading-snug text-emerald-200/55 sm:text-sm">
+                    {editingId
+                      ? "Update the fields below, then save. Your saved accounts stay in the list — not in this form."
+                      : "Save adds the account to your list and clears this form so you can enter another bank account immediately."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetEntryForm}
+                  className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-400/35 bg-gradient-to-r from-sky-500/25 to-cyan-500/20 px-4 py-2.5 text-xs font-black text-sky-50 shadow-md shadow-sky-950/40 ring-1 ring-sky-400/25 transition hover:from-sky-500/35 hover:to-cyan-500/30 sm:w-auto sm:justify-center sm:rounded-full sm:py-2"
+                >
+                  <Plus size={16} strokeWidth={2.5} />
+                  Add new bank account
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onAdd}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/15 px-2.5 py-1 text-[11px] font-black text-sky-100 transition hover:bg-sky-500/25 sm:text-xs"
-              >
-                <Plus size={14} /> Add account
-              </button>
-            </div>
-            {lines.map((line) => (
-              <div
-                key={line.id}
-                className="wealth-row-card space-y-2 rounded-2xl border border-sky-400/15 bg-black/30 p-2.5 shadow-inner shadow-black/40 backdrop-blur-sm sm:p-3"
-              >
+
+              <div key={draft.id} className="space-y-2">
                 <div className="grid gap-2 lg:grid-cols-12 lg:items-end lg:gap-2">
                   <label className="block min-w-0 lg:col-span-3">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
@@ -256,8 +303,8 @@ export function LiquidCashPanel({
                     </span>
                     <input
                       type="text"
-                      value={line.name}
-                      onChange={(e) => onChange(line.id, { name: e.target.value })}
+                      value={draft.name}
+                      onChange={(e) => patchDraft({ name: e.target.value })}
                       placeholder="e.g. Nabil savings"
                       className="wealth-input-text w-full px-2.5 py-2 text-xs sm:text-sm"
                     />
@@ -268,17 +315,18 @@ export function LiquidCashPanel({
                     </span>
                     <input
                       type="text"
-                      value={line.accountNumber ?? ""}
-                      onChange={(e) => onChange(line.id, { accountNumber: e.target.value || undefined })}
+                      value={draft.accountNumber ?? ""}
+                      onChange={(e) => patchDraft({ accountNumber: e.target.value || undefined })}
                       placeholder="Optional"
                       className="wealth-input-text w-full px-2.5 py-2 text-xs sm:text-sm"
                     />
                   </label>
                   <div className="min-w-0 lg:col-span-3">
-                    <NumericMoneyInput tone="dark"
+                    <NumericMoneyInput
+                      tone="dark"
                       label="Current balance"
-                      value={line.amount}
-                      onChange={(n) => onChange(line.id, { amount: n })}
+                      value={draft.amount}
+                      onChange={(n) => patchDraft({ amount: n })}
                       variant="amount"
                       placeholder="0"
                       className="text-[10px] font-bold uppercase tracking-wide text-zinc-200 [&>span]:block"
@@ -288,30 +336,116 @@ export function LiquidCashPanel({
                   </div>
                   <label className="block w-full lg:col-span-2">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Currency</span>
-                    <CurrencySelect value={line.currency} onChange={(c) => onChange(line.id, { currency: c })} />
+                    <CurrencySelect value={draft.currency} onChange={(c) => patchDraft({ currency: c })} />
                   </label>
-                  <div className="flex justify-end lg:col-span-1 lg:items-end lg:pb-0.5">
-                    <button
-                      type="button"
-                      aria-label="Remove"
-                      onClick={() => onRemove(line.id)}
-                      className="rounded-xl p-2 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
                 </div>
                 <div className="flex flex-col gap-2 border-t border-emerald-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-4 sm:gap-y-2">
                   <PortfolioIsoDateField
                     label="Opening date"
-                    value={line.openedDate}
-                    onChange={(next) => onChange(line.id, { openedDate: next })}
+                    value={draft.openedDate}
+                    onChange={(next) => patchDraft({ openedDate: next })}
                   />
-                  <PortfolioDateMeta dateIso={line.openedDate} leadText="Since" />
+                  <PortfolioDateMeta dateIso={draft.openedDate} leadText="Since" />
                 </div>
-                <LiquidCashTxnStrip line={line} ledgerFx={ledgerFx} onMutate={onMutate} />
+                {formError ? <p className="text-xs font-bold text-rose-300">{formError}</p> : null}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={saveDraft}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-xs font-black uppercase tracking-wide text-zinc-950 shadow-lg shadow-emerald-950/35 transition hover:brightness-110 sm:text-sm"
+                  >
+                    Save
+                  </button>
+                  {editingId ? (
+                    <button
+                      type="button"
+                      onClick={resetEntryForm}
+                      className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-bold text-emerald-100/90 transition hover:bg-white/10"
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-emerald-200/55">
+                <Wallet size={14} className="text-sky-300" />
+                Saved accounts
+              </div>
+              {lines.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-sky-400/25 bg-black/20 px-4 py-8 text-center">
+                  <p className="text-sm font-bold text-emerald-200/70">No bank accounts yet.</p>
+                  <p className="mt-1 text-xs font-semibold text-emerald-200/45">
+                    Complete the form above and tap <span className="font-black text-sky-200">Save</span> — it will show up
+                    here and the form will clear for your next entry.
+                  </p>
+                </div>
+              ) : (
+                lines.map((line) => (
+                  <div
+                    key={line.id}
+                    className={`wealth-row-card space-y-3 rounded-2xl border bg-black/35 p-3 shadow-inner shadow-black/40 backdrop-blur-sm sm:p-4 ${
+                      editingId === line.id
+                        ? "border-sky-400/50 ring-2 ring-sky-400/35"
+                        : "border-sky-400/18 ring-1 ring-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="truncate text-base font-black text-emerald-50 sm:text-lg">
+                          {line.name.trim() || "Unnamed account"}
+                        </p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-emerald-200/70">
+                          {line.accountNumber ? (
+                            <span>
+                              <span className="font-black text-emerald-200/45">Account · </span>
+                              {line.accountNumber}
+                            </span>
+                          ) : null}
+                          <span>
+                            <span className="font-black text-emerald-200/45">Balance · </span>
+                            {formatMoney(line.amount ?? 0, line.currency)}
+                          </span>
+                          <span className="font-black text-sky-200/90">{line.currency}</span>
+                        </div>
+                        <div className="flex flex-col gap-1 border-t border-emerald-400/10 pt-2 text-[11px] font-semibold text-emerald-200/50 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+                          {line.openedDate ? (
+                            <span>
+                              <span className="font-black text-emerald-200/40">Opened · </span>
+                              {line.openedDate}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-200/35">No opening date on file</span>
+                          )}
+                          <PortfolioDateMeta dateIso={line.openedDate} leadText="Since" />
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(line)}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-black text-sky-100 transition hover:bg-sky-500/20"
+                        >
+                          <Pencil size={14} />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeLine(line.id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/20"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <LiquidCashTxnStrip line={line} ledgerFx={ledgerFx} onMutate={onMutate} />
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
