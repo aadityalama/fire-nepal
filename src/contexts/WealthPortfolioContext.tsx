@@ -276,7 +276,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeLiquid = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      liquidCash: s.liquidCash.length > 1 ? s.liquidCash.filter((r) => r.id !== id) : s.liquidCash,
+      liquidCash: s.liquidCash.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -292,7 +292,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeFd = useCallback((id: string) => {
     setState((s) => {
       const fd = s.fixedDeposits ?? [];
-      return { ...s, fixedDeposits: fd.length > 1 ? fd.filter((r) => r.id !== id) : fd };
+      return { ...s, fixedDeposits: fd.filter((r) => r.id !== id) };
     });
   }, []);
 
@@ -308,7 +308,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeInv = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      investments: s.investments.length > 1 ? s.investments.filter((r) => r.id !== id) : s.investments,
+      investments: s.investments.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -324,7 +324,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeMetal = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      metals: s.metals.length > 1 ? s.metals.filter((r) => r.id !== id) : s.metals,
+      metals: s.metals.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -340,7 +340,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeRe = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      realEstate: s.realEstate.length > 1 ? s.realEstate.filter((r) => r.id !== id) : s.realEstate,
+      realEstate: s.realEstate.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -356,7 +356,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeVeh = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      vehicles: s.vehicles.length > 1 ? s.vehicles.filter((r) => r.id !== id) : s.vehicles,
+      vehicles: s.vehicles.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -372,7 +372,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeLiab = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      liabilities: s.liabilities.length > 1 ? s.liabilities.filter((r) => r.id !== id) : s.liabilities,
+      liabilities: s.liabilities.filter((r) => r.id !== id),
     }));
   }, []);
 
@@ -391,10 +391,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const removeRetirement = useCallback((id: string) => {
     setState((s) => ({
       ...s,
-      globalRetirementAssets:
-        s.globalRetirementAssets.length > 1
-          ? s.globalRetirementAssets.filter((r) => r.id !== id)
-          : s.globalRetirementAssets,
+      globalRetirementAssets: s.globalRetirementAssets.filter((r) => r.id !== id),
     }));
   }, []);
 

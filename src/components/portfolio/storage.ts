@@ -94,14 +94,14 @@ export function emptyGlobalRetirementAsset(kind: RetirementAccountKind = "ssf"):
 export function defaultWealthState(): WealthPortfolioStateV2 {
   return {
     version: 2,
-    liquidCash: [emptySimpleLine()],
-    fixedDeposits: [emptyFixedDeposit()],
-    investments: [emptyInvestment("nepse")],
-    metals: [emptyMetal("gold"), emptyMetal("silver")],
-    realEstate: [emptyRealEstate("apartment")],
-    vehicles: [emptyVehicle("car")],
-    liabilities: [emptyLiability("loan")],
-    globalRetirementAssets: [emptyGlobalRetirementAsset("ssf")],
+    liquidCash: [],
+    fixedDeposits: [],
+    investments: [],
+    metals: [],
+    realEstate: [],
+    vehicles: [],
+    liabilities: [],
+    globalRetirementAssets: [],
     netWorthHistory: [],
     ledger: [],
   };
@@ -149,17 +149,14 @@ function migrateV1ToV2(raw: string): WealthPortfolioStateV2 | null {
     if (merged.length) base.liquidCash = merged.slice(0, 40);
 
     if (Array.isArray(legacyInv) && legacyInv.length) {
-      base.investments = [
-        ...legacyInv.map((r) => ({
-          id: typeof r.id === "string" ? r.id : newId(),
-          kind: "sip" as InvestmentKind,
-          name: r.name || "Imported",
-          quantity: 1,
-          buyPrice: r.amount,
-          currency: r.currency ?? "NPR",
-        })),
-        emptyInvestment("us_stock"),
-      ];
+      base.investments = legacyInv.map((r) => ({
+        id: typeof r.id === "string" ? r.id : newId(),
+        kind: "sip" as InvestmentKind,
+        name: r.name || "Imported",
+        quantity: 1,
+        buyPrice: r.amount,
+        currency: r.currency ?? "NPR",
+      }));
     }
 
     const liab = v1.liabilities;
@@ -413,13 +410,13 @@ export function coerceWealthPortfolioState(parsed: Partial<WealthPortfolioStateV
 
 function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioStateV2 {
   const d = defaultWealthState();
-  const investmentsRaw = Array.isArray(parsed.investments) && parsed.investments.length ? parsed.investments : d.investments;
+  const investmentsRaw = Array.isArray(parsed.investments) ? parsed.investments : d.investments;
   const investments = investmentsRaw.map((r) => ({
     ...r,
     purchaseDate: sanitizeIsoDate((r as InvestmentRow).purchaseDate),
     fifoLots: sanitizeFifoLots((r as InvestmentRow).fifoLots),
   }));
-  const liquidRaw = Array.isArray(parsed.liquidCash) && parsed.liquidCash.length ? parsed.liquidCash : d.liquidCash;
+  const liquidRaw = Array.isArray(parsed.liquidCash) ? parsed.liquidCash : d.liquidCash;
   const liquidCash = liquidRaw.map((r) => {
     const row = r as SimpleMoneyLine;
     return {
@@ -428,7 +425,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       accountNumber: sanitizeIdField(row.accountNumber, 48),
     };
   });
-  const metalsRaw = Array.isArray(parsed.metals) && parsed.metals.length ? parsed.metals : d.metals;
+  const metalsRaw = Array.isArray(parsed.metals) ? parsed.metals : d.metals;
   const metals = metalsRaw.map((r) => {
     const m = r as MetalRow;
     const basis = m.totalCostBasisNpr;
@@ -440,7 +437,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       totalCostBasisNpr,
     };
   });
-  const reRaw = Array.isArray(parsed.realEstate) && parsed.realEstate.length ? parsed.realEstate : d.realEstate;
+  const reRaw = Array.isArray(parsed.realEstate) ? parsed.realEstate : d.realEstate;
   const realEstate = reRaw.map((r) => {
     const row = r as RealEstateRow;
     const est = row.annualAppreciationEstimatePct;
@@ -452,23 +449,19 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       annualAppreciationEstimatePct,
     };
   });
-  const vehRaw = Array.isArray(parsed.vehicles) && parsed.vehicles.length ? parsed.vehicles : d.vehicles;
+  const vehRaw = Array.isArray(parsed.vehicles) ? parsed.vehicles : d.vehicles;
   const vehicles = vehRaw.map((r) => ({
     ...r,
     purchaseDate: sanitizeIsoDate((r as VehicleRow).purchaseDate),
   }));
-  const liabRaw = Array.isArray(parsed.liabilities) && parsed.liabilities.length ? parsed.liabilities : d.liabilities;
+  const liabRaw = Array.isArray(parsed.liabilities) ? parsed.liabilities : d.liabilities;
   const liabilities = liabRaw.map((r) => ({
     ...r,
     loanStartDate: sanitizeIsoDate((r as LiabilityRow).loanStartDate),
   }));
-  const grRaw =
-    Array.isArray(parsed.globalRetirementAssets) && parsed.globalRetirementAssets.length
-      ? parsed.globalRetirementAssets
-      : d.globalRetirementAssets;
+  const grRaw = Array.isArray(parsed.globalRetirementAssets) ? parsed.globalRetirementAssets : d.globalRetirementAssets;
   const globalRetirementAssets = grRaw.map(sanitizeGlobalRetirementRow);
-  const fdRaw =
-    Array.isArray(parsed.fixedDeposits) && parsed.fixedDeposits.length ? parsed.fixedDeposits : d.fixedDeposits;
+  const fdRaw = Array.isArray(parsed.fixedDeposits) ? parsed.fixedDeposits : d.fixedDeposits;
   const fixedDeposits = fdRaw.map(sanitizeFixedDepositRow).slice(0, 40);
   return {
     version: 2,

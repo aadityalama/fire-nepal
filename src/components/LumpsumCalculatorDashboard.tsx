@@ -50,7 +50,7 @@ const quickPresets: Array<{ label: string; amount: number; currency: Currency; h
 
 const milestones = [
   { label: "First NPR 10L", valueNpr: 1_000_000, icon: PiggyBank },
-  { label: "Land Seed Fund", valueNpr: 5_000_000, icon: Mountain },
+  { label: "NPR 50 lakh", valueNpr: 5_000_000, icon: Mountain },
   { label: "FIRE Halfway", valueNpr: 15_000_000, icon: Flame },
   { label: "FIRE Target", valueNpr: FIRE_TARGET_NPR, icon: Target },
 ];

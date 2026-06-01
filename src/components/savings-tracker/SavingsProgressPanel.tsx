@@ -39,7 +39,7 @@ function Meter({
 export function SavingsProgressPanel() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const max = useMemo(() => Math.max(...MONTHLY_SAVINGS_SERIES.map((m) => m.savingsKrw)), []);
+  const max = useMemo(() => Math.max(1, ...MONTHLY_SAVINGS_SERIES.map((m) => m.savingsKrw)), []);
 
   return (
     <section className={`wealth-glass relative overflow-hidden p-4 sm:p-5 ${light ? "shadow-[0_12px_40px_-24px_rgba(15,23,42,0.08)]" : ""}`}>

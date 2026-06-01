@@ -66,9 +66,9 @@ export function buildDeskWealthSimulationParams(
 ): WealthSimulationParams {
   const { totals, passiveMonthlyNpr, globalRetirementAssets } = args;
   const monthlySpendNpr = defaultMonthlySpendFromPortfolio(totals, passiveMonthlyNpr);
-  const monthlyContributionNpr = Math.round(
-    Math.max(25_000, Math.min(400_000, totals.investableNpr * 0.004 + passiveMonthlyNpr * 0.25)),
-  );
+  const rawContribution = Math.round(totals.investableNpr * 0.004 + passiveMonthlyNpr * 0.25);
+  const monthlyContributionNpr =
+    rawContribution > 0 ? Math.max(25_000, Math.min(400_000, rawContribution)) : 0;
   return {
     currentAge: inferDefaultAgeFromPortfolio([...globalRetirementAssets]),
     monthlySpendNpr: Math.max(0, monthlySpendNpr),
@@ -190,7 +190,7 @@ export function buildCashflowOnlyFinancialCoachSnapshot(cashflow: CashflowDashbo
     netWorthNpr: 0,
     monthDeltaNpr: null,
     netWorthHistoryLen: 0,
-    fireScore: 55,
+    fireScore: 0,
     passiveMonthlyNpr: 0,
     investableNpr: 0,
     liquidNpr: 0,

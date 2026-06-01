@@ -21,27 +21,7 @@ import {
 
 type CompareCell = boolean | "limited";
 
-const COMPARE_ROWS: { key: string; free: CompareCell; premium: CompareCell; elite: CompareCell; label: string }[] = [
-  { key: "dash", label: "Advanced FIRE dashboard", free: false, premium: true, elite: true },
-  { key: "calc", label: "FIRE calculator (full)", free: true, premium: true, elite: true },
-  { key: "ocr", label: "OCR payslip import", free: false, premium: true, elite: true },
-  { key: "coach", label: "AI financial coach", free: false, premium: true, elite: true },
-  { key: "aipage", label: "AI coach dashboard (/ai-coach)", free: "limited", premium: true, elite: true },
-  { key: "intel", label: "AI wealth intelligence", free: "limited", premium: true, elite: true },
-  { key: "cagr", label: "CAGR & advanced analytics", free: false, premium: true, elite: true },
-  { key: "mc", label: "Multi-currency intelligence", free: false, premium: true, elite: true },
-  { key: "sim", label: "Advanced simulations", free: false, premium: true, elite: true },
-  { key: "sync", label: "Cloud sync", free: false, premium: true, elite: true },
-  { key: "pdf", label: "PDF reports", free: false, premium: true, elite: true },
-  { key: "elite_ai_dash", label: "AI Wealth Dashboard", free: false, premium: false, elite: true },
-  { key: "elite_family", label: ELITE_FAMILY_WEALTH_FEATURE_LABEL, free: false, premium: false, elite: true },
-  { key: "elite_nepal", label: "Nepal Return Simulator", free: false, premium: false, elite: true },
-  { key: "elite_rei", label: "Real Estate Intelligence", free: false, premium: false, elite: true },
-  { key: "elite_alloc", label: "AI Portfolio Allocation", free: false, premium: false, elite: true },
-  { key: "elite_advisory", label: "Private Advisory Tools", free: false, premium: false, elite: true },
-  { key: "elite_biz", label: "Business Finance Suite", free: false, premium: false, elite: true },
-];
-
+/** Founder cohort cap (copy + footers). */
 const FOUNDER_MEMBER_CAP = 500;
 
 function formatNpr(amount: number): string {
@@ -96,6 +76,27 @@ function useFounderWindowCountdown() {
     return `${d}d ${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m`;
   }, [now]);
 }
+
+const COMPARE_ROWS: { key: string; free: CompareCell; premium: CompareCell; elite: CompareCell; label: string }[] = [
+  { key: "dash", label: "Advanced FIRE dashboard", free: false, premium: true, elite: true },
+  { key: "calc", label: "FIRE calculator (full)", free: true, premium: true, elite: true },
+  { key: "ocr", label: "OCR payslip import", free: false, premium: true, elite: true },
+  { key: "coach", label: "AI financial coach", free: false, premium: true, elite: true },
+  { key: "aipage", label: "AI coach dashboard (/ai-coach)", free: "limited", premium: true, elite: true },
+  { key: "intel", label: "AI wealth intelligence", free: "limited", premium: true, elite: true },
+  { key: "cagr", label: "CAGR & advanced analytics", free: false, premium: true, elite: true },
+  { key: "mc", label: "Multi-currency intelligence", free: false, premium: true, elite: true },
+  { key: "sim", label: "Advanced simulations", free: false, premium: true, elite: true },
+  { key: "sync", label: "Cloud sync", free: false, premium: true, elite: true },
+  { key: "pdf", label: "PDF reports", free: false, premium: true, elite: true },
+  { key: "elite_ai_dash", label: "AI Wealth Dashboard", free: false, premium: false, elite: true },
+  { key: "elite_family", label: ELITE_FAMILY_WEALTH_FEATURE_LABEL, free: false, premium: false, elite: true },
+  { key: "elite_nepal", label: "Nepal Return Simulator", free: false, premium: false, elite: true },
+  { key: "elite_rei", label: "Real Estate Intelligence", free: false, premium: false, elite: true },
+  { key: "elite_alloc", label: "AI Portfolio Allocation", free: false, premium: false, elite: true },
+  { key: "elite_advisory", label: "Private Advisory Tools", free: false, premium: false, elite: true },
+  { key: "elite_biz", label: "Business Finance Suite", free: false, premium: false, elite: true },
+];
 
 function EliteFamilyWealthBullet({ checkClass }: { checkClass: string }) {
   const popoverId = `elite-family-scope-${useId().replace(/:/g, "")}`;
@@ -347,6 +348,7 @@ export function FireMembershipPage() {
               const delay = i * 80;
               const isElite = t === "elite";
               const isPremium = t === "premium";
+              const isFree = t === "free";
               const baseCard =
                 "animate-fade-up relative flex h-full min-h-0 flex-col rounded-[1.5rem] border p-6 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-all duration-300 ease-out sm:p-7";
               const sizing = isPremium ? "lg:z-10 lg:-my-1 lg:scale-[1.02] lg:px-7 lg:py-8 lg:shadow-[0_32px_80px_rgba(16,185,129,0.18)]" : "";

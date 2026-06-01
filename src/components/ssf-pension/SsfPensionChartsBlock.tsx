@@ -44,32 +44,44 @@ export function SsfPensionChartsBlock() {
     <div className="grid gap-4 lg:grid-cols-2">
       <div className={`wealth-chart-card wealth-glass flex min-h-[240px] flex-col p-4 sm:min-h-[260px] sm:p-5 ${light ? "border-slate-200/80" : ""}`}>
         <p className="text-[11px] font-black uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300/85">Contribution growth</p>
-        <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">Cumulative public-tier balance path (demo)</p>
+        <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+          Cumulative public-tier balance path from your contribution history (chart appears when data is available).
+        </p>
         <div className="mt-3 min-h-[180px] flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={SSF_GROWTH_CHART} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-              <defs>
-                <linearGradient id={`ssfBal${gid}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#14b8a6" stopOpacity={light ? 0.35 : 0.45} />
-                  <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 6" stroke={gridColor} vertical={false} />
-              <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
-              <YAxis {...axisProps} tickFormatter={(v) => `${Math.round(v / 1000)}k`} width={36} />
-              <Tooltip
-                contentStyle={{
-                  background: tooltipBg,
-                  border: `1px solid ${tooltipBorder}`,
-                  borderRadius: 12,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-                formatter={(v: number) => [`NPR ${v.toLocaleString("en-IN")}`, "Balance"]}
-              />
-              <Area type="monotone" dataKey="balance" stroke="#0d9488" strokeWidth={2} fill={`url(#ssfBal${gid})`} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {SSF_GROWTH_CHART.length === 0 ? (
+            <div
+              className={`flex h-full min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed px-4 text-center text-sm font-semibold ${
+                light ? "border-slate-200/90 text-slate-500" : "border-white/15 text-zinc-400"
+              }`}
+            >
+              No contribution history yet. Log contributions in the SSF workspace to plot growth over time.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={SSF_GROWTH_CHART} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={`ssfBal${gid}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#14b8a6" stopOpacity={light ? 0.35 : 0.45} />
+                    <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 6" stroke={gridColor} vertical={false} />
+                <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
+                <YAxis {...axisProps} tickFormatter={(v) => `${Math.round(v / 1000)}k`} width={36} />
+                <Tooltip
+                  contentStyle={{
+                    background: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                  formatter={(v: number) => [`NPR ${v.toLocaleString("en-IN")}`, "Balance"]}
+                />
+                <Area type="monotone" dataKey="balance" stroke="#0d9488" strokeWidth={2} fill={`url(#ssfBal${gid})`} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 

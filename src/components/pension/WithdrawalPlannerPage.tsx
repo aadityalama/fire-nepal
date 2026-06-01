@@ -18,7 +18,7 @@ export function WithdrawalPlannerPage() {
   return (
     <PensionChrome
       title="Withdrawal Planner"
-      subtitle="Phased drawdowns across public tiers, provident funds, and portfolio sleeves — illustrative sequencing, not tax or legal advice."
+      subtitle="Phased drawdowns across public tiers, provident funds, and portfolio sleeves — planning-oriented sequencing, not tax or legal advice."
     >
       <div className="mb-4 grid gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-teal-500/20 bg-teal-500/10 px-4 py-3 text-sm font-semibold text-teal-950 dark:text-teal-50">
@@ -32,7 +32,7 @@ export function WithdrawalPlannerPage() {
       </div>
 
       <section className="wealth-glass mb-6 p-4 sm:p-5">
-        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Withdrawal phases (demo)</h2>
+        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Withdrawal phases</h2>
         <ol className="mt-3 flex flex-col gap-3 text-sm font-semibold text-slate-700 dark:text-zinc-300">
           <li className="rounded-xl border border-slate-200/80 px-3 py-2 dark:border-white/10">
             <span className="font-black text-teal-700 dark:text-teal-300">Phase 1 · Bridge</span> — Portfolio dividends + short bond

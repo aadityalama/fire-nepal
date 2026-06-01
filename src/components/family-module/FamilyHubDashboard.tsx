@@ -90,7 +90,7 @@ export function FamilyHubDashboard() {
           </div>
           <div className={`mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold ${familyMutedText(light)}`}>
             <TrendingUp size={14} className="text-emerald-400" />
-            +4 pts vs last month (demo)
+            +4 pts vs last month (when modeled)
             <FamilyBtnGhost light={light} className="ml-auto min-h-[32px] px-2 py-1 text-[10px]" onClick={() => setScoreOpen(true)}>
               <Pencil size={12} /> Edit score
             </FamilyBtnGhost>

@@ -79,7 +79,7 @@ export function ReturnToNepalChrome({
                 : "border-white/10 bg-white/[0.05] text-white hover:bg-white/10"
             }`}
           >
-            <RefreshCw size={14} /> Reset demo
+            <RefreshCw size={14} /> Reset workspace
           </button>
         </div>
       </div>

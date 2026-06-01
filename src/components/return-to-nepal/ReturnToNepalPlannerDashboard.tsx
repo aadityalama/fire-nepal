@@ -133,7 +133,7 @@ export function ReturnToNepalPlannerDashboard() {
   return (
     <WealthDashboardShell
       brand={{ tagline: "Return OS", iconGradient: "from-teal-400 to-emerald-400" }}
-      footerNote="Return to Nepal Planner — local-first demo. Same glass workspace patterns as Pension; not tax or legal advice."
+      footerNote="Return to Nepal Planner — local-first workspace. Same glass patterns as Pension; not tax or legal advice."
     >
       <ReturnToNepalChrome
         title="Return to Nepal Planner"

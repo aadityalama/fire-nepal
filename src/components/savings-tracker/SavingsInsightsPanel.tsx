@@ -30,19 +30,31 @@ export function SavingsInsightsPanel() {
       </div>
 
       <ul className="relative flex min-h-0 flex-1 flex-col gap-3">
-        {AI_INSIGHTS.map((item) => (
+        {AI_INSIGHTS.length === 0 ? (
           <li
-            key={item.id}
-            className={`motion-safe:group flex flex-1 flex-col justify-center rounded-2xl border px-4 py-3.5 motion-safe:transition-[transform,box-shadow,border-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 ${
-              light
-                ? "border-white/80 bg-white/80 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] motion-safe:hover:border-emerald-200 motion-safe:hover:shadow-[0_14px_40px_-18px_rgba(16,185,129,0.18)]"
-                : "border-white/[0.06] bg-white/[0.04] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] motion-safe:hover:border-emerald-400/25 motion-safe:hover:shadow-[0_16px_44px_-20px_rgba(0,0,0,0.45)]"
+            className={`flex flex-1 flex-col justify-center rounded-2xl border px-4 py-6 text-center ${
+              light ? "border-emerald-200/80 bg-white/80" : "border-white/[0.08] bg-white/[0.04]"
             }`}
           >
-            <p className="text-[11px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300/90">{item.title}</p>
-            <p className="mt-1.5 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-300">{item.body}</p>
+            <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+              Insights appear when your savings rhythm and goals have enough history. Start by logging monthly deposits.
+            </p>
           </li>
-        ))}
+        ) : (
+          AI_INSIGHTS.map((item) => (
+            <li
+              key={item.id}
+              className={`motion-safe:group flex flex-1 flex-col justify-center rounded-2xl border px-4 py-3.5 motion-safe:transition-[transform,box-shadow,border-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 ${
+                light
+                  ? "border-white/80 bg-white/80 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] motion-safe:hover:border-emerald-200 motion-safe:hover:shadow-[0_14px_40px_-18px_rgba(16,185,129,0.18)]"
+                  : "border-white/[0.06] bg-white/[0.04] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] motion-safe:hover:border-emerald-400/25 motion-safe:hover:shadow-[0_16px_44px_-20px_rgba(0,0,0,0.45)]"
+              }`}
+            >
+              <p className="text-[11px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300/90">{item.title}</p>
+              <p className="mt-1.5 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-300">{item.body}</p>
+            </li>
+          ))
+        )}
       </ul>
     </section>
   );

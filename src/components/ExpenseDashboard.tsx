@@ -111,87 +111,8 @@ type RoommateProfile = {
   notes: string;
 };
 
-const initialMembers = ["Aashish", "Bikram", "Suman", "Nirmala"];
-
-const initialProfiles: Record<string, RoommateProfile> = {
-  Aashish: {
-    name: "Aashish Gurung",
-    phone: "+82 10-4821-1904",
-    kakaoId: "aashish.fire",
-    bankName: "Kookmin Bank",
-    accountNumber: "110-482-190421",
-    emergencyContact: "+977 984-120-4491",
-    notes: "Usually pays mart and rice/gas. Prefers settlement on salary day.",
-  },
-  Bikram: {
-    name: "Bikram Rai",
-    phone: "+82 10-7742-8820",
-    kakaoId: "bikram.kr",
-    bankName: "Shinhan Bank",
-    accountNumber: "088-774-288201",
-    emergencyContact: "+977 981-334-8832",
-    notes: "Pays room rent and remittance fees. Keep rent receipt screenshots here.",
-  },
-  Suman: {
-    name: "Suman Tamang",
-    phone: "+82 10-6615-4032",
-    kakaoId: "suman.seoul",
-    bankName: "Woori Bank",
-    accountNumber: "1002-661-540321",
-    emergencyContact: "+977 986-551-9033",
-    notes: "Usually handles electricity and shared utilities.",
-  },
-  Nirmala: {
-    name: "Nirmala Shrestha",
-    phone: "+82 10-3091-7620",
-    kakaoId: "nirmala.kakao",
-    bankName: "Hana Bank",
-    accountNumber: "391-309-176204",
-    emergencyContact: "+977 980-219-7004",
-    notes: "Tracks internet bills and monthly subscription payments.",
-  },
-};
-
-const initialExpenses: Expense[] = [
-  { id: 1, title: "Mart expenses", amount: 18500, payer: "Aashish", category: "Food/Mart", splitEqually: true, date: "2026-05-02" },
-  { id: 2, title: "Room rent", amount: 42000, payer: "Bikram", category: "Rent", splitEqually: true, date: "2026-05-05" },
-  { id: 3, title: "Electricity", amount: 7200, payer: "Suman", category: "Electricity", splitEqually: true, date: "2026-05-08" },
-  { id: 4, title: "Internet", amount: 3500, payer: "Nirmala", category: "Internet", splitEqually: true, date: "2026-05-10" },
-  { id: 5, title: "Rice/Gas", amount: 6800, payer: "Aashish", category: "Food/Mart", splitEqually: true, date: "2026-05-13" },
-  { id: 6, title: "Remittance transfer fee", amount: 2500, payer: "Bikram", category: "Remittance", splitEqually: true, date: "2026-05-16" },
-  { id: 7, title: "Mart expenses", amount: 16200, payer: "Suman", category: "Food/Mart", splitEqually: true, date: "2026-04-12" },
-  { id: 8, title: "Room rent", amount: 42000, payer: "Bikram", category: "Rent", splitEqually: true, date: "2026-04-05" },
-  { id: 9, title: "Electricity", amount: 6900, payer: "Aashish", category: "Electricity", splitEqually: true, date: "2026-04-18" },
-];
-
 const categories = ["Food/Mart", "Rent", "Electricity", "Internet", "Remittance", "Other"];
 const tabs: Tab[] = ["Dashboard", "Expenses", "Settlement", "Analytics", "AI Insights", "History"];
-
-const seedActivities: TimelineActivity[] = [
-  createActivity({
-    type: "expense_added",
-    monthKey: "2026-05",
-    member: "Bikram",
-    title: "Room rent",
-    amount: 42000,
-    category: "Rent",
-    message: "Bikram paid room rent",
-  }),
-  createActivity({
-    type: "expense_added",
-    monthKey: "2026-05",
-    member: "Aashish",
-    title: "Mart expenses",
-    amount: 18500,
-    category: "Food/Mart",
-    message: "Aashish added mart expense",
-  }),
-  createActivity({
-    type: "settlement",
-    monthKey: "2026-04",
-    message: "Settlement completed for April",
-  }),
-];
 
 function getCurrencyMeta(krwPerNpr: number) {
   return {
@@ -201,7 +122,7 @@ function getCurrencyMeta(krwPerNpr: number) {
   };
 }
 
-function emptyExpenseForm(payer = initialMembers[0], memberList: string[] = initialMembers): ExpenseForm {
+function emptyExpenseForm(payer = "", memberList: string[] = []): ExpenseForm {
   return {
     title: "",
     amount: "",
@@ -494,12 +415,12 @@ export function ExpenseDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
   const [currency, setCurrency] = useState<Currency>("NPR");
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
-  const [members, setMembers] = useState(initialMembers);
-  const [profiles, setProfiles] = useState<Record<string, RoommateProfile>>(initialProfiles);
+  const [members, setMembers] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, RoommateProfile>>({});
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [newMember, setNewMember] = useState("");
-  const [expenses, setExpenses] = useState(initialExpenses);
-  const [activities, setActivities] = useState<TimelineActivity[]>(seedActivities);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [activities, setActivities] = useState<TimelineActivity[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
@@ -523,7 +444,7 @@ export function ExpenseDashboard() {
       setExpenses(stored.expenses);
       setMembers(stored.members);
       setProfiles(stored.profiles);
-      setActivities(stored.activities.length ? stored.activities : seedActivities);
+      setActivities(stored.activities ?? []);
       if (stored.exchangeRate) setExchangeRate(stored.exchangeRate);
       if (stored.settlementTransferOverrides) {
         setSettlementOverrides(stored.settlementTransferOverrides);

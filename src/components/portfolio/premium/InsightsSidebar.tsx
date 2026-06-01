@@ -13,8 +13,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
-import { aiCoachInsight, marketOverview } from "@/data/fire-premium-dashboard";
+import { useMemo } from "react";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
+import { useMarketData } from "@/hooks/use-market-data";
 
 const quickAdds = [
   { label: "Add Bank", href: "/portfolio/banking", icon: Landmark },
@@ -26,12 +28,54 @@ const quickAdds = [
 ] as const;
 
 function SectionOverline({ children }: { children: string }) {
-  return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{children}</p>
-  );
+  return <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{children}</p>;
 }
 
 export function InsightsSidebar() {
+  const { intelModel, totals, hydrated } = useWealthPortfolio();
+  const { snapshot, status } = useMarketData({
+    symbolsCsv: "NEPSE",
+    cryptoCsv: "",
+    enabled: true,
+  });
+
+  const coachBody = useMemo(() => {
+    if (!hydrated) return "Loading your workspace…";
+    const head = intelModel.monthlyReport?.headline?.trim();
+    if (head) return head;
+    if (totals.totalAssetsNpr <= 0 && totals.liabilitiesNpr <= 0) {
+      return "Create Your First Goal in cashflow and add assets here — coach insights appear from your own numbers.";
+    }
+    return intelModel.cashBurn?.narrative?.trim() || "Track income and spending in cashflow to unlock tailored guidance.";
+  }, [hydrated, intelModel, totals.liabilitiesNpr, totals.totalAssetsNpr]);
+
+  const marketRows = useMemo(() => {
+    const rows: { label: string; value: string; changePct: number }[] = [];
+    if (!snapshot) return rows;
+    if (snapshot.nepseIndex && typeof snapshot.nepseIndex.value === "number") {
+      rows.push({
+        label: snapshot.nepseIndex.name || "NEPSE",
+        value: snapshot.nepseIndex.value.toLocaleString("en-US", { maximumFractionDigits: 2 }),
+        changePct: snapshot.nepseIndex.changePct ?? 0,
+      });
+    }
+    if (snapshot.forex?.nprPerUsd) {
+      rows.push({
+        label: "USD / NPR",
+        value: snapshot.forex.nprPerUsd.toFixed(2),
+        changePct: 0,
+      });
+    }
+    if (snapshot.forex?.krwPerNpr) {
+      rows.push({
+        label: "KRW / NPR",
+        value: snapshot.forex.krwPerNpr.toFixed(4),
+        changePct: 0,
+      });
+    }
+    return rows;
+  }, [snapshot]);
+
   return (
     <aside className="flex w-full min-w-0 flex-col gap-3 sm:gap-3.5 xl:gap-3">
       <PremiumGlassCard className="relative overflow-hidden p-3.5 sm:p-4 xl:p-3.5">
@@ -45,7 +89,7 @@ export function InsightsSidebar() {
             <div className="min-w-0 flex-1 space-y-0.5">
               <SectionOverline>Guidance</SectionOverline>
               <h2 className="text-[13px] font-bold tracking-tight text-white sm:text-sm">AI financial coach</h2>
-              <p className="text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs xl:text-[12px] xl:leading-snug">{aiCoachInsight}</p>
+              <p className="text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs xl:text-[12px] xl:leading-snug">{coachBody}</p>
             </div>
           </div>
           <Link
@@ -63,24 +107,30 @@ export function InsightsSidebar() {
           <SectionOverline>Markets</SectionOverline>
           <h2 className="text-[13px] font-bold tracking-tight text-white sm:text-sm">Overview</h2>
         </div>
-        <ul className="mt-2 space-y-1 sm:mt-3">
-          {marketOverview.map((m) => {
-            const up = m.changePct >= 0;
-            return (
-              <li
-                key={m.label}
-                className="flex items-center justify-between gap-1.5 rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm transition motion-safe:duration-300 motion-safe:ease-out hover:border-white/[0.1] hover:bg-white/[0.04] motion-safe:hover:-translate-y-px sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2"
-              >
-                <span className="text-xs font-semibold text-zinc-500">{m.label}</span>
-                <span className="text-xs font-bold tabular-nums text-white">{m.value}</span>
-                <span className={`text-[11px] font-bold tabular-nums ${up ? "text-emerald-400" : "text-rose-400"}`}>
-                  {up ? "+" : ""}
-                  {m.changePct.toFixed(2)}%
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        {status === "loading" && !marketRows.length ? (
+          <p className="mt-3 text-xs font-medium text-zinc-500">Loading live snapshot…</p>
+        ) : marketRows.length ? (
+          <ul className="mt-2 space-y-1 sm:mt-3">
+            {marketRows.map((m) => {
+              const up = m.changePct >= 0;
+              return (
+                <li
+                  key={m.label}
+                  className="flex items-center justify-between gap-1.5 rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm transition motion-safe:duration-300 motion-safe:ease-out hover:border-white/[0.1] hover:bg-white/[0.04] motion-safe:hover:-translate-y-px sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2"
+                >
+                  <span className="text-xs font-semibold text-zinc-500">{m.label}</span>
+                  <span className="text-xs font-bold tabular-nums text-white">{m.value}</span>
+                  <span className={`text-[11px] font-bold tabular-nums ${up ? "text-emerald-400" : "text-rose-400"}`}>
+                    {up ? "+" : ""}
+                    {m.changePct.toFixed(2)}%
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-3 text-xs font-medium text-zinc-500">Market snapshot unavailable — check your connection or try again later.</p>
+        )}
       </PremiumGlassCard>
 
       <PremiumGlassCard className="p-3.5 sm:p-4 xl:p-3.5">

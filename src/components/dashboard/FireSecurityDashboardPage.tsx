@@ -22,7 +22,7 @@ export function FireSecurityDashboardPage() {
   const [pw2, setPw2] = useState("");
   const [pwMsg, setPwMsg] = useState<string | null>(null);
 
-  const onPasswordDemo = useCallback(
+  const onPasswordSubmit = useCallback(
     (e: FormEvent) => {
       e.preventDefault();
       if (pw1.length < 6) {
@@ -33,7 +33,7 @@ export function FireSecurityDashboardPage() {
         setPwMsg("Passwords do not match.");
         return;
       }
-      setPwMsg("Demo only — password changes wire to your auth provider in production (STEP 7).");
+      setPwMsg("Password updates are not persisted here yet — connect your auth provider to enable this (roadmap).");
       setPw1("");
       setPw2("");
     },
@@ -122,7 +122,7 @@ export function FireSecurityDashboardPage() {
 
       <div className="rounded-2xl border border-white/10 bg-[#04140f]/80 p-6 backdrop-blur-xl">
         <h2 className="text-sm font-black uppercase tracking-[0.12em] text-emerald-300/70">Change password</h2>
-        <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={onPasswordDemo}>
+        <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={onPasswordSubmit}>
           <label className="block sm:col-span-2">
             <span className="text-[11px] font-black uppercase text-emerald-200/45">New password</span>
             <input
@@ -148,7 +148,7 @@ export function FireSecurityDashboardPage() {
               type="submit"
               className="rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg"
             >
-              Update password (demo)
+              Update password
             </button>
             {pwMsg ? <p className="mt-3 text-sm font-semibold text-emerald-300">{pwMsg}</p> : null}
           </div>
@@ -212,7 +212,7 @@ export function FireSecurityDashboardPage() {
           className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-zinc-300"
           onClick={() =>
             alert(
-              "Production: revoke all refresh tokens + invalidate sessions. Demo workspace only clears this browser via Sign out.",
+              "Production: revoke all refresh tokens and invalidate sessions. This preview only clears the current browser via Sign out.",
             )
           }
         >

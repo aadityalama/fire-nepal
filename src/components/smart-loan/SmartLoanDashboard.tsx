@@ -144,166 +144,41 @@ const editableMetricStorageKeys: Record<EditableMetric, string> = {
   interestIncome: "interestIncome",
 };
 
-const correctPin = "1234";
+const SMART_LOAN_PIN_KEY = "fn-smart-loan-pin-v1";
+
+function readSmartLoanPin(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(SMART_LOAN_PIN_KEY) ?? "";
+}
+
+function writeSmartLoanPin(pin: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(SMART_LOAN_PIN_KEY, pin);
+}
+
 const loanProfilesStorageKey = "smartLoan.profiles";
 const loanDocumentsStorageKey = "smartLoan.documents";
 const loanReminderDispatchStoragePrefix = "smartLoan.reminderDispatch";
 const chartColors = ["#10b981", "#22c55e", "#84cc16", "#f59e0b", "#ef4444"];
 
-const baseProfiles: Partial<LoanProfile>[] = [
-  {
-    id: "laxmi",
-    direction: "lent",
-    fullName: "Laxmi Gurung",
-    phone: "+977 984-1122334",
-    messaging: "WhatsApp + Viber",
-    citizenship: "46-01-77-03421",
-    passport: "PA1149021",
-    koreaId: "KOR-8842-20",
-    bank: "Nabil Bank",
-    account: "021001778844",
-    qrWallet: "eSewa QR saved",
-    address: "Pokhara-13, Kaski",
-    notes: "Family house repair bridge loan. Sends receipts monthly.",
-    risk: "Low",
-    relationship: "Family",
-    method: "Simple",
-    currency: "NPR",
-    principal: 650_000,
-    paid: 210_000,
-    annualRate: 12,
-    months: 18,
-    nextDue: "2026-06-03",
-    overdueDays: 0,
-    installmentsLeft: 8,
-    score: 88,
-  },
-  {
-    id: "min",
-    direction: "lent",
-    fullName: "Min Bahadur Tamang",
-    phone: "+82 10-4421-9088",
-    messaging: "Kakao + WhatsApp",
-    citizenship: "27-02-74-99218",
-    passport: "PA7765128",
-    koreaId: "KOR-1188-73",
-    bank: "KB Kookmin",
-    account: "846-23-001482",
-    qrWallet: "KakaoPay QR saved",
-    address: "Ansan, Gyeonggi-do",
-    notes: "Korea roommate advance. Needs stricter reminders.",
-    risk: "High",
-    relationship: "Other",
-    method: "Daily",
-    currency: "KRW",
-    principal: 4_800_000,
-    paid: 1_050_000,
-    annualRate: 18,
-    months: 10,
-    nextDue: "2026-05-24",
-    overdueDays: 3,
-    installmentsLeft: 6,
-    score: 61,
-  },
-  {
-    id: "aarav",
-    direction: "borrowed",
-    fullName: "Aarav Shrestha",
-    phone: "+977 981-2221190",
-    messaging: "WhatsApp",
-    citizenship: "03-07-78-45219",
-    passport: "PB8812047",
-    koreaId: "N/A",
-    bank: "NIC Asia",
-    account: "1199550021",
-    qrWallet: "Khalti QR saved",
-    address: "Birtamode, Jhapa",
-    notes: "Business stock loan borrowed from cousin.",
-    risk: "Medium",
-    relationship: "Business",
-    method: "EMI",
-    currency: "NPR",
-    principal: 900_000,
-    paid: 325_000,
-    annualRate: 15,
-    months: 24,
-    nextDue: "2026-06-01",
-    overdueDays: 0,
-    installmentsLeft: 14,
-    score: 74,
-  },
-  {
-    id: "sita",
-    direction: "lent",
-    fullName: "Sita Magar",
-    phone: "+977 986-4401188",
-    messaging: "Viber",
-    citizenship: "61-01-80-00731",
-    passport: "PC9911274",
-    koreaId: "KOR-4419-66",
-    bank: "Global IME",
-    account: "00450019812",
-    qrWallet: "IME Pay QR saved",
-    address: "Butwal-9, Rupandehi",
-    notes: "Education fee support. Contract signed and scanned.",
-    risk: "Critical",
-    relationship: "Friend",
-    method: "Compound",
-    currency: "NPR",
-    principal: 420_000,
-    paid: 80_000,
-    annualRate: 20,
-    months: 12,
-    nextDue: "2026-05-18",
-    overdueDays: 9,
-    installmentsLeft: 5,
-    score: 42,
-  },
-];
+const baseProfiles: Partial<LoanProfile>[] = [];
 
 const profiles = baseProfiles.map(normalizeLoanProfile);
 
-const baseDocuments: VaultDocument[] = [
-  { id: "doc-1", name: "Laxmi Citizenship Scan", folder: "Citizenship", type: "Image", owner: "Laxmi Gurung", status: "Encrypted" },
-  { id: "doc-2", name: "Min Daily Loan Agreement", folder: "Contracts", type: "PDF", owner: "Min Bahadur Tamang", status: "OCR Ready" },
-  { id: "doc-3", name: "Sita Payment Screenshot", folder: "Receipts", type: "Image", owner: "Sita Magar", status: "Needs Review" },
-  { id: "doc-4", name: "Aarav Signed Contract", folder: "Signed Contracts", type: "PDF", owner: "Aarav Shrestha", status: "Encrypted" },
-];
+const baseDocuments: VaultDocument[] = [];
 
-const repaymentData = [
-  { month: "Jan", collected: 220000, due: 280000, overdue: 45000 },
-  { month: "Feb", collected: 260000, due: 305000, overdue: 38000 },
-  { month: "Mar", collected: 310000, due: 325000, overdue: 25000 },
-  { month: "Apr", collected: 295000, due: 345000, overdue: 52000 },
-  { month: "May", collected: 352000, due: 390000, overdue: 81000 },
-  { month: "Jun", collected: 0, due: 420000, overdue: 0 },
-];
+const repaymentData = [{ month: "—", collected: 0, due: 0, overdue: 0 }];
 
-const interestGrowthData = [
-  { month: "M1", simple: 24000, compound: 24700, emi: 19000 },
-  { month: "M2", simple: 48000, compound: 50200, emi: 38000 },
-  { month: "M3", simple: 72000, compound: 76500, emi: 57000 },
-  { month: "M4", simple: 96000, compound: 103800, emi: 76000 },
-  { month: "M5", simple: 120000, compound: 132200, emi: 95000 },
-  { month: "M6", simple: 144000, compound: 161700, emi: 114000 },
-];
+const interestGrowthData = [{ month: "—", simple: 0, compound: 0, emi: 0 }];
 
-const heatmapDays = Array.from({ length: 35 }, (_, index) => {
-  const pressure = [18, 34, 72, 45, 88, 28, 14][index % 7] + (index % 5) * 3;
-  return { day: index + 1, pressure: Math.min(100, pressure) };
-});
+const heatmapDays = Array.from({ length: 35 }, (_, index) => ({ day: index + 1, pressure: 0 }));
 
-const reminders = [
-  { title: "Payment due reminder", detail: "Laxmi Didi installment due in 7 days", status: "Scheduled", icon: CalendarClock },
-  { title: "Overdue warning", detail: "Sita Magar is 9 days overdue", status: "High priority", icon: AlertTriangle },
-  { title: "Interest maturity", detail: "Min Dai daily interest matures Friday", status: "WhatsApp ready", icon: MessageCircle },
-  { title: "Family-shared reminder", detail: "Aarav EMI alert shared to family ledger", status: "Synced", icon: BellRing },
-];
+const reminders: { title: string; detail: string; status: string; icon: LucideIcon }[] = [];
 
 const fireImpact = [
-  { label: "Debt pressure", value: 68, fill: "#f59e0b" },
-  { label: "Recovery health", value: 74, fill: "#10b981" },
-  { label: "Return readiness", value: 82, fill: "#22c55e" },
+  { label: "Debt pressure", value: 0, fill: "#f59e0b" },
+  { label: "Recovery health", value: 0, fill: "#10b981" },
+  { label: "Return readiness", value: 0, fill: "#22c55e" },
 ];
 
 function toNpr(value: number, currency: CurrencyCode) {
@@ -884,7 +759,7 @@ export function SmartLoanDashboard() {
       .slice(0, 4)
       .map((profile) => ({
         title: dueReminderLabel(profile.nextDueDays),
-        detail: `${profile.fullName} · ${formatNpr(profile.remainingNpr)} · due ${formatDate(profile.nextDue)}`,
+        detail: `${profile.fullName} ÃÂ· ${formatNpr(profile.remainingNpr)} ÃÂ· due ${formatDate(profile.nextDue)}`,
         status: profile.isOverdue ? `${profile.daysOverdue} days overdue` : profile.daysRemainingLabel,
         icon: profile.isOverdue ? AlertTriangle : CalendarClock,
       }));
@@ -1122,15 +997,24 @@ export function SmartLoanDashboard() {
     setPinDraft(nextPin);
     setPinError("");
     if (nextPin.length !== 4) return;
-    if (nextPin === correctPin) {
+    const saved = readSmartLoanPin();
+    if (saved.length !== 4) {
+      writeSmartLoanPin(nextPin);
       setLocked(false);
       setPinDraft("");
       return;
     }
-    setPinError("Incorrect PIN. Try 1234 for this demo.");
+    if (nextPin === saved) {
+      setLocked(false);
+      setPinDraft("");
+      return;
+    }
+    setPinError("Incorrect PIN.");
   }
 
   if (locked) {
+    const savedPin = readSmartLoanPin();
+    const needsFirstPin = savedPin.length !== 4;
     return (
       <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_top_left,#0f5132_0%,#031710_42%,#020907_100%)] px-4 py-8 text-white">
         <motion.section
@@ -1142,9 +1026,11 @@ export function SmartLoanDashboard() {
             <Fingerprint size={30} />
           </div>
           <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Secure loan vault</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight">Enter PIN</h1>
+          <h1 className="mt-2 text-3xl font-black tracking-tight">{needsFirstPin ? "Create vault PIN" : "Enter PIN"}</h1>
           <p className="mt-2 text-sm font-semibold leading-relaxed text-emerald-50/65">
-            Demo PIN is 1234. Mobile builds can connect this screen to Capacitor Face ID or fingerprint unlock.
+            {needsFirstPin
+              ? "Choose a 4-digit PIN stored only on this browser to open your loan workspace."
+              : "Enter your saved vault PIN. On mobile you can later connect Face ID or fingerprint via Capacitor."}
           </p>
           <div className="mt-6 flex justify-center">
             <input
@@ -1154,7 +1040,7 @@ export function SmartLoanDashboard() {
               type="password"
               value={pinDraft}
               onChange={(event) => handlePinChange(event.target.value)}
-              placeholder="1234"
+              placeholder="PIN"
               className="h-14 w-44 rounded-2xl border border-white/15 bg-zinc-900 text-center text-2xl font-black tracking-[0.6em] text-white outline-none transition placeholder:text-emerald-50/25 focus:border-emerald-300/70"
             />
           </div>
@@ -1194,7 +1080,7 @@ export function SmartLoanDashboard() {
               </p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {[
-                  ["KRW ↔ NPR", "Live-ready multi-currency loans"],
+                  ["KRW Ã¢ÂÂ NPR", "Live-ready multi-currency loans"],
                   ["Offline-first", "Device vault and backup export"],
                   ["Recovery AI", "Risk score, notes, reminders"],
                 ].map(([label, value]) => (
@@ -1245,9 +1131,9 @@ export function SmartLoanDashboard() {
         </div>
 
         <div id="overview" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Total money lent" value={`₨${lentMoney.toLocaleString()}`} hint="Principal you have deployed to family, friends, and business borrowers." icon={WalletCards} onEdit={() => openMetricEditor("lentMoney")} />
-          <KpiCard label="Total money borrowed" value={`₨${borrowedMoney.toLocaleString()}`} hint="Liability you owe, converted to NPR for FIRE planning." icon={Landmark} accent="sky" onEdit={() => openMetricEditor("borrowedMoney")} />
-          <KpiCard label="Monthly interest income" value={`₨${interestIncome.toLocaleString()}`} hint="Projected monthly profit from active lending profiles." icon={TrendingUp} onEdit={() => openMetricEditor("interestIncome")} />
+          <KpiCard label="Total money lent" value={`Ã¢ÂÂ¨${lentMoney.toLocaleString()}`} hint="Principal you have deployed to family, friends, and business borrowers." icon={WalletCards} onEdit={() => openMetricEditor("lentMoney")} />
+          <KpiCard label="Total money borrowed" value={`Ã¢ÂÂ¨${borrowedMoney.toLocaleString()}`} hint="Liability you owe, converted to NPR for FIRE planning." icon={Landmark} accent="sky" onEdit={() => openMetricEditor("borrowedMoney")} />
+          <KpiCard label="Monthly interest income" value={`Ã¢ÂÂ¨${interestIncome.toLocaleString()}`} hint="Projected monthly profit from active lending profiles." icon={TrendingUp} onEdit={() => openMetricEditor("interestIncome")} />
           <KpiCard label="Pending due amount" value={formatNpr(overview.pendingDue)} hint="Next-cycle due amount across active accounts." icon={CalendarClock} accent="amber" />
           <KpiCard label="Upcoming payments" value={`${overview.upcoming}`} hint="Due within the next 10 days." icon={BellRing} accent="sky" />
           <KpiCard label="Overdue accounts" value={`${overview.overdue}`} hint="Needs recovery actions and stronger reminders." icon={AlertTriangle} accent="rose" />
@@ -1262,7 +1148,7 @@ export function SmartLoanDashboard() {
                 <AlertTriangle size={21} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-100">🔴 OVERDUE ACCOUNT</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-rose-100">Ã°ÂÂÂ´ OVERDUE ACCOUNT</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {overdueProfiles.slice(0, 4).map((profile) => (
                     <div key={profile.id} className="rounded-2xl border border-rose-300/35 bg-rose-500/10 p-3 text-sm font-bold text-rose-50">
@@ -1474,9 +1360,9 @@ export function SmartLoanDashboard() {
                             <AlertTriangle size={18} />
                           </span>
                           <div>
-                            <p className="text-sm font-black uppercase tracking-[0.18em] text-rose-100">🔴 OVERDUE ACCOUNT</p>
+                            <p className="text-sm font-black uppercase tracking-[0.18em] text-rose-100">Ã°ÂÂÂ´ OVERDUE ACCOUNT</p>
                             <p className="mt-1 text-sm font-bold text-rose-100/80">
-                              Borrower: {profile.fullName} · Amount: {formatNpr(profile.remainingNpr)} · Due Date: {formatDate(profile.nextDue)} · Days Overdue: {profile.daysOverdue}
+                              Borrower: {profile.fullName} ÃÂ· Amount: {formatNpr(profile.remainingNpr)} ÃÂ· Due Date: {formatDate(profile.nextDue)} ÃÂ· Days Overdue: {profile.daysOverdue}
                             </p>
                           </div>
                         </div>
@@ -1509,16 +1395,16 @@ export function SmartLoanDashboard() {
                           </Button>
                         </div>
                         <p className="mt-1 text-sm font-semibold text-emerald-50/65">
-                          {profile.phone || "No phone"} · WhatsApp {profile.whatsapp || profile.phone || "Not added"} · {profile.messaging}
+                          {profile.phone || "No phone"} ÃÂ· WhatsApp {profile.whatsapp || profile.phone || "Not added"} ÃÂ· {profile.messaging}
                         </p>
                         <div className="mt-4 grid gap-2 text-xs font-semibold text-emerald-50/70 sm:grid-cols-2 xl:grid-cols-3">
                           {[
-                            { label: "📧 Email Address", value: profile.email || "Not added", icon: Mail },
-                            { label: "📱 Phone", value: profile.phone || "Not added", icon: Phone },
-                            { label: "🪪 Citizenship", value: profile.citizenship || "Not added", icon: IdCard },
-                            { label: "🛂 Passport", value: profile.passport || "Optional", icon: FileText },
-                            { label: "🏦 Bank Details", value: `${profile.bank || "Bank not added"} · ${profile.account || "Account not added"}`, icon: Landmark },
-                            { label: "📍 Address", value: profile.address || "Not added", icon: UsersRound },
+                            { label: "Ã°ÂÂÂ§ Email Address", value: profile.email || "Not added", icon: Mail },
+                            { label: "Ã°ÂÂÂ± Phone", value: profile.phone || "Not added", icon: Phone },
+                            { label: "Ã°ÂÂªÂª Citizenship", value: profile.citizenship || "Not added", icon: IdCard },
+                            { label: "Ã°ÂÂÂ Passport", value: profile.passport || "Optional", icon: FileText },
+                            { label: "Ã°ÂÂÂ¦ Bank Details", value: `${profile.bank || "Bank not added"} ÃÂ· ${profile.account || "Account not added"}`, icon: Landmark },
+                            { label: "Ã°ÂÂÂ Address", value: profile.address || "Not added", icon: UsersRound },
                           ].map((item) => {
                             const Icon = item.icon;
                             return (
@@ -1624,7 +1510,7 @@ export function SmartLoanDashboard() {
                         <p className="rounded-xl bg-white/[0.05] p-2 font-bold text-emerald-50/75">
                           Interest {profile.direction === "lent" ? "earned" : "paid"}: {formatNpr(profile.interestNpr)}
                         </p>
-                        <p className="rounded-xl bg-white/[0.05] p-2 font-bold text-emerald-50/75">Engine: {profile.method} · {profile.annualRate}%</p>
+                        <p className="rounded-xl bg-white/[0.05] p-2 font-bold text-emerald-50/75">Engine: {profile.method} ÃÂ· {profile.annualRate}%</p>
                       </div>
                       <div className="mt-3 space-y-2">
                         {profile.isOverdue ? (
@@ -1638,7 +1524,7 @@ export function SmartLoanDashboard() {
                                 </span>
                               </div>
                               <p className="text-[11px] font-semibold text-rose-100/70">
-                                Due {formatDate(profile.nextDue)} · {profile.daysOverdue} days overdue · {`Your payment is overdue by ${profile.daysOverdue} days. Please pay immediately.`}
+                                Due {formatDate(profile.nextDue)} ÃÂ· {profile.daysOverdue} days overdue ÃÂ· {`Your payment is overdue by ${profile.daysOverdue} days. Please pay immediately.`}
                               </p>
                             </div>
                           </div>
@@ -1663,7 +1549,7 @@ export function SmartLoanDashboard() {
                                 </span>
                               </div>
                               <p className={`text-[11px] font-semibold ${payment.status === "Overdue" ? "text-rose-100/65" : "text-emerald-50/55"}`}>
-                                {formatDate(payment.date)} · {payment.amount ? formatCurrency(payment.amount, profile.currency) : "Pending"}
+                                {formatDate(payment.date)} ÃÂ· {payment.amount ? formatCurrency(payment.amount, profile.currency) : "Pending"}
                               </p>
                             </div>
                           </div>
@@ -1675,10 +1561,10 @@ export function SmartLoanDashboard() {
                               profile.reminderLogs.slice(0, 4).map((log) => (
                                 <div key={log.id} className="rounded-lg bg-white/[0.045] p-2 text-[11px] font-semibold text-emerald-50/65">
                                   <p className="font-black text-white">
-                                    {formatDate(log.date)} · {log.recipientKind} · {log.emailSent ? "Email sent" : "Email not sent"}
+                                    {formatDate(log.date)} ÃÂ· {log.recipientKind} ÃÂ· {log.emailSent ? "Email sent" : "Email not sent"}
                                   </p>
                                   <p>
-                                    Recipient: {log.recipient} · Status: {log.status}
+                                    Recipient: {log.recipient} ÃÂ· Status: {log.status}
                                   </p>
                                 </div>
                               ))
@@ -1721,7 +1607,7 @@ export function SmartLoanDashboard() {
                     <div>
                       <p className="font-black text-white">{profile.fullName}</p>
                       <p className="text-xs font-semibold text-emerald-50/60">
-                        {profile.method} · {profile.annualRate}% APR · {profile.installmentsLeft} installments left
+                        {profile.method} ÃÂ· {profile.annualRate}% APR ÃÂ· {profile.installmentsLeft} installments left
                       </p>
                     </div>
                     <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-black text-emerald-200">
@@ -1802,7 +1688,7 @@ export function SmartLoanDashboard() {
                     <div>
                       <p className="font-black text-white">{document.name}</p>
                       <p className="text-xs font-semibold text-emerald-50/60">
-                        {document.folder} · {document.type} · {document.owner}
+                        {document.folder} ÃÂ· {document.type} ÃÂ· {document.owner}
                       </p>
                     </div>
                   </div>
@@ -1843,7 +1729,7 @@ export function SmartLoanDashboard() {
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-400/10 text-emerald-200">
               <Banknote size={22} />
             </div>
-            <h3 className="mt-4 text-xl font-black text-white">KRW ↔ NPR analytics</h3>
+            <h3 className="mt-4 text-xl font-black text-white">KRW Ã¢ÂÂ NPR analytics</h3>
             <p className="mt-2 text-sm font-semibold leading-relaxed text-emerald-50/65">Live-ready conversion with the current dashboard rate.</p>
             <input
               type="number"
@@ -1885,7 +1771,7 @@ export function SmartLoanDashboard() {
               <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300" style={{ width: `${fireImpactScore}%` }} />
               </div>
-              <p className="mt-2 text-xs font-semibold text-emerald-50/60">Debt stress meter: {debtStressScore}% · Return-to-Nepal readiness uses savings - liabilities - EMI.</p>
+              <p className="mt-2 text-xs font-semibold text-emerald-50/60">Debt stress meter: {debtStressScore}% ÃÂ· Return-to-Nepal readiness uses savings - liabilities - EMI.</p>
             </div>
           </MotionCard>
 

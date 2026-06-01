@@ -677,7 +677,7 @@ function UploadOverlay({
       return;
     }
     if (file.size > MAX_BYTES) {
-      setErr("File too large for this demo (max ~80 MB).");
+      setErr("File too large for this workspace (max ~80 MB).");
       return;
     }
     const id = newFamilyId("vault");

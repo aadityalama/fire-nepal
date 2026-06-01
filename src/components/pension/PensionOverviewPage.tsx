@@ -75,7 +75,7 @@ export function PensionOverviewPage() {
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Retirement projection</h2>
           </div>
           <p className="text-sm font-semibold text-slate-600 dark:text-zinc-400">
-            Model salary curves, retirement age, and annuity-style outputs — illustrative until you connect official statements.
+            Model salary curves, retirement age, and annuity-style outputs. Connect official statements for live balances.
           </p>
           <Link
             href={`${PENSION_BASE}/retirement-projection`}
@@ -109,7 +109,7 @@ export function PensionOverviewPage() {
       </div>
 
       <section className={`wealth-glass p-4 sm:p-5 ${light ? "ring-1 ring-slate-900/[0.04]" : ""}`}>
-        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Quick snapshot (demo)</h2>
+        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Quick snapshot</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className={`rounded-xl border px-3 py-3 ${light ? "border-slate-200/80 bg-white/80" : "border-white/10 bg-white/[0.03]"}`}>
             <p className="text-[10px] font-black uppercase tracking-wide text-teal-700 dark:text-teal-300">EPF balance</p>

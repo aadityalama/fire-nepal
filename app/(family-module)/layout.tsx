@@ -6,7 +6,7 @@ import { FamilyModuleClientRoot } from "@/components/family-module/FamilyModuleC
 export const metadata: Metadata = {
   title: "Family Module | FIRE Nepal",
   description:
-    "Premium family OS for FIRE Nepal — hub, children, education, health, calendar, and parenting AI (demo workspace).",
+    "Premium family OS for FIRE Nepal — hub, children, education, health, calendar, and parenting AI.",
 };
 
 export default function FamilyModuleLayout({ children }: { children: ReactNode }) {

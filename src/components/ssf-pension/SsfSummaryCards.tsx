@@ -8,14 +8,14 @@ export function SsfSummaryCards() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const cards = [
-    { label: "Total SSF balance", value: formatMoney(SSF_SUMMARY.totalBalanceNpr, "NPR"), hint: "Desk rollup · NPR" },
-    { label: "Est. monthly pension", value: formatMoney(SSF_SUMMARY.estimatedMonthlyPensionNpr, "NPR"), hint: "Illustrative annuity model" },
-    { label: "Contribution months", value: String(SSF_SUMMARY.contributionMonths), hint: "Paid + credited months" },
-    { label: "Retirement readiness", value: `${SSF_SUMMARY.readinessScore}%`, hint: "Public tier + portfolio (demo)" },
+    { label: "Total SSF balance", value: formatMoney(SSF_SUMMARY.totalBalanceNpr, "NPR"), hint: "From your workspace inputs" },
+    { label: "Est. monthly pension", value: formatMoney(SSF_SUMMARY.estimatedMonthlyPensionNpr, "NPR"), hint: "Projection desk model" },
+    { label: "Contribution months", value: String(SSF_SUMMARY.contributionMonths), hint: "Recorded months" },
+    { label: "Retirement readiness", value: `${SSF_SUMMARY.readinessScore}%`, hint: "Heuristic from your data" },
     {
       label: "Next contribution due",
-      value: SSF_SUMMARY.nextContributionDue,
-      hint: SSF_SUMMARY.nextContributionLabel,
+      value: SSF_SUMMARY.nextContributionDue || "—",
+      hint: SSF_SUMMARY.nextContributionLabel || "Set dates in SSF workspace",
     },
   ];
 

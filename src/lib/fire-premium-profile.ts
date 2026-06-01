@@ -51,8 +51,8 @@ function defaultFields(user: ProductAuthUser): PremiumMemberProfileFields {
     country: "Nepal",
     countryOfWork: "South Korea",
     preferredCurrency: "NPR",
-    fireGoalAmount: 50_000_000,
-    monthlyInvestment: 150_000,
+    fireGoalAmount: 0,
+    monthlyInvestment: 0,
     riskProfile: "balanced",
   };
 }

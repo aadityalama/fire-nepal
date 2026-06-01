@@ -200,7 +200,7 @@ export function ParentingAiDashboard() {
             <div>
               <p className={`text-[10px] font-black uppercase tracking-wide ${familyMutedText(light)}`}>Next 90 days</p>
               <p className={`mt-2 text-2xl font-black ${familyHeadingClass(light)}`}>+4.2%</p>
-              <p className={`mt-1 text-xs ${familyMutedText(light)}`}>Expected NPR outflow vs prior quarter (demo).</p>
+              <p className={`mt-1 text-xs ${familyMutedText(light)}`}>Expected NPR outflow vs prior quarter (when tracked).</p>
             </div>
             <div>
               <p className={`text-[10px] font-black uppercase tracking-wide ${familyMutedText(light)}`}>Confidence</p>

@@ -51,7 +51,7 @@ const NEPAL_MONTHLY_EXPENSE_NPR = 100_000;
 const quickPresets: Array<{ label: string; amount: number; currency: Currency; helper: string }> = [
   { label: "₩100k", amount: 100_000, currency: "KRW", helper: "Starter habit" },
   { label: "₩300k", amount: 300_000, currency: "KRW", helper: "Strong savings" },
-  { label: "₩500k", amount: 500_000, currency: "KRW", helper: "Korea worker mode" },
+  { label: "₩500k", amount: 500_000, currency: "KRW", helper: "Steady contribution tier" },
   { label: "₩1M", amount: 1_000_000, currency: "KRW", helper: "Accelerated FIRE" },
   { label: "NPR 50k", amount: 50_000, currency: "NPR", helper: "Nepal investing" },
   { label: "NPR 100k", amount: 100_000, currency: "NPR", helper: "Premium SIP" },
@@ -328,17 +328,20 @@ export function SipCalculatorDashboard() {
     { label: "Retirement corpus", value: formatNpr(projection.futureValueNpr), icon: WalletCards },
     { label: "Safe withdrawal", value: `${formatNpr(annualSafeWithdrawal)} / year`, icon: ShieldCheck },
   ];
-  const salaryModeMonthly = 500_000;
-  const salaryModeYears = 10;
-  const salaryModeNpr = (() => {
-    const monthlyReturn = projection.annualReturn / 100 / 12;
-    const months = salaryModeYears * 12;
-    const value =
-      monthlyReturn > 0
-        ? salaryModeMonthly * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
-        : salaryModeMonthly * months;
-    return toNpr(value, "KRW");
-  })();
+  const scenarioMonthly = projection.monthlyInvestment;
+  const scenarioYears = projection.years;
+  const scenarioFutureNpr =
+    scenarioMonthly > 0 && scenarioYears > 0
+      ? (() => {
+          const monthlyReturn = projection.annualReturn / 100 / 12;
+          const months = scenarioYears * 12;
+          const value =
+            monthlyReturn > 0
+              ? scenarioMonthly * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
+              : scenarioMonthly * months;
+          return toNpr(value, currency);
+        })()
+      : 0;
 
   function applyPreset(preset: (typeof quickPresets)[number]) {
     setCurrency(preset.currency);
@@ -683,21 +686,41 @@ export function SipCalculatorDashboard() {
                     <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-emerald-300/15 blur-3xl" />
                     <div className="relative">
                       <p className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-emerald-100">
-                        Korea Worker Mode
+                        SIP scenario
                       </p>
-                      <h2 className="mt-4 text-3xl font-black tracking-tight">If you invest ₩500k monthly for 10 years</h2>
+                      <h2 className="mt-4 text-3xl font-black tracking-tight">
+                        {scenarioMonthly > 0 && scenarioYears > 0 ? (
+                          <>
+                            If you invest {formatCurrency(scenarioMonthly, currency)} monthly for {scenarioYears}{" "}
+                            {scenarioYears === 1 ? "year" : "years"}
+                          </>
+                        ) : (
+                          "Set monthly SIP and timeline"
+                        )}
+                      </h2>
                       <p className="mt-3 text-sm font-bold leading-relaxed text-emerald-50/80">
-                        At your selected {formatPct(projection.annualReturn)} annual return, this Korea salary investing
-                        simulation projects a future value of {formatNpr(salaryModeNpr)} in Nepal terms.
+                        {scenarioMonthly > 0 && scenarioYears > 0 ? (
+                          <>
+                            At your selected {formatPct(projection.annualReturn)} annual return, this scenario projects a future
+                            value of {formatNpr(scenarioFutureNpr)} in Nepal terms.
+                          </>
+                        ) : (
+                          <>
+                            Enter a positive monthly amount and horizon above. The scenario block mirrors those inputs instead of a
+                            fixed sample salary.
+                          </>
+                        )}
                       </p>
                       <div className="mt-5 grid gap-3 sm:grid-cols-2">
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">KRW invested</p>
-                          <p className="mt-2 text-2xl font-black">{formatCurrency(salaryModeMonthly * salaryModeYears * 12, "KRW")}</p>
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Contributed (scenario)</p>
+                          <p className="mt-2 text-2xl font-black">
+                            {formatCurrency(scenarioMonthly * Math.max(0, scenarioYears) * 12, currency)}
+                          </p>
                         </div>
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
                           <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">NPR future value</p>
-                          <p className="mt-2 text-2xl font-black">{formatNpr(salaryModeNpr)}</p>
+                          <p className="mt-2 text-2xl font-black">{formatNpr(scenarioFutureNpr)}</p>
                         </div>
                       </div>
                     </div>

@@ -697,7 +697,7 @@ export function SchoolScheduleSystem() {
               <p className={`text-[10px] font-black uppercase tracking-wide ${familyMutedText(light)}`}>Parent visibility</p>
               <p className={`mt-2 text-sm leading-relaxed ${familyMutedText(light)}`}>
                 This dashboard summarizes schedule load, homework completion, graded scores, and fee history from the same Family OS state used on
-                Education and Records Vault. Data is demo-local in the browser until you wire authentication and a backend.
+                Education and Records Vault. Data stays in this browser until you add authentication and a backend.
               </p>
             </div>
           </div>

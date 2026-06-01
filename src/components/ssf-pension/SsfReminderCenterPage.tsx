@@ -6,17 +6,14 @@ import { buildSsfReminderEmailBody, SSF_EMAIL_SUBJECT } from "@/lib/ssf-pension/
 import { SSF_SUMMARY } from "@/lib/ssf-pension/demo-data";
 import { PensionChrome } from "@/components/pension/PensionChrome";
 
-const ALERTS = [
-  { id: "a1", title: "Premium due reminder", body: `Next deposit target ${SSF_SUMMARY.nextContributionDue} (${SSF_SUMMARY.nextContributionLabel}).`, tone: "amber" as const },
-  { id: "a2", title: "Employer deposit missing alert", body: "One month shows missing employer match — escalate to payroll.", tone: "rose" as const },
-  { id: "a3", title: "Contribution delay warning", body: "Delays beyond 60 days can break insurance continuity — set calendar guardrails.", tone: "amber" as const },
-  { id: "a4", title: "Pension eligibility notification", body: "Minimum contribution history approaching vesting checkpoint (demo).", tone: "teal" as const },
-];
+const ALERTS: { id: string; title: string; body: string; tone: "amber" | "rose" | "teal" }[] = [];
 
 export function SsfReminderCenterPage() {
   const { workspace, setReminderPrefs } = useSsfPension();
   const { emailReminders, pushNotifications, premiumDueDaysBefore } = workspace.reminderPrefs;
-  const sampleBody = buildSsfReminderEmailBody({ dueDateLabel: SSF_SUMMARY.nextContributionLabel });
+  const sampleBody = buildSsfReminderEmailBody({
+    dueDateLabel: SSF_SUMMARY.nextContributionLabel || "your scheduled contribution date",
+  });
 
   return (
     <PensionChrome
@@ -72,23 +69,29 @@ export function SsfReminderCenterPage() {
 
       <section className="wealth-glass space-y-3 p-4 sm:p-5">
         <h2 className="text-lg font-black text-slate-900 dark:text-white">Premium reminder system</h2>
-        <ul className="flex flex-col gap-2">
-          {ALERTS.map((a) => (
-            <li
-              key={a.id}
-              className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
-                a.tone === "rose"
-                  ? "border-rose-400/25 bg-rose-500/10 text-rose-950 dark:text-rose-50"
-                  : a.tone === "amber"
-                    ? "border-amber-400/25 bg-amber-500/10 text-amber-950 dark:text-amber-50"
-                    : "border-teal-400/25 bg-teal-500/10 text-teal-950 dark:text-teal-50"
-              }`}
-            >
-              <p className="font-black">{a.title}</p>
-              <p className="mt-1 text-xs opacity-90">{a.body}</p>
-            </li>
-          ))}
-        </ul>
+        {ALERTS.length === 0 ? (
+          <p className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-4 text-sm font-medium text-slate-600 dark:border-white/10 dark:bg-black/25 dark:text-zinc-300">
+            No reminders yet. When your SSF workspace is linked to payroll or imports, alerts will appear here.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {ALERTS.map((a) => (
+              <li
+                key={a.id}
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold ${
+                  a.tone === "rose"
+                    ? "border-rose-400/25 bg-rose-500/10 text-rose-950 dark:text-rose-50"
+                    : a.tone === "amber"
+                      ? "border-amber-400/25 bg-amber-500/10 text-amber-950 dark:text-amber-50"
+                      : "border-teal-400/25 bg-teal-500/10 text-teal-950 dark:text-teal-50"
+                }`}
+              >
+                <p className="font-black">{a.title}</p>
+                <p className="mt-1 text-xs opacity-90">{a.body}</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </PensionChrome>
   );

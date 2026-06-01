@@ -57,7 +57,7 @@ export function HubHomePanel() {
             <div>
               <p className="text-sm font-black text-amber-50">Finish onboarding</p>
               <p className="mt-1 text-xs font-medium text-amber-100/75">
-                We will seed optional cashflow defaults and generate an illustrative FIRE profile.
+                We will optionally sync cashflow from your onboarding answers when you add income there.
               </p>
             </div>
           </div>
@@ -71,7 +71,7 @@ export function HubHomePanel() {
         </div>
       ) : onboarding.generated ? (
         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-200/55">Generated profile</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/55">Profile summary</p>
           <p className="mt-2 text-sm font-semibold leading-relaxed text-emerald-50/90">{onboarding.generated.headline}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
@@ -79,7 +79,7 @@ export function HubHomePanel() {
               <p className="mt-1 text-lg font-black text-white">{onboarding.generated.savingsRatePct}%</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase text-zinc-500">FI band (illustrative)</p>
+              <p className="text-[10px] font-black uppercase text-zinc-500">FI band (desk)</p>
               <p className="mt-1 text-sm font-black leading-snug text-white">{onboarding.generated.estYearsToFiBand}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">

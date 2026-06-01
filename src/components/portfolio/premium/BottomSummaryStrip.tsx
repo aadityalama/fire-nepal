@@ -1,23 +1,29 @@
 "use client";
 
 import { TrendingUp } from "lucide-react";
-import { formatNpr, premiumSummary } from "@/data/fire-premium-dashboard";
-
-const items = [
-  { label: "Total assets", value: formatNpr(premiumSummary.totalAssetsNpr) },
-  { label: "Liabilities", value: formatNpr(premiumSummary.totalLiabilitiesNpr), accent: "rose" as const },
-  { label: "Net worth", value: formatNpr(premiumSummary.totalNetWorthNpr), hint: "After debt" },
-  {
-    label: "Savings rate",
-    value: `${premiumSummary.savingsRatePct.toFixed(1)}%`,
-    hint: "Target 40%+",
-    good: true,
-  },
-  { label: "Passive income", value: formatNpr(premiumSummary.monthlyPassiveIncomeNpr), hint: "/ mo" },
-  { label: "Active income", value: formatNpr(premiumSummary.activeIncomeMonthlyNpr), hint: "/ mo est." },
-];
+import { formatNpr } from "@/data/fire-premium-dashboard";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
+import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 
 export function BottomSummaryStrip() {
+  const { totals, passiveMonthly, hydrated } = useWealthPortfolio();
+  const { summary } = useUnifiedFireSummary();
+
+  const savingsRate = summary.savingsRatePct;
+  const items = [
+    { label: "Total assets", value: formatNpr(hydrated ? totals.totalAssetsNpr : 0) },
+    { label: "Liabilities", value: formatNpr(hydrated ? totals.liabilitiesNpr : 0), accent: "rose" as const },
+    { label: "Net worth", value: formatNpr(hydrated ? totals.netWorthNpr : 0), hint: "After debt" },
+    {
+      label: "Savings rate",
+      value: savingsRate != null ? `${savingsRate.toFixed(1)}%` : "—",
+      hint: savingsRate != null ? "From cashflow" : "Add income & expenses",
+      good: savingsRate != null && savingsRate >= 20,
+    },
+    { label: "Passive income", value: formatNpr(hydrated ? passiveMonthly : 0), hint: "/ mo" },
+    { label: "Active income", value: formatNpr(hydrated ? summary.monthlyIncome : 0), hint: "/ mo" },
+  ];
+
   return (
     <div className="sticky bottom-0 z-20 mt-4 border-t border-emerald-500/[0.12] bg-zinc-950/75 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-20px_72px_-32px_rgba(0,0,0,0.88),0_0_0_1px_rgba(255,255,255,0.04)_inset] backdrop-blur-2xl backdrop-saturate-[1.08] supports-[backdrop-filter]:bg-zinc-950/60 sm:mt-5 sm:px-2.5 sm:pt-2 xl:mt-4">
       <div className="mx-auto grid w-full max-w-none grid-cols-2 gap-1.5 px-0.5 sm:grid-cols-3 sm:gap-2 sm:px-1 lg:grid-cols-6 lg:gap-1.5 lg:px-0">

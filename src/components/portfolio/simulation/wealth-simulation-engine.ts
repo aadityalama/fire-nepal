@@ -389,8 +389,10 @@ export function inferDefaultAgeFromPortfolio(rows: { currentAge?: number }[]): n
 }
 
 export function defaultMonthlySpendFromPortfolio(totals: WealthTotals, passiveMonthlyNpr: number): number {
-  const implied = passiveMonthlyNpr > 0 ? passiveMonthlyNpr : 0;
+  if (totals.netWorthNpr <= 0 && passiveMonthlyNpr <= 0) return 0;
+  const implied = passiveMonthlyNpr > 0 ? passiveMonthlyNpr * 1.05 : 0;
+  if (totals.netWorthNpr <= 0) return Math.round(Math.max(0, implied));
   const floor = 85_000;
-  const fromNw = totals.netWorthNpr > 0 ? clamp(totals.netWorthNpr * 0.00035, 70_000, 450_000) : floor;
-  return Math.round(Math.max(floor, implied > 0 ? implied * 1.05 : fromNw));
+  const fromNw = clamp(totals.netWorthNpr * 0.00035, 70_000, 450_000);
+  return Math.round(Math.max(floor, implied > 0 ? implied : fromNw));
 }

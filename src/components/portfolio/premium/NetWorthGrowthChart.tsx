@@ -13,14 +13,48 @@ import {
   YAxis,
 } from "recharts";
 import type { NetWorthPoint } from "@/data/fire-premium-dashboard";
-import { formatNpr, netWorthSeries, premiumSummary } from "@/data/fire-premium-dashboard";
+import { formatNpr } from "@/data/fire-premium-dashboard";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 
 const tabs = [
   { id: "monthly" as const, label: "Monthly" },
   { id: "yearly" as const, label: "Yearly" },
   { id: "all" as const, label: "All Time" },
 ];
+
+function monthKeyToShortLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  if (!y || !m) return monthKey;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function bucketHistory(
+  history: { month: string; netWorthNpr: number }[],
+  mode: "monthly" | "yearly" | "all",
+): NetWorthPoint[] {
+  const sorted = [...history].sort((a, b) => a.month.localeCompare(b.month));
+  if (!sorted.length) return [];
+
+  if (mode === "all" || sorted.length <= 18) {
+    return sorted.map((p) => ({ label: monthKeyToShortLabel(p.month), nw: p.netWorthNpr }));
+  }
+
+  if (mode === "yearly") {
+    const byYear = new Map<string, { month: string; netWorthNpr: number }>();
+    for (const p of sorted) {
+      const y = p.month.slice(0, 4);
+      const prev = byYear.get(y);
+      if (!prev || p.month > prev.month) byYear.set(y, p);
+    }
+    return [...byYear.values()]
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map((p) => ({ label: p.month.slice(0, 4), nw: p.netWorthNpr }));
+  }
+
+  // monthly: last 18 points
+  return sorted.slice(-18).map((p) => ({ label: monthKeyToShortLabel(p.month), nw: p.netWorthNpr }));
+}
 
 function MilestoneCallout({ points }: { points: NetWorthPoint[] }) {
   const tagged = points.filter((p) => p.milestone);
@@ -40,7 +74,6 @@ function MilestoneCallout({ points }: { points: NetWorthPoint[] }) {
   );
 }
 
-/** Matches Recharts `Payload` value slot (number | string | array) for tooltip callback typing */
 type NetWorthTooltipEntry = {
   value?: number | string | ReadonlyArray<number | string>;
   payload?: NetWorthPoint;
@@ -68,23 +101,35 @@ function NetWorthTooltip({
 }
 
 export function NetWorthGrowthChart() {
+  const { totals, state, hydrated } = useWealthPortfolio();
   const uid = useId().replace(/:/g, "");
   const fillGradId = `nw-area-fill-${uid}`;
   const lineStrokeId = `nw-line-stroke-${uid}`;
   const compact = useMediaQuery("(max-width: 639px)");
 
   const [range, setRange] = useState<(typeof tabs)[number]["id"]>("yearly");
-  const data = netWorthSeries[range];
+  const history = state.netWorthHistory ?? [];
+
+  const data = useMemo(() => {
+    const pts = bucketHistory(history, range);
+    if (pts.length >= 2) return pts;
+    if (pts.length === 1) return [pts[0]!, { ...pts[0]!, label: `${pts[0]!.label} ·`, nw: pts[0]!.nw }];
+    return [
+      { label: "Start", nw: 0 },
+      { label: "Now", nw: hydrated ? totals.netWorthNpr : 0 },
+    ];
+  }, [history, range, hydrated, totals.netWorthNpr]);
 
   const yDomain = useMemo(() => {
     const vals = data.map((d) => d.nw);
     const min = Math.min(...vals);
     const max = Math.max(...vals);
-    const pad = (max - min) * 0.12 || max * 0.06;
+    const pad = (max - min) * 0.12 || Math.max(max * 0.06, 1);
     return [min - pad, max + pad];
   }, [data]);
 
   const hasMilestones = useMemo(() => data.some((p) => p.milestone), [data]);
+  const isEmptyHistory = history.length < 2;
 
   return (
     <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-3 sm:p-3.5 xl:p-3.5">
@@ -92,10 +137,12 @@ export function NetWorthGrowthChart() {
         <div className="min-w-0 space-y-0.5 sm:space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:text-[11px]">Net worth growth</p>
           <p className="text-[1.38rem] font-semibold tabular-nums tracking-[-0.03em] text-white sm:text-[1.5rem] sm:leading-tight xl:text-[1.42rem]">
-            {formatNpr(premiumSummary.totalNetWorthNpr)}
+            {formatNpr(hydrated ? totals.netWorthNpr : 0)}
           </p>
           <p className="max-w-lg text-[11px] font-medium leading-relaxed text-zinc-400/95 sm:text-xs lg:line-clamp-2">
-            Compounding trajectory toward FI — switch range to stress-test pacing.
+            {isEmptyHistory
+              ? "Log net worth over time as you update your portfolio — your curve appears here automatically."
+              : "Compounding trajectory from your saved net worth history."}
           </p>
         </div>
         <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-xl border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:w-auto sm:flex-nowrap sm:rounded-2xl sm:p-0.5">
@@ -135,111 +182,109 @@ export function NetWorthGrowthChart() {
                   : { top: 20, right: 8, left: 0, bottom: 12 }
               }
             >
-            <defs>
-              <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#5eead4" stopOpacity={0.38} />
-                <stop offset="40%" stopColor="#10b981" stopOpacity={0.16} />
-                <stop offset="85%" stopColor="#064e3b" stopOpacity={0.04} />
-                <stop offset="100%" stopColor="#022c22" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={lineStrokeId} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#a7f3d0" />
-                <stop offset="45%" stopColor="#34d399" />
-                <stop offset="100%" stopColor="#059669" />
-              </linearGradient>
-            </defs>
+              <defs>
+                <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#5eead4" stopOpacity={0.38} />
+                  <stop offset="40%" stopColor="#10b981" stopOpacity={0.16} />
+                  <stop offset="85%" stopColor="#064e3b" stopOpacity={0.04} />
+                  <stop offset="100%" stopColor="#022c22" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id={lineStrokeId} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#a7f3d0" />
+                  <stop offset="45%" stopColor="#34d399" />
+                  <stop offset="100%" stopColor="#059669" />
+                </linearGradient>
+              </defs>
 
-            <CartesianGrid strokeDasharray="5 12" stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <CartesianGrid strokeDasharray="5 12" stroke="rgba(255,255,255,0.04)" vertical={false} />
 
-            <XAxis
-              dataKey="label"
-              tick={{ fill: "rgba(161,161,170,0.88)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
-              tickLine={false}
-              axisLine={false}
-              tickMargin={compact ? 8 : 14}
-              interval="preserveStartEnd"
-              dy={4}
-            />
-            <YAxis
-              domain={yDomain as [number, number]}
-              tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`}
-              tick={{ fill: "rgba(113,113,122,0.95)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
-              axisLine={false}
-              tickLine={false}
-              width={compact ? 40 : 56}
-              tickMargin={compact ? 4 : 8}
-            />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "rgba(161,161,170,0.88)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={compact ? 8 : 14}
+                interval="preserveStartEnd"
+                dy={4}
+              />
+              <YAxis
+                domain={yDomain as [number, number]}
+                tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`}
+                tick={{ fill: "rgba(113,113,122,0.95)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
+                axisLine={false}
+                tickLine={false}
+                width={compact ? 40 : 56}
+                tickMargin={compact ? 4 : 8}
+              />
 
-            <Tooltip
-              content={(props) => <NetWorthTooltip {...props} />}
-              cursor={{ stroke: "rgba(52,211,153,0.22)", strokeWidth: 1 }}
-            />
+              <Tooltip
+                content={(props) => <NetWorthTooltip {...props} />}
+                cursor={{ stroke: "rgba(52,211,153,0.22)", strokeWidth: 1 }}
+              />
 
-            {/* Outer soft glow (wide stroke) */}
-            <Line
-              type="monotone"
-              dataKey="nw"
-              stroke="#10b981"
-              strokeWidth={14}
-              strokeOpacity={0.14}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              dot={false}
-              isAnimationActive={false}
-              legendType="none"
-            />
-            {/* Mid halo */}
-            <Line
-              type="monotone"
-              dataKey="nw"
-              stroke="#34d399"
-              strokeWidth={6}
-              strokeOpacity={0.22}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              dot={false}
-              isAnimationActive={false}
-              legendType="none"
-            />
+              <Line
+                type="monotone"
+                dataKey="nw"
+                stroke="#10b981"
+                strokeWidth={14}
+                strokeOpacity={0.14}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                dot={false}
+                isAnimationActive={false}
+                legendType="none"
+              />
+              <Line
+                type="monotone"
+                dataKey="nw"
+                stroke="#34d399"
+                strokeWidth={6}
+                strokeOpacity={0.22}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                dot={false}
+                isAnimationActive={false}
+                legendType="none"
+              />
 
-            <Area
-              type="monotone"
-              dataKey="nw"
-              stroke={`url(#${lineStrokeId})`}
-              strokeWidth={3}
-              fill={`url(#${fillGradId})`}
-              fillOpacity={1}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              isAnimationActive
-              animationDuration={640}
-              animationEasing="ease-out"
-              activeDot={{
-                r: 6,
-                strokeWidth: 0,
-                fill: "#ecfdf5",
-                className: "drop-shadow-[0_0_14px_rgba(52,211,153,0.95)]",
-              }}
-              dot={(props) => {
-                const { cx, cy, payload } = props;
-                const dotKey = `nw-dot-${payload.label}-${payload.nw}`;
-                if (payload.milestone) {
-                  return (
-                    <circle
-                      key={dotKey}
-                      cx={cx}
-                      cy={cy}
-                      r={6}
-                      fill="#052e22"
-                      stroke="#6ee7b7"
-                      strokeWidth={2}
-                      className="drop-shadow-[0_0_14px_rgba(52,211,153,0.9)]"
-                    />
-                  );
-                }
-                return <circle key={dotKey} cx={cx} cy={cy} r={0} />;
-              }}
-            />
+              <Area
+                type="monotone"
+                dataKey="nw"
+                stroke={`url(#${lineStrokeId})`}
+                strokeWidth={3}
+                fill={`url(#${fillGradId})`}
+                fillOpacity={1}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                isAnimationActive
+                animationDuration={640}
+                animationEasing="ease-out"
+                activeDot={{
+                  r: 6,
+                  strokeWidth: 0,
+                  fill: "#ecfdf5",
+                  className: "drop-shadow-[0_0_14px_rgba(52,211,153,0.95)]",
+                }}
+                dot={(props) => {
+                  const { cx, cy, payload } = props;
+                  const dotKey = `nw-dot-${payload.label}-${payload.nw}`;
+                  if (payload.milestone) {
+                    return (
+                      <circle
+                        key={dotKey}
+                        cx={cx}
+                        cy={cy}
+                        r={6}
+                        fill="#052e22"
+                        stroke="#6ee7b7"
+                        strokeWidth={2}
+                        className="drop-shadow-[0_0_14px_rgba(52,211,153,0.9)]"
+                      />
+                    );
+                  }
+                  return <circle key={dotKey} cx={cx} cy={cy} r={0} />;
+                }}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

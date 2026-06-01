@@ -6,10 +6,10 @@ import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShel
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
 const PLACEHOLDER_ROWS = [
-  { label: "Default child profile", value: "Arya (demo)" },
-  { label: "Shared calendar visibility", value: "Parents + nanny" },
+  { label: "Default child profile", value: "Not set" },
+  { label: "Shared calendar visibility", value: "Parents only" },
   { label: "AI insight sensitivity", value: "Balanced" },
-  { label: "Emergency SMS", value: "Off (demo)" },
+  { label: "Emergency SMS", value: "Off" },
 ];
 
 export function FamilySettingsWealthPage() {
@@ -25,7 +25,7 @@ export function FamilySettingsWealthPage() {
         <DashboardSectionHeader
           eyebrow="Household"
           title="Family Settings"
-          subtitle="Privacy, shared access, and AI behavior for the Family Hub — premium controls (demo)."
+          subtitle="Privacy, shared access, and AI behavior for the Family Hub."
         />
         <div className={`wealth-glass overflow-hidden rounded-2xl border ${light ? "border-emerald-200/70 shadow-sm" : "border-emerald-400/15"}`}>
           <ul className="divide-y divide-emerald-200/60 dark:divide-emerald-500/15">

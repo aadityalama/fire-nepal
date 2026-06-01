@@ -59,7 +59,7 @@ export function SavingsTrackerDashboard() {
   const primaryMonthly = primary === "krw" ? SAVINGS_DASH_META.monthlySavingsKrw : monthlyNpr;
   const secondaryLine =
     primary === "krw"
-      ? `≈ ${formatNprInteger(totalNpr)} at demo rate`
+      ? `≈ ${formatNprInteger(totalNpr)} at NPR/KRW reference rate`
       : `≈ ${formatKrwInteger(SAVINGS_DASH_META.totalSavingsKrw)}`;
 
   const secondaryMonthly =
@@ -68,7 +68,7 @@ export function SavingsTrackerDashboard() {
   return (
     <WealthDashboardShell
       brand={{ tagline: "Savings OS", iconGradient: "from-emerald-400 to-lime-400" }}
-      footerNote="Demo workspace — amounts are illustrative. Toggle theme in the header; data stays local in production builds."
+      footerNote="Savings workspace — amounts stay on this device until you connect sync. Toggle theme in the header."
     >
       <div className="mb-6 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-center sm:justify-between lg:mb-8">
         <Link
@@ -194,7 +194,7 @@ export function SavingsTrackerDashboard() {
                       {formatPct(SAVINGS_DASH_META.growthPctVsLastMonth)}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Seasonally adjusted demo curve</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Vs prior month (when you have history)</p>
                 </div>
               </div>
             </div>
@@ -207,7 +207,7 @@ export function SavingsTrackerDashboard() {
               }`}
             >
               <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/80">FIRE target</p>
-              <p className="mt-2 text-sm font-bold text-slate-600 dark:text-zinc-300">Corpus target (demo)</p>
+              <p className="mt-2 text-sm font-bold text-slate-600 dark:text-zinc-300">Corpus target</p>
               <p className="mt-1 text-xl font-black text-slate-900 dark:text-white">{formatKrwInteger(SAVINGS_DASH_META.fireTargetKrw)}</p>
               <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">
                 ≈ {formatNprInteger(krwToNpr(SAVINGS_DASH_META.fireTargetKrw))} · glide {SAVINGS_DASH_META.fireTargetProgressPct}%
@@ -249,7 +249,7 @@ export function SavingsTrackerDashboard() {
               light={light}
               label="Average monthly"
               value={formatKrwInteger(SAVINGS_DASH_META.avgMonthlyKrw)}
-              hint="Trailing 12 months (demo)"
+              hint="Trailing 12 months (when tracked)"
             />
             <AnalyticsTile
               light={light}

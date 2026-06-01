@@ -26,7 +26,7 @@ export type ProductOnboardingState = {
 export const DEFAULT_ONBOARDING: ProductOnboardingState = {
   version: 1,
   completed: false,
-  age: 32,
+  age: 0,
   salaryMonthlyNpr: 0,
   country: "South Korea",
   monthlySavingsNpr: 0,
@@ -74,7 +74,7 @@ export function generateFireProfileFromOnboarding(input: ProductOnboardingState)
   return {
     savingsRatePct: Math.round(sr * 10) / 10,
     headline: `At ~${Math.round(sr)}% savings vs income and a ${label} posture, you are building institutional-grade optionality for Nepal return.`,
-    estYearsToFiBand: `${bandLow}–${bandHigh} yrs (illustrative; use the desk simulation for precision)`,
+    estYearsToFiBand: `${bandLow}–${bandHigh} yrs (desk estimate — refine in simulation)`,
     runwayMonthsSuggested: clamp(runway, 3, 24),
   };
 }

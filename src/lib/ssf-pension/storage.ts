@@ -30,21 +30,21 @@ export type SsfPensionWorkspaceState = {
 const DEFAULT_STATE: SsfPensionWorkspaceState = {
   version: 1,
   reminderPrefs: {
-    emailReminders: true,
+    emailReminders: false,
     pushNotifications: false,
     premiumDueDaysBefore: 5,
   },
   projection: {
-    currentAge: 34,
-    monthlySalaryNpr: 185_000,
-    monthlySsfContributionNpr: 18_500,
+    currentAge: 0,
+    monthlySalaryNpr: 0,
+    monthlySsfContributionNpr: 0,
     retirementAge: 60,
-    annualSalaryGrowthPct: 4.5,
+    annualSalaryGrowthPct: 0,
   },
   retireNepal: {
-    monthlyFamilySpendNpr: 95_000,
-    assumedInflationPct: 6.2,
-    otherMonthlyIncomeNpr: 22_000,
+    monthlyFamilySpendNpr: 0,
+    assumedInflationPct: 0,
+    otherMonthlyIncomeNpr: 0,
   },
 };
 

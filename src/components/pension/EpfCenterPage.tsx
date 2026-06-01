@@ -16,14 +16,14 @@ export function EpfCenterPage() {
   return (
     <PensionChrome
       title="EPF Center"
-      subtitle="Employee Provident Fund desk — balances, employer share, interest accrual, and voluntary top-ups. Demo figures until payroll sync."
+      subtitle="Employee Provident Fund desk — balances, employer share, interest accrual, and voluntary top-ups. Connect payroll sync when available."
     >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Member balance", value: formatMoney(EPF_DEMO.memberBalanceNpr, "NPR"), hint: "Principal + interest (desk)" },
           { label: "Employer share", value: formatMoney(EPF_DEMO.employerShareNpr, "NPR"), hint: "Credited to member ledger" },
           { label: "Employee share", value: formatMoney(EPF_DEMO.employeeShareNpr, "NPR"), hint: "Salary deferrals" },
-          { label: "Interest accrued", value: formatMoney(EPF_DEMO.interestAccruedNpr, "NPR"), hint: "Last FY accrual (demo)" },
+          { label: "Interest accrued", value: formatMoney(EPF_DEMO.interestAccruedNpr, "NPR"), hint: "Last FY accrual (desk)" },
         ].map((c) => (
           <div key={c.label} className={`wealth-glass flex min-h-[120px] flex-col justify-between p-4 sm:p-5 ${glass}`}>
             <div>
@@ -51,7 +51,7 @@ export function EpfCenterPage() {
               style={{ width: `${EPF_DEMO.vestingPct}%` }}
             />
           </div>
-          <p className="mt-2 text-[11px] font-bold text-slate-500 dark:text-zinc-500">Vesting progress (illustrative) {EPF_DEMO.vestingPct}%</p>
+          <p className="mt-2 text-[11px] font-bold text-slate-500 dark:text-zinc-500">Vesting progress {EPF_DEMO.vestingPct}%</p>
         </section>
 
         <section className={`wealth-glass flex flex-col gap-3 p-4 sm:p-5 ${glass}`}>

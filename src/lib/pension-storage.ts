@@ -4,7 +4,7 @@ import { PENSION_STORAGE_KEY } from "@/lib/pension-types";
 const DEFAULT_STATE: PensionDashboardState = {
   version: 1,
   profile: {
-    joinDate: new Date(new Date().getFullYear() - 3, 0, 2).toISOString().slice(0, 10),
+    joinDate: new Date().toISOString().slice(0, 10),
   },
   slips: [],
 };

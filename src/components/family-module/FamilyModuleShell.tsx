@@ -150,7 +150,7 @@ export function FamilyModuleShell({ children }: { children: ReactNode }) {
               light ? "border-slate-200/80 text-slate-500" : "border-white/10 text-zinc-500"
             }`}
           >
-            {!collapsed ? <p className="px-2 leading-relaxed">Premium family workspace · local-first demo data</p> : null}
+            {!collapsed ? <p className="px-2 leading-relaxed">Premium family workspace · saved on this device</p> : null}
           </div>
         </aside>
 

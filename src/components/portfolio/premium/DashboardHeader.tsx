@@ -75,7 +75,6 @@ export function DashboardHeader({ userName, onPeriodChange }: DashboardHeaderPro
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" strokeWidth={2} />
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)] ring-2 ring-zinc-950/90" />
         </button>
 
         <PremiumGlassCard glow={false} className="flex items-center gap-2.5 px-2.5 py-1.5 sm:gap-3 sm:px-3 sm:py-2">

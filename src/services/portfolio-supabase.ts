@@ -12,7 +12,7 @@ import type {
   VehicleRow,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
-import { coerceWealthPortfolioState, defaultWealthState } from "@/components/portfolio/storage";
+import { coerceWealthPortfolioState } from "@/components/portfolio/storage";
 import type { Database, Json } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
@@ -90,14 +90,14 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
 
   return coerceWealthPortfolioState({
     version: 2,
-    liquidCash: liquidCash.length ? liquidCash : defaultWealthState().liquidCash,
-    fixedDeposits: fixedDeposits.length ? fixedDeposits : defaultWealthState().fixedDeposits,
-    investments: investments.length ? investments : defaultWealthState().investments,
-    metals: metalRows.length ? metalRows : defaultWealthState().metals,
-    realEstate: realEstate.length ? realEstate : defaultWealthState().realEstate,
-    vehicles: vehicles.length ? vehicles : defaultWealthState().vehicles,
-    liabilities: liabilities.length ? liabilities : defaultWealthState().liabilities,
-    globalRetirementAssets: globalRetirementAssets.length ? globalRetirementAssets : defaultWealthState().globalRetirementAssets,
+    liquidCash,
+    fixedDeposits,
+    investments,
+    metals: metalRows,
+    realEstate,
+    vehicles,
+    liabilities,
+    globalRetirementAssets,
     ledger,
     netWorthHistory,
   });

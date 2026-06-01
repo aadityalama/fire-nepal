@@ -12,34 +12,24 @@ export function FamilyAiInsightsWealthPage() {
   return (
     <WealthDashboardShell
       brand={{ tagline: "Family AI", iconGradient: "from-emerald-400 to-teal-400" }}
-      footerNote="Family AI Insights — demo signals. Connect your data model when backend is ready."
+      footerNote="Family AI Insights — signals appear when your family workspace has enough connected data."
     >
       <div className="wealth-dash-flow flex flex-col gap-5 lg:gap-6">
         <DashboardSectionHeader
           eyebrow="Family intelligence"
           title="Family AI Insights"
-          subtitle="Cross-household signals: cash timing, school load, and wellbeing proxies — scoped to family data only (demo)."
+          subtitle="Cross-household signals for cash timing, education load, and wellbeing — scoped to your family data only."
         />
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[
-            {
-              title: "Rhythm score",
-              body: "Evening wind-down consistency is up — fewer late meals before school nights.",
-            },
-            { title: "Fee seasonality", body: "Next education invoice clusters with rent week — consider KRW sweep 4 days early." },
-            { title: "Household focus", body: "Shared calendar density is moderate; two buffer evenings remain this month." },
-            { title: "Risk flags", body: "No medical renewals due in 45 days. Visa window opens in 12 days (demo)." },
-          ].map((c) => (
-            <div
-              key={c.title}
-              className={`wealth-glass rounded-2xl border p-5 motion-safe:transition-[transform,box-shadow] motion-safe:duration-300 motion-safe:hover:-translate-y-0.5 ${
-                light ? "border-emerald-200/70 shadow-sm" : "border-emerald-400/15"
-              }`}
-            >
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/75">{c.title}</p>
-              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700 dark:text-zinc-300">{c.body}</p>
-            </div>
-          ))}
+        <div
+          className={`wealth-glass rounded-2xl border p-8 text-center sm:p-10 ${
+            light ? "border-emerald-200/70 shadow-sm" : "border-emerald-400/15"
+          }`}
+        >
+          <p className="text-lg font-black tracking-tight text-slate-900 dark:text-white">No insights yet</p>
+          <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+            Add family schedules, shared reminders, and records in the hub. When there is enough signal, personalized
+            summaries will show here instead of placeholder cards.
+          </p>
         </div>
         <div
           className={`wealth-glass rounded-2xl border p-5 sm:p-6 ${light ? "border-emerald-200/70" : "border-emerald-400/15"}`}
