@@ -170,15 +170,15 @@ export function FooterInfoPage({
           {sections.map(({ title: sectionTitle, body, icon: Icon = ShieldCheck }, index) => (
             <article
               key={sectionTitle}
-              className="glass-card soft-gradient-border animate-fade-up group relative overflow-hidden rounded-[1.8rem] border border-white/50 bg-white/80 p-5 shadow-[0_24px_70px_rgba(0,63,47,0.12)] backdrop-blur-2xl transition hover:-translate-y-1 dark:border-white/10 dark:bg-white/[0.08] sm:p-6"
+              className="glass-card soft-gradient-border animate-fade-up group relative overflow-hidden rounded-[1.8rem] border border-white/50 bg-white/92 p-5 shadow-[0_24px_70px_rgba(0,63,47,0.12)] backdrop-blur-2xl transition hover:-translate-y-1 dark:border-white/10 dark:bg-white/[0.08] sm:p-6"
               style={{ animationDelay: `${index * 45}ms` }}
             >
               <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-emerald-300/20 blur-3xl transition group-hover:bg-emerald-300/30" />
               <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-[0_18px_40px_rgba(0,122,61,0.18)]">
                 <Icon className="h-5 w-5" aria-hidden />
               </div>
-              <h2 className="relative mt-5 text-xl font-black tracking-tight text-[#111827] dark:text-white">{sectionTitle}</h2>
-              <p className="relative mt-3 text-sm font-semibold leading-[1.65] text-[#374151] dark:text-gray-200">{body}</p>
+              <h2 className="relative mt-5 text-xl font-black tracking-tight text-black dark:text-white">{sectionTitle}</h2>
+              <p className="relative mt-3 text-base font-semibold leading-relaxed text-slate-800 dark:text-gray-100">{body}</p>
             </article>
           ))}
         </section>
@@ -255,19 +255,19 @@ export function ContactPageContent() {
             </div>
           </div>
 
-          <div className="glass-card soft-gradient-border animate-fade-up rounded-[2rem] border border-white/55 bg-white/85 p-5 shadow-[0_28px_80px_rgba(0,63,47,0.16)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08] sm:p-7">
-            <h2 className="text-2xl font-black tracking-tight text-[#111827] dark:text-white">Contact Form</h2>
+          <div className="glass-card soft-gradient-border animate-fade-up rounded-[2rem] border border-white/55 bg-white/92 p-5 shadow-[0_28px_80px_rgba(0,63,47,0.16)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08] sm:p-7">
+            <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Contact Form</h2>
             <form className="mt-6 grid gap-4" onSubmit={submitContact}>
               <ContactInput label="Name" value={form.name} onChange={(value) => updateField("name", value)} />
               <ContactInput label="Email" type="email" value={form.email} onChange={(value) => updateField("email", value)} />
               <ContactInput label="Subject" value={form.subject} onChange={(value) => updateField("subject", value)} />
-              <label className="grid gap-2 text-sm font-black text-[#111827] dark:text-gray-100">
+              <label className="grid gap-2 text-sm font-black text-black dark:text-gray-100">
                 Message
                 <textarea
                   value={form.message}
                   onChange={(event) => updateField("message", event.target.value)}
                   rows={6}
-                  className="min-h-36 rounded-2xl border border-[#D1D5DB] bg-white/90 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition placeholder:text-[#6B7280] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100/90 dark:border-white/20 dark:bg-white/[0.08] dark:text-white dark:placeholder:text-gray-400"
+                  className="min-h-36 rounded-2xl border border-[#D1D5DB] bg-white/90 px-4 py-3 text-sm font-semibold text-black outline-none transition placeholder:text-slate-500 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100/90 dark:border-white/20 dark:bg-white/[0.08] dark:text-white dark:placeholder:text-gray-400"
                   placeholder="Tell us how we can help..."
                 />
               </label>
@@ -280,7 +280,7 @@ export function ContactPageContent() {
               </button>
             </form>
             <div className="mt-6 rounded-[1.5rem] border border-emerald-200/70 bg-emerald-50/70 p-4 dark:border-emerald-300/15 dark:bg-emerald-400/10">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#065f46] dark:text-emerald-200">Social Links</p>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-950 dark:text-gray-100">Social Links</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {["YouTube", "Facebook", "TikTok"].map((social) => (
                   <a
@@ -288,7 +288,7 @@ export function ContactPageContent() {
                     href={`https://www.${social === "TikTok" ? "tiktok" : social.toLowerCase()}.com`}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-black text-[#111827] transition hover:-translate-y-0.5 hover:border-emerald-400 dark:border-white/10 dark:bg-white/10 dark:text-gray-100"
+                    className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-black text-black transition hover:-translate-y-0.5 hover:border-emerald-400 dark:border-white/10 dark:bg-white/10 dark:text-gray-100"
                   >
                     {social}
                   </a>
@@ -314,13 +314,13 @@ function ContactInput({
   type?: string;
 }) {
   return (
-    <label className="grid gap-2 text-sm font-black text-[#111827] dark:text-gray-100">
+    <label className="grid gap-2 text-sm font-black text-black dark:text-gray-100">
       {label}
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-[#D1D5DB] bg-white/90 px-4 py-3 text-sm font-semibold text-[#111827] outline-none transition placeholder:text-[#6B7280] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100/90 dark:border-white/20 dark:bg-white/[0.08] dark:text-white dark:placeholder:text-gray-400"
+        className="rounded-2xl border border-[#D1D5DB] bg-white/90 px-4 py-3 text-sm font-semibold text-black outline-none transition placeholder:text-slate-500 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100/90 dark:border-white/20 dark:bg-white/[0.08] dark:text-white dark:placeholder:text-gray-400"
         placeholder={label}
       />
     </label>
@@ -526,9 +526,9 @@ function AboutSection({
   className?: string;
 }>) {
   return (
-    <section className={`glass-card soft-gradient-border animate-fade-up rounded-[2rem] border border-white/55 bg-white/85 p-5 shadow-[0_26px_80px_rgba(0,63,47,0.13)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08] sm:p-7 ${className}`}>
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#4B5563] dark:text-emerald-200/95">{eyebrow}</p>
-      <h2 className="mt-3 text-2xl font-black tracking-tight text-[#111827] dark:text-white sm:text-3xl">{title}</h2>
+    <section className={`glass-card soft-gradient-border animate-fade-up rounded-[2rem] border border-white/55 bg-white/92 p-5 shadow-[0_26px_80px_rgba(0,63,47,0.13)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.08] sm:p-7 ${className}`}>
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800 dark:text-gray-100">{eyebrow}</p>
+      <h2 className="mt-3 text-2xl font-black tracking-tight text-black dark:text-white sm:text-3xl">{title}</h2>
       <div className="mt-5">{children}</div>
     </section>
   );
@@ -601,7 +601,7 @@ export function AboutFooterInfoPage() {
 
         <div className="grid gap-5 pb-12">
           <AboutSection eyebrow="Our Story" title="Created for the sacrifices behind every remittance">
-            <div className="mx-auto grid max-w-prose gap-5 text-sm font-semibold leading-[1.75] text-[#374151] dark:text-gray-200 sm:text-base sm:leading-[1.8] lg:max-w-[68ch] lg:text-[1.0625rem] lg:leading-[1.82]">
+            <div className="mx-auto grid max-w-prose gap-5 text-sm font-semibold leading-[1.75] text-slate-800 dark:text-gray-100 sm:text-base sm:leading-[1.8] lg:max-w-[68ch] lg:text-[1.0625rem] lg:leading-[1.82]">
               {aboutStoryParagraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
@@ -610,10 +610,10 @@ export function AboutFooterInfoPage() {
 
           <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
             <AboutSection eyebrow="Our Mission" title="Financial freedom should not be limited by geography">
-              <p className="text-base font-bold leading-8 text-[#374151] dark:text-gray-200">
+              <p className="text-base font-bold leading-8 text-slate-800 dark:text-gray-100">
                 To help every Nepali abroad achieve Financial Independence and create a secure future for their family.
               </p>
-              <p className="mt-4 text-sm font-semibold leading-[1.7] text-[#4B5563] dark:text-gray-300 sm:text-base sm:leading-[1.72]">
+              <p className="mt-4 text-sm font-semibold leading-[1.7] text-slate-800 dark:text-gray-100 sm:text-base sm:leading-[1.72]">
                 Whether you work in South Korea, Japan, UAE, Qatar, Saudi Arabia, Malaysia, Europe, Australia, Canada, the United States, or anywhere else in the world, FIRE Nepal exists to support your journey.
               </p>
             </AboutSection>
@@ -622,15 +622,15 @@ export function AboutFooterInfoPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-[1.5rem] border border-emerald-200/70 bg-emerald-50/80 p-5 dark:border-emerald-300/15 dark:bg-emerald-400/10">
                   <PiggyBank className="h-6 w-6 text-emerald-700 dark:text-emerald-200" aria-hidden />
-                  <h3 className="mt-4 text-lg font-black text-[#111827] dark:text-white">Financial Independence</h3>
-                  <p className="mt-2 text-sm font-semibold leading-[1.65] text-[#374151] dark:text-gray-200">
+                  <h3 className="mt-4 text-lg font-black text-black dark:text-white">Financial Independence</h3>
+                  <p className="mt-2 text-sm font-semibold leading-[1.65] text-slate-800 dark:text-gray-100">
                     Building enough wealth so work becomes a choice, not a necessity.
                   </p>
                 </div>
                 <div className="rounded-[1.5rem] border border-amber-200/70 bg-amber-50/80 p-5 dark:border-amber-300/15 dark:bg-amber-400/10">
                   <LineChart className="h-6 w-6 text-amber-700 dark:text-amber-200" aria-hidden />
-                  <h3 className="mt-4 text-lg font-black text-[#111827] dark:text-white">Retire Early</h3>
-                  <p className="mt-2 text-sm font-semibold leading-[1.65] text-[#374151] dark:text-gray-200">
+                  <h3 className="mt-4 text-lg font-black text-black dark:text-white">Retire Early</h3>
+                  <p className="mt-2 text-sm font-semibold leading-[1.65] text-slate-800 dark:text-gray-100">
                     Creating the freedom to spend more time with family, personal goals, community service, entrepreneurship, or enjoying life on your own terms.
                   </p>
                 </div>
@@ -644,7 +644,7 @@ export function AboutFooterInfoPage() {
                 {whoWeServe.map((person) => (
                   <div key={person} className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-white/70 p-3 dark:border-white/10 dark:bg-white/[0.06]">
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden />
-                    <span className="text-sm font-black text-[#111827] dark:text-gray-100">{person}</span>
+                    <span className="text-sm font-black text-black dark:text-gray-100">{person}</span>
                   </div>
                 ))}
               </div>
@@ -655,8 +655,8 @@ export function AboutFooterInfoPage() {
                 {buildCards.map(({ title, body, icon: Icon }) => (
                   <article key={title} className="rounded-[1.4rem] border border-emerald-100 bg-white/70 p-4 transition hover:-translate-y-1 hover:border-emerald-300 dark:border-white/10 dark:bg-white/[0.06]">
                     <Icon className="h-5 w-5 text-emerald-700 dark:text-emerald-200" aria-hidden />
-                    <h3 className="mt-3 text-base font-black text-[#111827] dark:text-white">{title}</h3>
-                    <p className="mt-1.5 text-sm font-semibold leading-[1.62] text-[#4B5563] dark:text-gray-300">{body}</p>
+                    <h3 className="mt-3 text-base font-black text-black dark:text-white">{title}</h3>
+                    <p className="mt-1.5 text-sm font-semibold leading-[1.62] text-slate-800 dark:text-gray-100">{body}</p>
                   </article>
                 ))}
               </div>
@@ -665,14 +665,14 @@ export function AboutFooterInfoPage() {
 
           <section className="grid gap-5 lg:grid-cols-2">
             <AboutSection eyebrow="Our Vision" title="The most trusted financial platform for Nepalis worldwide">
-              <p className="text-sm font-semibold leading-[1.65] text-[#374151] dark:text-gray-200 sm:text-base">
+              <p className="text-sm font-semibold leading-[1.65] text-slate-800 dark:text-gray-100 sm:text-base">
                 A platform where every Nepali abroad can:
               </p>
               <div className="mt-4 grid gap-3">
                 {visionPoints.map((point) => (
                   <div key={point} className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-white/70 p-3 dark:border-white/10 dark:bg-white/[0.06]">
                     <TrendingUp className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden />
-                    <span className="text-sm font-black text-[#111827] dark:text-gray-100">{point}</span>
+                    <span className="text-sm font-black text-black dark:text-gray-100">{point}</span>
                   </div>
                 ))}
               </div>
@@ -681,7 +681,7 @@ export function AboutFooterInfoPage() {
             <AboutSection eyebrow="Our Values" title="The principles behind the product">
               <div className="flex flex-wrap gap-3">
                 {valuePillars.map((value) => (
-                  <span key={value} className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-[#111827] dark:border-emerald-300/15 dark:bg-emerald-400/10 dark:text-gray-100">
+                  <span key={value} className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-black dark:border-emerald-300/15 dark:bg-emerald-400/10 dark:text-gray-100">
                     {value}
                   </span>
                 ))}
@@ -694,7 +694,7 @@ export function AboutFooterInfoPage() {
                 ].map(({ label, icon: Icon }) => (
                   <div key={label} className="rounded-2xl border border-emerald-100 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.06]">
                     <Icon className="h-5 w-5 text-emerald-700 dark:text-emerald-200" aria-hidden />
-                    <p className="mt-3 text-sm font-black text-[#111827] dark:text-gray-100">{label}</p>
+                    <p className="mt-3 text-sm font-black text-black dark:text-gray-100">{label}</p>
                   </div>
                 ))}
               </div>
