@@ -103,12 +103,12 @@ function familyHubTriggerClasses(active: boolean, light: boolean) {
     "flex w-full min-h-[44px] items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold tracking-[-0.01em] transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99] sm:text-[0.8125rem] sm:leading-snug";
   if (active) {
     return light
-      ? `${base} border-emerald-400/55 bg-emerald-50 text-emerald-950`
+      ? `${base} border-emerald-400/55 bg-emerald-50 text-black`
       : `${base} border-emerald-400/35 bg-emerald-500/[0.12] text-white`;
   }
   return light
-    ? `${base} border-transparent bg-white/55 text-slate-700 backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90`
-    : `${base} border-transparent bg-white/[0.04] text-zinc-300 backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
+    ? `${base} border-transparent bg-white/55 text-slate-800 font-semibold backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90 hover:text-black`
+    : `${base} border-transparent bg-white/[0.04] text-gray-100 font-semibold backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
 }
 
 function familyHubSubLinkClasses(active: boolean, light: boolean) {
@@ -116,12 +116,12 @@ function familyHubSubLinkClasses(active: boolean, light: boolean) {
     "flex min-h-[40px] items-center rounded-lg border px-3 py-2 text-[0.8125rem] font-medium leading-snug transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99] sm:pl-4";
   if (active) {
     return light
-      ? `${base} border-emerald-300/50 bg-emerald-50/95 text-emerald-950`
+      ? `${base} border-emerald-300/50 bg-emerald-50/95 text-black`
       : `${base} border-emerald-400/30 bg-emerald-500/[0.1] text-white`;
   }
   return light
-    ? `${base} border-transparent bg-transparent text-slate-600 hover:border-emerald-200/60 hover:bg-emerald-50/70 hover:text-slate-900`
-    : `${base} border-transparent bg-transparent text-zinc-400 hover:border-white/10 hover:bg-white/[0.05] hover:text-zinc-100`;
+    ? `${base} border-transparent bg-transparent text-slate-800 font-semibold hover:border-emerald-200/60 hover:bg-emerald-50/70 hover:text-black`
+    : `${base} border-transparent bg-transparent text-gray-100 font-semibold hover:border-white/10 hover:bg-white/[0.05] hover:text-white`;
 }
 
 type FamilyHubNavSectionProps = {
@@ -198,12 +198,12 @@ function navLinkClasses(active: boolean, light: boolean) {
     "flex min-h-[44px] items-center justify-center rounded-xl border px-3 py-2.5 text-xs font-semibold tracking-[-0.01em] transition-colors duration-200 active:scale-[0.99] sm:justify-start sm:text-[0.8125rem] sm:leading-snug";
   if (active) {
     return light
-      ? `${base} border-emerald-400/55 bg-emerald-50 text-emerald-950`
+      ? `${base} border-emerald-400/55 bg-emerald-50 text-black`
       : `${base} border-emerald-400/35 bg-emerald-500/[0.12] text-white`;
   }
   return light
-    ? `${base} border-transparent bg-white/55 text-slate-700 backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90`
-    : `${base} border-transparent bg-white/[0.04] text-zinc-300 backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
+    ? `${base} border-transparent bg-white/55 text-slate-800 font-semibold backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90 hover:text-black`
+    : `${base} border-transparent bg-white/[0.04] text-gray-100 font-semibold backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
 }
 
 export function WealthDashboardShell({
@@ -255,7 +255,7 @@ export function WealthDashboardShell({
   return (
     <main
       className={`portfolio-wealth-dash premium-shell relative min-h-screen pb-24 antialiased transition-[background-color,color] duration-300 ease-out max-xl:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] xl:pb-10 ${
-        light ? "bg-slate-100 text-slate-800" : "bg-[#011a14] text-zinc-100"
+        light ? "bg-slate-100 text-slate-800" : "bg-[#011a14] text-gray-100"
       }`}
     >
       <div className="wealth-dash-atmosphere wealth-dash-atmosphere-float pointer-events-none fixed inset-0" />
@@ -272,8 +272,8 @@ export function WealthDashboardShell({
               onClick={() => setDrawerOpen(true)}
               className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-emerald-100 shadow-sm transition xl:hidden ${
                 light
-                  ? "border-slate-200/90 bg-white/90 text-emerald-900 hover:bg-slate-50"
-                  : "border-emerald-400/20 bg-white/[0.06] hover:border-emerald-300/35 hover:bg-white/10"
+                  ? "border-slate-200/90 bg-white/90 text-black hover:bg-slate-50"
+                  : "border-emerald-400/20 bg-white/[0.06] text-gray-100 hover:border-emerald-300/35 hover:bg-white/10"
               }`}
               aria-expanded={drawerOpen}
               aria-controls="wealth-dash-drawer"
@@ -290,11 +290,11 @@ export function WealthDashboardShell({
               <Flame size={18} fill="currentColor" />
             </div>
             <div className="min-w-0 text-right">
-              <p className={`truncate text-[0.8125rem] font-semibold tracking-[-0.03em] ${light ? "text-slate-900" : "text-white"}`}>
+              <p className={`truncate text-[0.8125rem] font-bold tracking-[-0.03em] ${light ? "text-black" : "text-white"}`}>
                 FIRE Nepal
               </p>
               <p
-                className={`truncate text-[9px] font-medium uppercase tracking-[0.2em] ${light ? "text-slate-500" : "text-zinc-400"}`}
+                className={`truncate text-[9px] font-semibold uppercase tracking-[0.2em] ${light ? "text-slate-800" : "text-gray-100"}`}
               >
                 {brand.tagline}
               </p>
@@ -319,7 +319,7 @@ export function WealthDashboardShell({
           } xl:translate-x-0 xl:border-b-0 xl:shrink-0 ${
             light
               ? "border-r border-emerald-200/55 bg-gradient-to-b from-white/98 via-white/95 to-emerald-50/40 text-slate-800 shadow-none backdrop-blur-xl xl:shadow-[2px_0_32px_-16px_rgba(16,185,129,0.1)]"
-              : "border-r border-emerald-500/12 bg-gradient-to-b from-zinc-950/98 via-[#041a14]/96 to-black/92 text-zinc-100 shadow-[2px_0_28px_-12px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+              : "border-r border-emerald-500/12 bg-gradient-to-b from-zinc-950/98 via-[#041a14]/96 to-black/92 text-gray-100 shadow-[2px_0_28px_-12px_rgba(0,0,0,0.55)] backdrop-blur-xl"
           } ${
             drawerOpen ? "translate-x-0 shadow-2xl shadow-black/50" : "-translate-x-full xl:translate-x-0"
           } xl:sticky xl:top-0 xl:max-h-[min(100dvh,100svh)] xl:min-h-0 xl:overflow-hidden xl:flex xl:flex-col`}
@@ -331,7 +331,7 @@ export function WealthDashboardShell({
           >
             <p
               className={`text-[11px] font-black uppercase tracking-[0.18em] ${
-                light ? "text-slate-600" : "text-zinc-200"
+                light ? "text-black" : "text-white"
               }`}
             >
               Navigate
@@ -341,8 +341,8 @@ export function WealthDashboardShell({
               onClick={close}
               className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition ${
                 light
-                  ? "border-slate-200/80 text-slate-700 hover:bg-slate-100"
-                  : "border-emerald-400/20 text-emerald-100 hover:bg-white/10"
+                  ? "border-slate-200/80 text-slate-800 hover:bg-slate-100"
+                  : "border-emerald-400/20 text-gray-100 hover:bg-white/10"
               }`}
               aria-label="Close menu"
             >
@@ -360,13 +360,13 @@ export function WealthDashboardShell({
                 </div>
                 <div className="min-w-0 xl:text-left">
                   <p
-                    className={`text-[0.8125rem] font-semibold tracking-[-0.03em] ${light ? "text-slate-900" : "text-white"}`}
+                    className={`text-[0.8125rem] font-bold tracking-[-0.03em] ${light ? "text-black" : "text-white"}`}
                   >
                     FIRE Nepal
                   </p>
                   <p
-                    className={`mt-0.5 text-[9px] font-medium uppercase leading-relaxed tracking-[0.2em] ${
-                      light ? "text-slate-500" : "text-zinc-400"
+                    className={`mt-0.5 text-[9px] font-semibold uppercase leading-relaxed tracking-[0.2em] ${
+                      light ? "text-slate-800" : "text-gray-100"
                     }`}
                   >
                     {brand.tagline}
@@ -404,7 +404,7 @@ export function WealthDashboardShell({
             </div>
             <div
               className={`mt-auto space-y-3 border-t pt-4 text-[10px] font-bold leading-relaxed xl:border-t-0 xl:pt-0 ${
-                light ? "border-emerald-200/60 text-slate-600" : "border-emerald-400/10 text-zinc-200"
+                light ? "border-emerald-200/60 text-slate-800" : "border-emerald-400/10 text-gray-100"
               }`}
             >
               <div className="hidden xl:block">

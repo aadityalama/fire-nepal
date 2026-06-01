@@ -82,15 +82,15 @@ export function ModuleLedgerCard({
             <BookOpen size={15} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-black text-emerald-50 sm:text-base">{title}</h3>
-            <p className="text-[11px] font-bold leading-snug text-emerald-200/60 sm:text-xs">{subtitle}</p>
-            <p className="mt-0.5 text-[11px] font-bold tabular-nums text-emerald-200/55 sm:text-xs">
+            <h3 className="text-sm font-black text-white sm:text-base">{title}</h3>
+            <p className="text-[11px] font-semibold leading-snug text-gray-100 sm:text-xs">{subtitle}</p>
+            <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-100 sm:text-xs">
               {scoped.length} tx · realized{" "}
               <span className={realized >= 0 ? "text-lime-300" : "text-rose-300"}>{formatMoney(realized, "NPR")}</span>
             </p>
           </div>
         </div>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-400/15 bg-black/30 text-emerald-200">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-400/15 bg-black/30 text-gray-100">
           {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </span>
       </button>
@@ -99,18 +99,18 @@ export function ModuleLedgerCard({
         <div className="mt-3 space-y-3 border-t border-emerald-400/10 pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-emerald-400/15 bg-black/30 px-2 py-1.5 sm:max-w-[16rem]">
-              <Search size={13} className="shrink-0 text-emerald-300/50" />
+              <Search size={13} className="shrink-0 text-slate-500" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search…"
-                className="min-w-0 flex-1 bg-transparent text-[11px] font-bold text-emerald-50 outline-none placeholder:text-emerald-200/35"
+                className="min-w-0 flex-1 bg-transparent text-[11px] font-semibold text-white outline-none placeholder:text-slate-500"
               />
             </div>
             <button
               type="button"
               onClick={() => setSort((s) => (s === "desc" ? "asc" : "desc"))}
-              className="shrink-0 rounded-full border border-emerald-400/20 bg-black/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-100/85 transition hover:border-emerald-400/35"
+              className="shrink-0 rounded-full border border-emerald-400/20 bg-black/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-gray-100 transition hover:border-emerald-400/35"
             >
               Date {sort === "desc" ? "↓" : "↑"}
             </button>
@@ -124,7 +124,7 @@ export function ModuleLedgerCard({
                 className={`rounded-full px-2.5 py-1 text-[10px] font-black transition sm:text-[11px] ${
                   view === t.id
                     ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 shadow-sm shadow-emerald-500/15"
-                    : "border border-emerald-400/18 bg-black/25 text-emerald-100/75 hover:border-emerald-400/32"
+                    : "border border-emerald-400/18 bg-black/25 text-gray-100 hover:border-emerald-400/32"
                 }`}
               >
                 {t.label}
@@ -132,7 +132,7 @@ export function ModuleLedgerCard({
             ))}
           </div>
           {filtered.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-emerald-400/18 bg-black/20 px-3 py-5 text-center text-[11px] font-bold text-emerald-200/50">
+            <p className="rounded-lg border border-dashed border-emerald-400/18 bg-black/20 px-3 py-5 text-center text-[11px] font-semibold text-gray-100">
               {scoped.length === 0
                 ? "No transactions in this book yet. Record activity from Transactions above."
                 : "No rows match this view or search."}

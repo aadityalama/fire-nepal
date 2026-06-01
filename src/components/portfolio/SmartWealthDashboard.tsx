@@ -174,23 +174,23 @@ export function SmartWealthDashboard() {
             href="/"
             className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
               light
-                ? "border-slate-200/90 bg-white/90 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                : "border-white/[0.08] text-zinc-300 hover:border-white/15 hover:text-white"
+                ? "border-slate-200/90 bg-white/90 text-slate-800 font-semibold hover:border-slate-300 hover:bg-slate-50"
+                : "border-white/[0.08] text-gray-100 font-semibold hover:border-white/15 hover:text-white"
             }`}
           >
             <ArrowLeft size={15} /> Home
           </Link>
         </div>
-        <div className={`flex min-w-0 flex-col gap-1 text-xs sm:items-end sm:text-right ${light ? "text-slate-500" : "text-zinc-400"}`}>
+        <div className={`flex min-w-0 flex-col gap-1 text-xs sm:items-end sm:text-right ${light ? "text-slate-800" : "text-gray-100"}`}>
           <div
-            className={`flex items-center gap-2 font-medium ${light ? "text-emerald-800" : "text-emerald-200/80"}`}
+            className={`flex items-center gap-2 font-semibold ${light ? "text-black" : "text-white"}`}
           >
             <Briefcase size={14} className={`shrink-0 ${light ? "text-emerald-600" : "text-emerald-400/90"}`} />
             <span>Portfolio overview</span>
-            {ratesLoading ? <span className={light ? "text-slate-400" : "text-zinc-500"}>· rates…</span> : null}
+            {ratesLoading ? <span className={light ? "text-slate-600" : "text-gray-200"}>· rates…</span> : null}
           </div>
           {overlay && deltaNw != null && Number.isFinite(deltaNw) ? (
-            <p className={`tabular-nums ${light ? "text-slate-600" : "text-zinc-500"}`}>
+            <p className={`tabular-nums font-medium ${light ? "text-slate-800" : "text-gray-100"}`}>
               Live vs baseline NW{" "}
               <span
                 className={

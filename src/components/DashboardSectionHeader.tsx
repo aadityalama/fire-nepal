@@ -5,18 +5,6 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 
 export type DashboardSectionHeaderAccent = "emerald" | "teal" | "cyan";
 
-const ACCENT_TITLE_DARK: Record<DashboardSectionHeaderAccent, string> = {
-  emerald: "from-white via-lime-100 to-emerald-300",
-  teal: "from-white via-emerald-100 to-teal-300",
-  cyan: "from-white via-cyan-100 to-teal-300",
-};
-
-const ACCENT_TITLE_LIGHT: Record<DashboardSectionHeaderAccent, string> = {
-  emerald: "from-emerald-950 via-emerald-800 to-emerald-600",
-  teal: "from-teal-950 via-emerald-900 to-teal-700",
-  cyan: "from-slate-900 via-cyan-900 to-teal-800",
-};
-
 const ACCENT_LINE: Record<DashboardSectionHeaderAccent, string> = {
   emerald: "from-emerald-500/80 via-lime-400/50 to-transparent",
   teal: "from-teal-500/75 via-emerald-400/45 to-transparent",
@@ -49,7 +37,6 @@ export function DashboardSectionHeader({
 }: DashboardSectionHeaderProps) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const titleGrad = light ? ACCENT_TITLE_LIGHT[accent] : ACCENT_TITLE_DARK[accent];
   const glowGrad = ACCENT_GLOW[accent];
   const lineGrad = ACCENT_LINE[accent];
 
@@ -61,11 +48,13 @@ export function DashboardSectionHeader({
     ? "bg-[radial-gradient(ellipse_85%_55%_at_50%_-20%,rgba(16,185,129,0.12),transparent_55%)]"
     : "bg-[radial-gradient(ellipse_85%_55%_at_50%_-20%,rgba(52,211,153,0.08),transparent_55%)]";
 
-  const eyebrowCls = light
-    ? "text-emerald-800/90"
-    : "text-emerald-200/65";
+  const eyebrowCls = light ? "text-black" : "text-gray-100";
 
-  const subtitleCls = light ? "text-slate-600" : "text-zinc-400";
+  const titleCls = light
+    ? "max-w-4xl text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-black sm:text-3xl md:text-[2.15rem] md:leading-[1.08]"
+    : "max-w-4xl text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-white sm:text-3xl md:text-[2.15rem] md:leading-[1.08]";
+
+  const subtitleCls = light ? "text-slate-800 font-semibold" : "text-gray-100 font-semibold";
 
   return (
     <header className="wealth-dash-section-header relative mb-0 sm:mb-0">
@@ -85,13 +74,9 @@ export function DashboardSectionHeader({
               {eyebrow}
             </div>
           ) : null}
-          <h1
-            className={`max-w-4xl bg-gradient-to-r ${titleGrad} bg-clip-text text-[1.45rem] font-bold leading-[1.12] tracking-tight text-transparent sm:text-3xl md:text-[2.15rem] md:leading-[1.08]`}
-          >
-            {title}
-          </h1>
+          <h1 className={titleCls}>{title}</h1>
           <p
-            className={`mt-3 max-w-3xl text-sm font-medium leading-relaxed sm:mt-3.5 sm:text-base sm:leading-relaxed ${subtitleCls}`}
+            className={`mt-3 max-w-3xl text-sm leading-relaxed sm:mt-3.5 sm:text-base sm:leading-relaxed ${subtitleCls}`}
           >
             {subtitle}
           </p>

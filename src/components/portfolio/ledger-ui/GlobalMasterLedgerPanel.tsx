@@ -65,17 +65,17 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
             <BookOpen size={18} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-black text-emerald-50 sm:text-lg">Global master ledger</h2>
-            <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
+            <h2 className="text-base font-black text-white sm:text-lg">Global master ledger</h2>
+            <p className="text-xs font-semibold leading-snug text-gray-100 sm:text-sm">
               Optional combined book across all modules · {ledger.length} entries · realized in scope{" "}
               <span className={realized >= 0 ? "text-lime-300" : "text-rose-300"}>{formatMoney(realized, "NPR")}</span>
             </p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-300/45 sm:text-xs">
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-100 sm:text-xs">
               Filter by asset type · search · sort by date
             </p>
           </div>
         </div>
-        <span className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-black/30 text-emerald-200">
+        <span className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-black/30 text-gray-100">
           {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </span>
       </button>
@@ -83,7 +83,7 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
       {open ? (
         <div className="mt-4 space-y-3 border-t border-emerald-400/10 pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-emerald-200/50">
+            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-white">
               <Filter size={12} /> Asset
             </span>
             <div className="flex flex-wrap gap-1.5">
@@ -98,7 +98,7 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
                   className={`rounded-full px-2.5 py-1 text-[10px] font-black transition sm:text-[11px] ${
                     bucketFilter === b
                       ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 shadow-md shadow-emerald-500/20"
-                      : "border border-emerald-400/20 bg-black/25 text-emerald-100/80 hover:border-emerald-400/35"
+                      : "border border-emerald-400/20 bg-black/25 text-gray-100 hover:border-emerald-400/35"
                   }`}
                 >
                   {masterBucketFilterLabel(b)}
@@ -109,25 +109,25 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-emerald-400/15 bg-black/30 px-2.5 py-2 sm:max-w-md">
-              <Search size={14} className="shrink-0 text-emerald-300/50" />
+              <Search size={14} className="shrink-0 text-slate-500" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search label, date, notes, type…"
-                className="min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none placeholder:text-emerald-200/35"
+                className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-white outline-none placeholder:text-slate-500"
               />
             </div>
             <button
               type="button"
               onClick={() => setSort((s) => (s === "desc" ? "asc" : "desc"))}
-              className="shrink-0 rounded-full border border-emerald-400/20 bg-black/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-emerald-100/85 transition hover:border-emerald-400/35"
+              className="shrink-0 rounded-full border border-emerald-400/20 bg-black/30 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-gray-100 transition hover:border-emerald-400/35"
             >
               Sort date {sort === "desc" ? "↓" : "↑"}
             </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-wide text-emerald-200/50">View</span>
+            <span className="text-[10px] font-black uppercase tracking-wide text-white">View</span>
             <div className="flex flex-wrap gap-1.5">
               {VIEW_TABS.map((t) => (
                 <button
@@ -137,7 +137,7 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
                   className={`rounded-full px-3 py-1 text-[11px] font-black transition sm:text-xs ${
                     view === t.id
                       ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 shadow-md shadow-emerald-500/20"
-                      : "border border-emerald-400/20 bg-black/25 text-emerald-100/80 hover:border-emerald-400/35"
+                      : "border border-emerald-400/20 bg-black/25 text-gray-100 hover:border-emerald-400/35"
                   }`}
                 >
                   {t.label}
@@ -147,7 +147,7 @@ export function GlobalMasterLedgerPanel({ ledger }: { ledger: readonly Portfolio
           </div>
 
           {filtered.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-emerald-400/20 bg-black/20 px-3 py-6 text-center text-xs font-bold text-emerald-200/55">
+            <p className="rounded-xl border border-dashed border-emerald-400/20 bg-black/20 px-3 py-6 text-center text-xs font-semibold text-gray-100">
               No transactions match this filter. Try All assets, clear search, or record activity from module
               Transactions strips.
             </p>

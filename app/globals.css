@@ -996,9 +996,9 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
   border-radius: 0.75rem;
   border: 1px solid rgba(52, 211, 153, 0.15);
   background: rgba(0, 0, 0, 0.35);
-  color: #ecfdf5;
+  color: #f9fafb;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   outline: none;
 }
 
@@ -1008,8 +1008,10 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.12);
 }
 
+.portfolio-wealth-dash .wealth-input::placeholder,
 .portfolio-wealth-dash .wealth-input-text::placeholder {
-  color: rgba(167, 243, 208, 0.35);
+  color: rgb(100 116 139);
+  opacity: 1;
 }
 
 @keyframes wealth-chart-shimmer-move {
@@ -1178,6 +1180,13 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input-text {
   background: rgba(255, 255, 255, 0.94) !important;
   color: rgb(15 23 42) !important;
   border-color: rgba(16, 185, 129, 0.35) !important;
+  font-weight: 600;
+}
+
+html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input::placeholder,
+html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input-text::placeholder {
+  color: rgb(100 116 139) !important;
+  opacity: 1;
 }
 
 html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-overview-shell,

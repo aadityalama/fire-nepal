@@ -26,7 +26,7 @@ export type TxnSegmentDef = { id: string; label: string; tone: TxnSegmentTone };
 function segmentClass(active: boolean, tone: TxnSegmentTone) {
   const base =
     "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition sm:text-xs ";
-  if (!active) return `${base} bg-black/30 text-emerald-200/70`;
+  if (!active) return `${base} bg-black/30 text-gray-100`;
   if (tone === "in") return `${base} bg-lime-500/25 text-lime-200 ring-1 ring-lime-400/40`;
   if (tone === "out") return `${base} bg-rose-500/20 text-rose-100 ring-1 ring-rose-400/35`;
   if (tone === "div") return `${base} bg-cyan-500/22 text-cyan-100 ring-1 ring-cyan-400/40`;
@@ -97,16 +97,16 @@ export function PortfolioTransactionStrip({
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg bg-black/20 px-2 py-1.5 text-left text-[11px] font-black text-emerald-100/90 transition hover:bg-black/30 sm:text-xs"
+        className="flex w-full items-center justify-between gap-2 rounded-lg bg-black/20 px-2 py-1.5 text-left text-[11px] font-bold text-white transition hover:bg-black/30 sm:text-xs"
       >
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="grid h-6 w-6 shrink-0 place-items-center text-emerald-300/80">
+          <span className="grid h-6 w-6 shrink-0 place-items-center text-gray-200">
             {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </span>
           <span className="truncate">{headerLabel}</span>
         </span>
         {summaryRight ? (
-          <span className="max-w-[55%] shrink-0 truncate text-end text-[10px] font-bold text-emerald-200/55">
+          <span className="max-w-[55%] shrink-0 truncate text-end text-[10px] font-semibold text-gray-100">
             {summaryRight}
           </span>
         ) : null}
@@ -144,7 +144,7 @@ export function PortfolioTransactionStrip({
             >
               {showFees ? (
                 <label className="block">
-                  <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">{feesLabel}</span>
+                  <span className="mb-0.5 block text-[10px] font-semibold uppercase text-gray-100">{feesLabel}</span>
                   <input
                     value={feesStr}
                     onChange={(e) => onFeesStrChange(e.target.value)}
@@ -164,7 +164,7 @@ export function PortfolioTransactionStrip({
             </div>
           ) : null}
           <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Notes</span>
+            <span className="mb-0.5 block text-[10px] font-semibold uppercase text-gray-100">Notes</span>
             <input
               value={notes}
               onChange={(e) => onNotesChange(e.target.value)}

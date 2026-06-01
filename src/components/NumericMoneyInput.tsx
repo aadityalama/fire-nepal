@@ -107,7 +107,7 @@ export function NumericMoneyInput({
   autoScaleFont = false,
   className,
   wrapperClassName = "rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100",
-  inputClassName = "min-w-0 flex-1 bg-transparent text-sm font-bold text-emerald-950 outline-none",
+  inputClassName = "min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none",
   tone = "light",
   disabled,
   "aria-label": ariaLabel,
@@ -144,9 +144,9 @@ export function NumericMoneyInput({
   const scaled = autoScaleFont ? dynamicMoneyInputFontClass(show) : "";
   const mergedInputClass = [inputClassName, scaled].filter(Boolean).join(" ");
 
-  const affixPrefixClass = tone === "dark" ? "text-emerald-100" : "text-emerald-700";
-  const affixSuffixClass = tone === "dark" ? "text-zinc-200" : "text-zinc-500";
-  const labelToneClass = tone === "dark" ? "text-zinc-200" : "text-sm text-zinc-600";
+  const affixPrefixClass = tone === "dark" ? "text-gray-100" : "text-black";
+  const affixSuffixClass = tone === "dark" ? "text-gray-100" : "text-slate-800";
+  const labelToneClass = tone === "dark" ? "text-sm font-semibold text-gray-100" : "text-sm font-semibold text-slate-800";
 
   function handleFocus() {
     setFocused(true);
@@ -212,7 +212,7 @@ export function NumericMoneyInput({
           disabled={disabled}
           aria-label={ariaLabel ?? label}
           placeholder={placeholder}
-          className={`block min-w-full w-max max-w-none bg-transparent text-right font-bold tabular-nums tracking-tight outline-none placeholder:text-emerald-300/35 ${mergedInputClass}`}
+          className={`block min-w-full w-max max-w-none bg-transparent text-right font-semibold tabular-nums tracking-tight outline-none placeholder:text-slate-500 ${mergedInputClass}`}
           value={show}
           onChange={handleChange}
           onFocus={handleFocus}
