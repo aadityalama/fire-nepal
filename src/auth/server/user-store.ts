@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
 import { OTP_TTL_MS, verifyOtpAgainstProof, type PendingVerifyPayload } from "@/auth/server/pending-verify-cookie";
-import { verifyPassword } from "@/auth/server/password-hash";
+import { hashPassword, verifyPassword } from "@/auth/server/password-hash";
 
 export type StoredUser = {
   id: string;
@@ -86,6 +86,16 @@ export function assertLogin(emailRaw: string, password: string): StoredUser | nu
   if (!u || !u.emailVerified) return null;
   if (!verifyPassword(password, u.salt, u.passwordHash)) return null;
   return u;
+}
+
+export function updateVerifiedUserPassword(emailRaw: string, newPassword: string): StoredUser | null {
+  const email = normEmail(emailRaw);
+  const u = verifiedByEmail.get(email);
+  if (!u || !u.emailVerified) return null;
+  const { salt, passwordHash } = hashPassword(newPassword);
+  const updated: StoredUser = { ...u, salt, passwordHash };
+  verifiedByEmail.set(email, updated);
+  return updated;
 }
 
 /** Full profile for API responses (may include data URL avatar). */

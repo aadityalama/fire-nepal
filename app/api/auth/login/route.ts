@@ -10,6 +10,7 @@ import { getAuthSecret } from "@/auth/server/env";
 import { pendingCookieActiveForEmail } from "@/auth/server/pending-verify-cookie";
 import { signUserSession } from "@/auth/server/session-token";
 import { assertLogin, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
+import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
 
 export const runtime = "nodejs";
@@ -21,6 +22,10 @@ type Body = {
 };
 
 export async function POST(req: Request) {
+  if (isLegacyAuthBlockedInProduction()) {
+    return legacyAuthNotPersistedResponse();
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;

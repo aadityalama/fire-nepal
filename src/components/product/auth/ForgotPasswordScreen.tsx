@@ -2,12 +2,14 @@
 
 import { ArrowRight, KeyRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export function ForgotPasswordScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -35,12 +37,26 @@ export function ForgotPasswordScreen() {
 
       const r = await fetch("/api/auth/forgot-password", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: trimmed }),
       });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        expiresAt?: number;
+        devCode?: string;
+        error?: string;
+      };
       if (!r.ok) {
-        const j = (await r.json().catch(() => ({}))) as { error?: string };
         setError(j.error ?? "Request failed.");
+        return;
+      }
+      if (typeof j.expiresAt === "number") {
+        const q = new URLSearchParams({ email: trimmed, expiresAt: String(j.expiresAt) });
+        if (j.devCode) {
+          sessionStorage.setItem(`fn_dev_reset_${trimmed}`, j.devCode);
+        }
+        router.push(`/reset-password?${q.toString()}`);
         return;
       }
       setDone(true);

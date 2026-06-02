@@ -3,6 +3,7 @@ import { FN_SESSION_COOKIE, FN_SESSION_MAX_AGE_SEC } from "@/auth/constants";
 import { getAuthSecret } from "@/auth/server/env";
 import { signUserSession } from "@/auth/server/session-token";
 import { canSyncLegacySession, getVerifiedUserByEmail, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
+import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import type { ProductAuthSession } from "@/lib/product-auth-storage";
 
 export const runtime = "nodejs";
@@ -12,6 +13,10 @@ export const runtime = "nodejs";
  * Only allowed when the user already exists in the server directory (same id + email).
  */
 export async function POST(req: Request) {
+  if (isLegacyAuthBlockedInProduction()) {
+    return legacyAuthNotPersistedResponse();
+  }
+
   let body: { session?: ProductAuthSession };
   try {
     body = (await req.json()) as { session?: ProductAuthSession };

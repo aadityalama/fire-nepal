@@ -10,6 +10,7 @@ import {
 } from "@/auth/server/pending-verify-cookie";
 import { sendSignupVerificationOtpEmail } from "@/auth/server/verification-email";
 import { isEmailRegistered } from "@/auth/server/user-store";
+import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import { isResendApiKeyConfigured } from "@/lib/resend-api";
 
 export const runtime = "nodejs";
@@ -39,6 +40,10 @@ function clearPendingCookie(res: NextResponse) {
 }
 
 export async function POST(req: Request) {
+  if (isLegacyAuthBlockedInProduction()) {
+    return legacyAuthNotPersistedResponse();
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;

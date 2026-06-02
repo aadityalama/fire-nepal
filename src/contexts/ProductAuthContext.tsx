@@ -173,7 +173,22 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       try {
         const sb = getSupabaseBrowserClient();
         const { data, error } = await sb.auth.signInWithPassword({ email: trimmed, password });
-        if (error) return { ok: false as const, error: error.message };
+        if (error) {
+          const msg = (error.message ?? "").toLowerCase();
+          const code = (error as { code?: string }).code;
+          if (
+            code === "email_not_confirmed" ||
+            msg.includes("email not confirmed") ||
+            msg.includes("email address is not confirmed")
+          ) {
+            return {
+              ok: false as const,
+              error:
+                "Confirm your email before signing in. Open the verification link Supabase sent you, or enter the code on the verify-email page, then try again.",
+            };
+          }
+          return { ok: false as const, error: error.message };
+        }
         if (!data.user) return { ok: false as const, error: "Sign-in failed." };
         const pu = mapSupabaseUser(data.user);
         setUser(pu);
@@ -301,6 +316,18 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
         const pu = mapSupabaseUser(data.user);
         setUser(pu);
         saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" });
+        const meta = data.user.user_metadata as Record<string, unknown> | undefined;
+        const displayName = typeof meta?.name === "string" ? meta.name : pu.name;
+        const avatarFromMeta =
+          typeof meta?.avatar_url === "string"
+            ? meta.avatar_url
+            : typeof meta?.avatarUrl === "string"
+              ? meta.avatarUrl
+              : null;
+        await upsertUserProfileFields(sb, data.user.id, {
+          display_name: displayName,
+          avatar_url: avatarFromMeta ?? pu.avatarUrl,
+        });
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Verification failed." };

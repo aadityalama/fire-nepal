@@ -1,7 +1,7 @@
 /** Default landing after sign-in when no safe `next` is provided. */
 export const DEFAULT_POST_LOGIN_PATH = "/hub";
 
-const AUTH_PATH_EXACT = new Set(["/login", "/signup", "/verify-email", "/forgot-password"]);
+const AUTH_PATH_EXACT = new Set(["/login", "/signup", "/verify-email", "/forgot-password", "/reset-password"]);
 
 function pathnameOnly(path: string): string {
   const q = path.indexOf("?");

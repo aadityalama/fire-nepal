@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { FN_PENDING_VERIFY_COOKIE } from "@/auth/constants";
 import { getAuthSecret } from "@/auth/server/env";
+import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import { buildPendingSignupCookie, OTP_TTL_MS } from "@/auth/server/pending-verify-cookie";
 import { sendSignupVerificationOtpEmail } from "@/auth/server/verification-email";
 import { isEmailRegistered } from "@/auth/server/user-store";
@@ -31,6 +32,10 @@ function pendingCookieOptions(): typeof PENDING_COOKIE_BASE {
 }
 
 export async function POST(req: Request) {
+  if (isLegacyAuthBlockedInProduction()) {
+    return legacyAuthNotPersistedResponse();
+  }
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -42,7 +47,7 @@ export async function POST(req: Request) {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
   const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
-  let avatarUrl: string | null =
+  const avatarUrl: string | null =
     typeof body.avatarUrl === "string" && body.avatarUrl.length > 0 ? body.avatarUrl : null;
   if (avatarUrl && avatarUrl.length > MAX_AVATAR_CHARS) {
     return NextResponse.json({ error: "Profile image is too large (max 5MB)." }, { status: 400 });
