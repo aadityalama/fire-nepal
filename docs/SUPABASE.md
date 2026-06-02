@@ -49,7 +49,7 @@ Optional: enable **Realtime** replication for `public.portfolio_extensions` in t
 ### Scheduled reminder emails (Vercel + Resend)
 
 1. Set **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only; never expose to the client). The cron route uses it to read all active reminders and insert send rows.
-2. Set **`CRON_SECRET`** and configure Vercel Cron (see `vercel.json`) to call **`GET /api/cron/scheduled-reminders`** every minute with header `Authorization: Bearer <CRON_SECRET>`.
+2. Set **`CRON_SECRET`** and add a **Vercel Cron** (Project → Settings → Cron Jobs) that **`GET`**s **`/api/cron/scheduled-reminders`** with header `Authorization: Bearer <CRON_SECRET>`. On **Pro** and above you can use a **per-minute** schedule (e.g. `* * * * *`). **Hobby** plans only allow **once-per-day** crons—use an external scheduler (or upgrade) if you need sub-daily email checks.
 3. Configure **`RESEND_API_KEY`** and **`RESEND_FROM_EMAIL`** (or `EMAIL_FROM`) so transactional emails can send.
 
 ## Auth URLs in code
