@@ -22,7 +22,13 @@ import { ReturnPlannerNumericInput } from "@/components/return-to-nepal/ReturnPl
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
 import { useReturnToNepalPlanner } from "@/contexts/ReturnToNepalContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { budgetOverrunRisk, computeNepalMonthlyCol, phaseCompletionRatio } from "@/lib/return-to-nepal/planner-engine";
+import {
+  budgetOverrunRisk,
+  computeAutoNationalPensionMaturityKrw,
+  computeAutoSeveranceKrw,
+  computeNepalMonthlyCol,
+  phaseCompletionRatio,
+} from "@/lib/return-to-nepal/planner-engine";
 import {
   CONSTRUCTION_PHASES,
   LIFESTYLE_LABELS,
@@ -45,6 +51,46 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
       {children}
       {hint ? <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{hint}</span> : null}
     </label>
+  );
+}
+
+function AutoCalculateToggleGroup({
+  autoOn,
+  onAutoOnChange,
+  light,
+  labelledById,
+}: {
+  autoOn: boolean;
+  onAutoOnChange: (next: boolean) => void;
+  light: boolean;
+  labelledById: string;
+}) {
+  const pill = (pressed: boolean) =>
+    `min-h-[40px] rounded-lg px-3.5 py-2 text-[11px] font-black uppercase tracking-wide transition ${
+      pressed
+        ? "bg-teal-600 text-white shadow-sm ring-1 ring-teal-500/40"
+        : light
+          ? "text-slate-600 hover:bg-slate-100/90"
+          : "text-zinc-400 hover:bg-white/[0.06]"
+    }`;
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <span id={labelledById} className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">
+        Auto calculate
+      </span>
+      <div
+        className={`inline-flex rounded-xl border p-0.5 ${light ? "border-slate-200/90 bg-slate-50/90" : "border-white/10 bg-black/25"}`}
+        role="group"
+        aria-labelledby={labelledById}
+      >
+        <button type="button" className={pill(autoOn)} aria-pressed={autoOn} onClick={() => onAutoOnChange(true)}>
+          On
+        </button>
+        <button type="button" className={pill(!autoOn)} aria-pressed={!autoOn} onClick={() => onAutoOnChange(false)}>
+          Off
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -110,6 +156,15 @@ export function ReturnToNepalPlannerDashboard() {
   const koreaBarPct = (snapshot.koreaImpliedMonthlySpendNpr / compareMax) * 100;
   const nepalBarPct = (snapshot.monthlyNepalLivingNpr / compareMax) * 100;
   const runwayProgressPct = Math.min(100, (snapshot.emergencyReserveMonths / Math.max(1, state.emergencyMonthsTarget)) * 100);
+
+  const autoSeveranceKrw = useMemo(
+    () => computeAutoSeveranceKrw(state),
+    [state.koreaYearsWorked, state.plannedKoreaYearsRemaining, state.monthlySalaryKrw],
+  );
+  const autoNationalPensionKrw = useMemo(
+    () => computeAutoNationalPensionMaturityKrw(state),
+    [state.koreaYearsWorked, state.plannedKoreaYearsRemaining, state.monthlySalaryKrw],
+  );
 
   const emergencyHint =
     snapshot.emergencyStatusLabel === "elite"
@@ -402,16 +457,153 @@ export function ReturnToNepalPlannerDashboard() {
             <Field label="Korea savings (KRW)">
               <ReturnPlannerNumericInput value={state.koreaSavingsKrw} min={0} onCommit={(koreaSavingsKrw) => patch({ koreaSavingsKrw })} />
             </Field>
-            <Field label="Severance override (KRW)" hint="0 = auto">
-              <ReturnPlannerNumericInput value={state.severanceOverrideKrw} min={0} onCommit={(severanceOverrideKrw) => patch({ severanceOverrideKrw })} />
-            </Field>
-            <Field label="National pension maturity override (KRW)" hint="0 = auto">
-              <ReturnPlannerNumericInput
-                value={state.nationalPensionMaturityOverrideKrw}
-                min={0}
-                onCommit={(nationalPensionMaturityOverrideKrw) => patch({ nationalPensionMaturityOverrideKrw })}
-              />
-            </Field>
+            <div
+              className={`flex flex-col gap-3 rounded-2xl border p-4 sm:col-span-2 ${
+                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/10 bg-white/[0.03]"
+              }`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Severance (KRW)</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+                    Model uses salary × total Korea years (worked + planned).
+                  </p>
+                </div>
+                <AutoCalculateToggleGroup
+                  labelledById="rtn-sev-auto-label"
+                  light={light}
+                  autoOn={state.severanceAutoCalculate !== false}
+                  onAutoOnChange={(next) => {
+                    if (next) {
+                      patch({ severanceAutoCalculate: true, severanceOverrideKrw: 0 });
+                    } else {
+                      const seed =
+                        state.severanceOverrideKrw > 0
+                          ? state.severanceOverrideKrw
+                          : Math.round(computeAutoSeveranceKrw(state));
+                      patch({ severanceAutoCalculate: false, severanceOverrideKrw: seed });
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Override amount (KRW)</span>
+                {state.severanceAutoCalculate !== false ? (
+                  <div
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-zinc-400`}
+                    aria-readonly="true"
+                  >
+                    Manual entry off — estimate below is used
+                  </div>
+                ) : (
+                  <ReturnPlannerNumericInput value={state.severanceOverrideKrw} min={0} onCommit={(severanceOverrideKrw) => patch({ severanceOverrideKrw })} />
+                )}
+              </div>
+              {state.severanceAutoCalculate !== false ? (
+                <>
+                  <p className="text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                    Estimated severance: {formatKrwInteger(autoSeveranceKrw)}
+                  </p>
+                  <p
+                    className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+                      light
+                        ? "border-amber-200/80 bg-amber-50/90 text-amber-950/90"
+                        : "border-amber-400/25 bg-amber-500/10 text-amber-100/95"
+                    }`}
+                  >
+                    <span className="font-black uppercase tracking-wide text-amber-800 dark:text-amber-200/90">Auto On</span>
+                    {" — "}The planner uses the estimate above.{" "}
+                    <span className="font-bold">Older behaviour: typing 0 in the box meant “use the model.”</span> Use this toggle for that now; the override row is not used while Auto is On.
+                  </p>
+                </>
+              ) : (
+                <p
+                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/10 bg-black/20 text-zinc-300"
+                  }`}
+                >
+                  <span className="font-black text-teal-800 dark:text-teal-200">Manual mode</span>
+                  {" — "}Enter your lump sum in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
+                  <span className="font-bold">no severance payout</span> (different from Auto On, which uses the estimate).
+                </p>
+              )}
+            </div>
+            <div
+              className={`flex flex-col gap-3 rounded-2xl border p-4 sm:col-span-2 ${
+                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/10 bg-white/[0.03]"
+              }`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">National pension maturity (KRW)</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+                    Rough maturity from contributions + growth (illustrative).
+                  </p>
+                </div>
+                <AutoCalculateToggleGroup
+                  labelledById="rtn-np-auto-label"
+                  light={light}
+                  autoOn={state.nationalPensionAutoCalculate !== false}
+                  onAutoOnChange={(next) => {
+                    if (next) {
+                      patch({ nationalPensionAutoCalculate: true, nationalPensionMaturityOverrideKrw: 0 });
+                    } else {
+                      const seed =
+                        state.nationalPensionMaturityOverrideKrw > 0
+                          ? state.nationalPensionMaturityOverrideKrw
+                          : Math.round(computeAutoNationalPensionMaturityKrw(state));
+                      patch({ nationalPensionAutoCalculate: false, nationalPensionMaturityOverrideKrw: seed });
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Override amount (KRW)</span>
+                {state.nationalPensionAutoCalculate !== false ? (
+                  <div
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-zinc-400`}
+                    aria-readonly="true"
+                  >
+                    Manual entry off — estimate below is used
+                  </div>
+                ) : (
+                  <ReturnPlannerNumericInput
+                    value={state.nationalPensionMaturityOverrideKrw}
+                    min={0}
+                    onCommit={(nationalPensionMaturityOverrideKrw) => patch({ nationalPensionMaturityOverrideKrw })}
+                  />
+                )}
+              </div>
+              {state.nationalPensionAutoCalculate !== false ? (
+                <>
+                  <p className="text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                    Estimated national pension: {formatKrwInteger(autoNationalPensionKrw)}
+                  </p>
+                  <p
+                    className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+                      light
+                        ? "border-amber-200/80 bg-amber-50/90 text-amber-950/90"
+                        : "border-amber-400/25 bg-amber-500/10 text-amber-100/95"
+                    }`}
+                  >
+                    <span className="font-black uppercase tracking-wide text-amber-800 dark:text-amber-200/90">Auto On</span>
+                    {" — "}Same as severance: the estimate above is what counts.{" "}
+                    <span className="font-bold">0 in the box used to mean “use the model”</span>
+                    {" — "}use Auto On for that, or Auto Off to enter your own KRW.
+                  </p>
+                </>
+              ) : (
+                <p
+                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/10 bg-black/20 text-zinc-300"
+                  }`}
+                >
+                  <span className="font-black text-teal-800 dark:text-teal-200">Manual mode</span>
+                  {" — "}Enter maturity in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
+                  <span className="font-bold">no national-pension lump sum</span> at return.
+                </p>
+              )}
+            </div>
           </div>
           <div className="mt-5 rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4 dark:bg-teal-500/[0.08]">
             <p className="text-sm font-black text-slate-900 dark:text-white">

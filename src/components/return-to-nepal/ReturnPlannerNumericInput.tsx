@@ -12,6 +12,7 @@ type Props = {
   min?: number;
   max?: number;
   className?: string;
+  disabled?: boolean;
   /** Mobile keyboard: integers default to `numeric`, decimals to `decimal`. */
   inputMode?: "numeric" | "decimal";
   autoComplete?: string;
@@ -36,6 +37,7 @@ export function ReturnPlannerNumericInput({
   min,
   max,
   className = "",
+  disabled = false,
   inputMode,
   autoComplete = "off",
 }: Props) {
@@ -47,12 +49,14 @@ export function ReturnPlannerNumericInput({
   const display = editing !== null ? editing : String(value);
 
   const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
+    if (disabled) return;
     const initial = value === 0 ? "" : String(value);
     setEditing(initial);
     if (e.target.value === "0") e.target.value = "";
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     const raw = e.target.value;
     setEditing(raw);
 
@@ -79,12 +83,15 @@ export function ReturnPlannerNumericInput({
   };
 
   const handleBlur = () => {
+    if (disabled) return;
     setEditing(null);
     const c = clamp(value, min, max);
     if (c !== value) {
       onCommit(c);
     }
   };
+
+  const disabledClass = disabled ? "cursor-not-allowed opacity-60" : "";
 
   return (
     <input
@@ -93,12 +100,14 @@ export function ReturnPlannerNumericInput({
       autoComplete={autoComplete}
       enterKeyHint="done"
       spellCheck={false}
+      disabled={disabled}
+      aria-disabled={disabled}
       pattern={integer ? "[0-9]*" : "[0-9]*[.]?[0-9]*"}
       value={display}
       onFocus={handleFocus}
       onChange={handleChange}
       onBlur={handleBlur}
-      className={mergedClass}
+      className={`${mergedClass} ${disabledClass}`.trim()}
     />
   );
 }

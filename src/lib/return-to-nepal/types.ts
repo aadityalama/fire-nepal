@@ -70,8 +70,10 @@ export type ReturnToNepalPlannerState = {
   fdMonthlyNpr: number;
   rentalMonthlyNpr: number;
   swpMonthlyNpr: number;
-  /** Korea severance / pension maturity (optional manual overrides; 0 = auto-estimate) */
+  /** Korea severance / pension — when auto is off, override KRW is used as-is (0 = none). When auto is on, overrides are ignored. */
+  severanceAutoCalculate: boolean;
   severanceOverrideKrw: number;
+  nationalPensionAutoCalculate: boolean;
   nationalPensionMaturityOverrideKrw: number;
   /** Family resettlement */
   schoolFeesMonthlyNpr: number;

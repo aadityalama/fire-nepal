@@ -34,19 +34,37 @@ function fvMonthlyContribution(
   return (monthly * (Math.pow(1 + r, months) - 1)) / r;
 }
 
-function estimateSeveranceKrw(state: ReturnToNepalPlannerState): number {
-  if (state.severanceOverrideKrw > 0) return state.severanceOverrideKrw;
+/** Model severance (KRW) from salary × tenure — used when auto-calculate is on. */
+export function computeAutoSeveranceKrw(state: ReturnToNepalPlannerState): number {
   const months = clamp(state.koreaYearsWorked + state.plannedKoreaYearsRemaining, 0, 40);
   return state.monthlySalaryKrw * months;
 }
 
-function estimateNationalPensionMaturityKrw(state: ReturnToNepalPlannerState): number {
-  if (state.nationalPensionMaturityOverrideKrw > 0) return state.nationalPensionMaturityOverrideKrw;
+/** Rough national-pension maturity (KRW) — used when auto-calculate is on. */
+export function computeAutoNationalPensionMaturityKrw(state: ReturnToNepalPlannerState): number {
   const totalYears = clamp(state.koreaYearsWorked + state.plannedKoreaYearsRemaining, 0, 45);
   const annualContrib = state.monthlySalaryKrw * 12 * 0.045;
   const r = 0.035 / 12;
   const months = Math.round(totalYears * 12);
   return fvMonthlyContribution(annualContrib / 12, months, r) * 0.72;
+}
+
+function severanceAutoOn(state: ReturnToNepalPlannerState): boolean {
+  return state.severanceAutoCalculate !== false;
+}
+
+function nationalPensionAutoOn(state: ReturnToNepalPlannerState): boolean {
+  return state.nationalPensionAutoCalculate !== false;
+}
+
+function estimateSeveranceKrw(state: ReturnToNepalPlannerState): number {
+  if (severanceAutoOn(state)) return computeAutoSeveranceKrw(state);
+  return Math.max(0, state.severanceOverrideKrw);
+}
+
+function estimateNationalPensionMaturityKrw(state: ReturnToNepalPlannerState): number {
+  if (nationalPensionAutoOn(state)) return computeAutoNationalPensionMaturityKrw(state);
+  return Math.max(0, state.nationalPensionMaturityOverrideKrw);
 }
 
 export type TimelinePoint = {
