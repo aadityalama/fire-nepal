@@ -4,7 +4,7 @@ import { SmartRemindersDashboard } from "@/components/smart-reminders/SmartRemin
 export const metadata: Metadata = {
   title: "Smart Reminders | FIRE Nepal",
   description:
-    "FIRE Nepal Smart Reminder Engine — recurring bills, school fees, family-shared alerts, calendar view, and optional email notifications (local-first).",
+    "FIRE Nepal Smart Reminder Engine — exact date & time scheduling, Supabase storage when signed in, Vercel cron + Resend email, and family-shared alerts.",
 };
 
 export default function SmartRemindersPage() {

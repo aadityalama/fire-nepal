@@ -22,35 +22,75 @@ import { priorityAccent } from "@/components/smart-reminders/priority-styles";
 import { ReminderCalendarCard } from "@/components/smart-reminders/ReminderCalendarCard";
 import { UpcomingBillsCard } from "@/components/smart-reminders/UpcomingBillsCard";
 import { UpcomingEducationCard } from "@/components/smart-reminders/UpcomingEducationCard";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useSmartReminders } from "@/contexts/SmartRemindersContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { formatNextSendLabel, nextTheoreticalEmailUtc, type ScheduledReminderShape } from "@/lib/scheduled-reminders/schedule-logic";
 import { formatYmd } from "@/lib/smart-reminders/date-utils";
 import { reminderPriority } from "@/lib/smart-reminders/reminder-engine";
-import type { Recurrence, Reminder, ReminderType } from "@/lib/smart-reminders/types";
-import { REMINDER_TYPES } from "@/lib/smart-reminders/types";
+import type { Reminder, ReminderType } from "@/lib/smart-reminders/types";
+import { REMINDER_TYPES, REPEAT_FREQUENCIES } from "@/lib/smart-reminders/types";
 
 function sortByDue(a: Reminder, b: Reminder): number {
   return a.dueDate.localeCompare(b.dueDate);
 }
 
-const defaultForm = (): Omit<Reminder, "id" | "createdAt"> => ({
-  title: "",
-  reminderType: "room_rent",
-  amountNpr: null,
-  dueDate: formatYmd(new Date()),
-  recurrence: "monthly",
-  sharedWithFamily: true,
-  notes: "",
-  emailNotify: true,
-});
+const REMINDER_TIMEZONES = [
+  "Asia/Kathmandu",
+  "Asia/Seoul",
+  "Asia/Singapore",
+  "Asia/Dubai",
+  "Asia/Tokyo",
+  "Europe/London",
+  "America/New_York",
+  "UTC",
+] as const;
+
+function defaultForm(emailFallback: string): Omit<Reminder, "id" | "createdAt"> {
+  return {
+    title: "",
+    reminderType: "room_rent",
+    amountNpr: null,
+    dueDate: formatYmd(new Date()),
+    dueTime: "09:00",
+    timezone: "Asia/Kathmandu",
+    email: emailFallback,
+    repeatFrequency: "monthly",
+    notify7DaysBefore: false,
+    notify3DaysBefore: false,
+    notify1DayBefore: false,
+    notifyAtDueTime: true,
+    notifyOverdue: false,
+    sharedWithFamily: true,
+    notes: "",
+  };
+}
+
+function toScheduleShape(r: Reminder): ScheduledReminderShape {
+  return {
+    dueDate: r.dueDate,
+    dueTime: r.dueTime,
+    timezone: r.timezone,
+    repeatFrequency: r.repeatFrequency,
+    notify7DaysBefore: r.notify7DaysBefore,
+    notify3DaysBefore: r.notify3DaysBefore,
+    notify1DayBefore: r.notify1DayBefore,
+    notifyAtDueTime: r.notifyAtDueTime,
+    notifyOverdue: r.notifyOverdue,
+  };
+}
 
 export function SmartRemindersDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const { user } = useProductAuth();
   const {
     hydrated,
     store,
     reminders,
+    remindersSource,
+    cloudSyncing,
+    refreshCloudReminders,
     markReminderPaid,
     addReminder,
     deleteReminder,
@@ -62,7 +102,7 @@ export function SmartRemindersDashboard() {
   } = useSmartReminders();
 
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState(() => defaultForm(user?.email ?? ""));
   const [historyOpen, setHistoryOpen] = useState(true);
 
   const now = new Date();
@@ -81,14 +121,26 @@ export function SmartRemindersDashboard() {
   }
   const stats = { overdue, upcoming, ok };
 
-  const onSubmit = () => {
+  const footerNote =
+    remindersSource === "cloud"
+      ? "Signed in · reminders sync to Supabase. Vercel cron + Resend send at the times you pick."
+      : "Local workspace — sign in with Supabase on production to sync reminders and enable automated emails.";
+
+  const onSubmit = async () => {
     if (!form.title.trim()) return;
-    addReminder({
+    if (!form.email.trim() || !form.email.includes("@")) return;
+    const tm = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(form.dueTime.trim());
+    const dueTime =
+      tm != null
+        ? `${String(Math.min(23, Math.max(0, Number.parseInt(tm[1], 10)))).padStart(2, "0")}:${String(Math.min(59, Math.max(0, Number.parseInt(tm[2], 10)))).padStart(2, "0")}`
+        : "09:00";
+    await addReminder({
       ...form,
+      dueTime,
       title: form.title.trim(),
       notes: form.notes?.trim() ? form.notes.trim() : undefined,
     });
-    setForm(defaultForm());
+    setForm(defaultForm(user?.email ?? ""));
     setSheetOpen(false);
   };
 
@@ -96,7 +148,7 @@ export function SmartRemindersDashboard() {
     return (
       <WealthDashboardShell
         brand={{ tagline: "Reminders OS", iconGradient: "from-emerald-400 to-amber-300" }}
-        footerNote="Loading your local-first reminder workspace…"
+        footerNote="Loading your reminder workspace…"
       >
         <div className="px-2 py-16 text-center text-sm font-semibold text-slate-600 dark:text-zinc-400">Loading reminders…</div>
       </WealthDashboardShell>
@@ -106,7 +158,7 @@ export function SmartRemindersDashboard() {
   return (
     <WealthDashboardShell
       brand={{ tagline: "Reminders OS", iconGradient: "from-emerald-400 to-amber-300" }}
-      footerNote="Demo workspace — reminders, toasts, and email sends stay on-device until you wire a backend."
+      footerNote={footerNote}
     >
       <div className="mb-6 flex flex-col gap-3 sm:mb-7 sm:flex-row sm:items-center sm:justify-between lg:mb-8">
         <Link
@@ -177,12 +229,29 @@ export function SmartRemindersDashboard() {
         <section className="flex flex-col flex-wrap gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
-            onClick={() => setSheetOpen(true)}
+            onClick={() => {
+              setForm(defaultForm(user?.email ?? ""));
+              setSheetOpen(true);
+            }}
             className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition hover:brightness-110 active:scale-[0.99] sm:flex-none"
           >
             <Plus size={18} />
             New reminder
           </button>
+          {remindersSource === "cloud" ? (
+            <button
+              type="button"
+              disabled={cloudSyncing}
+              onClick={() => void refreshCloudReminders()}
+              className={`inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-black transition active:scale-[0.99] sm:flex-none ${
+                light
+                  ? "border-emerald-300/70 bg-white text-emerald-950 hover:bg-emerald-50"
+                  : "border-emerald-400/25 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/15"
+              }`}
+            >
+              {cloudSyncing ? "Syncing…" : "Refresh from cloud"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => pushFamilyShareNotice("Family board updated — review shared rent + school reminders together.")}
@@ -207,8 +276,11 @@ export function SmartRemindersDashboard() {
                 onChange={(e) => setEmailNotificationsEnabled(e.target.checked)}
                 className="h-4 w-4 accent-emerald-600"
               />
-              Email notifications (demo toasts)
+              In-app + demo toasts (local mode)
             </label>
+            {remindersSource === "cloud" ? (
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300/90">Cloud reminders use Resend + cron.</span>
+            ) : null}
             <label className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-zinc-200">
               <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400">Yellow window</span>
               <input
@@ -300,6 +372,8 @@ export function SmartRemindersDashboard() {
             {sorted.map((r) => {
               const p = reminderPriority(r, now, upcomingWithin);
               const a = priorityAccent(p);
+              const nextUtc = nextTheoreticalEmailUtc(toScheduleShape(r), now);
+              const nextLabel = formatNextSendLabel(nextUtc, r.timezone);
               return (
                 <div
                   key={r.id}
@@ -324,15 +398,16 @@ export function SmartRemindersDashboard() {
                     </div>
                     <p className="mt-2 truncate text-sm font-black text-slate-900 dark:text-white">{r.title}</p>
                     <p className="mt-0.5 text-xs font-semibold text-slate-600 dark:text-zinc-400">
-                      Due {r.dueDate} · {r.recurrence}
+                      Due {r.dueDate} at {r.dueTime} ({r.timezone}) · {r.repeatFrequency}
                       {r.amountNpr != null ? ` · NPR ${r.amountNpr.toLocaleString("en-IN")}` : ""}
-                      {r.emailNotify ? " · Email on" : ""}
+                      {r.email ? ` · ${r.email}` : ""}
                     </p>
+                    <p className="mt-1 text-[11px] font-bold text-emerald-800/90 dark:text-emerald-200/85">Next email: {nextLabel}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 sm:justify-end">
                     <button
                       type="button"
-                      onClick={() => markReminderPaid(r.id)}
+                      onClick={() => void markReminderPaid(r.id)}
                       className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 text-xs font-black text-emerald-50 transition hover:bg-emerald-500/15 active:scale-[0.99]"
                     >
                       <CheckCircle2 size={16} />
@@ -340,7 +415,7 @@ export function SmartRemindersDashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => deleteReminder(r.id)}
+                      onClick={() => void deleteReminder(r.id)}
                       className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black transition active:scale-[0.99] ${
                         light ? "border-slate-200/90 text-slate-800 hover:bg-slate-50" : "border-white/10 text-zinc-200 hover:bg-white/[0.06]"
                       }`}
@@ -396,7 +471,7 @@ export function SmartRemindersDashboard() {
                       </div>
                       <p className="mt-2 truncate text-sm font-black text-slate-900 dark:text-white">{h.title}</p>
                       <p className="mt-0.5 text-xs font-semibold text-slate-600 dark:text-zinc-400">
-                        Paid {new Date(h.paidAt).toLocaleString()} · was due {h.dueDate}
+                        Paid {new Date(h.paidAt).toLocaleString()} · was due {h.dueDate} ({h.repeatFrequency})
                         {h.amountNpr != null ? ` · NPR ${h.amountNpr.toLocaleString("en-IN")}` : ""}
                       </p>
                     </div>
@@ -468,17 +543,29 @@ export function SmartRemindersDashboard() {
                   </select>
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Recurrence</span>
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Repeat</span>
                   <select
-                    value={form.recurrence}
-                    onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value as Recurrence }))}
+                    value={form.repeatFrequency}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, repeatFrequency: e.target.value as (typeof REPEAT_FREQUENCIES)[number] }))
+                    }
                     className={`min-h-[44px] rounded-xl border px-2 text-sm font-bold outline-none ring-emerald-500/30 focus:ring-4 ${
                       light ? "border-emerald-200/80 bg-white text-slate-900" : "border-white/10 bg-black/30 text-white"
                     }`}
                   >
-                    <option value="once">One-time</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
+                    {REPEAT_FREQUENCIES.map((t) => (
+                      <option key={t} value={t}>
+                        {t === "once"
+                          ? "One-time"
+                          : t === "daily"
+                            ? "Daily"
+                            : t === "weekly"
+                              ? "Weekly"
+                              : t === "monthly"
+                                ? "Monthly"
+                                : "Yearly"}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -495,6 +582,52 @@ export function SmartRemindersDashboard() {
                     }`}
                   />
                 </label>
+                <label className="grid gap-1">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Due time</span>
+                  <input
+                    type="time"
+                    value={form.dueTime}
+                    onChange={(e) => setForm((f) => ({ ...f, dueTime: e.target.value }))}
+                    className={`min-h-[44px] rounded-xl border px-2 text-sm font-bold outline-none ring-emerald-500/30 focus:ring-4 ${
+                      light ? "border-emerald-200/80 bg-white text-slate-900" : "border-white/10 bg-black/30 text-white"
+                    }`}
+                  />
+                </label>
+              </div>
+
+              <label className="grid gap-1">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Time zone (IANA)</span>
+                <input
+                  list="fire-reminder-tz"
+                  value={form.timezone}
+                  onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value.trim() || "Asia/Kathmandu" }))}
+                  placeholder="Asia/Kathmandu"
+                  className={`min-h-[44px] rounded-xl border px-3 text-sm font-semibold outline-none ring-emerald-500/30 focus:ring-4 ${
+                    light ? "border-emerald-200/80 bg-white text-slate-900" : "border-white/10 bg-black/30 text-white"
+                  }`}
+                />
+                <datalist id="fire-reminder-tz">
+                  {REMINDER_TIMEZONES.map((z) => (
+                    <option key={z} value={z} />
+                  ))}
+                </datalist>
+              </label>
+
+              <label className="grid gap-1">
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Reminder email</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="you@example.com"
+                  className={`min-h-[44px] rounded-xl border px-3 text-sm font-semibold outline-none ring-emerald-500/30 focus:ring-4 ${
+                    light ? "border-emerald-200/80 bg-white text-slate-900" : "border-white/10 bg-black/30 text-white"
+                  }`}
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1">
                   <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Amount (NPR)</span>
                   <input
@@ -513,6 +646,59 @@ export function SmartRemindersDashboard() {
                     }`}
                   />
                 </label>
+              </div>
+
+              <div
+                className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-emerald-50/40" : "border-emerald-500/15 bg-black/25"}`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-wide text-emerald-800 dark:text-emerald-200/90">Email schedule</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={form.notify7DaysBefore}
+                      onChange={(e) => setForm((f) => ({ ...f, notify7DaysBefore: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    7 days before
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={form.notify3DaysBefore}
+                      onChange={(e) => setForm((f) => ({ ...f, notify3DaysBefore: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    3 days before
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={form.notify1DayBefore}
+                      onChange={(e) => setForm((f) => ({ ...f, notify1DayBefore: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    1 day before
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={form.notifyAtDueTime}
+                      onChange={(e) => setForm((f) => ({ ...f, notifyAtDueTime: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    At exact due time
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-zinc-200 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={form.notifyOverdue}
+                      onChange={(e) => setForm((f) => ({ ...f, notifyOverdue: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    Daily overdue (each day after due, at due time)
+                  </label>
+                </div>
               </div>
 
               <label className="grid gap-1">
@@ -536,15 +722,6 @@ export function SmartRemindersDashboard() {
                     className="h-4 w-4 accent-emerald-600"
                   />
                   Share with family
-                </label>
-                <label className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-zinc-200">
-                  <input
-                    type="checkbox"
-                    checked={form.emailNotify}
-                    onChange={(e) => setForm((f) => ({ ...f, emailNotify: e.target.checked }))}
-                    className="h-4 w-4 accent-emerald-600"
-                  />
-                  Email this reminder (demo)
                 </label>
               </div>
 

@@ -19,7 +19,7 @@ export function UpcomingBillsCard({
 }: {
   reminders: Reminder[];
   upcomingWithinDays: number;
-  onMarkPaid: (id: string) => void;
+  onMarkPaid: (id: string) => void | Promise<void>;
 }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -81,7 +81,7 @@ export function UpcomingBillsCard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onMarkPaid(r.id)}
+                  onClick={() => void onMarkPaid(r.id)}
                   className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 text-xs font-black text-emerald-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 active:scale-[0.99]"
                 >
                   Mark paid

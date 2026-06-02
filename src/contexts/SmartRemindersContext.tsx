@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useLocalStorageJsonState } from "@/hooks/useLocalStorageJsonState";
 import { createDefaultSmartRemindersStore } from "@/lib/smart-reminders/default-state";
 import {
@@ -10,12 +11,14 @@ import {
   draftNotificationsForDay,
   makeHistoryEntry,
   nextDueAfterPaid,
+  reminderHasEmailNotifications,
   reminderPriority,
   rollForwardDueDateIfNeeded,
 } from "@/lib/smart-reminders/reminder-engine";
 import { sanitizeSmartRemindersStore } from "@/lib/smart-reminders/sanitize";
 import type { InAppNotification, Reminder, SmartRemindersStore } from "@/lib/smart-reminders/types";
 import { formatYmd, startOfLocalDay } from "@/lib/smart-reminders/date-utils";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const STORAGE_KEY = "fire_nepal_smart_reminders_v1";
 
@@ -24,13 +27,16 @@ type SmartRemindersContextValue = {
   store: SmartRemindersStore;
   setStore: React.Dispatch<React.SetStateAction<SmartRemindersStore>>;
   reminders: Reminder[];
+  remindersSource: "local" | "cloud";
+  cloudSyncing: boolean;
+  refreshCloudReminders: () => Promise<void>;
   unreadNotificationCount: number;
   overdueCount: number;
   upcomingSoonCount: number;
-  markReminderPaid: (id: string) => void;
-  addReminder: (input: Omit<Reminder, "id" | "createdAt">) => void;
+  markReminderPaid: (id: string) => Promise<void>;
+  addReminder: (input: Omit<Reminder, "id" | "createdAt">) => Promise<void>;
   updateReminder: (id: string, patch: Partial<Omit<Reminder, "id" | "createdAt">>) => void;
-  deleteReminder: (id: string) => void;
+  deleteReminder: (id: string) => Promise<void>;
   dismissNotification: (id: string) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -55,12 +61,55 @@ function dedupeSetFromNotifications(notifications: InAppNotification[]): Set<str
   return s;
 }
 
+async function fetchCloudReminders(): Promise<Reminder[]> {
+  const r = await fetch("/api/scheduled-reminders", { credentials: "include", cache: "no-store" });
+  if (!r.ok) throw new Error("Could not load cloud reminders");
+  const j = (await r.json()) as { reminders?: Reminder[] };
+  return j.reminders ?? [];
+}
+
 export function SmartRemindersProvider({ children }: { children: ReactNode }) {
+  const { user, authMode } = useProductAuth();
+  const cloudEnabled = isSupabaseConfigured() && authMode === "supabase" && Boolean(user);
+
   const [store, setStore, hydrated] = useLocalStorageJsonState<SmartRemindersStore>({
     storageKey: STORAGE_KEY,
     getDefault: () => createDefaultSmartRemindersStore(),
     sanitize: sanitizeSmartRemindersStore,
   });
+
+  const [cloudReminders, setCloudReminders] = useState<Reminder[] | null>(null);
+  const [cloudLoaded, setCloudLoaded] = useState(false);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+
+  const refreshCloudReminders = useCallback(async () => {
+    if (!cloudEnabled) return;
+    setCloudSyncing(true);
+    try {
+      const list = await fetchCloudReminders();
+      setCloudReminders(list);
+    } catch {
+      toast.error("Could not sync reminders from Supabase.");
+    } finally {
+      setCloudSyncing(false);
+      setCloudLoaded(true);
+    }
+  }, [cloudEnabled]);
+
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    const t = window.setTimeout(() => {
+      void refreshCloudReminders();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [cloudEnabled, user?.id, refreshCloudReminders]);
+
+  const reminders = useMemo(() => {
+    if (cloudEnabled && cloudLoaded) return cloudReminders ?? [];
+    return store.reminders;
+  }, [cloudEnabled, cloudLoaded, cloudReminders, store.reminders]);
+
+  const remindersSource: "local" | "cloud" = cloudEnabled && cloudLoaded ? "cloud" : "local";
 
   const [clockTick, setClockTick] = useState(0);
 
@@ -69,7 +118,7 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     setStore((prev) => {
       const existingKeys = dedupeSetFromNotifications(prev.notifications);
       const drafts = draftNotificationsForDay({
-        reminders: prev.reminders,
+        reminders: cloudEnabled && cloudLoaded ? (cloudReminders ?? []) : prev.reminders,
         now,
         existingDedupeKeys: existingKeys,
         emailNotificationsEnabled: prev.settings.emailNotificationsEnabled,
@@ -93,13 +142,14 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
 
       let next = { ...prev, notifications: [...appended, ...prev.notifications] };
 
-      // Demo email channel: toast + in-app "email_sent" row (one per reminder per local day)
-      if (prev.settings.emailNotificationsEnabled) {
+      const reminderList = cloudEnabled && cloudLoaded ? (cloudReminders ?? []) : prev.reminders;
+
+      if (prev.settings.emailNotificationsEnabled && !cloudEnabled) {
         const extra: InAppNotification[] = [];
         const todayYmd = formatYmd(startOfLocalDay(now));
         for (const d of drafts) {
-          const r = prev.reminders.find((x) => x.id === d.reminderId);
-          if (!r?.emailNotify) continue;
+          const r = reminderList.find((x) => x.id === d.reminderId);
+          if (!r || !reminderHasEmailNotifications(r)) continue;
 
           const emailedAlreadyToday = prev.notifications.some((n) => {
             if (n.reminderId !== r.id || n.kind !== "email_sent") return false;
@@ -116,7 +166,7 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
             reminderId: r.id,
             kind: "email_sent",
             title: "Email notification sent",
-            body: `Demo send for “${r.title}”. Connect SMTP later for real delivery.`,
+            body: `Demo send for “${r.title}”. Sign in with Supabase for real Resend delivery via cron.`,
             createdAt: now.toISOString(),
             read: false,
           });
@@ -126,7 +176,7 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
 
       return next;
     });
-  }, [setStore]);
+  }, [setStore, cloudEnabled, cloudLoaded, cloudReminders]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -140,14 +190,43 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
   }, [hydrated, syncEngine]);
 
   const markReminderPaid = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      if (cloudEnabled && cloudLoaded) {
+        setCloudSyncing(true);
+        try {
+          const old = (cloudReminders ?? []).find((x) => x.id === id);
+          const r = await fetch(`/api/scheduled-reminders/${id}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ markPaid: true }),
+          });
+          const j = (await r.json()) as { ok?: boolean; reminder?: Reminder; error?: string };
+          if (!r.ok || !j.ok || !j.reminder) {
+            toast.error(j.error ?? "Could not update reminder.");
+            return;
+          }
+          setCloudReminders((prev) => (prev ?? []).map((x) => (x.id === id ? j.reminder! : x)));
+          const now = new Date();
+          setStore((prev) => {
+            const paidSnapshot = old ?? j.reminder!;
+            const entry = makeHistoryEntry(paidSnapshot, now);
+            return { ...prev, history: [entry, ...prev.history].slice(0, 400) };
+          });
+          toast.success("Marked paid", { description: "Updated in Supabase." });
+        } finally {
+          setCloudSyncing(false);
+        }
+        return;
+      }
+
       const now = new Date();
       setStore((prev) => {
         const r = prev.reminders.find((x) => x.id === id);
         if (!r) return prev;
         const entry = makeHistoryEntry(r, now);
 
-        if (r.recurrence === "once") {
+        if (r.repeatFrequency === "once") {
           return {
             ...prev,
             reminders: prev.reminders.filter((x) => x.id !== id),
@@ -155,7 +234,7 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
           };
         }
 
-        const nextDue = rollForwardDueDateIfNeeded(nextDueAfterPaid(r.dueDate, r.recurrence), r.recurrence, now);
+        const nextDue = rollForwardDueDateIfNeeded(nextDueAfterPaid(r.dueDate, r.repeatFrequency), r.repeatFrequency, now);
         const updated: Reminder = { ...r, dueDate: nextDue };
         return {
           ...prev,
@@ -165,11 +244,68 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
       });
       toast.success("Marked paid", { description: "Moved to reminder history and updated the next due date." });
     },
-    [setStore],
+    [setStore, cloudEnabled, cloudLoaded, cloudReminders],
   );
 
   const addReminder = useCallback(
-    (input: Omit<Reminder, "id" | "createdAt">) => {
+    async (input: Omit<Reminder, "id" | "createdAt">) => {
+      if (cloudEnabled) {
+        setCloudSyncing(true);
+        try {
+          const r = await fetch("/api/scheduled-reminders", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: input.title,
+              amountNpr: input.amountNpr,
+              dueDate: input.dueDate,
+              dueTime: input.dueTime,
+              timezone: input.timezone,
+              email: input.email,
+              repeatFrequency: input.repeatFrequency,
+              notify7DaysBefore: input.notify7DaysBefore,
+              notify3DaysBefore: input.notify3DaysBefore,
+              notify1DayBefore: input.notify1DayBefore,
+              notifyAtDueTime: input.notifyAtDueTime,
+              notifyOverdue: input.notifyOverdue,
+              reminderType: input.reminderType,
+              notes: input.notes,
+              sharedWithFamily: input.sharedWithFamily,
+            }),
+          });
+          const j = (await r.json()) as { ok?: boolean; reminder?: Reminder; error?: string };
+          if (!r.ok || !j.ok || !j.reminder) {
+            toast.error(j.error ?? "Could not save reminder.");
+            return;
+          }
+          setCloudReminders((prev) => [j.reminder!, ...(prev ?? [])]);
+          setCloudLoaded(true);
+          const now = new Date();
+          if (input.sharedWithFamily) {
+            setStore((prev) => ({
+              ...prev,
+              notifications: [
+                {
+                  id: newId("fam"),
+                  reminderId: j.reminder!.id,
+                  kind: "family_shared",
+                  title: "Shared with family",
+                  body: `“${input.title}” is visible on the family reminder board.`,
+                  createdAt: now.toISOString(),
+                  read: false,
+                },
+                ...prev.notifications,
+              ],
+            }));
+          }
+          toast.success("Reminder saved", { description: "Stored in Supabase." });
+        } finally {
+          setCloudSyncing(false);
+        }
+        return;
+      }
+
       const now = new Date();
       const r: Reminder = {
         ...input,
@@ -195,7 +331,7 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
         return { ...prev, reminders: [r, ...prev.reminders], notifications };
       });
     },
-    [setStore],
+    [setStore, cloudEnabled],
   );
 
   const updateReminder = useCallback((id: string, patch: Partial<Omit<Reminder, "id" | "createdAt">>) => {
@@ -205,13 +341,36 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     }));
   }, [setStore]);
 
-  const deleteReminder = useCallback((id: string) => {
-    setStore((prev) => ({
-      ...prev,
-      reminders: prev.reminders.filter((r) => r.id !== id),
-      notifications: prev.notifications.filter((n) => n.reminderId !== id),
-    }));
-  }, [setStore]);
+  const deleteReminder = useCallback(
+    async (id: string) => {
+      if (cloudEnabled && cloudLoaded) {
+        setCloudSyncing(true);
+        try {
+          const r = await fetch(`/api/scheduled-reminders/${id}`, { method: "DELETE", credentials: "include" });
+          const j = (await r.json()) as { ok?: boolean; error?: string };
+          if (!r.ok || !j.ok) {
+            toast.error(j.error ?? "Could not delete.");
+            return;
+          }
+          setCloudReminders((prev) => (prev ?? []).filter((x) => x.id !== id));
+          setStore((prev) => ({
+            ...prev,
+            notifications: prev.notifications.filter((n) => n.reminderId !== id),
+          }));
+          toast.success("Deleted");
+        } finally {
+          setCloudSyncing(false);
+        }
+        return;
+      }
+      setStore((prev) => ({
+        ...prev,
+        reminders: prev.reminders.filter((r) => r.id !== id),
+        notifications: prev.notifications.filter((n) => n.reminderId !== id),
+      }));
+    },
+    [setStore, cloudEnabled, cloudLoaded],
+  );
 
   const dismissNotification = useCallback((id: string) => {
     setStore((prev) => ({ ...prev, notifications: prev.notifications.filter((n) => n.id !== id) }));
@@ -269,21 +428,24 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
   const overdueCount = useMemo(() => {
     void clockTick;
     const now = new Date();
-    return store.reminders.filter((r) => reminderPriority(r, now, store.settings.upcomingWithinDays) === "overdue").length;
-  }, [clockTick, store.reminders, store.settings.upcomingWithinDays]);
+    return reminders.filter((r) => reminderPriority(r, now, store.settings.upcomingWithinDays) === "overdue").length;
+  }, [clockTick, reminders, store.settings.upcomingWithinDays]);
 
   const upcomingSoonCount = useMemo(() => {
     void clockTick;
     const now = new Date();
-    return store.reminders.filter((r) => reminderPriority(r, now, store.settings.upcomingWithinDays) === "upcoming").length;
-  }, [clockTick, store.reminders, store.settings.upcomingWithinDays]);
+    return reminders.filter((r) => reminderPriority(r, now, store.settings.upcomingWithinDays) === "upcoming").length;
+  }, [clockTick, reminders, store.settings.upcomingWithinDays]);
 
   const value = useMemo<SmartRemindersContextValue>(
     () => ({
-      hydrated,
+      hydrated: hydrated && (!cloudEnabled || cloudLoaded),
       store,
       setStore,
-      reminders: store.reminders,
+      reminders,
+      remindersSource,
+      cloudSyncing,
+      refreshCloudReminders,
       unreadNotificationCount,
       overdueCount,
       upcomingSoonCount,
@@ -300,8 +462,14 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     }),
     [
       hydrated,
+      cloudEnabled,
+      cloudLoaded,
       store,
       setStore,
+      reminders,
+      remindersSource,
+      cloudSyncing,
+      refreshCloudReminders,
       unreadNotificationCount,
       overdueCount,
       upcomingSoonCount,

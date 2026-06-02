@@ -1,5 +1,5 @@
-import type { InAppNotification, Recurrence, Reminder, ReminderHistoryEntry, ReminderPriority, ReminderType } from "./types";
-import { addMonths, addYears, daysBetween, formatYmd, parseYmd, startOfLocalDay } from "./date-utils";
+import type { InAppNotification, RepeatFrequency, Reminder, ReminderHistoryEntry, ReminderPriority, ReminderType } from "./types";
+import { addDays, addMonths, addYears, daysBetween, formatYmd, parseYmd, startOfLocalDay } from "./date-utils";
 
 const EDUCATION_TYPES = new Set<ReminderType>(["school_fees", "tuition", "exams"]);
 
@@ -17,10 +17,13 @@ export function isBillishReminderType(t: ReminderType): boolean {
   );
 }
 
-export function nextDueAfterPaid(due: string, recurrence: Recurrence): string {
+export function nextDueAfterPaid(due: string, repeatFrequency: RepeatFrequency): string {
   const base = parseYmd(due);
-  if (recurrence === "monthly") return formatYmd(addMonths(base, 1));
-  if (recurrence === "yearly") return formatYmd(addYears(base, 1));
+  if (repeatFrequency === "once") return due;
+  if (repeatFrequency === "daily") return formatYmd(addDays(base, 1));
+  if (repeatFrequency === "weekly") return formatYmd(addDays(base, 7));
+  if (repeatFrequency === "monthly") return formatYmd(addMonths(base, 1));
+  if (repeatFrequency === "yearly") return formatYmd(addYears(base, 1));
   return due;
 }
 
@@ -28,13 +31,13 @@ export function nextDueAfterPaid(due: string, recurrence: Recurrence): string {
  * If multiple periods were missed, fast-forward scheduled due date until it's not before `today`,
  * preserving cadence from the original due anchor.
  */
-export function rollForwardDueDateIfNeeded(due: string, recurrence: Recurrence, today: Date): string {
-  if (recurrence === "once") return due;
+export function rollForwardDueDateIfNeeded(due: string, repeatFrequency: RepeatFrequency, today: Date): string {
+  if (repeatFrequency === "once") return due;
   let cur = due;
   const t0 = startOfLocalDay(today).getTime();
   let guard = 0;
   while (parseYmd(cur).getTime() < t0 && guard < 240) {
-    cur = nextDueAfterPaid(cur, recurrence);
+    cur = nextDueAfterPaid(cur, repeatFrequency);
     guard += 1;
   }
   return cur;
@@ -62,7 +65,7 @@ export function makeHistoryEntry(reminder: Reminder, paidAt: Date): ReminderHist
     amountNpr: reminder.amountNpr,
     paidAt: paidAt.toISOString(),
     dueDate: reminder.dueDate,
-    recurrence: reminder.recurrence,
+    repeatFrequency: reminder.repeatFrequency,
     sharedWithFamily: reminder.sharedWithFamily,
   };
 }
@@ -77,19 +80,30 @@ export function buildDedupeKey(reminderId: string, kind: InAppNotification["kind
 
 export type EngineNotificationDraft = Omit<InAppNotification, "read"> & { dedupeKey: string };
 
+function anyEmailChannelOn(r: Reminder): boolean {
+  return (
+    r.notify7DaysBefore ||
+    r.notify3DaysBefore ||
+    r.notify1DayBefore ||
+    r.notifyAtDueTime ||
+    r.notifyOverdue ||
+    Boolean(r.emailNotify)
+  );
+}
+
 export function draftNotificationsForDay(input: {
   reminders: Reminder[];
   now: Date;
   existingDedupeKeys: Set<string>;
   emailNotificationsEnabled: boolean;
 }): EngineNotificationDraft[] {
+  void input.emailNotificationsEnabled;
   const todayYmd = formatYmd(startOfLocalDay(input.now));
   const drafts: EngineNotificationDraft[] = [];
 
   for (const r of input.reminders) {
-    const due = startOfLocalDay(parseYmd(r.dueDate));
     const today = startOfLocalDay(input.now);
-    const diff = daysBetween(today, due);
+    const diff = daysBetween(today, startOfLocalDay(parseYmd(r.dueDate)));
 
     if (diff === 0) {
       const dedupeKey = buildDedupeKey(r.id, "payment_due", todayYmd);
@@ -125,3 +139,5 @@ export function draftNotificationsForDay(input: {
 
   return drafts;
 }
+
+export { anyEmailChannelOn as reminderHasEmailNotifications };

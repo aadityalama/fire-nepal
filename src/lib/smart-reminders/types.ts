@@ -13,6 +13,10 @@ export const REMINDER_TYPES = [
 
 export type ReminderType = (typeof REMINDER_TYPES)[number];
 
+export const REPEAT_FREQUENCIES = ["once", "daily", "weekly", "monthly", "yearly"] as const;
+export type RepeatFrequency = (typeof REPEAT_FREQUENCIES)[number];
+
+/** @deprecated use REPEAT_FREQUENCIES — kept for sanitize migration */
 export const RECURRENCE = ["once", "monthly", "yearly"] as const;
 export type Recurrence = (typeof RECURRENCE)[number];
 
@@ -24,15 +28,29 @@ export type Reminder = {
   reminderType: ReminderType;
   /** Optional amount in NPR for household budgeting */
   amountNpr: number | null;
-  /** Next due date (YYYY-MM-DD, Asia/Kathmandu calendar day) */
+  /** Next due date (YYYY-MM-DD) */
   dueDate: string;
-  recurrence: Recurrence;
+  /** Local wall time for email scheduling, HH:mm (24h) */
+  dueTime: string;
+  /** IANA time zone for due date + due time */
+  timezone: string;
+  /** Destination for automated reminder emails */
+  email: string;
+  repeatFrequency: RepeatFrequency;
+  notify7DaysBefore: boolean;
+  notify3DaysBefore: boolean;
+  notify1DayBefore: boolean;
+  notifyAtDueTime: boolean;
+  notifyOverdue: boolean;
   /** Shared visibility for spouse / parents / kids at home */
   sharedWithFamily: boolean;
   notes?: string;
   createdAt: string;
-  /** When enabled, demo engine simulates outbound email on due/overdue transitions */
-  emailNotify: boolean;
+  /**
+   * Legacy single flag — if true, treat as all notify toggles on for local-first stores.
+   * Prefer explicit `notify*` fields.
+   */
+  emailNotify?: boolean;
 };
 
 export type ReminderHistoryEntry = {
@@ -43,7 +61,7 @@ export type ReminderHistoryEntry = {
   amountNpr: number | null;
   paidAt: string;
   dueDate: string;
-  recurrence: Recurrence;
+  repeatFrequency: RepeatFrequency;
   sharedWithFamily: boolean;
 };
 

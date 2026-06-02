@@ -158,6 +158,97 @@ export type Database = {
         };
         Relationships: [];
       };
+      scheduled_reminders: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          amount: number | null;
+          due_date: string;
+          due_time: string;
+          timezone: string;
+          email: string;
+          repeat_frequency: string;
+          notify_7d: boolean;
+          notify_3d: boolean;
+          notify_1d: boolean;
+          notify_at_due: boolean;
+          notify_overdue: boolean;
+          reminder_type: string;
+          notes: string | null;
+          shared_with_family: boolean;
+          is_completed: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          amount?: number | null;
+          due_date: string;
+          due_time?: string;
+          timezone?: string;
+          email: string;
+          repeat_frequency?: string;
+          notify_7d?: boolean;
+          notify_3d?: boolean;
+          notify_1d?: boolean;
+          notify_at_due?: boolean;
+          notify_overdue?: boolean;
+          reminder_type?: string;
+          notes?: string | null;
+          shared_with_family?: boolean;
+          is_completed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          amount?: number | null;
+          due_date?: string;
+          due_time?: string;
+          timezone?: string;
+          email?: string;
+          repeat_frequency?: string;
+          notify_7d?: boolean;
+          notify_3d?: boolean;
+          notify_1d?: boolean;
+          notify_at_due?: boolean;
+          notify_overdue?: boolean;
+          reminder_type?: string;
+          notes?: string | null;
+          shared_with_family?: boolean;
+          is_completed?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      scheduled_reminder_email_sends: {
+        Row: {
+          id: string;
+          reminder_id: string;
+          slot: string;
+          anchor_due_date: string;
+          overdue_local_date: string | null;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          reminder_id: string;
+          slot: string;
+          anchor_due_date: string;
+          overdue_local_date?: string | null;
+          sent_at?: string;
+        };
+        Update: {
+          slot?: string;
+          anchor_due_date?: string;
+          overdue_local_date?: string | null;
+          sent_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
