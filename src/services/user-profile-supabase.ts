@@ -7,8 +7,8 @@ export async function upsertUserProfileFields(
   client: Client,
   userId: string,
   fields: { display_name?: string | null; avatar_url?: string | null; preferred_currency?: "NPR" | "KRW" | "USD" },
-) {
-  await client.from("user_profiles").upsert(
+): Promise<{ error: string | null }> {
+  const { error } = await client.from("user_profiles").upsert(
     {
       id: userId,
       ...fields,
@@ -16,6 +16,7 @@ export async function upsertUserProfileFields(
     },
     { onConflict: "id" },
   );
+  return { error: error?.message ?? null };
 }
 
 export async function fetchUserProfile(client: Client, userId: string) {

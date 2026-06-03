@@ -10,20 +10,29 @@ import {
   Smartphone,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { EncryptionBadge, ProtectedDashboardLabel, SecureSessionPill } from "@/components/security/SecurityUi";
 import { SecurityAlertCards } from "@/components/security/SecurityAlertCards";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { SECURITY_ARCHITECTURE_VERSION, SECURITY_ROADMAP } from "@/lib/fire-security-architecture";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 export function FireSecurityDashboardPage() {
-  const { user, logout } = useProductAuth();
+  const { user, logout, authMode } = useProductAuth();
+  const [showRecoveryBanner, setShowRecoveryBanner] = useState(false);
   const [pw1, setPw1] = useState("");
   const [pw2, setPw2] = useState("");
   const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [pwBusy, setPwBusy] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    setShowRecoveryBanner(q.get("pw") === "1");
+  }, []);
 
   const onPasswordSubmit = useCallback(
-    (e: FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault();
       if (pw1.length < 6) {
         setPwMsg("Use at least 6 characters.");
@@ -33,11 +42,33 @@ export function FireSecurityDashboardPage() {
         setPwMsg("Passwords do not match.");
         return;
       }
-      setPwMsg("Password updates are not persisted here yet — connect your auth provider to enable this (roadmap).");
+      if (authMode === "supabase") {
+        setPwBusy(true);
+        setPwMsg(null);
+        try {
+          const sb = getSupabaseBrowserClient();
+          const { error } = await sb.auth.updateUser({ password: pw1 });
+          if (error) {
+            setPwMsg(error.message);
+            return;
+          }
+          setPwMsg("Password updated. You can continue using this session.");
+          setPw1("");
+          setPw2("");
+        } catch (err) {
+          setPwMsg(err instanceof Error ? err.message : "Could not update password.");
+        } finally {
+          setPwBusy(false);
+        }
+        return;
+      }
+      setPwMsg(
+        "Cloud password changes require Supabase (set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY). In local legacy mode, use forgot-password from the login screen.",
+      );
       setPw1("");
       setPw2("");
     },
-    [pw1, pw2],
+    [pw1, pw2, authMode],
   );
 
   if (!user) {
@@ -48,6 +79,15 @@ export function FireSecurityDashboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-10 pb-24 lg:pb-10">
+      {showRecoveryBanner ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-4 text-sm font-semibold text-amber-50"
+        >
+          You followed a password reset link. Choose a new password below, then consider bookmarking this page for
+          future changes.
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -146,9 +186,10 @@ export function FireSecurityDashboardPage() {
           <div className="sm:col-span-2">
             <button
               type="submit"
-              className="rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg"
+              disabled={pwBusy}
+              className="rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg disabled:opacity-50"
             >
-              Update password
+              {pwBusy ? "Updating…" : "Update password"}
             </button>
             {pwMsg ? <p className="mt-3 text-sm font-semibold text-emerald-300">{pwMsg}</p> : null}
           </div>

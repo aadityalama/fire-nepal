@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, startTransition, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export function ResetPasswordScreen() {
   const router = useRouter();
@@ -74,13 +75,25 @@ export function ResetPasswordScreen() {
     return (
       <AuthGlassShell>
         <div className="rounded-[1.5rem] border border-emerald-400/18 bg-white/[0.04] p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-          <p className="text-sm font-semibold text-emerald-100/80">Missing email. Start from forgot password.</p>
+          <p className="text-sm font-semibold text-emerald-100/80">
+            {isSupabaseConfigured()
+              ? "Production password reset uses the link in your email. After you open it, set a new password under Dashboard → Security."
+              : "Missing email. Start from forgot password."}
+          </p>
           <Link
             href="/forgot-password"
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg"
           >
-            Request reset <ArrowRight size={16} />
+            {isSupabaseConfigured() ? "Back to forgot password" : "Request reset"} <ArrowRight size={16} />
           </Link>
+          {isSupabaseConfigured() ? (
+            <Link
+              href="/dashboard/security"
+              className="mt-4 block text-sm font-black text-emerald-300 hover:text-white"
+            >
+              Open Security center
+            </Link>
+          ) : null}
         </div>
       </AuthGlassShell>
     );

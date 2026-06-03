@@ -7,6 +7,8 @@ Copy to `.env.local` (local) and set the same keys in **Vercel → Project → S
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_public_key
+# Production: forces password-reset and sign-up email links to the live site.
+NEXT_PUBLIC_SITE_URL=https://firenepal.com
 ```
 
 Values come from the [Supabase dashboard](https://supabase.com/dashboard) → **Project Settings → API** (Project URL and `anon` `public` key).
@@ -22,12 +24,17 @@ When they are **unset** in production, legacy `/api/auth/*` routes return **503*
 1. **Authentication → Providers**  
    Enable **Email** and turn on **Email / password** (confirm sign-in is optional per your product policy).
 
-2. **Authentication → URL configuration**  
-   - **Site URL**: production origin (e.g. `https://your-domain.com`).  
-   - **Redirect URLs**: include  
-     `http://localhost:3000/auth/callback`  
-     `https://your-domain.com/auth/callback`  
-     and any preview URLs you use (wildcard `https://*.vercel.app/auth/callback` if acceptable for your security model).
+2. **Authentication → URL configuration** (production project — **FIRE Nepal**)
+
+   - **Site URL**: `https://firenepal.com`  
+     Do **not** leave this as `http://localhost:3000`. Supabase uses it as the default base for some auth flows and email templates.
+   - **Redirect URLs** (Additional Redirect URLs): allow exactly what users should land on after email links. For production, include at least:  
+     `https://firenepal.com/auth/callback`  
+     Optional: `https://www.firenepal.com/auth/callback` if you serve the app on `www`.  
+     **Remove** `http://localhost:3000` and `http://localhost:3000/auth/callback` from this **production** project so emailed links cannot send users to localhost.
+   - **Email templates** (Authentication → Email): confirm links use `{{ .ConfirmationURL }}` (recommended). Avoid hard-coding `localhost` in custom HTML.
+
+   **Local development:** use a separate Supabase project, *or* temporarily add `http://localhost:3000/auth/callback` to Redirect URLs while testing—then remove it from the production project before go-live.
 
 3. **Authentication → Emails**  
    Configure **SMTP** or a provider so sign-up, verification, magic links, and password reset emails actually send.
@@ -37,14 +44,35 @@ When they are **unset** in production, legacy `/api/auth/*` routes return **503*
 
 ## Database
 
-Run the SQL in `supabase/migrations/20250524120000_fire_nepal_portfolio.sql` in the Supabase SQL editor (or use the Supabase CLI). This creates **`user_profiles`**, portfolio tables, RLS, and a trigger that inserts a profile row when a row is added to `auth.users`.
+Migrations live in `supabase/migrations/` (see `supabase/config.toml`). Apply them in **timestamp order** so foreign keys resolve (`scheduled_reminders` before `admin_dashboard`).
 
-Also run `supabase/migrations/20250602140000_scheduled_reminders.sql` for **Smart Reminders** cloud storage:
+**Recommended (repeatable):** from this repo root, with the **Postgres connection URI** exported (Dashboard → **Project Settings → Database** → *Connection string* → URI):
+
+```bash
+export SUPABASE_DB_URL='postgresql://...'
+npm run db:push:remote
+```
+
+**Alternative:** open each file under `supabase/migrations/` in the Supabase **SQL Editor** and run in order.
+
+### What the migrations create
+
+`20250524120000_fire_nepal_portfolio.sql` — **`user_profiles`**, portfolio tables, RLS, and a trigger that inserts a profile row when a row is added to `auth.users`.
+
+`20250525130000_nepse_watchlist.sql` — **`nepse_watchlist`**.
+
+`20250602140000_scheduled_reminders.sql` — **Smart Reminders** cloud storage:
 
 - **`public.scheduled_reminders`** — title, amount, `due_date`, `due_time`, `timezone`, `email`, `repeat_frequency`, per-channel booleans (`notify_7d`, `notify_3d`, `notify_1d`, `notify_at_due`, `notify_overdue`), plus optional notes and family share. RLS: users can only read/write their own rows.
 - **`public.scheduled_reminder_email_sends`** — dedupe log for cron-sent emails (written by the **service role** only).
 
+`20250602160000_admin_dashboard.sql` — **`profiles`**, **`subscriptions`**, **`revenue_events`**, **`reminder_logs`**, **`admin_users`**, **`system_health`** (admin dashboard + cron health metadata).
+
 Optional: enable **Realtime** replication for `public.portfolio_extensions` in the dashboard for live cross-tab portfolio updates.
+
+### Granting `/admin` access
+
+After migrations, insert the auth user’s UUID into **`public.admin_users`** (SQL Editor or any privileged client). See `docs/admin.md`.
 
 ### Scheduled reminder emails (Vercel + Resend)
 
@@ -54,4 +82,6 @@ Optional: enable **Realtime** replication for `public.portfolio_extensions` in t
 
 ## Auth URLs in code
 
-Sign-up uses `emailRedirectTo` → `{origin}/auth/callback`. Password reset uses the same callback with `next=/dashboard/security`. Ensure those paths are allowed in **Redirect URLs** as above.
+Sign-up uses `emailRedirectTo` → `{origin}/auth/callback`. Password reset uses `redirectTo` → `/auth/callback?next=/dashboard/security?pw=1`. Resend verification passes the same `emailRedirectTo`.
+
+The app resolves `{origin}` as **`NEXT_PUBLIC_SITE_URL`** (trimmed, no trailing slash) when set, otherwise the current browser origin. Set `NEXT_PUBLIC_SITE_URL=https://firenepal.com` on Vercel Production so email links always target the live site. Ensure those full URLs are allowed under **Redirect URLs** as above.

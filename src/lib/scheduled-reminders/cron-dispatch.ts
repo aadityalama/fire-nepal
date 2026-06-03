@@ -151,6 +151,13 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<{
         text,
       });
       if (!res.ok) {
+        await sb.from("reminder_logs").insert({
+          reminder_id: row.id,
+          user_id: row.user_id,
+          event_type: "email_failed",
+          provider_message: res.message.slice(0, 2000),
+          metadata: { slot: fire.slot, anchorDueDate: fire.anchorDueDate },
+        });
         await sb.from("scheduled_reminder_email_sends").delete().eq("id", sendId);
         skipped += 1;
         continue;

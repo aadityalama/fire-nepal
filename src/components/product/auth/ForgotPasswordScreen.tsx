@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
+import { getPublicSiteOrigin } from "@/lib/public-site-url";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -22,10 +23,11 @@ export function ForgotPasswordScreen() {
     try {
       const trimmed = email.trim().toLowerCase();
       if (isSupabaseConfigured()) {
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const origin = getPublicSiteOrigin();
         const sb = getSupabaseBrowserClient();
+        const nextPath = "/dashboard/security?pw=1";
         const { error } = await sb.auth.resetPasswordForEmail(trimmed, {
-          redirectTo: `${origin}/auth/callback?next=/dashboard/settings`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         });
         if (error) {
           setError(error.message);
@@ -85,8 +87,21 @@ export function ForgotPasswordScreen() {
 
         {done ? (
           <div className="mt-8 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-5 text-sm font-semibold leading-relaxed text-emerald-50">
-            If an account exists for that address, password reset instructions will be sent. Check your inbox (and
-            spam) in a few minutes.
+            {isSupabaseConfigured() ? (
+              <>
+                If an account exists for that address, you will receive an email with a reset link. Open the link, then
+                choose a new password on the{" "}
+                <Link href="/dashboard/security" className="font-black text-emerald-200 underline hover:text-white">
+                  Security
+                </Link>{" "}
+                page (you will be signed in automatically).
+              </>
+            ) : (
+              <>
+                If an account exists for that address, password reset instructions will be sent. Check your inbox (and
+                spam) in a few minutes.
+              </>
+            )}
             <Link href="/login" className="mt-4 block text-center text-sm font-black text-emerald-300 hover:text-white">
               ← Back to sign in
             </Link>

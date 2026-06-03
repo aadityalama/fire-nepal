@@ -8,6 +8,7 @@ import {
   saveProductAuthSession,
   type ProductAuthUser,
 } from "@/lib/product-auth-storage";
+import { getPublicSiteOrigin } from "@/lib/public-site-url";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { upsertUserProfileFields } from "@/services/user-profile-supabase";
@@ -255,10 +256,13 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
           const pu = mapSupabaseUser(data.user);
           setUser(pu);
           saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" });
-          await upsertUserProfileFields(sb, data.user.id, {
+          const profileRes = await upsertUserProfileFields(sb, data.user.id, {
             display_name: name.trim(),
             avatar_url: opts.avatarUrl ?? null,
           });
+          if (profileRes.error) {
+            console.error("[auth] user_profiles upsert after signup:", profileRes.error);
+          }
           return { ok: true as const };
         }
         return { ok: false as const, error: "Sign-up could not be completed." };
@@ -324,10 +328,13 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
             : typeof meta?.avatarUrl === "string"
               ? meta.avatarUrl
               : null;
-        await upsertUserProfileFields(sb, data.user.id, {
+        const profileRes = await upsertUserProfileFields(sb, data.user.id, {
           display_name: displayName,
           avatar_url: avatarFromMeta ?? pu.avatarUrl,
         });
+        if (profileRes.error) {
+          console.error("[auth] user_profiles upsert after verify:", profileRes.error);
+        }
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Verification failed." };
@@ -357,7 +364,12 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
     if (isSupabaseConfigured()) {
       try {
         const sb = getSupabaseBrowserClient();
-        const { error } = await sb.auth.resend({ type: "signup", email: trimmed });
+        const origin = getPublicSiteOrigin();
+        const { error } = await sb.auth.resend({
+          type: "signup",
+          email: trimmed,
+          options: { emailRedirectTo: `${origin}/auth/callback` },
+        });
         if (error) return { ok: false as const, error: error.message };
         return {
           ok: true as const,
