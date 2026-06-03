@@ -487,33 +487,41 @@ export function SmartRemindersDashboard() {
       </div>
 
       {sheetOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4">
           <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-label="Close" onClick={() => setSheetOpen(false)} />
           <div
-            className={`relative w-full max-w-lg rounded-t-3xl border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl motion-safe:transition motion-safe:duration-300 sm:rounded-3xl sm:p-6 ${
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="smart-reminder-sheet-title"
+            className={`relative flex max-h-[min(92dvh,calc(100dvh-0.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border shadow-2xl motion-safe:transition motion-safe:duration-300 sm:max-h-[min(88dvh,44rem)] sm:rounded-3xl ${
               light ? "border-emerald-200/80 bg-white" : "border-emerald-500/15 bg-[#030806]"
             }`}
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300/80 dark:bg-white/15 sm:hidden" />
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/75">Create</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">New reminder</h3>
+            <div className="shrink-0 px-4 pb-2 pt-3 sm:px-6 sm:pt-6">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300/80 dark:bg-white/15 sm:hidden" />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/75">Create</p>
+                  <h3 id="smart-reminder-sheet-title" className="text-lg font-black text-slate-900 dark:text-white">
+                    New reminder
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(false)}
+                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition ${
+                    light ? "border-slate-200/80 text-slate-800 hover:bg-slate-50" : "border-white/10 text-zinc-200 hover:bg-white/[0.06]"
+                  }`}
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setSheetOpen(false)}
-                className={`grid h-10 w-10 place-items-center rounded-xl border transition ${
-                  light ? "border-slate-200/80 text-slate-800 hover:bg-slate-50" : "border-white/10 text-zinc-200 hover:bg-white/[0.06]"
-                }`}
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
             </div>
 
-            <div className="mt-4 grid gap-3">
-              <label className="grid gap-1">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 sm:px-6">
+              <div className="grid gap-3">
+                <label className="grid gap-1">
                 <span className="text-[11px] font-black uppercase tracking-wide text-slate-600 dark:text-zinc-400">Title</span>
                 <input
                   value={form.title}
@@ -724,7 +732,16 @@ export function SmartRemindersDashboard() {
                   Share with family
                 </label>
               </div>
+              </div>
+            </div>
 
+            <div
+              className={`shrink-0 border-t px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-18px_rgba(0,0,0,0.18)] sm:px-6 sm:pt-4 ${
+                light
+                  ? "border-emerald-200/70 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/80"
+                  : "border-white/[0.08] bg-[#030806]/95 backdrop-blur-md supports-[backdrop-filter]:bg-[#030806]/85"
+              }`}
+            >
               <button
                 type="button"
                 onClick={onSubmit}
