@@ -1,0 +1,46 @@
+# FIRE Nepal — ping production smart-reminder email cron every 5 minutes (Vercel Hobby-friendly).
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   CRON_TARGET_URL  — full URL, e.g. https://firenepal.com/api/cron/scheduled-reminders
+#   CRON_SECRET      — same value as Vercel env CRON_SECRET (Bearer token)
+#
+# Optional: restrict which branches can run schedules (default branch only for schedule events).
+
+name: Scheduled reminders cron
+
+on:
+  schedule:
+    # Every 5 minutes (UTC)
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-reminders-cron
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call /api/cron/scheduled-reminders
+        env:
+          URL: ${{ secrets.CRON_TARGET_URL }}
+          TOKEN: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${URL:-}" ] || [ -z "${TOKEN:-}" ]; then
+            echo "Missing CRON_TARGET_URL or CRON_SECRET in repository secrets."
+            exit 1
+          fi
+          code="$(curl -sS -o /tmp/cron_body.txt -w "%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/json" \
+            "${URL}")"
+          echo "HTTP ${code}"
+          head -c 2000 /tmp/cron_body.txt || true
+          echo
+          if [ "$code" != "200" ]; then
+            exit 1
+          fi
