@@ -249,6 +249,165 @@ export type Database = {
         };
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          id: string;
+          plan_type: "free" | "premium" | "elite";
+          last_active_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          plan_type?: "free" | "premium" | "elite";
+          last_active_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          plan_type?: "free" | "premium" | "elite";
+          last_active_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan: "premium" | "elite";
+          status: "active" | "canceled" | "past_due" | "trialing" | "incomplete";
+          amount_minor: number | null;
+          currency: string;
+          current_period_start: string | null;
+          current_period_end: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan: "premium" | "elite";
+          status?: "active" | "canceled" | "past_due" | "trialing" | "incomplete";
+          amount_minor?: number | null;
+          currency?: string;
+          current_period_start?: string | null;
+          current_period_end?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          plan?: "premium" | "elite";
+          status?: "active" | "canceled" | "past_due" | "trialing" | "incomplete";
+          amount_minor?: number | null;
+          currency?: string;
+          current_period_start?: string | null;
+          current_period_end?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      revenue_events: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          amount_npr: number;
+          kind: "subscription" | "one_time" | "adjustment" | "other";
+          note: string | null;
+          external_ref: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          amount_npr: number;
+          kind?: "subscription" | "one_time" | "adjustment" | "other";
+          note?: string | null;
+          external_ref?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string | null;
+          amount_npr?: number;
+          kind?: "subscription" | "one_time" | "adjustment" | "other";
+          note?: string | null;
+          external_ref?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      reminder_logs: {
+        Row: {
+          id: string;
+          reminder_id: string | null;
+          user_id: string | null;
+          event_type: "email_sent" | "email_failed" | "cron_started" | "cron_completed" | "other";
+          provider_message: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reminder_id?: string | null;
+          user_id?: string | null;
+          event_type: "email_sent" | "email_failed" | "cron_started" | "cron_completed" | "other";
+          provider_message?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          reminder_id?: string | null;
+          user_id?: string | null;
+          event_type?: "email_sent" | "email_failed" | "cron_started" | "cron_completed" | "other";
+          provider_message?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      admin_users: {
+        Row: {
+          user_id: string;
+          role: "admin" | "super_admin";
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          role?: "admin" | "super_admin";
+          created_at?: string;
+        };
+        Update: {
+          role?: "admin" | "super_admin";
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      system_health: {
+        Row: {
+          id: string;
+          label: string | null;
+          last_run_at: string | null;
+          last_status: string | null;
+          metadata: Json;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          label?: string | null;
+          last_run_at?: string | null;
+          last_status?: string | null;
+          metadata?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          label?: string | null;
+          last_run_at?: string | null;
+          last_status?: string | null;
+          metadata?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

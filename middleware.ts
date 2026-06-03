@@ -94,6 +94,8 @@ export const config = {
     "/family-settings/:path*",
     "/child-records-vault",
     "/child-records-vault/:path*",
+    "/admin",
+    "/admin/:path*",
     "/auth/callback",
   ],
 };

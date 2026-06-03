@@ -30,4 +30,5 @@ export const FN_PROTECTED_PREFIXES = [
   "/family-ai-insights",
   "/family-settings",
   "/child-records-vault",
+  "/admin",
 ] as const;
