@@ -11,6 +11,7 @@ import {
 import { loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
+import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 
 function sumIncome(cf: CashflowDashboardState): number {
   return Object.values(cf.income).reduce<number>((a, v) => a + (typeof v === "number" && v > 0 ? v : 0), 0);
@@ -45,6 +46,7 @@ export function FireDashboardMetrics({
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [tick, setTick] = useState(0);
+  const [bullionSpot, setBullionSpot] = useState<GoldSilverPriceResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,31 @@ export function FireDashboardMetrics({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/market/gold-price?_t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const j = (await res.json()) as GoldSilverPriceResponse;
+        if (cancelled) return;
+        if (
+          typeof j.goldPerGramNPR === "number" &&
+          typeof j.silverPerGramNPR === "number" &&
+          j.goldPerGramNPR > 0 &&
+          j.silverPerGramNPR > 0
+        ) {
+          setBullionSpot(j);
+        }
+      } catch {
+        /* keep prior / fallback inside computeWealthTotals */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tick, refreshKey]);
+
+  useEffect(() => {
     const onStorage = () => setTick((t) => t + 1);
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -69,8 +96,11 @@ export function FireDashboardMetrics({
     void tick;
     void refreshKey;
     const state = loadWealthPortfolioState();
-    return computeWealthTotals(state, krwPerNpr, usdPerNpr);
-  }, [krwPerNpr, usdPerNpr, tick, refreshKey]);
+    const bullionGramRatesNpr = bullionSpot
+      ? { goldNprPerGram: bullionSpot.goldPerGramNPR, silverNprPerGram: bullionSpot.silverPerGramNPR }
+      : null;
+    return computeWealthTotals(state, krwPerNpr, usdPerNpr, { bullionGramRatesNpr });
+  }, [krwPerNpr, usdPerNpr, tick, refreshKey, bullionSpot]);
 
   const cashflow = useMemo(() => {
     void tick;

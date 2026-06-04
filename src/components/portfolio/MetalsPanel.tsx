@@ -2,8 +2,8 @@
 
 import { Gem, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { resolveMetalGramRatesForUi } from "@/components/portfolio/calculations";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
-import { mockMetalRateNprPerGram } from "@/components/portfolio/mock-prices";
 import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
@@ -14,6 +14,7 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
 
 function todayIso() {
@@ -184,6 +185,13 @@ export function MetalsPanel({
   onRemove: (id: string) => void;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
+  const { bullionSpot, bullionError, usdPerNpr } = useWealthPortfolio();
+  const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
+  const lastUpdatedLabel = bullionSpot?.updatedAt
+    ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    : "—";
+  const sourceLabel = bullionSpot?.source ?? "FX-anchored estimate";
+
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -193,7 +201,9 @@ export function MetalsPanel({
           </div>
           <div>
             <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
-            <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">Grams · demo spot (NPR/g) placeholder</p>
+            <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
+              Grams · NPR per gram from global spot (USD) with live NPR/USD.
+            </p>
           </div>
         </div>
         <div className="flex gap-1.5">
@@ -214,10 +224,28 @@ export function MetalsPanel({
         </div>
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:px-3 sm:text-[11px]">
+        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-black uppercase tracking-wide text-amber-100">
+          Live price
+        </span>
+        <span className="text-emerald-200/75">
+          Last updated: <span className="text-emerald-50">{lastUpdatedLabel}</span>
+        </span>
+        <span className="min-w-0 text-emerald-200/75">
+          Source: <span className="break-all text-emerald-50">{sourceLabel}</span>
+        </span>
+        {showWarning ? (
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-black uppercase tracking-wide text-amber-200">
+            Feed warning
+          </span>
+        ) : null}
+      </div>
+
       <div className="space-y-2">
         {rows.map((row) => {
           const g = row.grams ?? 0;
-          const rate = mockMetalRateNprPerGram(row.metal);
+          const uiRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
+          const rate = row.metal === "gold" ? uiRates.goldNprPerGram : uiRates.silverNprPerGram;
           const total = g * rate;
           return (
             <div
@@ -250,7 +278,7 @@ export function MetalsPanel({
                     />
                   </div>
                   <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:text-xs">
-                    <p className="text-emerald-200/55">Live rate (demo)</p>
+                    <p className="text-emerald-200/55">Live price</p>
                     <p className="mt-0.5 font-black text-amber-200/95">{formatMoney(rate, "NPR")} / g</p>
                     <p className="mt-1 text-emerald-100/90">
                       Value: <span className="font-black text-emerald-50">{formatMoney(total, "NPR")}</span>

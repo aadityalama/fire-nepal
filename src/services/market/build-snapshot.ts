@@ -1,11 +1,15 @@
+import { DEFAULT_BULLION_USD_PER_TROY_OZ } from "@/lib/market/bullion-estimate";
 import { fetchCoingeckoUsd } from "@/services/market/coingecko";
 import { fetchNprForexCross } from "@/services/market/forex-npr";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
 import { buildNepseTerminalSnapshot } from "@/services/market/nepse-terminal";
 import { fetchYahooLast } from "@/services/market/yahoo-quotes";
-import type { MarketSnapshot, MarketSourceStatus } from "@/types/market";
+import type { MarketSnapshot, MarketSourceStatus, MetalSpotUsdOz } from "@/types/market";
 
-const DEFAULT_METALS_USD_OZ = { goldUsdPerOz: 2680, silverUsdPerOz: 32 };
+const DEFAULT_METALS_USD_OZ: MetalSpotUsdOz = {
+  goldUsdPerOz: DEFAULT_BULLION_USD_PER_TROY_OZ.goldUsdPerOz,
+  silverUsdPerOz: DEFAULT_BULLION_USD_PER_TROY_OZ.silverUsdPerOz,
+};
 
 function splitEquitySymbols(symbols: string[]): { usd: string[]; kr: string[] } {
   const usd: string[] = [];

@@ -1,6 +1,6 @@
 import type { InvestmentKind } from "@/components/portfolio/types";
 
-/** Deterministic mock “live” multiplier vs buy (placeholder until real feed). */
+/** Deterministic mock “live” multiplier vs buy when no market snapshot is available. */
 export function mockLiveMultiplier(id: string, kind: InvestmentKind): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
@@ -15,9 +15,4 @@ export function mockLiveMultiplier(id: string, kind: InvestmentKind): number {
   const spread = 0.12 + kindBias[kind];
   const t = (h % 1000) / 1000;
   return 1 - spread / 2 + t * spread;
-}
-
-/** Mock NPR per gram (placeholder live rates). */
-export function mockMetalRateNprPerGram(metal: "gold" | "silver"): number {
-  return metal === "gold" ? 12850 : 152;
 }

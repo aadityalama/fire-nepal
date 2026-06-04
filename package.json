@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "generate:investment-registry": "node scripts/generate-investment-registry.mjs",
     "db:push:remote": "npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes"
   },

@@ -1,8 +1,5 @@
 import { aggregateFdMonthlyInterestNpr, sumFixedDepositPrincipalNpr } from "@/components/portfolio/banking-fd";
-import { mockLiveMultiplier, mockMetalRateNprPerGram } from "@/components/portfolio/mock-prices";
-import { resolveLiveUnitNpr } from "@/lib/investment-market/quotes";
-import { metalsNprPerGramFromSnapshot } from "@/services/market/metal-convert";
-import { resolveLiveUnitNprFromSnapshot } from "@/services/portfolio/market-quotes";
+import { mockLiveMultiplier } from "@/components/portfolio/mock-prices";
 import type {
   GlobalRetirementAssetRow,
   InvestmentRow,
@@ -13,7 +10,12 @@ import type {
   VehicleRow,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
-import { amountToNpr, type PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
+import { resolveLiveUnitNpr } from "@/lib/investment-market/quotes";
+import { fallbackMetalRatesFromUsdAnchors } from "@/lib/market/bullion-estimate";
+import { amountToNpr, FALLBACK_USD_PER_NPR, type PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
+import { metalsNprPerGramFromSnapshot } from "@/services/market/metal-convert";
+import { resolveLiveUnitNprFromSnapshot } from "@/services/portfolio/market-quotes";
+import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import type { MarketSnapshot } from "@/types/market";
 
 export type InvestmentValuation = {
@@ -99,16 +101,18 @@ export function sumInvestmentsNpr(
 export function sumMetalsNpr(
   rows: MetalRow[],
   liveGramRates?: { goldNprPerGram: number; silverNprPerGram: number } | null,
+  usdPerNprForFallback?: number,
 ): number {
+  const hasLive =
+    liveGramRates != null &&
+    liveGramRates.goldNprPerGram > 0 &&
+    liveGramRates.silverNprPerGram > 0;
+  const anchor = fallbackMetalRatesFromUsdAnchors(usdPerNprForFallback ?? FALLBACK_USD_PER_NPR);
+  const rates = hasLive ? liveGramRates : anchor;
   return rows.reduce((a, r) => {
     const g = r.grams ?? 0;
     if (g <= 0) return a;
-    const rate =
-      liveGramRates != null
-        ? r.metal === "gold"
-          ? liveGramRates.goldNprPerGram
-          : liveGramRates.silverNprPerGram
-        : mockMetalRateNprPerGram(r.metal);
+    const rate = r.metal === "gold" ? rates.goldNprPerGram : rates.silverNprPerGram;
     return a + g * rate;
   }, 0);
 }
@@ -200,6 +204,8 @@ export type WealthTotals = {
 export type ComputeWealthTotalsOptions = {
   /** When set, marks listed investments + bullion to market using server-fetched quotes. */
   liveMarket?: MarketSnapshot | null;
+  /** NPR per gram from `/api/market/gold-price` — overrides snapshot-derived bullion when set. */
+  bullionGramRatesNpr?: { goldNprPerGram: number; silverNprPerGram: number } | null;
 };
 
 export function computeWealthTotals(
@@ -209,13 +215,22 @@ export function computeWealthTotals(
   opts?: ComputeWealthTotalsOptions | null,
 ): WealthTotals {
   const liveMarket = opts?.liveMarket ?? null;
-  const metalGramRates = liveMarket ? metalsNprPerGramFromSnapshot(liveMarket, usdPerNpr) : null;
+  const explicitBullion = opts?.bullionGramRatesNpr;
+  const fromSnap = liveMarket ? metalsNprPerGramFromSnapshot(liveMarket, usdPerNpr) : null;
+  const metalGramRates =
+    explicitBullion != null &&
+    explicitBullion.goldNprPerGram > 0 &&
+    explicitBullion.silverNprPerGram > 0
+      ? explicitBullion
+      : fromSnap != null && fromSnap.goldNprPerGram > 0 && fromSnap.silverNprPerGram > 0
+        ? fromSnap
+        : null;
   const liquidNpr = sumSimpleLinesNpr(s.liquidCash, krwPerNpr, usdPerNpr);
   const fdRows = s.fixedDeposits ?? [];
   const fixedDepositsPrincipalNpr = sumFixedDepositPrincipalNpr(fdRows, krwPerNpr, usdPerNpr);
   const fixedDepositsEstimatedMonthlyIncomeNpr = aggregateFdMonthlyInterestNpr(fdRows, krwPerNpr, usdPerNpr);
   const inv = sumInvestmentsNpr(s.investments, krwPerNpr, usdPerNpr, liveMarket);
-  const metalsNpr = sumMetalsNpr(s.metals, metalGramRates);
+  const metalsNpr = sumMetalsNpr(s.metals, metalGramRates, usdPerNpr);
   const realEstateNpr = sumRealEstateNpr(s.realEstate, krwPerNpr, usdPerNpr);
   const vehiclesNpr = sumVehiclesNpr(s.vehicles, krwPerNpr, usdPerNpr);
   const liabilitiesNpr = sumLiabilitiesNpr(s.liabilities, krwPerNpr, usdPerNpr);
@@ -327,4 +342,22 @@ export function netWorthMonthOverMonthPercent(history: { month: string; netWorth
   const absPrev = Math.abs(prev);
   if (absPrev < 1) return null;
   return ((cur - prev) / prev) * 100;
+}
+
+/** NPR/g for UI rows — prefers `/api/market/gold-price` payload, else FX-anchored estimate (never zero). */
+export function resolveMetalGramRatesForUi(
+  bullionSpot: GoldSilverPriceResponse | null,
+  usdPerNpr: number,
+): { goldNprPerGram: number; silverNprPerGram: number } {
+  if (
+    bullionSpot &&
+    bullionSpot.goldPerGramNPR > 0 &&
+    bullionSpot.silverPerGramNPR > 0
+  ) {
+    return {
+      goldNprPerGram: bullionSpot.goldPerGramNPR,
+      silverNprPerGram: bullionSpot.silverPerGramNPR,
+    };
+  }
+  return fallbackMetalRatesFromUsdAnchors(usdPerNpr);
 }

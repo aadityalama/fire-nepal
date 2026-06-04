@@ -8,9 +8,11 @@ export function buildLivePortfolioOverlay(
   krwPerNpr: number,
   usdPerNpr: number,
   snapshot: MarketSnapshot,
+  bullionGramRatesNpr?: { goldNprPerGram: number; silverNprPerGram: number } | null,
 ): LivePortfolioOverlay {
-  const totalsBase = computeWealthTotals(state, krwPerNpr, usdPerNpr);
-  const totalsLive = computeWealthTotals(state, krwPerNpr, usdPerNpr, { liveMarket: snapshot });
+  const bullionOpts = { bullionGramRatesNpr: bullionGramRatesNpr ?? null };
+  const totalsBase = computeWealthTotals(state, krwPerNpr, usdPerNpr, bullionOpts);
+  const totalsLive = computeWealthTotals(state, krwPerNpr, usdPerNpr, { ...bullionOpts, liveMarket: snapshot });
   return {
     snapshot,
     totalsLive,

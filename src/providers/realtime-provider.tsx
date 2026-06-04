@@ -29,7 +29,7 @@ const RealtimeMarketContext = createContext<RealtimeMarketContextValue | null>(n
  * Uses public proxies only — no secrets. Supabase row sync remains in `WealthPortfolioCloudSync`.
  */
 export function RealtimeMarketProvider({ children }: { children: ReactNode }) {
-  const { state, hydrated, krwPerNpr, usdPerNpr } = useWealthPortfolio();
+  const { state, hydrated, krwPerNpr, usdPerNpr, bullionGramRatesNpr } = useWealthPortfolio();
 
   const { symbolsCsv, cryptoCsv } = useMemo(() => {
     const pack = collectMarketSymbolsFromPortfolio(state);
@@ -49,8 +49,8 @@ export function RealtimeMarketProvider({ children }: { children: ReactNode }) {
 
   const overlay = useMemo(() => {
     if (!snapshot) return null;
-    return buildLivePortfolioOverlay(state, krwPerNpr, usdPerNpr, snapshot);
-  }, [snapshot, state, krwPerNpr, usdPerNpr]);
+    return buildLivePortfolioOverlay(state, krwPerNpr, usdPerNpr, snapshot, bullionGramRatesNpr);
+  }, [snapshot, state, krwPerNpr, usdPerNpr, bullionGramRatesNpr]);
 
   const holdingsLive = useMemo(() => {
     if (!snapshot || !overlay) return [];

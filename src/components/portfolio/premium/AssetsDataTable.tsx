@@ -3,8 +3,7 @@
 import { Download, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { lineToNpr, valueInvestmentRow } from "@/components/portfolio/calculations";
-import { mockMetalRateNprPerGram } from "@/components/portfolio/mock-prices";
+import { lineToNpr, resolveMetalGramRatesForUi, valueInvestmentRow } from "@/components/portfolio/calculations";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
 import { formatNpr } from "@/data/fire-premium-dashboard";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
@@ -36,7 +35,7 @@ function manageHrefFor(category: string): string {
 }
 
 function useLivePortfolioRows(): PortfolioRow[] {
-  const { state, totals, krwPerNpr, usdPerNpr } = useWealthPortfolio();
+  const { state, totals, krwPerNpr, usdPerNpr, bullionSpot } = useWealthPortfolio();
   return useMemo(() => {
     const denom = Math.max(totals.totalAssetsNpr, 1e-9);
     const alloc = (npr: number) => (denom > 0 ? (npr / denom) * 100 : 0);
@@ -93,19 +92,22 @@ function useLivePortfolioRows(): PortfolioRow[] {
     for (const m of state.metals) {
       const g = m.grams ?? 0;
       const basis = m.totalCostBasisNpr;
+      const uiRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
+      const rate = m.metal === "gold" ? uiRates.goldNprPerGram : uiRates.silverNprPerGram;
       let npr = 0;
       if (typeof basis === "number" && basis > 0) npr = basis;
-      else if (g > 0) npr = g * mockMetalRateNprPerGram(m.metal);
-      if (npr <= 0) continue;
+      else if (g > 0) npr = g * rate;
+      const currentNpr = g > 0 ? g * rate : npr;
+      if (npr <= 0 && currentNpr <= 0) continue;
       out.push({
         id: m.id,
         name: `${m.metal === "gold" ? "Gold" : "Silver"} holdings`,
         type: "Commodity",
         category: "Metal",
         purchaseNpr: npr,
-        currentNpr: npr,
+        currentNpr,
         cagrPct: 0,
-        allocationPct: alloc(npr),
+        allocationPct: alloc(currentNpr),
         manageHref: manageHrefFor("Metal"),
       });
     }
@@ -160,7 +162,7 @@ function useLivePortfolioRows(): PortfolioRow[] {
     }
 
     return out;
-  }, [state, totals.totalAssetsNpr, krwPerNpr, usdPerNpr]);
+  }, [state, totals.totalAssetsNpr, krwPerNpr, usdPerNpr, bullionSpot]);
 }
 
 export function AssetsDataTable() {

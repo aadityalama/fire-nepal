@@ -51,11 +51,14 @@ import type { FinancialCoachSnapshot } from "@/components/financial-coach/types"
 import { computePayslipTrendAnalytics } from "@/components/payslip-import/payslip-analytics";
 import { loadPayslipHistoryState, PAYSLIP_HISTORY_SYNC_EVENT } from "@/components/payslip-import/payslip-history-storage";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
+import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { WealthPortfolioCloudSync } from "@/hooks/WealthPortfolioCloudSync";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 export type WealthPortfolioLedgerFx = { krwPerNpr: number; usdPerNpr: number };
+
+export type BullionGramRatesNpr = { goldNprPerGram: number; silverNprPerGram: number };
 
 export type WealthPortfolioContextValue = {
   hydrated: boolean;
@@ -64,6 +67,10 @@ export type WealthPortfolioContextValue = {
   krwPerNpr: number;
   usdPerNpr: number;
   ledgerFx: WealthPortfolioLedgerFx;
+  /** NPR/g from `/api/market/gold-price` when loaded; feeds `computeWealthTotals` bullion marks. */
+  bullionGramRatesNpr: BullionGramRatesNpr | null;
+  bullionSpot: GoldSilverPriceResponse | null;
+  bullionError: string | null;
   totals: WealthTotals;
   allocation: ReturnType<typeof allocationPercents>;
   fireScore: number;
@@ -112,6 +119,8 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
+  const [bullionSpot, setBullionSpot] = useState<GoldSilverPriceResponse | null>(null);
+  const [bullionError, setBullionError] = useState<string | null>(null);
   const [monthlyDividendNpr, setMonthlyDividendNpr] = useState(0);
   const [coachDataTick, setCoachDataTick] = useState(0);
   const [intelRollups, setIntelRollups] = useState<FinancialIntelMonthRollup[]>([]);
@@ -179,6 +188,39 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const loadBullion = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    try {
+      const res = await fetch(`/api/market/gold-price?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = (await res.json()) as GoldSilverPriceResponse;
+      if (
+        typeof j.goldPerGramNPR !== "number" ||
+        typeof j.silverPerGramNPR !== "number" ||
+        !Number.isFinite(j.goldPerGramNPR) ||
+        !Number.isFinite(j.silverPerGramNPR) ||
+        j.goldPerGramNPR <= 0 ||
+        j.silverPerGramNPR <= 0
+      ) {
+        throw new Error("Invalid bullion payload");
+      }
+      setBullionSpot(j);
+      setBullionError(null);
+    } catch (e) {
+      setBullionError(e instanceof Error ? e.message : "Gold/silver feed failed");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void loadBullion();
+    const id = window.setInterval(() => void loadBullion(), 10 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [hydrated, loadBullion]);
+
   useEffect(() => {
     if (!hydrated) return;
     const h = window.setTimeout(() => {
@@ -189,7 +231,18 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(h);
   }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr]);
 
-  const totals = useMemo(() => computeWealthTotals(state, krwPerNpr, usdPerNpr), [state, krwPerNpr, usdPerNpr]);
+  const bullionGramRatesNpr = useMemo((): BullionGramRatesNpr | null => {
+    if (!bullionSpot) return null;
+    return {
+      goldNprPerGram: bullionSpot.goldPerGramNPR,
+      silverNprPerGram: bullionSpot.silverPerGramNPR,
+    };
+  }, [bullionSpot]);
+
+  const totals = useMemo(
+    () => computeWealthTotals(state, krwPerNpr, usdPerNpr, { bullionGramRatesNpr }),
+    [state, krwPerNpr, usdPerNpr, bullionGramRatesNpr],
+  );
   const retirementSnap = useMemo(() => computeRetirementDashboardSnapshot(totals), [totals]);
   const allocation = useMemo(() => allocationPercents(totals), [totals]);
   const fireScore = useMemo(() => fireReadinessScore(totals), [totals]);
@@ -428,6 +481,9 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       krwPerNpr,
       usdPerNpr,
       ledgerFx,
+      bullionGramRatesNpr,
+      bullionSpot,
+      bullionError,
       totals,
       allocation,
       fireScore,
@@ -472,6 +528,9 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       krwPerNpr,
       usdPerNpr,
       ledgerFx,
+      bullionGramRatesNpr,
+      bullionSpot,
+      bullionError,
       totals,
       allocation,
       fireScore,
