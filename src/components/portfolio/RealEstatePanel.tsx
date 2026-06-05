@@ -27,10 +27,8 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
-import { RealEstatePortfolioSleeveChart } from "@/components/portfolio/RealEstatePortfolioSleeveChart";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { compressImageFileToJpegDataUrl } from "@/components/portfolio/real-estate-photo-utils";
-import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { amountToNpr } from "@/lib/portfolio-convert";
 import { formatMoney } from "@/lib/expense-utils";
 
@@ -476,7 +474,6 @@ export function RealEstatePanel({
   onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
-  const { totals, hydrated } = useWealthPortfolio();
   return (
     <section className="wealth-glass relative overflow-hidden rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_0%_0%,rgba(45,212,191,0.09),transparent_48%),radial-gradient(ellipse_at_100%_30%,rgba(20,184,166,0.07),transparent_52%)]" />
@@ -500,9 +497,6 @@ export function RealEstatePanel({
           >
             <Plus size={14} /> Add
           </button>
-        </div>
-        <div className="mb-3 min-w-0">
-          <RealEstatePortfolioSleeveChart totals={totals} hydrated={hydrated} />
         </div>
         <div className="space-y-3">
           {rows.map((row) => {
