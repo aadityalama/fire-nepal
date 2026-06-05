@@ -17,6 +17,7 @@ import type {
   VehicleRow,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
+import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
 const STORAGE_KEY_V1 = "fire-nepal-portfolio-v1";
@@ -447,6 +448,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       ...row,
       acquiredDate: sanitizeIsoDate(row.acquiredDate),
       annualAppreciationEstimatePct,
+      propertyPhoto: sanitizePropertyPhotoRef(row.propertyPhoto),
     };
   });
   const vehRaw = Array.isArray(parsed.vehicles) ? parsed.vehicles : d.vehicles;

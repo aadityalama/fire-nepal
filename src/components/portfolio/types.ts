@@ -98,6 +98,11 @@ export type RealEstateRow = {
   acquiredDate?: string;
   /** Optional planning assumption: expected average annual price growth % (user-entered). */
   annualAppreciationEstimatePct?: number;
+  /**
+   * Optional cover image: `https://…` image URL or inline `data:image/jpeg;base64,…` from client compression.
+   * Does not affect valuations — display only.
+   */
+  propertyPhoto?: string;
 };
 
 export type VehicleRow = {

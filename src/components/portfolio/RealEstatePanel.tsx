@@ -1,7 +1,8 @@
 "use client";
 
-import { Building2, Plus, Target, Trash2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { Building2, Camera, ImageIcon, Plus, Target, Trash2 } from "lucide-react";
+import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { CurrencySelect } from "@/components/portfolio/CurrencySelect";
@@ -26,6 +27,9 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { RealEstatePortfolioSleeveChart } from "@/components/portfolio/RealEstatePortfolioSleeveChart";
+import { compressImageFileToJpegDataUrl, isSafeHttpsImageUrl } from "@/components/portfolio/real-estate-photo-utils";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { amountToNpr } from "@/lib/portfolio-convert";
 import { formatMoney } from "@/lib/expense-utils";
 
@@ -223,11 +227,21 @@ function RealEstateTxnStrip({
   const [tradeDate, setTradeDate] = useState(portfolioTxnTodayIso);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setErr(null);
-    setTradeDate(portfolioTxnTodayIso());
-  }, [open, segmentId, row.id]);
+  const handleOpenChange = (v: boolean) => {
+    if (v) {
+      setErr(null);
+      setTradeDate(portfolioTxnTodayIso());
+    }
+    setOpen(v);
+  };
+
+  const handleSegmentId = (id: string) => {
+    setSegmentId(id);
+    if (open) {
+      setErr(null);
+      setTradeDate(portfolioTxnTodayIso());
+    }
+  };
 
   const submit = () => {
     setErr(null);
@@ -262,12 +276,12 @@ function RealEstateTxnStrip({
   return (
     <PortfolioTransactionStrip
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       headerLabel="Transactions"
       summaryRight={`${row.currency}`}
       segments={RE_TX_SEGMENTS}
       segmentId={segmentId}
-      onSegmentId={setSegmentId}
+      onSegmentId={handleSegmentId}
       innerPanelClassName="mt-2 space-y-2 rounded-xl border border-teal-400/20 bg-gradient-to-br from-slate-950/75 via-black/45 to-teal-950/25 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:p-3"
       tradeDate={tradeDate}
       onTradeDate={setTradeDate}
@@ -304,6 +318,158 @@ const TYPES: { value: RealEstateKind; label: string }[] = [
   { value: "commercial", label: "Commercial" },
 ];
 
+function realEstateTypeLabel(kind: RealEstateKind): string {
+  return TYPES.find((t) => t.value === kind)?.label ?? kind;
+}
+
+/** Remount hero when `propertyPhoto` changes so URL draft state stays in sync (no effect setState). */
+function realEstatePhotoStateKey(row: RealEstateRow): string {
+  const p = row.propertyPhoto;
+  if (!p) return "none";
+  const kind = p.startsWith("https://") ? "h" : p.startsWith("data:") ? "d" : "o";
+  return `${kind}-${p.length}`;
+}
+
+function RealEstatePropertyHero({
+  row,
+  krwPerNpr,
+  usdPerNpr,
+  onChange,
+}: {
+  row: RealEstateRow;
+  krwPerNpr: number;
+  usdPerNpr: number;
+  onChange: (id: string, patch: Partial<RealEstateRow>) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [urlDraft, setUrlDraft] = useState(() =>
+    row.propertyPhoto?.startsWith("https://") ? row.propertyPhoto : "",
+  );
+
+  const roiPct = reRoiPct(row.purchaseValue, row.estimatedValue);
+  const holding = reHoldingYrMo(row.acquiredDate);
+  const estNpr =
+    row.estimatedValue != null && row.estimatedValue > 0
+      ? amountToNpr(row.estimatedValue, row.currency, krwPerNpr, usdPerNpr)
+      : null;
+  const roiText = roiPct == null ? "—" : `${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(1)}%`;
+  const holdingText =
+    holding != null ? `${holding.years}y ${holding.months}m` : row.acquiredDate ? "—" : "Add acquired date";
+  const photo = row.propertyPhoto?.trim();
+
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const dataUrl = await compressImageFileToJpegDataUrl(f);
+    if (!dataUrl) {
+      toast.error("Could not use this image. Try a smaller JPG/PNG or paste an https image link.");
+      return;
+    }
+    onChange(row.id, { propertyPhoto: dataUrl });
+  };
+
+  const applyUrl = () => {
+    const t = urlDraft.trim();
+    if (!t) {
+      onChange(row.id, { propertyPhoto: undefined });
+      return;
+    }
+    if (!isSafeHttpsImageUrl(t)) {
+      toast.error("Enter a valid https:// image URL.");
+      return;
+    }
+    onChange(row.id, { propertyPhoto: t });
+  };
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-teal-400/20 bg-gradient-to-br from-black/40 via-teal-950/20 to-slate-950/40 p-3 ring-1 ring-white/[0.04] sm:flex-row sm:items-stretch sm:gap-4">
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-xl border border-teal-400/25 bg-gradient-to-br from-teal-900/40 to-slate-950 sm:aspect-auto sm:w-[38%] sm:min-h-[148px] sm:max-w-md">
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- user-provided https URLs + inline JPEG data URLs
+          <img
+            src={photo}
+            alt={row.name.trim() ? `${row.name.trim()} — cover` : "Property cover"}
+            className="h-full min-h-[9rem] w-full object-cover sm:min-h-[148px]"
+          />
+        ) : (
+          <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 p-4 text-center sm:min-h-[148px]">
+            <ImageIcon size={32} className="text-teal-300/40" />
+            <p className="text-[11px] font-bold text-emerald-200/50">No cover photo yet</p>
+          </div>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-teal-400/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-teal-100">
+            {realEstateTypeLabel(row.propertyType)}
+          </span>
+        </div>
+        <h3 className="truncate text-lg font-black tracking-tight text-emerald-50 sm:text-xl">
+          {row.name.trim() || "Untitled property"}
+        </h3>
+        <p className="text-xs font-semibold leading-relaxed text-emerald-200/70">
+          Est. value{" "}
+          <span className="font-black text-emerald-100">{formatReCcy(row.estimatedValue, row.currency)}</span>
+          {estNpr != null ? (
+            <span className="font-bold text-emerald-200/55"> · ≈ {formatMoney(estNpr, "NPR")}</span>
+          ) : null}
+          <span className="text-emerald-200/55"> · ROI </span>
+          <span
+            className={`font-black tabular-nums ${
+              roiPct != null && roiPct >= 0 ? "text-lime-200" : roiPct != null ? "text-rose-300" : "text-emerald-200/50"
+            }`}
+          >
+            {roiText}
+          </span>
+          <span className="text-emerald-200/55"> · Held </span>
+          <span className="font-black text-violet-200 tabular-nums">{holdingText}</span>
+        </p>
+        <div className="mt-auto flex flex-col gap-2 border-t border-teal-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-end">
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onFile} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full border border-teal-400/35 bg-teal-500/15 px-3 py-1.5 text-[11px] font-black text-teal-100 transition hover:bg-teal-500/25"
+          >
+            <Camera size={14} /> Upload
+          </button>
+          {photo ? (
+            <button
+              type="button"
+              onClick={() => {
+                setUrlDraft("");
+                onChange(row.id, { propertyPhoto: undefined });
+              }}
+              className="text-[11px] font-bold text-rose-300/80 hover:text-rose-200"
+            >
+              Remove photo
+            </button>
+          ) : null}
+          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:min-w-[12rem]">
+            <span className="text-[10px] font-bold uppercase text-emerald-200/45">Image URL (https)</span>
+            <div className="flex gap-1.5">
+              <input
+                value={urlDraft}
+                onChange={(e) => setUrlDraft(e.target.value)}
+                placeholder="https://…"
+                className="wealth-input-text min-w-0 flex-1 rounded-lg border border-teal-400/20 bg-black/35 px-2 py-1.5 text-[11px] font-semibold text-emerald-50"
+              />
+              <button
+                type="button"
+                onClick={applyUrl}
+                className="shrink-0 rounded-lg border border-teal-400/30 bg-teal-500/20 px-2 py-1.5 text-[11px] font-black text-teal-100 hover:bg-teal-500/30"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RealEstatePanel({
   rows,
   ledger,
@@ -323,6 +489,7 @@ export function RealEstatePanel({
   onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
+  const { totals, hydrated } = useWealthPortfolio();
   return (
     <section className="wealth-glass relative overflow-hidden rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_0%_0%,rgba(45,212,191,0.09),transparent_48%),radial-gradient(ellipse_at_100%_30%,rgba(20,184,166,0.07),transparent_52%)]" />
@@ -347,6 +514,9 @@ export function RealEstatePanel({
             <Plus size={14} /> Add
           </button>
         </div>
+        <div className="mb-3 min-w-0">
+          <RealEstatePortfolioSleeveChart totals={totals} hydrated={hydrated} />
+        </div>
         <div className="space-y-3">
           {rows.map((row) => {
             const costNpr =
@@ -365,13 +535,36 @@ export function RealEstatePanel({
                 : null;
             const holding = reHoldingYrMo(row.acquiredDate);
             const impliedAnnual = reImpliedAnnualGrowthPct(row.purchaseValue, row.estimatedValue, row.acquiredDate);
+            const missingAcquiredDate = !String(row.acquiredDate ?? "").trim();
             const aiInsightBundle = reAiWealthInsightsBundle(row);
             const roiTone =
               roiPct == null ? "text-emerald-200/50" : roiPct >= 0 ? "text-lime-300" : "text-rose-300";
             const roiText = roiPct == null ? "—" : `${roiPct >= 0 ? "+" : ""}${roiPct.toFixed(1)}%`;
             const profitText = profit == null ? "—" : formatReSignedCcy(profit, row.currency);
-            const impliedText = impliedAnnual == null ? "—" : `${impliedAnnual.toFixed(1)}%`;
-            const holdingText = holding == null ? "—" : `${holding.years}y ${holding.months}m`;
+            const impliedText =
+              impliedAnnual != null
+                ? `${impliedAnnual.toFixed(1)}%`
+                : missingAcquiredDate
+                  ? "Enter acquired date to calculate CAGR"
+                  : "—";
+            const impliedValueClass =
+              impliedAnnual != null
+                ? "text-amber-100"
+                : missingAcquiredDate
+                  ? "text-emerald-200/55 font-semibold"
+                  : "text-emerald-200/50";
+            const holdingText =
+              holding != null
+                ? `${holding.years}y ${holding.months}m`
+                : missingAcquiredDate
+                  ? "Add acquired date"
+                  : "—";
+            const holdingValueClass =
+              holding != null
+                ? "text-violet-100"
+                : missingAcquiredDate
+                  ? "text-emerald-200/55 font-semibold"
+                  : "text-emerald-200/50";
             const appreciationProjection = reAppreciationTargetProjection(row);
             const hasAnnualPct =
               typeof row.annualAppreciationEstimatePct === "number" &&
@@ -382,6 +575,13 @@ export function RealEstatePanel({
                 key={row.id}
                 className="wealth-row-card min-w-0 space-y-3 rounded-2xl border border-teal-400/15 bg-gradient-to-br from-teal-950/35 via-black/40 to-slate-950/50 p-2.5 shadow-lg shadow-black/35 ring-1 ring-white/[0.04] backdrop-blur-md sm:p-3"
               >
+                <RealEstatePropertyHero
+                  key={`${row.id}-${realEstatePhotoStateKey(row)}`}
+                  row={row}
+                  krwPerNpr={krwPerNpr}
+                  usdPerNpr={usdPerNpr}
+                  onChange={onChange}
+                />
                 <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
                   <label className="min-w-0 sm:col-span-1 lg:col-span-2">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
@@ -495,7 +695,7 @@ export function RealEstatePanel({
                     labelClassName="text-amber-200/65"
                     shellClassName="border-amber-400/20 bg-black/35 shadow-inner shadow-black/30"
                     valueText={impliedText}
-                    valueClassName="text-amber-100"
+                    valueClassName={impliedValueClass}
                     maxRem={1.6875}
                     minRem={0.4375}
                     footer={<p className="font-semibold text-emerald-200/45">From purchase → current & hold</p>}
@@ -505,7 +705,7 @@ export function RealEstatePanel({
                     labelClassName="text-violet-200/65"
                     shellClassName="border-violet-400/20 bg-black/35 shadow-inner shadow-black/30"
                     valueText={holdingText}
-                    valueClassName="text-violet-100"
+                    valueClassName={holdingValueClass}
                     maxRem={1.6875}
                     minRem={0.4375}
                     footer={<p className="font-semibold text-emerald-200/45">Since acquired date</p>}
