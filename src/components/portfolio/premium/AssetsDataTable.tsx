@@ -115,10 +115,13 @@ function useLivePortfolioRows(): PortfolioRow[] {
     for (const r of state.realEstate) {
       const npr = lineToNpr(r.estimatedValue, r.currency, krwPerNpr, usdPerNpr);
       const cost = lineToNpr(r.purchaseValue, r.currency, krwPerNpr, usdPerNpr);
-      if (npr <= 0 && !(r.name ?? "").trim()) continue;
+      const loc = (r.location ?? "").trim();
+      const label = (r.name ?? "").trim();
+      if (npr <= 0 && !label && !loc) continue;
+      const displayName = [label || "Property", loc].filter(Boolean).join(" · ");
       out.push({
         id: r.id,
-        name: (r.name ?? "").trim() || "Property",
+        name: displayName,
         type: "Real Estate",
         category: "Real estate",
         purchaseNpr: cost,

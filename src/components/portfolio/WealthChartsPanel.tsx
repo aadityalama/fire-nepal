@@ -406,7 +406,7 @@ export function WealthChartsPanel({
       forward,
       impliedLine,
       targetY: targetProj?.targetFutureValue != null ? amountToNpr(targetProj.targetFutureValue, reShowcase.currency, krwPerNpr, usdPerNpr) : null,
-      name: reShowcase.name || reShowcase.propertyType,
+      name: [reShowcase.name, reShowcase.location?.trim()].filter(Boolean).join(" · ") || reShowcase.propertyType,
       rPct,
     };
   }, [reShowcase, krwPerNpr, usdPerNpr]);

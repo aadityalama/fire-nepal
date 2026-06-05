@@ -345,6 +345,15 @@ function sanitizeIdField(raw: unknown, maxLen: number): string | undefined {
   return t.length ? t : undefined;
 }
 
+const MAX_RE_LOCATION_LEN = 200;
+
+/** Free-text property location for display; normalized whitespace, length-capped. */
+function sanitizeLocationField(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.replace(/\s+/g, " ").trim().slice(0, MAX_RE_LOCATION_LEN);
+  return t.length ? t : undefined;
+}
+
 function sanitizeGlobalRetirementRow(r: unknown): GlobalRetirementAssetRow {
   const o = (r && typeof r === "object" ? r : {}) as Partial<GlobalRetirementAssetRow>;
   const cur = o.currency === "NPR" || o.currency === "KRW" || o.currency === "USD" ? o.currency : "NPR";
@@ -448,6 +457,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       ...row,
       acquiredDate: sanitizeIsoDate(row.acquiredDate),
       annualAppreciationEstimatePct,
+      location: sanitizeLocationField(row.location),
       propertyPhoto: sanitizePropertyPhotoRef(row.propertyPhoto),
     };
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Camera, ImageIcon, Plus, Target, Trash2 } from "lucide-react";
+import { Building2, Camera, ImageIcon, MapPin, Plus, Target, Trash2 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
@@ -345,6 +345,7 @@ function RealEstatePropertyHero({
   const holdingText =
     holding != null ? `${holding.years}y ${holding.months}m` : row.acquiredDate ? "—" : "Add acquired date";
   const photo = row.propertyPhoto?.trim();
+  const locationStr = row.location?.trim() ?? "";
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -385,6 +386,15 @@ function RealEstatePropertyHero({
           {row.name.trim() || "Untitled property"}
         </h3>
         <p className="text-xs font-semibold leading-relaxed text-emerald-200/70">
+          {locationStr ? (
+            <>
+              <span className="inline-flex max-w-full items-start gap-1 align-middle font-bold text-teal-100/95">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400/85" aria-hidden />
+                <span className="min-w-0 break-words">{locationStr}</span>
+              </span>
+              <span className="text-emerald-200/50"> · </span>
+            </>
+          ) : null}
           Est. value{" "}
           <span className="font-black text-emerald-100">{formatReCcy(row.estimatedValue, row.currency)}</span>
           {estNpr != null ? (
@@ -562,11 +572,25 @@ export function RealEstatePanel({
                       type="text"
                       value={row.name}
                       onChange={(e) => onChange(row.id, { name: e.target.value })}
-                      placeholder="Location / unit"
+                      placeholder="Property name"
                       className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
                     />
                   </label>
-                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-3">
+                  <label className="min-w-0 sm:col-span-2 lg:col-span-2">
+                    <span className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                      <MapPin className="h-3 w-3 shrink-0 text-teal-400/80" aria-hidden />
+                      Location
+                    </span>
+                    <input
+                      type="text"
+                      value={row.location ?? ""}
+                      onChange={(e) => onChange(row.id, { location: e.target.value })}
+                      placeholder="e.g. Budhanilkantha, Kathmandu"
+                      autoComplete="street-address"
+                      className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
+                    />
+                  </label>
+                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-2">
                     <NumericMoneyInput tone="dark"
                       label="Purchase value"
                       value={row.purchaseValue}
@@ -580,7 +604,7 @@ export function RealEstatePanel({
                       inputClassName="min-w-0 bg-transparent text-xs font-bold text-emerald-50 outline-none sm:text-sm"
                     />
                   </div>
-                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-3">
+                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-2">
                     <NumericMoneyInput tone="dark"
                       label="Est. current value"
                       value={row.estimatedValue}

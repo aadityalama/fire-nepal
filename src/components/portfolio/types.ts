@@ -91,6 +91,11 @@ export type RealEstateRow = {
   id: string;
   propertyType: RealEstateKind;
   name: string;
+  /**
+   * Human-readable place (ward/district, city, country), e.g. "Budhanilkantha, Kathmandu" or "Jeonju, South Korea".
+   * Display / planning only — does not affect valuations.
+   */
+  location?: string;
   purchaseValue: number | undefined;
   estimatedValue: number | undefined;
   currency: PortfolioDisplayCurrency;

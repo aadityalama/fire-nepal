@@ -119,7 +119,7 @@ export function recordInvestmentSell(
   const idx = state.investments.findIndex((r) => r.id === rowId);
   if (idx < 0) return null;
   const row = state.investments[idx];
-  let lots = cloneLots(row);
+  const lots = cloneLots(row);
   const totalAvail = lots.reduce((a, l) => a + l.quantity, 0);
   if (input.quantity > totalAvail + 1e-9) return null;
 
@@ -202,7 +202,7 @@ export function recordInvestmentBuy(
   state: WealthPortfolioStateV2,
   rowId: string,
   input: InvestmentTradePayload,
-  fx: LedgerFx,
+  _fx: LedgerFx,
 ): WealthPortfolioStateV2 | null {
   if (!isoOk(input.tradeDate)) return null;
   if (input.quantity <= 0 || !Number.isFinite(input.quantity)) return null;
@@ -221,7 +221,7 @@ export function recordInvestmentBuy(
     fees: input.fees,
   };
 
-  let lots = cloneLots(row);
+  const lots = cloneLots(row);
   lots.push(newLot);
   const newQty = lots.reduce((a, l) => a + l.quantity, 0);
   const newBuy = weightedUnitCost(lots);
@@ -289,7 +289,7 @@ export function recordInvestmentBonusShare(
     openedAt: input.tradeDate,
   };
 
-  let lots = cloneLots(row);
+  const lots = cloneLots(row);
   lots.push(newLot);
   const newQty = lots.reduce((a, l) => a + l.quantity, 0);
   const newBuy = weightedUnitCost(lots);
@@ -567,7 +567,7 @@ export function recordRealEstateBuyProperty(
     txType: "buy",
     bucket: "real_estate",
     rowId,
-    assetLabel: row.name || row.propertyType,
+    assetLabel: [row.name, row.location?.trim()].filter(Boolean).join(" · ") || row.propertyType,
     ledgerAction: "Buy property",
     quantity: add,
     unitPrice: 1,
@@ -606,7 +606,7 @@ export function recordRealEstateSellProperty(
     txType: "sell",
     bucket: "real_estate",
     rowId,
-    assetLabel: row.name || row.propertyType,
+    assetLabel: [row.name, row.location?.trim()].filter(Boolean).join(" · ") || row.propertyType,
     ledgerAction: "Sell property",
     quantity: sub,
     unitPrice: 1,
