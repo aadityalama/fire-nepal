@@ -28,7 +28,7 @@ import {
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { RealEstatePortfolioSleeveChart } from "@/components/portfolio/RealEstatePortfolioSleeveChart";
-import { compressImageFileToJpegDataUrl, isSafeHttpsImageUrl } from "@/components/portfolio/real-estate-photo-utils";
+import { compressImageFileToJpegDataUrl } from "@/components/portfolio/real-estate-photo-utils";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { amountToNpr } from "@/lib/portfolio-convert";
 import { formatMoney } from "@/lib/expense-utils";
@@ -322,14 +322,6 @@ function realEstateTypeLabel(kind: RealEstateKind): string {
   return TYPES.find((t) => t.value === kind)?.label ?? kind;
 }
 
-/** Remount hero when `propertyPhoto` changes so URL draft state stays in sync (no effect setState). */
-function realEstatePhotoStateKey(row: RealEstateRow): string {
-  const p = row.propertyPhoto;
-  if (!p) return "none";
-  const kind = p.startsWith("https://") ? "h" : p.startsWith("data:") ? "d" : "o";
-  return `${kind}-${p.length}`;
-}
-
 function RealEstatePropertyHero({
   row,
   krwPerNpr,
@@ -342,9 +334,6 @@ function RealEstatePropertyHero({
   onChange: (id: string, patch: Partial<RealEstateRow>) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [urlDraft, setUrlDraft] = useState(() =>
-    row.propertyPhoto?.startsWith("https://") ? row.propertyPhoto : "",
-  );
 
   const roiPct = reRoiPct(row.purchaseValue, row.estimatedValue);
   const holding = reHoldingYrMo(row.acquiredDate);
@@ -363,23 +352,10 @@ function RealEstatePropertyHero({
     if (!f) return;
     const dataUrl = await compressImageFileToJpegDataUrl(f);
     if (!dataUrl) {
-      toast.error("Could not use this image. Try a smaller JPG/PNG or paste an https image link.");
+      toast.error("Could not use this image. Try a smaller JPG or PNG.");
       return;
     }
     onChange(row.id, { propertyPhoto: dataUrl });
-  };
-
-  const applyUrl = () => {
-    const t = urlDraft.trim();
-    if (!t) {
-      onChange(row.id, { propertyPhoto: undefined });
-      return;
-    }
-    if (!isSafeHttpsImageUrl(t)) {
-      toast.error("Enter a valid https:// image URL.");
-      return;
-    }
-    onChange(row.id, { propertyPhoto: t });
   };
 
   return (
@@ -425,7 +401,7 @@ function RealEstatePropertyHero({
           <span className="text-emerald-200/55"> · Held </span>
           <span className="font-black text-violet-200 tabular-nums">{holdingText}</span>
         </p>
-        <div className="mt-auto flex flex-col gap-2 border-t border-teal-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="mt-auto flex flex-col gap-2 border-t border-teal-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onFile} />
           <button
             type="button"
@@ -437,33 +413,12 @@ function RealEstatePropertyHero({
           {photo ? (
             <button
               type="button"
-              onClick={() => {
-                setUrlDraft("");
-                onChange(row.id, { propertyPhoto: undefined });
-              }}
+              onClick={() => onChange(row.id, { propertyPhoto: undefined })}
               className="text-[11px] font-bold text-rose-300/80 hover:text-rose-200"
             >
               Remove photo
             </button>
           ) : null}
-          <div className="flex min-w-0 flex-1 flex-col gap-1 sm:min-w-[12rem]">
-            <span className="text-[10px] font-bold uppercase text-emerald-200/45">Image URL (https)</span>
-            <div className="flex gap-1.5">
-              <input
-                value={urlDraft}
-                onChange={(e) => setUrlDraft(e.target.value)}
-                placeholder="https://…"
-                className="wealth-input-text min-w-0 flex-1 rounded-lg border border-teal-400/20 bg-black/35 px-2 py-1.5 text-[11px] font-semibold text-emerald-50"
-              />
-              <button
-                type="button"
-                onClick={applyUrl}
-                className="shrink-0 rounded-lg border border-teal-400/30 bg-teal-500/20 px-2 py-1.5 text-[11px] font-black text-teal-100 hover:bg-teal-500/30"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -576,7 +531,7 @@ export function RealEstatePanel({
                 className="wealth-row-card min-w-0 space-y-3 rounded-2xl border border-teal-400/15 bg-gradient-to-br from-teal-950/35 via-black/40 to-slate-950/50 p-2.5 shadow-lg shadow-black/35 ring-1 ring-white/[0.04] backdrop-blur-md sm:p-3"
               >
                 <RealEstatePropertyHero
-                  key={`${row.id}-${realEstatePhotoStateKey(row)}`}
+                  key={row.id}
                   row={row}
                   krwPerNpr={krwPerNpr}
                   usdPerNpr={usdPerNpr}
