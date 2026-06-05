@@ -96,6 +96,8 @@ export type RealEstateRow = {
    * Display / planning only — does not affect valuations.
    */
   location?: string;
+  /** Optional Google Maps link (https only; validated when persisting). Display only. */
+  mapsUrl?: string;
   purchaseValue: number | undefined;
   estimatedValue: number | undefined;
   currency: PortfolioDisplayCurrency;

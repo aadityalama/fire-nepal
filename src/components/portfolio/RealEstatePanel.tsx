@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Camera, ImageIcon, MapPin, Plus, Target, Trash2 } from "lucide-react";
+import { Building2, Camera, ExternalLink, ImageIcon, MapPin, Plus, Target, Trash2 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
@@ -28,6 +28,7 @@ import {
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { RealEstatePortfolioSleeveChart } from "@/components/portfolio/RealEstatePortfolioSleeveChart";
+import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { compressImageFileToJpegDataUrl } from "@/components/portfolio/real-estate-photo-utils";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { amountToNpr } from "@/lib/portfolio-convert";
@@ -346,6 +347,8 @@ function RealEstatePropertyHero({
     holding != null ? `${holding.years}y ${holding.months}m` : row.acquiredDate ? "—" : "Add acquired date";
   const photo = row.propertyPhoto?.trim();
   const locationStr = row.location?.trim() ?? "";
+  const safeMapsUrl = sanitizeGoogleMapsUrl(row.mapsUrl);
+  const mapsHeroLabel = locationStr || row.name.trim() || "Pinned place";
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -385,8 +388,27 @@ function RealEstatePropertyHero({
         <h3 className="truncate text-lg font-black tracking-tight text-emerald-50 sm:text-xl">
           {row.name.trim() || "Untitled property"}
         </h3>
+        {safeMapsUrl ? (
+          <div className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-teal-400/25 bg-gradient-to-r from-teal-950/40 via-black/30 to-slate-950/35 px-3 py-2.5 shadow-inner ring-1 ring-teal-400/10 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-2.5">
+            <p className="min-w-0 text-sm font-bold leading-snug text-teal-50 sm:text-[0.9375rem]">
+              <span aria-hidden="true" className="mr-1.5 inline-block shrink-0">
+                📍
+              </span>
+              <span className="break-words">{mapsHeroLabel}</span>
+            </p>
+            <a
+              href={safeMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 self-start rounded-full border border-cyan-400/40 bg-cyan-500/15 px-4 py-2 text-[11px] font-black uppercase tracking-wide text-cyan-50 shadow-sm transition hover:border-cyan-300/55 hover:bg-cyan-500/25 sm:min-h-0 sm:self-auto sm:py-1.5 sm:text-xs"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+              Open in Google Maps
+            </a>
+          </div>
+        ) : null}
         <p className="text-xs font-semibold leading-relaxed text-emerald-200/70">
-          {locationStr ? (
+          {!safeMapsUrl && locationStr ? (
             <>
               <span className="inline-flex max-w-full items-start gap-1 align-middle font-bold text-teal-100/95">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400/85" aria-hidden />
@@ -639,6 +661,26 @@ export function RealEstatePanel({
                     </button>
                   </div>
                 </div>
+
+                <label className="mt-0.5 block min-w-0">
+                  <span className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                    <ExternalLink className="h-3 w-3 shrink-0 text-teal-400/75" aria-hidden />
+                    Google Maps link
+                  </span>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={row.mapsUrl ?? ""}
+                    onChange={(e) => onChange(row.id, { mapsUrl: e.target.value })}
+                    placeholder="https://maps.google.com/… or https://www.google.com/maps/…"
+                    className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
+                  />
+                  <p className="mt-1 text-[10px] font-medium leading-snug text-emerald-200/45">
+                    Saved only if it is a valid https Google Maps URL (opens in a new tab from the hero).
+                  </p>
+                </label>
 
                 <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-4 lg:items-stretch lg:gap-2.5">
                   <ReMetricKpiCard
