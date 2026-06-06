@@ -19,9 +19,12 @@ function stopDragEvent(e: DragEvent) {
 export function MetalHoldingPhotos({
   row,
   onPatch,
+  uploadEnabled = true,
 }: {
   row: MetalRow;
   onPatch: (patch: Partial<MetalRow>) => void;
+  /** When false, gallery is view/manage only (upload via BUY transaction). */
+  uploadEnabled?: boolean;
 }) {
   const inputId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -131,58 +134,72 @@ export function MetalHoldingPhotos({
 
         <div
           className={`flex min-w-0 flex-1 flex-col justify-center rounded-xl border border-dashed px-3 py-3 transition sm:min-h-[7.5rem] ${
-            dragOver ? "border-emerald-400/60 bg-emerald-500/10" : "border-emerald-400/25 bg-black/20"
+            uploadEnabled
+              ? dragOver
+                ? "border-emerald-400/60 bg-emerald-500/10"
+                : "border-emerald-400/25 bg-black/20"
+              : "border-emerald-400/15 bg-black/15"
           }`}
           onDragEnter={(e) => {
+            if (!uploadEnabled) return;
             stopDragEvent(e);
             dragDepth.current += 1;
             setDragOver(true);
           }}
           onDragLeave={(e) => {
+            if (!uploadEnabled) return;
             stopDragEvent(e);
             dragDepth.current = Math.max(0, dragDepth.current - 1);
             if (dragDepth.current === 0) setDragOver(false);
           }}
-          onDragOver={stopDragEvent}
-          onDrop={(e) => {
-            stopDragEvent(e);
-            dragDepth.current = 0;
-            setDragOver(false);
-            const dt = e.dataTransfer?.files;
-            if (dt?.length) void appendImages(Array.from(dt));
-          }}
+          onDragOver={uploadEnabled ? stopDragEvent : undefined}
+          onDrop={
+            uploadEnabled
+              ? (e) => {
+                  stopDragEvent(e);
+                  dragDepth.current = 0;
+                  setDragOver(false);
+                  const dt = e.dataTransfer?.files;
+                  if (dt?.length) void appendImages(Array.from(dt));
+                }
+              : undefined
+          }
         >
           <p className="text-[11px] font-bold leading-snug text-emerald-200/75">
-            Jewelry, bars, coins, or purchase invoices — stored on this holding (syncs with your portfolio backup).
+            {uploadEnabled
+              ? "Jewelry, bars, coins, or purchase invoices — stored on this holding (syncs with your portfolio backup)."
+              : "Photos on this holding (add more when you record a BUY)."}
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input
-              ref={fileRef}
-              id={inputId}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              multiple
-              className="sr-only"
-              onChange={onFileChange}
-            />
-            <label
-              htmlFor={inputId}
-              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/25 sm:min-h-0 sm:py-1.5"
-            >
-              <Camera size={14} aria-hidden />
-              Upload
-            </label>
-            <button
-              type="button"
-              className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-emerald-400/25 px-3 py-2 text-[11px] font-bold text-emerald-200/90 transition hover:bg-emerald-500/10 sm:min-h-0 sm:py-1.5"
-              onClick={() => fileRef.current?.click()}
-            >
-              Choose files
-            </button>
-            <span className="text-[10px] font-semibold text-emerald-200/45">
-              or drag & drop here · max {METAL_PHOTO_MAX_COUNT}
-            </span>
-          </div>
+          {uploadEnabled ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                ref={fileRef}
+                id={inputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="sr-only"
+                onChange={onFileChange}
+              />
+              <label
+                htmlFor={inputId}
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/25 sm:min-h-0 sm:py-1.5"
+              >
+                <Camera size={14} aria-hidden />
+                Upload
+              </label>
+              <button
+                type="button"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-emerald-400/25 px-3 py-2 text-[11px] font-bold text-emerald-200/90 transition hover:bg-emerald-500/10 sm:min-h-0 sm:py-1.5"
+                onClick={() => fileRef.current?.click()}
+              >
+                Choose files
+              </button>
+              <span className="text-[10px] font-semibold text-emerald-200/45">
+                or drag & drop here · max {METAL_PHOTO_MAX_COUNT}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 

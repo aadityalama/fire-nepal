@@ -18,6 +18,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
+import { deriveMetalTotalCostBasisNprPatch } from "@/components/portfolio/metal-buy-basis";
 import { sanitizeMetalPhotoGallery } from "@/components/portfolio/metal-photo-utils";
 import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
@@ -456,7 +457,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
         : undefined;
     const metalBuyPriceUnitFinal = metalBuyPriceAmount != null ? metalBuyPriceUnit : undefined;
     const { photoUrls, coverPhotoIndex } = sanitizeMetalPhotoGallery(m.photoUrls, m.coverPhotoIndex);
-    return {
+    let row: MetalRow = {
       ...r,
       boughtDate: sanitizeIsoDate(m.boughtDate),
       totalCostBasisNpr,
@@ -464,6 +465,13 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       metalBuyPriceUnit: metalBuyPriceUnitFinal,
       ...(photoUrls && photoUrls.length > 0 ? { photoUrls, coverPhotoIndex } : { photoUrls: undefined, coverPhotoIndex: undefined }),
     };
+    if (row.totalCostBasisNpr == null) {
+      const inferred = deriveMetalTotalCostBasisNprPatch(row);
+      if ("totalCostBasisNpr" in inferred && inferred.totalCostBasisNpr != null) {
+        row = { ...row, totalCostBasisNpr: inferred.totalCostBasisNpr };
+      }
+    }
+    return row;
   });
   const reRaw = Array.isArray(parsed.realEstate) ? parsed.realEstate : d.realEstate;
   const realEstate = reRaw.map((r) => {

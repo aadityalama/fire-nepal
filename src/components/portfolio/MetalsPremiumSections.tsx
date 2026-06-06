@@ -16,7 +16,7 @@ import {
   weightedBasisCostPerGram,
   type MetalRatePair,
 } from "@/components/portfolio/metals-premium-metrics";
-import type { MetalRow } from "@/components/portfolio/types";
+import type { MetalRow, PortfolioLedgerEntry } from "@/components/portfolio/types";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { formatMoney } from "@/lib/expense-utils";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
@@ -110,14 +110,14 @@ function metalInsightBlock(opts: {
         </div>
       </dl>
       {!hasBasisLots ? (
-        <p className="mt-2 text-[10px] font-semibold text-emerald-200/45">Add cost basis on holdings to unlock averages.</p>
+        <p className="mt-2 text-[10px] font-semibold text-emerald-200/45">Record BUY transactions with price to unlock averages.</p>
       ) : null}
     </div>
   );
 }
 
 function holdingFooter(days: number | null) {
-  if (days == null) return <p className="font-semibold text-emerald-200/40">Set bought dates on holdings</p>;
+  if (days == null) return <p className="font-semibold text-emerald-200/40">Record BUY transactions with dates to anchor holding time</p>;
   return (
     <p className="font-semibold text-emerald-200/50">
       {days.toLocaleString()} calendar day{days === 1 ? "" : "s"}
@@ -198,15 +198,17 @@ export function MetalsPremiumDashboard({
   rows,
   gramRates,
   totals,
+  ledger = [],
 }: {
   rows: readonly MetalRow[];
   gramRates: MetalRatePair;
   totals: WealthTotals;
+  ledger?: readonly PortfolioLedgerEntry[];
 }) {
   const all = rollupAllMetals(rows, gramRates);
   const gold = rollupMetalBucket(rows, "gold", gramRates);
   const silver = rollupMetalBucket(rows, "silver", gramRates);
-  const days = metalHoldingCalendarDays(rows);
+  const days = metalHoldingCalendarDays(rows, ledger);
   const purchase = all.basisSumNpr;
   const current = all.currentNpr;
   const netPl = purchase > 0 ? current - purchase : null;
@@ -276,7 +278,9 @@ export function MetalsPremiumDashboard({
           </div>
           <div>
             <h3 className="text-xs font-black uppercase tracking-[0.1em] text-emerald-50 sm:text-sm">Premium wealth KPIs</h3>
-            <p className="text-[10px] font-bold text-emerald-200/55 sm:text-[11px]">Cost basis, marks, return, and holding — aligned with row-level marks.</p>
+            <p className="text-[10px] font-bold text-emerald-200/55 sm:text-[11px]">
+              Cost basis from BUY transactions, live marks, return, and holding duration.
+            </p>
           </div>
         </div>
         <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
@@ -288,7 +292,7 @@ export function MetalsPremiumDashboard({
             valueClassName="text-emerald-50"
             maxRem={1.5}
             minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Sum of entered basis</p>}
+            footer={<p className="font-semibold text-emerald-200/45">From BUY transactions (cost basis)</p>}
           />
           <MetalPremiumKpiCard
             label="Current market value"

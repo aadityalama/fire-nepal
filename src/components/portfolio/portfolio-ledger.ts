@@ -7,7 +7,9 @@ import type {
   PortfolioLedgerEntry,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
+import { METAL_PHOTO_MAX_COUNT } from "@/components/portfolio/metal-photo-utils";
 import type { PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
+import { NEPAL_UI_GRAMS_PER_TOLA } from "@/lib/portfolio/nepal-metal-ui-convert";
 
 function ledgerNewId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
@@ -60,10 +62,13 @@ export type CashflowPayload = {
 export type MetalBuyPayload = {
   grams: number;
   tradeDate: string;
-  /** Optional NPR basis added for this purchase (for realized P/L on future sells). */
-  basisNprAdded?: number;
+  /** NPR per gram or per UI tola (11.66 g), per `buyPriceUnit`. */
+  buyPriceNpr: number;
+  buyPriceUnit: "gram" | "tola";
   feesNpr?: number;
   notes?: string;
+  /** Optional new photos (data URLs) merged into the holding gallery (capped server-side in UI). */
+  photoUrlsToAppend?: string[];
 };
 
 function isoOk(s: string): boolean {
@@ -364,6 +369,25 @@ export function recordInvestmentCashDividend(
   return appendEntry(state, entry);
 }
 
+function syncMetalLegacyBuyPriceFields(row: MetalRow): MetalRow {
+  const g = row.grams ?? 0;
+  const b = row.totalCostBasisNpr;
+  if (g > 1e-9 && typeof b === "number" && b > 0) {
+    return {
+      ...row,
+      metalBuyPriceAmount: Math.round((b / g) * 1e6) / 1e6,
+      metalBuyPriceUnit: "gram",
+    };
+  }
+  return { ...row, metalBuyPriceAmount: undefined, metalBuyPriceUnit: undefined };
+}
+
+function minPurchaseIso(a: string | undefined, b: string): string | undefined {
+  if (!isoOk(b)) return a;
+  if (!a || !isoOk(a)) return b;
+  return a <= b ? a : b;
+}
+
 export function recordMetalSell(
   state: WealthPortfolioStateV2,
   rowId: string,
@@ -414,11 +438,11 @@ export function recordMetalSell(
     meta: { fifoVersion: 1, proceedsNpr, costNpr, feesNpr, unit: "grams" },
   };
 
-  const updatedRow: MetalRow = {
+  const updatedRow: MetalRow = syncMetalLegacyBuyPriceFields({
     ...row,
     grams: newGrams > 0 ? newGrams : 0,
     totalCostBasisNpr: newBasis,
-  };
+  });
 
   const metals = [...state.metals];
   metals[idx] = updatedRow;
@@ -432,15 +456,20 @@ export function recordMetalBuy(
 ): WealthPortfolioStateV2 | null {
   if (!isoOk(input.tradeDate)) return null;
   if (input.grams <= 0 || !Number.isFinite(input.grams)) return null;
+  if (input.buyPriceNpr <= 0 || !Number.isFinite(input.buyPriceNpr)) return null;
 
   const idx = state.metals.findIndex((r) => r.id === rowId);
   if (idx < 0) return null;
   const row = state.metals[idx];
   const g0 = row.grams ?? 0;
   const newGrams = g0 + input.grams;
-  const addBasis = input.basisNprAdded ?? 0;
-  const newBasis =
-    addBasis > 0 ? (row.totalCostBasisNpr ?? 0) + addBasis : row.totalCostBasisNpr;
+  const nprPerGram =
+    input.buyPriceUnit === "tola" ? input.buyPriceNpr / NEPAL_UI_GRAMS_PER_TOLA : input.buyPriceNpr;
+  if (!Number.isFinite(nprPerGram) || nprPerGram < 0) return null;
+  const feesNpr = input.feesNpr ?? 0;
+  const addBasis = input.grams * nprPerGram + feesNpr;
+  const newBasisRaw = (row.totalCostBasisNpr ?? 0) + addBasis;
+  const newBasis = newBasisRaw > 0 ? Math.round(newBasisRaw * 100) / 100 : undefined;
 
   const entry: PortfolioLedgerEntry = {
     id: ledgerNewId(),
@@ -451,20 +480,41 @@ export function recordMetalBuy(
     ledgerAction: "Buy",
     metal: row.metal,
     quantity: input.grams,
-    unitPrice: input.basisNprAdded != null && input.grams > 0 ? addBasis / input.grams : 0,
+    unitPrice: nprPerGram,
     currency: "NPR",
     tradeDate: input.tradeDate,
     fees: input.feesNpr,
     notes: input.notes?.trim() || undefined,
     realizedGainNpr: null,
-    meta: { fifoVersion: 1, basisNprAdded: addBasis, unit: "grams" },
+    meta: {
+      fifoVersion: 1,
+      basisNprAdded: addBasis,
+      unit: "grams",
+      buyPriceUnit: input.buyPriceUnit,
+      metalBuyPriceNpr: input.buyPriceNpr,
+    },
   };
 
-  const updatedRow: MetalRow = {
+  let photoUrls = row.photoUrls;
+  let coverPhotoIndex = row.coverPhotoIndex;
+  const append = input.photoUrlsToAppend?.filter(Boolean) ?? [];
+  if (append.length > 0) {
+    const base = photoUrls ?? [];
+    const room = Math.max(0, METAL_PHOTO_MAX_COUNT - base.length);
+    const slice = append.slice(0, room);
+    const merged = [...base, ...slice];
+    photoUrls = merged.length > 0 ? merged : undefined;
+    coverPhotoIndex = photoUrls && photoUrls.length > 0 ? Math.min(row.coverPhotoIndex ?? 0, photoUrls.length - 1) : undefined;
+  }
+
+  const updatedRow: MetalRow = syncMetalLegacyBuyPriceFields({
     ...row,
     grams: newGrams,
-    totalCostBasisNpr: newBasis && newBasis > 0 ? newBasis : undefined,
-  };
+    totalCostBasisNpr: newBasis,
+    boughtDate: minPurchaseIso(row.boughtDate, input.tradeDate),
+    photoUrls,
+    coverPhotoIndex,
+  });
 
   const metals = [...state.metals];
   metals[idx] = updatedRow;

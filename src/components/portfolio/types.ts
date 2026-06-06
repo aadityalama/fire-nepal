@@ -85,9 +85,9 @@ export type MetalRow = {
   boughtDate?: string;
   /** Total NPR cost basis for held grams (optional; enables realized P/L on sells). */
   totalCostBasisNpr?: number;
-  /** NPR buy price per gram or per UI tola — with `grams`, drives `totalCostBasisNpr` when set. */
+  /** @deprecated Synced from cost basis ÷ grams after trades; prefer `totalCostBasisNpr` + ledger. */
   metalBuyPriceAmount?: number;
-  /** Whether `metalBuyPriceAmount` is NPR per gram or per UI tola (11.66 g). */
+  /** @deprecated Synced with `metalBuyPriceAmount`; UI uses transactions only. */
   metalBuyPriceUnit?: "gram" | "tola";
   /**
    * Optional photos (jewelry, bars, invoices): inline JPEG data URLs or safe `https` image URLs.

@@ -1,5 +1,5 @@
-import type { MetalRow } from "@/components/portfolio/types";
-import { calendarDaysInvested, parsePurchaseIso } from "@/components/portfolio/holding-stats";
+import type { MetalRow, PortfolioLedgerEntry } from "@/components/portfolio/types";
+import { calendarDaysInvested, isValidPurchaseIso, parsePurchaseIso } from "@/components/portfolio/holding-stats";
 
 export type MetalRatePair = { goldNprPerGram: number; silverNprPerGram: number };
 
@@ -67,6 +67,34 @@ export function rollupAllMetals(rows: readonly MetalRow[], rates: MetalRatePair)
   };
 }
 
+/** Earliest buy / acquisition anchor for a single holding (row date or metal ledger buys). */
+export function metalRowFirstBuyIso(row: MetalRow, ledger: readonly PortfolioLedgerEntry[]): string | undefined {
+  const dates: string[] = [];
+  if (row.boughtDate && isValidPurchaseIso(row.boughtDate)) dates.push(row.boughtDate);
+  for (const e of ledger) {
+    if (e.bucket !== "metal" || e.rowId !== row.id || e.txType !== "buy") continue;
+    if (typeof e.tradeDate === "string" && isValidPurchaseIso(e.tradeDate)) dates.push(e.tradeDate);
+  }
+  if (dates.length === 0) return undefined;
+  return dates.sort()[0];
+}
+
+/** Oldest acquisition date among metal rows that still hold weight (uses ledger when provided). */
+export function oldestMetalAnchorDate(
+  rows: readonly MetalRow[],
+  ledger?: readonly PortfolioLedgerEntry[],
+): Date | null {
+  let best: Date | null = null;
+  for (const r of rows) {
+    if ((r.grams ?? 0) <= 0) continue;
+    const iso = ledger && ledger.length > 0 ? metalRowFirstBuyIso(r, ledger) : r.boughtDate;
+    const d = parsePurchaseIso(iso);
+    if (!d) continue;
+    if (!best || d.getTime() < best.getTime()) best = d;
+  }
+  return best;
+}
+
 /** Oldest valid `boughtDate` among rows with grams > 0 (any metal). */
 export function oldestMetalBoughtDate(rows: readonly MetalRow[]): Date | null {
   let best: Date | null = null;
@@ -80,8 +108,12 @@ export function oldestMetalBoughtDate(rows: readonly MetalRow[]): Date | null {
   return best;
 }
 
-export function metalHoldingCalendarDays(rows: readonly MetalRow[]): number | null {
-  const start = oldestMetalBoughtDate(rows);
+export function metalHoldingCalendarDays(
+  rows: readonly MetalRow[],
+  ledger?: readonly PortfolioLedgerEntry[],
+): number | null {
+  const start =
+    ledger && ledger.length > 0 ? oldestMetalAnchorDate(rows, ledger) : oldestMetalBoughtDate(rows);
   if (!start) return null;
   return calendarDaysInvested(start, new Date());
 }

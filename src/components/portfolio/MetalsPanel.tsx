@@ -1,22 +1,20 @@
 "use client";
 
 import { Gem, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
 } from "@/components/portfolio/calculations";
-import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
-import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
 import { MetalHoldingPhotos } from "@/components/portfolio/MetalHoldingPhotos";
 import {
-  convertMetalBuyPriceAmountForUnitChange,
-  deriveMetalTotalCostBasisNprPatch,
-  metalBuyPriceNprPerGram,
-} from "@/components/portfolio/metal-buy-basis";
-import { MetalGramTolaFields, MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
+  compressMetalImageFile,
+  METAL_PHOTO_MAX_COUNT,
+} from "@/components/portfolio/metal-photo-utils";
+import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
+import { metalRowFirstBuyIso } from "@/components/portfolio/metals-premium-metrics";
 import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
@@ -27,6 +25,8 @@ import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/c
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
 import { NEPAL_METAL_TOLA_GRAMS } from "@/lib/market/bullion-estimate";
+import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
+import { toast } from "sonner";
 
 function todayIso() {
   return portfolioTxnTodayIso();
@@ -46,13 +46,18 @@ function MetalTradeStrip({
 }) {
   const [open, setOpen] = useState(false);
   const [segmentId, setSegmentId] = useState<string>("sell");
-  const [gramsStr, setGramsStr] = useState("");
-  const [pxStr, setPxStr] = useState("");
-  const [basisStr, setBasisStr] = useState("");
+  const [qtyStr, setQtyStr] = useState("");
+  const [qtyUnit, setQtyUnit] = useState<"gram" | "tola">("gram");
+  const [buyPriceStr, setBuyPriceStr] = useState("");
+  const [buyPriceUnit, setBuyPriceUnit] = useState<"gram" | "tola">("gram");
+  const [sellPriceStr, setSellPriceStr] = useState("");
+  const [sellPriceUnit, setSellPriceUnit] = useState<"gram" | "tola">("gram");
   const [feesStr, setFeesStr] = useState("");
   const [notes, setNotes] = useState("");
   const [tradeDate, setTradeDate] = useState(todayIso);
   const [err, setErr] = useState<string | null>(null);
+  const buyPhotoInputId = useId();
+  const buyPhotoRef = useRef<HTMLInputElement>(null);
 
   const held = row.grams ?? 0;
   const basis = row.totalCostBasisNpr;
@@ -66,15 +71,41 @@ function MetalTradeStrip({
     });
   }, [open, segmentId, row.id]);
 
-  const submit = () => {
+  const parseQtyGrams = (): number | null => {
+    const raw = qtyStr.replace(/,/g, "").trim();
+    if (raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (qtyUnit === "gram") return n;
+    return Number(tolaUiToGrams(n).toFixed(6));
+  };
+
+  const parseSellUnitPriceNprPerGram = (): number | null => {
+    const raw = sellPriceStr.replace(/,/g, "").trim();
+    if (raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    if (sellPriceUnit === "gram") return n;
+    return n / NEPAL_UI_GRAMS_PER_TOLA;
+  };
+
+  const parseBuyPriceNpr = (): number | null => {
+    const raw = buyPriceStr.replace(/,/g, "").trim();
+    if (raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return n;
+  };
+
+  const submit = async () => {
     setErr(null);
-    const grams = Number(gramsStr.replace(/,/g, ""));
-    if (!Number.isFinite(grams) || grams <= 0) {
-      setErr("Enter valid grams.");
+    const grams = parseQtyGrams();
+    if (grams == null) {
+      setErr(`Enter a valid quantity (${qtyUnit === "gram" ? "grams" : "tola"}).`);
       return;
     }
     if (segmentId === "sell" && grams > held + 1e-9) {
-      setErr("Cannot sell more grams than you hold.");
+      setErr("Cannot sell more than you hold.");
       return;
     }
     const feesNpr = feesStr.trim() === "" ? undefined : Number(feesStr.replace(/,/g, ""));
@@ -82,10 +113,11 @@ function MetalTradeStrip({
       setErr("Fees must be non-negative NPR.");
       return;
     }
+
     if (segmentId === "sell") {
-      const unitPriceNprPerGram = Number(pxStr.replace(/,/g, ""));
-      if (!Number.isFinite(unitPriceNprPerGram) || unitPriceNprPerGram < 0) {
-        setErr("Enter sell price per gram (NPR).");
+      const unitPriceNprPerGram = parseSellUnitPriceNprPerGram();
+      if (unitPriceNprPerGram == null) {
+        setErr(`Enter sell price (NPR per ${sellPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
       const ok = onMutate((s) =>
@@ -96,25 +128,78 @@ function MetalTradeStrip({
         return;
       }
     } else {
-      const basisNprAdded = basisStr.trim() === "" ? undefined : Number(basisStr.replace(/,/g, ""));
-      if (basisNprAdded != null && (!Number.isFinite(basisNprAdded) || basisNprAdded < 0)) {
-        setErr("Cost basis added must be non-negative NPR.");
+      const buyPriceNpr = parseBuyPriceNpr();
+      if (buyPriceNpr == null) {
+        setErr(`Enter buy price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
+
+      let photoUrlsToAppend: string[] | undefined;
+      const inputEl = buyPhotoRef.current;
+      if (inputEl?.files?.length) {
+        const files = Array.from(inputEl.files).filter((f) => f.type.startsWith("image/"));
+        const existing = row.photoUrls?.length ?? 0;
+        const room = Math.max(0, METAL_PHOTO_MAX_COUNT - existing);
+        if (files.length > room && room === 0) {
+          setErr(`Photo limit reached (${METAL_PHOTO_MAX_COUNT} per holding).`);
+          return;
+        }
+        const urls: string[] = [];
+        for (const f of files.slice(0, room)) {
+          const dataUrl = await compressMetalImageFile(f);
+          if (!dataUrl) {
+            setErr(`Could not compress "${f.name}". Try a smaller image.`);
+            return;
+          }
+          urls.push(dataUrl);
+        }
+        if (urls.length > 0) {
+          photoUrlsToAppend = urls;
+          toast.success(`Added ${urls.length} photo(s) with this buy.`);
+        }
+      }
+
       const ok = onMutate((s) =>
-        recordMetalBuy(s, row.id, { grams, tradeDate, basisNprAdded, feesNpr, notes }),
+        recordMetalBuy(s, row.id, {
+          grams,
+          tradeDate,
+          buyPriceNpr,
+          buyPriceUnit,
+          feesNpr,
+          notes,
+          photoUrlsToAppend,
+        }),
       );
       if (!ok) {
         setErr("Could not record buy.");
         return;
       }
+      if (inputEl) inputEl.value = "";
     }
-    setGramsStr("");
-    setPxStr("");
-    setBasisStr("");
+
+    setQtyStr("");
+    setBuyPriceStr("");
+    setSellPriceStr("");
     setFeesStr("");
     setNotes("");
   };
+
+  const previewBuyGrams = parseQtyGrams();
+  const previewBuyPrice = parseBuyPriceNpr();
+  const previewFees = feesStr.trim() === "" ? 0 : Number(feesStr.replace(/,/g, ""));
+  let previewAddBasis: number | null = null;
+  if (
+    segmentId === "buy" &&
+    previewBuyGrams != null &&
+    previewBuyPrice != null &&
+    Number.isFinite(previewFees) &&
+    previewFees >= 0
+  ) {
+    const npg = buyPriceUnit === "tola" ? previewBuyPrice / NEPAL_UI_GRAMS_PER_TOLA : previewBuyPrice;
+    if (Number.isFinite(npg) && npg >= 0) {
+      previewAddBasis = previewBuyGrams * npg + previewFees;
+    }
+  }
 
   return (
     <PortfolioTransactionStrip
@@ -124,7 +209,7 @@ function MetalTradeStrip({
       summaryRight={
         <>
           {held.toLocaleString()} g · basis {basis != null ? formatMoney(basis, "NPR") : "—"}
-          {avgPerG != null ? ` · ~${formatMoney(avgPerG, "NPR")}/g` : ""}
+          {avgPerG != null ? ` · avg ${formatMoney(avgPerG, "NPR")}/g` : ""}
         </>
       }
       segments={METAL_TX_SEGMENTS}
@@ -139,44 +224,149 @@ function MetalTradeStrip({
       onNotesChange={setNotes}
       error={err}
       submitLabel={segmentId === "sell" ? "Record sell" : "Record buy"}
-      onSubmit={submit}
+      onSubmit={() => void submit()}
       accent="amber"
     >
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Quantity unit</span>
+          {(["gram", "tola"] as const).map((u) => {
+            const active = qtyUnit === u;
+            return (
+              <button
+                key={u}
+                type="button"
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                  active
+                    ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
+                    : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+                }`}
+                onClick={() => setQtyUnit(u)}
+              >
+                {u === "gram" ? "Grams" : "Tola (UI)"}
+              </button>
+            );
+          })}
+        </div>
         <label className="block">
-          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Grams</span>
+          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+            {qtyUnit === "gram" ? "Quantity (grams)" : "Quantity (tola)"}
+          </span>
           <input
-            value={gramsStr}
-            onChange={(e) => setGramsStr(e.target.value)}
+            value={qtyStr}
+            onChange={(e) => setQtyStr(e.target.value)}
             inputMode="decimal"
             className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
             placeholder="0"
           />
         </label>
+
         {segmentId === "sell" ? (
-          <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Sell NPR / g</span>
-            <input
-              value={pxStr}
-              onChange={(e) => setPxStr(e.target.value)}
-              inputMode="decimal"
-              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-              placeholder="0"
-            />
-          </label>
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Sell price unit</span>
+              {(["gram", "tola"] as const).map((u) => {
+                const active = sellPriceUnit === u;
+                return (
+                  <button
+                    key={u}
+                    type="button"
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                      active
+                        ? "border-rose-400/45 bg-rose-500/15 text-rose-100"
+                        : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+                    }`}
+                    onClick={() => setSellPriceUnit(u)}
+                  >
+                    NPR / {u === "gram" ? "g" : "tola"}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+                Sell price ({sellPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
+              </span>
+              <input
+                value={sellPriceStr}
+                onChange={(e) => setSellPriceStr(e.target.value)}
+                inputMode="decimal"
+                className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                placeholder="0"
+              />
+            </label>
+          </>
         ) : (
-          <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
-              Cost basis added (NPR)
-            </span>
-            <input
-              value={basisStr}
-              onChange={(e) => setBasisStr(e.target.value)}
-              inputMode="decimal"
-              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-              placeholder="Optional — for P/L on sells"
-            />
-          </label>
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy price unit</span>
+              {(["gram", "tola"] as const).map((u) => {
+                const active = buyPriceUnit === u;
+                return (
+                  <button
+                    key={u}
+                    type="button"
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                      active
+                        ? "border-lime-400/45 bg-lime-500/15 text-lime-100"
+                        : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+                    }`}
+                    onClick={() => setBuyPriceUnit(u)}
+                  >
+                    NPR / {u === "gram" ? "g" : "tola"}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+                Buy price ({buyPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
+              </span>
+              <input
+                value={buyPriceStr}
+                onChange={(e) => setBuyPriceStr(e.target.value)}
+                inputMode="decimal"
+                className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                placeholder="0"
+              />
+            </label>
+            <div className="rounded-lg border border-emerald-400/15 bg-black/30 px-2 py-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/55">Photos (optional)</p>
+              <input
+                ref={buyPhotoRef}
+                id={buyPhotoInputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="sr-only"
+              />
+              <label
+                htmlFor={buyPhotoInputId}
+                className="mt-1 inline-flex cursor-pointer rounded-full border border-amber-400/35 bg-amber-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-amber-100"
+              >
+                Attach images
+              </label>
+              <p className="mt-1 text-[10px] font-semibold text-emerald-200/45">
+                Merged into this holding when you submit the buy (max {METAL_PHOTO_MAX_COUNT} total).
+              </p>
+            </div>
+            {previewAddBasis != null && Number.isFinite(previewAddBasis) ? (
+              <p className="text-[10px] font-bold text-emerald-200/70">
+                This buy total (incl. fees):{" "}
+                <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
+                {previewBuyGrams != null ? (
+                  <>
+                    {" "}
+                    · after submit ~{" "}
+                    <span className="tabular-nums text-amber-100">
+                      {(held + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                    </span>{" "}
+                    held
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </>
         )}
       </div>
     </PortfolioTransactionStrip>
@@ -215,36 +405,6 @@ export function MetalsPanel({
   const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
   const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
 
-  const patchMetalRow = useCallback(
-    (id: string, patch: Partial<MetalRow>) => {
-      const touchesBuyOrQty =
-        Object.prototype.hasOwnProperty.call(patch, "grams") ||
-        Object.prototype.hasOwnProperty.call(patch, "metalBuyPriceAmount") ||
-        Object.prototype.hasOwnProperty.call(patch, "metalBuyPriceUnit");
-      if (!touchesBuyOrQty) {
-        onChange(id, patch);
-        return;
-      }
-
-      const row = rows.find((r) => r.id === id);
-      if (!row) return;
-      const merged: MetalRow = { ...row, ...patch };
-      const basisPatch = deriveMetalTotalCostBasisNprPatch(merged);
-      if (Object.keys(basisPatch).length > 0) {
-        onChange(id, { ...patch, ...basisPatch });
-        return;
-      }
-      const hadBuy = metalBuyPriceNprPerGram(row) != null;
-      const hasBuy = metalBuyPriceNprPerGram(merged) != null;
-      if (hadBuy && !hasBuy) {
-        onChange(id, { ...patch, totalCostBasisNpr: undefined, metalBuyPriceUnit: undefined });
-        return;
-      }
-      onChange(id, patch);
-    },
-    [rows, onChange],
-  );
-
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -255,10 +415,11 @@ export function MetalsPanel({
           <div>
             <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
             <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
-              Grams · portfolio marks follow the{" "}
+              Use <span className="text-emerald-100">Buy</span> and <span className="text-emerald-100">Sell</span>{" "}
+              transactions for quantities, prices, and cost basis. Portfolio marks follow the{" "}
               <span className="text-emerald-100">FENEGOSIDA-published Nepal board</span> (Fine Gold 9999 &amp; Silver per
               10 g and per tola on fenegosida.org; aligned with FNGSGJA industry rates). International USD/oz is
-              reference only. Ledger, cost basis, and transactions are unchanged.
+              reference only.
             </p>
           </div>
         </div>
@@ -451,11 +612,11 @@ export function MetalsPanel({
           <span className="break-all text-emerald-50">{sourceLabel}</span>
           <span className="mx-1.5 text-emerald-500/40">·</span>
           <span className="text-emerald-200/55">Board 1 tola =</span> {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g (Nepal bullion
-          convention). <span className="text-emerald-200/55">Holdings UI conversion:</span> 1 tola = 11.66 g.
+          convention). <span className="text-emerald-200/55">Holdings UI conversion:</span> 1 tola = {NEPAL_UI_GRAMS_PER_TOLA} g.
         </p>
       </div>
 
-      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} totals={totals} />
+      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} totals={totals} ledger={ledger} />
 
       <div className="space-y-2">
         {rows.map((row) => {
@@ -466,140 +627,111 @@ export function MetalsPanel({
           const rateTola = row.metal === "gold" ? uiTola.goldNprPerTola : uiTola.silverNprPerTola;
           const total = g * rate;
           const basis = row.totalCostBasisNpr;
+          const avgPerG = g > 0 && basis != null && basis > 0 ? basis / g : null;
           const unrealizedNpr =
             typeof basis === "number" && basis > 0 && g > 0 ? total - basis : null;
+          const firstBuyIso = metalRowFirstBuyIso(row, ledger);
           return (
             <div
               key={row.id}
               className="wealth-row-card flex flex-col gap-2 rounded-xl p-2.5 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex min-w-0 flex-col gap-2">
-                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} />
-                <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
+                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} uploadEnabled={false} />
+                <div className="grid gap-2 sm:grid-cols-2 sm:items-end">
                   <label className="block">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Metal</span>
                     <select
                       value={row.metal}
-                      onChange={(e) => patchMetalRow(row.id, { metal: e.target.value as "gold" | "silver" })}
+                      onChange={(e) => onChange(row.id, { metal: e.target.value as "gold" | "silver" })}
                       className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
                     >
                       <option value="gold">Gold</option>
                       <option value="silver">Silver</option>
                     </select>
                   </label>
-                  <div className="min-w-0 sm:col-span-2">
-                    <MetalGramTolaFields grams={row.grams} onGramsChange={(n) => patchMetalRow(row.id, { grams: n })} />
-                  </div>
-                  <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:col-span-3 sm:text-xs">
-                    <p className="text-emerald-200/55">Live mark</p>
-                    <p className="mt-0.5 font-black text-amber-200/95">{formatMoney(rate, "NPR")} / g</p>
-                    <p className="mt-0.5 font-bold text-amber-200/75">{formatMoney(rateTola, "NPR")} / tola</p>
-                    <p className="mt-1 text-emerald-100/90">
-                      Holdings value:{" "}
-                      <span className="font-black text-emerald-50">{formatMoney(total, "NPR")}</span>
-                    </p>
-                    {unrealizedNpr != null ? (
-                      <p
-                        className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${
-                          unrealizedNpr >= 0
-                            ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                            : "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                        }`}
-                      >
-                        {unrealizedNpr >= 0 ? (
-                          <TrendingUp size={12} className="shrink-0" aria-hidden />
+                </div>
+
+                <div className="rounded-lg border border-emerald-400/15 bg-black/30 px-2.5 py-2 text-[11px] font-bold sm:text-xs">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/70">Holdings (from transactions)</p>
+                  <dl className="mt-1.5 space-y-1">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-emerald-200/55">Quantity</dt>
+                      <dd className="text-end tabular-nums text-emerald-50">
+                        {g > 0 ? (
+                          <>
+                            {g.toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                            <span className="text-emerald-200/50"> (~{gramsToTolaUi(g).toFixed(4)} tola UI)</span>
+                          </>
                         ) : (
-                          <TrendingDown size={12} className="shrink-0" aria-hidden />
+                          "—"
                         )}
-                        Unrealized {unrealizedNpr >= 0 ? "+" : ""}
-                        {formatMoney(unrealizedNpr, "NPR")}
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-[10px] font-bold text-emerald-200/45">
-                        Add buy price (per gram or per tola) to track unrealized P/L.
-                      </p>
-                    )}
-                  </div>
-                  <div className="min-w-0 sm:col-span-3">
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Buy price</p>
-                    <div className="mb-2 flex flex-wrap gap-1.5">
-                      {(["gram", "tola"] as const).map((u) => {
-                        const active = (row.metalBuyPriceUnit ?? "gram") === u;
-                        return (
-                          <button
-                            key={u}
-                            type="button"
-                            className={`min-h-[40px] rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition sm:min-h-0 ${
-                              active
-                                ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
-                                : "border-emerald-400/20 bg-black/30 text-emerald-200/70 hover:border-emerald-400/35"
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-emerald-200/55">Total cost basis</dt>
+                      <dd className="tabular-nums text-emerald-50">
+                        {basis != null && basis > 0 ? formatMoney(basis, "NPR") : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-emerald-200/55">Average cost</dt>
+                      <dd className="tabular-nums text-emerald-50">
+                        {avgPerG != null ? `${formatMoney(avgPerG, "NPR")} / g` : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2 border-t border-emerald-400/10 pt-1">
+                      <dt className="text-emerald-200/55">Live mark</dt>
+                      <dd className="text-end text-emerald-50">
+                        <span className="font-black">{formatMoney(rate, "NPR")} / g</span>
+                        <span className="block text-[10px] font-bold text-emerald-200/65">
+                          {formatMoney(rateTola, "NPR")} / tola
+                        </span>
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-emerald-200/55">Current value</dt>
+                      <dd className="tabular-nums font-black text-amber-100">
+                        {g > 0 ? formatMoney(total, "NPR") : "—"}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-emerald-200/55">Unrealized P/L</dt>
+                      <dd>
+                        {unrealizedNpr != null ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${
+                              unrealizedNpr >= 0
+                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                                : "border-rose-400/30 bg-rose-500/10 text-rose-200"
                             }`}
-                            onClick={() => {
-                              if (active) return;
-                              const converted = convertMetalBuyPriceAmountForUnitChange(
-                                row.metalBuyPriceAmount,
-                                row.metalBuyPriceUnit,
-                                u,
-                              );
-                              patchMetalRow(row.id, {
-                                metalBuyPriceUnit: u,
-                                ...(converted != null ? { metalBuyPriceAmount: converted } : {}),
-                              });
-                            }}
                           >
-                            NPR / {u === "gram" ? "g" : "tola"}
-                          </button>
-                        );
-                      })}
+                            {unrealizedNpr >= 0 ? (
+                              <TrendingUp size={12} className="shrink-0" aria-hidden />
+                            ) : (
+                              <TrendingDown size={12} className="shrink-0" aria-hidden />
+                            )}
+                            {unrealizedNpr >= 0 ? "+" : ""}
+                            {formatMoney(unrealizedNpr, "NPR")}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-200/45">Record a buy with price to track P/L</span>
+                        )}
+                      </dd>
                     </div>
-                    <NumericMoneyInput
-                      tone="dark"
-                      label={row.metalBuyPriceUnit === "tola" ? "Buy price (NPR per UI tola)" : "Buy price (NPR per gram)"}
-                      value={row.metalBuyPriceAmount}
-                      onChange={(n) =>
-                        patchMetalRow(row.id, {
-                          metalBuyPriceAmount: n,
-                          metalBuyPriceUnit: row.metalBuyPriceUnit ?? "gram",
-                        })
-                      }
-                      variant="amount"
-                      placeholder="0"
-                      className="text-[10px] font-bold uppercase tracking-wide text-zinc-200 [&>span]:block"
-                      wrapperClassName="rounded-xl border border-emerald-400/15 bg-black/30 px-2 py-2 focus-within:border-emerald-400/40"
-                      inputClassName="min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none"
-                    />
-                    {(() => {
-                      const ppg = metalBuyPriceNprPerGram(row);
-                      return ppg != null ? (
-                        <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
-                          Implied ≈ <span className="tabular-nums text-amber-100/90">{formatMoney(ppg, "NPR")}</span> / g
-                          {row.metalBuyPriceUnit === "tola" ? (
-                            <span className="text-emerald-200/45"> (from NPR/tola ÷ 11.66)</span>
-                          ) : null}
-                        </p>
-                      ) : null;
-                    })()}
-                    <div className="mt-2 rounded-xl border border-emerald-400/20 bg-black/35 px-2.5 py-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Total cost basis (NPR)</p>
-                      <p className="mt-0.5 text-sm font-black tabular-nums text-emerald-50">
-                        {typeof row.totalCostBasisNpr === "number" && row.totalCostBasisNpr > 0
-                          ? formatMoney(row.totalCostBasisNpr, "NPR")
-                          : "—"}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold leading-snug text-emerald-200/45">
-                        Quantity × buy price. Updates instantly when grams, tola, or buy price changes.
-                      </p>
-                    </div>
-                  </div>
+                  </dl>
                 </div>
-                <div className="flex flex-col gap-2 border-t border-emerald-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-4 sm:gap-y-2">
-                  <PortfolioIsoDateField
-                    label="Bought date"
-                    value={row.boughtDate}
-                    onChange={(next) => onChange(row.id, { boughtDate: next })}
-                  />
-                  <PortfolioDateMeta dateIso={row.boughtDate} leadText="Owned" />
+
+                <div className="border-t border-emerald-400/10 pt-2">
+                  {firstBuyIso ? (
+                    <PortfolioDateMeta dateIso={firstBuyIso} leadText="First activity" />
+                  ) : (
+                    <p className="text-[10px] font-bold text-emerald-200/45">
+                      First purchase date appears after you record a buy with a date.
+                    </p>
+                  )}
                 </div>
+
                 <MetalTradeStrip row={row} onMutate={onMutate} />
               </div>
               <button
