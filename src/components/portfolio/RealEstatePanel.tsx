@@ -27,6 +27,7 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { parsePurchaseIso } from "@/components/portfolio/holding-stats";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { compressImageFileToJpegDataUrl } from "@/components/portfolio/real-estate-photo-utils";
 import { amountToNpr } from "@/lib/portfolio-convert";
@@ -550,6 +551,7 @@ export function RealEstatePanel({
             const hasAnnualPct =
               typeof row.annualAppreciationEstimatePct === "number" &&
               Number.isFinite(row.annualAppreciationEstimatePct);
+            const showHeldDateMeta = parsePurchaseIso(row.acquiredDate) != null;
 
             return (
               <div
@@ -593,7 +595,13 @@ export function RealEstatePanel({
                         className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
                       />
                     </label>
-                    <label className="min-w-0 sm:col-span-2 lg:col-span-8">
+                    <PortfolioIsoDateField
+                      label="Acquired date"
+                      value={row.acquiredDate}
+                      onChange={(next) => onChange(row.id, { acquiredDate: next })}
+                      className="min-w-0 w-full sm:col-span-2 lg:col-span-2"
+                    />
+                    <label className="min-w-0 sm:col-span-2 lg:col-span-6">
                       <span className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
                         <MapPin className="h-3 w-3 shrink-0 text-teal-400/80" aria-hidden />
                         Location
@@ -814,15 +822,11 @@ export function RealEstatePanel({
                   )
                 ) : null}
 
-                <div className="flex min-w-0 flex-col gap-2 border-t border-teal-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-4 sm:gap-y-2">
-                  <PortfolioIsoDateField
-                    label="Acquired date"
-                    value={row.acquiredDate}
-                    onChange={(next) => onChange(row.id, { acquiredDate: next })}
-                    className="min-w-0 w-full shrink-0 sm:max-w-full sm:min-w-0"
-                  />
-                  <PortfolioDateMeta dateIso={row.acquiredDate} basisNpr={costNpr} markNpr={estNpr} leadText="Held" />
-                </div>
+                {showHeldDateMeta ? (
+                  <div className="flex min-w-0 flex-col gap-2 border-t border-teal-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-4 sm:gap-y-2">
+                    <PortfolioDateMeta dateIso={row.acquiredDate} basisNpr={costNpr} markNpr={estNpr} leadText="Held" />
+                  </div>
+                ) : null}
 
                 <RealEstateAiInsightsEngine bundle={aiInsightBundle} />
 
