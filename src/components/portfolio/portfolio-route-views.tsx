@@ -1,6 +1,7 @@
 "use client";
 
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { GoldSilverPageHeader } from "@/components/portfolio/GoldSilverPageHeader";
 import { AssetsHubPanel } from "@/components/portfolio/AssetsHubPanel";
 import { FireFeatureGate } from "@/components/membership/FireFeatureGate";
 import { AiFinancialCoachSection } from "@/components/financial-coach/AiFinancialCoachSection";
@@ -107,12 +108,8 @@ export function PortfolioInvestmentsPage() {
 export function PortfolioGoldPage() {
   const { state, applyPortfolioMutate, updateMetal, addMetal, removeMetal } = useWealthPortfolio();
   return (
-    <div className={flow}>
-      <DashboardSectionHeader
-        accent="emerald"
-        title="Gold & Silver"
-        subtitle="Bullion and jewelry holdings with NPR marks."
-      />
+    <div className="flex min-w-0 max-w-full flex-col gap-3 sm:gap-4 lg:gap-5">
+      <GoldSilverPageHeader />
       <MetalsPanel
         rows={state.metals}
         ledger={state.ledger}

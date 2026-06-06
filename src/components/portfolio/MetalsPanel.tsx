@@ -473,8 +473,8 @@ export function MetalsPanel({
   const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
 
   return (
-    <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+    <section className="wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-amber-200">
             <Gem size={18} />
