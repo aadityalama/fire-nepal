@@ -22,6 +22,23 @@ export type MembershipPaymentModalProps = {
 
 const METHODS: MembershipPaymentMethod[] = ["khalti_qr", "esewa_qr", "global_ime_qr"];
 
+async function membershipRequestErrorMessage(r: Response): Promise<string> {
+  const raw = await r.text();
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return r.statusText?.trim() || `Request failed (HTTP ${r.status})`;
+  }
+  try {
+    const j = JSON.parse(trimmed) as { error?: unknown; message?: unknown; details?: unknown };
+    if (typeof j.error === "string" && j.error.trim()) return j.error.trim();
+    if (typeof j.message === "string" && j.message.trim()) return j.message.trim();
+    if (typeof j.details === "string" && j.details.trim()) return j.details.trim();
+  } catch {
+    /* non-JSON body */
+  }
+  return trimmed.length > 400 ? `${trimmed.slice(0, 400)}…` : trimmed;
+}
+
 function methodIcon(m: MembershipPaymentMethod) {
   if (m === "khalti_qr") return Wallet;
   if (m === "esewa_qr") return Smartphone;
@@ -64,9 +81,9 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
       fd.set("file", file);
       if (reference.trim()) fd.set("reference", reference.trim());
       const r = await fetch("/api/membership-requests", { method: "POST", body: fd, credentials: "include" });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) {
-        toast.error(j.error ?? "Submission failed");
+        const msg = await membershipRequestErrorMessage(r);
+        toast.error(msg);
         return;
       }
       toast.success("Payment proof submitted. We will review and activate your plan shortly.");

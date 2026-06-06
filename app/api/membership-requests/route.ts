@@ -13,6 +13,18 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
 
+function formatPostgrestError(err: {
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string | null;
+}): string {
+  const parts = [err.message, err.details, err.hint].filter((p) => typeof p === "string" && p.trim().length > 0);
+  const base = parts.join(" — ").trim();
+  if (base) return err.code ? `${base} (${err.code})` : base;
+  return err.code ? `Database error (${err.code})` : "Database error";
+}
+
 function extFromMime(mime: string): string {
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
@@ -32,6 +44,7 @@ export async function GET() {
       error: userErr,
     } = await supabase.auth.getUser();
     if (userErr || !user?.id) {
+      console.error("MEMBERSHIP_AUTH_ERROR", userErr ?? new Error("missing session user"));
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -67,6 +80,7 @@ export async function POST(request: Request) {
       error: userErr,
     } = await supabase.auth.getUser();
     if (userErr || !user?.id) {
+      console.error("MEMBERSHIP_AUTH_ERROR", userErr ?? new Error("missing session user"));
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -125,10 +139,14 @@ export async function POST(request: Request) {
       upsert: false,
     });
     if (upErr) {
-      return NextResponse.json({ error: upErr.message }, { status: 500 });
+      console.error("MEMBERSHIP_UPLOAD_ERROR", upErr);
+      const msg = upErr.message?.trim() || "Storage upload failed";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    const { data: row, error: insErr } = await supabase
+    // Service-role insert: proof is already stored with service role; RLS `to authenticated` can block
+    // the user-scoped PostgREST client in some server contexts even when `getUser()` succeeds.
+    const { data: row, error: insErr } = await admin
       .from("membership_requests")
       .insert({
         id,
@@ -144,13 +162,15 @@ export async function POST(request: Request) {
       .single();
 
     if (insErr) {
+      console.error("MEMBERSHIP_INSERT_ERROR", insErr);
       await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_url]);
-      return NextResponse.json({ error: insErr.message }, { status: 500 });
+      return NextResponse.json({ error: formatPostgrestError(insErr) }, { status: 500 });
     }
 
     return NextResponse.json({ request: row });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Server error";
+    console.error("MEMBERSHIP_POST_UNHANDLED", e);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
