@@ -27,6 +27,7 @@ import { formatMoney } from "@/lib/expense-utils";
 import { NEPAL_METAL_TOLA_GRAMS } from "@/lib/market/bullion-estimate";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
 import { toast } from "sonner";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 
 function todayIso() {
   return portfolioTxnTodayIso();
@@ -488,7 +489,8 @@ export function MetalsPanel({
             </p>
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          <PortfolioModuleDataResetButton module="metals" onMutate={onMutate} />
           <button
             type="button"
             onClick={() => onAdd("gold")}

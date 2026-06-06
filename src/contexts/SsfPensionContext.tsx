@@ -7,6 +7,7 @@ import {
   type SsfPensionWorkspaceState,
   type SsfReminderPrefs,
 } from "@/lib/ssf-pension/storage";
+import { FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT } from "@/lib/fire-nepal/workspace-data-reset";
 
 type SsfPensionContextValue = {
   workspace: SsfPensionWorkspaceState;
@@ -27,6 +28,12 @@ export function SsfPensionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveSsfPensionWorkspace(workspace);
   }, [workspace]);
+
+  useEffect(() => {
+    const onGlobal = () => setWorkspace(loadSsfPensionWorkspace());
+    window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
+    return () => window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
+  }, []);
 
   const setReminderPrefs = useCallback((patch: Partial<SsfReminderPrefs>) => {
     setWorkspace((w) => ({ ...w, reminderPrefs: { ...w.reminderPrefs, ...patch } }));

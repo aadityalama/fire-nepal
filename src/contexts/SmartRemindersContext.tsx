@@ -19,6 +19,7 @@ import { sanitizeSmartRemindersStore } from "@/lib/smart-reminders/sanitize";
 import type { InAppNotification, Reminder, SmartRemindersStore } from "@/lib/smart-reminders/types";
 import { formatYmd, startOfLocalDay } from "@/lib/smart-reminders/date-utils";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT } from "@/lib/fire-nepal/workspace-data-reset";
 
 const STORAGE_KEY = "fire_nepal_smart_reminders_v1";
 
@@ -63,9 +64,15 @@ function dedupeSetFromNotifications(notifications: InAppNotification[]): Set<str
 
 async function fetchCloudReminders(): Promise<Reminder[]> {
   const r = await fetch("/api/scheduled-reminders", { credentials: "include", cache: "no-store" });
-  if (!r.ok) throw new Error("Could not load cloud reminders");
-  const j = (await r.json()) as { reminders?: Reminder[] };
-  return j.reminders ?? [];
+  let msg: string | undefined;
+  try {
+    const j = (await r.json()) as { reminders?: Reminder[]; error?: string; ok?: boolean };
+    msg = typeof j.error === "string" ? j.error : undefined;
+    if (r.ok) return j.reminders ?? [];
+  } catch {
+    msg = undefined;
+  }
+  throw new Error(msg ?? `Could not load cloud reminders (${r.status}).`);
 }
 
 export function SmartRemindersProvider({ children }: { children: ReactNode }) {
@@ -88,8 +95,8 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     try {
       const list = await fetchCloudReminders();
       setCloudReminders(list);
-    } catch {
-      toast.error("Could not sync reminders from Supabase.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not sync reminders from Supabase.");
     } finally {
       setCloudSyncing(false);
       setCloudLoaded(true);
@@ -103,6 +110,18 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     }, 0);
     return () => window.clearTimeout(t);
   }, [cloudEnabled, user?.id, refreshCloudReminders]);
+
+  useEffect(() => {
+    const onGlobalReset = () => {
+      setStore((prev) => ({
+        ...createDefaultSmartRemindersStore(),
+        settings: { ...prev.settings },
+      }));
+      void refreshCloudReminders();
+    };
+    window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobalReset);
+    return () => window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobalReset);
+  }, [setStore, refreshCloudReminders]);
 
   const reminders = useMemo(() => {
     if (cloudEnabled && cloudLoaded) return cloudReminders ?? [];

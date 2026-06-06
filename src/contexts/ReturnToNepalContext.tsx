@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { DEFAULT_RETURN_PLANNER_STATE, RETURN_PLANNER_STORAGE_KEY } from "@/lib/return-to-nepal/default-planner-state";
 import { type PlannerSnapshot, computePlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { ConstructionPhaseId, ReturnToNepalPlannerState, SettlementChecklistId } from "@/lib/return-to-nepal/types";
+import { FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT } from "@/lib/fire-nepal/workspace-data-reset";
 
 type Ctx = {
   state: ReturnToNepalPlannerState;
@@ -40,6 +41,12 @@ export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(RETURN_PLANNER_STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  useEffect(() => {
+    const onGlobal = () => setState(loadState());
+    window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
+    return () => window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
+  }, []);
 
   const patch = useCallback((partial: Partial<ReturnToNepalPlannerState>) => {
     setState((s) => ({ ...s, ...partial }));

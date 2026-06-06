@@ -14,6 +14,7 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { PortfolioLedgerEntry, VehicleKind, VehicleRow, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 
 const VEH_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "buy", label: "Buy", tone: "in" },
@@ -209,13 +210,16 @@ export function VehiclesPanel({
             <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">Resale estimate by type</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/25 sm:text-xs"
-        >
-          <Plus size={14} /> Add
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <PortfolioModuleDataResetButton module="vehicles" onMutate={onMutate} />
+          <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/25 sm:text-xs"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
       </div>
       <div className="space-y-2">
         {rows.map((row) => (

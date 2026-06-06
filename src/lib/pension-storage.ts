@@ -1,13 +1,17 @@
 import type { PensionDashboardState } from "@/lib/pension-types";
 import { PENSION_STORAGE_KEY } from "@/lib/pension-types";
 
-const DEFAULT_STATE: PensionDashboardState = {
-  version: 1,
-  profile: {
-    joinDate: new Date().toISOString().slice(0, 10),
-  },
-  slips: [],
-};
+export function defaultPensionDashboardState(now = new Date()): PensionDashboardState {
+  return {
+    version: 1,
+    profile: {
+      joinDate: now.toISOString().slice(0, 10),
+    },
+    slips: [],
+  };
+}
+
+const DEFAULT_STATE: PensionDashboardState = defaultPensionDashboardState();
 
 export function loadPensionState(): PensionDashboardState {
   if (typeof window === "undefined") return DEFAULT_STATE;

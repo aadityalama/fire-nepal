@@ -30,6 +30,7 @@ import type {
 } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
 import { emptySimpleLine } from "@/components/portfolio/storage";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 
 const LIQ_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "add", label: "Add cash", tone: "in" },
@@ -223,6 +224,7 @@ export function LiquidCashPanel({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <PortfolioModuleDataResetButton module="banking_cash" onMutate={onMutate} />
             <div className="inline-flex rounded-full border border-sky-400/20 bg-black/35 p-0.5 shadow-inner shadow-black/40">
               <button
                 type="button"

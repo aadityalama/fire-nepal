@@ -6,7 +6,8 @@ import { CurrencySelect } from "@/components/portfolio/CurrencySelect";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { projectRetirementRowFvNpr } from "@/components/portfolio/calculations";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
-import type { GlobalRetirementAssetRow, PortfolioLedgerEntry, RetirementAccountKind } from "@/components/portfolio/types";
+import type { GlobalRetirementAssetRow, PortfolioLedgerEntry, RetirementAccountKind, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 import { formatMoney } from "@/lib/expense-utils";
 
 const KIND_GROUPS: { group: string; options: { value: RetirementAccountKind; label: string }[] }[] = [
@@ -44,6 +45,7 @@ export function GlobalRetirementAssetsPanel({
   onChange,
   onAdd,
   onRemove,
+  onMutate,
 }: {
   rows: GlobalRetirementAssetRow[];
   ledger: readonly PortfolioLedgerEntry[];
@@ -52,6 +54,7 @@ export function GlobalRetirementAssetsPanel({
   onChange: (id: string, patch: Partial<GlobalRetirementAssetRow>) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
+  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
@@ -71,13 +74,16 @@ export function GlobalRetirementAssetsPanel({
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-2.5 py-1 text-[11px] font-black text-indigo-100 transition hover:bg-indigo-500/25 sm:text-xs"
-        >
-          <Plus size={14} /> Add
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <PortfolioModuleDataResetButton module="pension" onMutate={onMutate} />
+          <button
+            type="button"
+            onClick={onAdd}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-500/15 px-2.5 py-1 text-[11px] font-black text-indigo-100 transition hover:bg-indigo-500/25 sm:text-xs"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">

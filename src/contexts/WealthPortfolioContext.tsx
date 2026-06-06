@@ -56,6 +56,10 @@ import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import { WealthPortfolioCloudSync } from "@/hooks/WealthPortfolioCloudSync";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import {
+  FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT,
+  FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT,
+} from "@/lib/fire-nepal/workspace-data-reset";
 
 export type WealthPortfolioLedgerFx = { krwPerNpr: number; usdPerNpr: number };
 
@@ -160,6 +164,18 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    const reloadFromDisk = () => {
+      setState(loadWealthPortfolioState());
+    };
+    window.addEventListener(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT, reloadFromDisk);
+    window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, reloadFromDisk);
+    return () => {
+      window.removeEventListener(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT, reloadFromDisk);
+      window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, reloadFromDisk);
+    };
   }, []);
 
   useEffect(() => {

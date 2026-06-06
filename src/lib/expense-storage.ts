@@ -34,7 +34,17 @@ export type DashboardPersistedState = {
   settlementTransferOverrides?: Record<string, Record<string, number>>;
 };
 
-const LEGACY_KEY = "fire-nepal-expense-dashboard-v1";
+export const LEGACY_KEY = "fire-nepal-expense-dashboard-v1";
+
+export function emptyExpenseDashboardState(): DashboardPersistedState {
+  return {
+    version: 2,
+    expenses: [],
+    members: [],
+    profiles: {},
+    activities: [],
+  };
+}
 
 export function createActivity(
   input: Omit<TimelineActivity, "id" | "timestamp">,

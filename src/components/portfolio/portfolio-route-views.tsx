@@ -166,7 +166,8 @@ export function PortfolioVehiclesPage() {
 }
 
 export function PortfolioRetirementPage() {
-  const { state, krwPerNpr, usdPerNpr, updateRetirement, addRetirement, removeRetirement } = useWealthPortfolio();
+  const { state, krwPerNpr, usdPerNpr, updateRetirement, addRetirement, removeRetirement, applyPortfolioMutate } =
+    useWealthPortfolio();
   return (
     <div className={flow}>
       <DashboardSectionHeader
@@ -182,6 +183,7 @@ export function PortfolioRetirementPage() {
         onChange={updateRetirement}
         onAdd={addRetirement}
         onRemove={removeRetirement}
+        onMutate={applyPortfolioMutate}
       />
     </div>
   );

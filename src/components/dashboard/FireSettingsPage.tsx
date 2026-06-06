@@ -1,11 +1,27 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useState } from "react";
+import { toast } from "sonner";
+import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmModal";
+import { performGlobalFireNepalWorkspaceDataReset } from "@/lib/fire-nepal/workspace-data-reset";
 
 export function FireSettingsPage() {
   const [digest, setDigest] = useState(false);
   const [alerts, setAlerts] = useState(true);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+
+  const runGlobalReset = () => {
+    setResetBusy(true);
+    try {
+      performGlobalFireNepalWorkspaceDataReset();
+      toast.success("FIRE Nepal workspace data was reset.");
+      setResetOpen(false);
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
@@ -51,7 +67,35 @@ export function FireSettingsPage() {
           </Link>{" "}
           modules to export sheets when needed.
         </p>
+
+        <div className="mt-6 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+          <p className="text-sm font-bold text-white">Reset all FIRE Nepal data</p>
+          <p className="mt-2 text-xs font-semibold leading-relaxed text-zinc-400">
+            Clears locally stored workspace data: portfolio, cashflow, shared expense workspace, payslip import history,
+            SSF pension calculator inputs (reminder toggles preserved), Korea pension / severance slips (enrollment
+            profile fields preserved), return-to-Nepal planner, financial intelligence rollups, and smart reminder rows
+            (reminder notification settings preserved). Does not change sign-in, membership, premium profile, theme, or
+            cloud-side data — the next sync may restore data from the cloud.
+          </p>
+          <button
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-600/20 px-4 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-600/35"
+          >
+            Reset all FIRE Nepal data
+          </button>
+        </div>
       </div>
+
+      <DataResetConfirmModal
+        open={resetOpen}
+        title="Reset all FIRE Nepal data?"
+        body="This clears locally stored workspace data in this browser. Reminder notification preferences and SSF reminder toggles are kept. Authentication, account, premium profile, subscriptions, and cloud-hosted records are not modified here — a later cloud sync can repopulate this device."
+        confirmLabel="Reset everything"
+        busy={resetBusy}
+        onCancel={() => !resetBusy && setResetOpen(false)}
+        onConfirm={runGlobalReset}
+      />
     </div>
   );
 }

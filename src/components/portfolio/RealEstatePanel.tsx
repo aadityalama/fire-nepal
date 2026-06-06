@@ -27,6 +27,7 @@ import {
   type TxnSegmentDef,
 } from "@/components/portfolio/transaction-ui/PortfolioTransactionStrip";
 import type { RealEstateKind, RealEstateRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 import { parsePurchaseIso } from "@/components/portfolio/holding-stats";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { compressImageFileToJpegDataUrl } from "@/components/portfolio/real-estate-photo-utils";
@@ -491,13 +492,16 @@ export function RealEstatePanel({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-teal-400/30 bg-teal-500/15 px-2.5 py-1 text-[11px] font-black text-teal-100 transition hover:bg-teal-500/25 sm:text-xs"
-          >
-            <Plus size={14} /> Add
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <PortfolioModuleDataResetButton module="real_estate" onMutate={onMutate} />
+            <button
+              type="button"
+              onClick={onAdd}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-teal-400/30 bg-teal-500/15 px-2.5 py-1 text-[11px] font-black text-teal-100 transition hover:bg-teal-500/25 sm:text-xs"
+            >
+              <Plus size={14} /> Add
+            </button>
+          </div>
         </div>
         <div className="space-y-3">
           {rows.map((row) => {
