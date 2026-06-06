@@ -563,96 +563,103 @@ export function RealEstatePanel({
                   usdPerNpr={usdPerNpr}
                   onChange={onChange}
                 />
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
-                  <label className="min-w-0 sm:col-span-1 lg:col-span-2">
-                    <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
-                      Type
-                    </span>
-                    <select
-                      value={row.propertyType}
-                      onChange={(e) => onChange(row.id, { propertyType: e.target.value as RealEstateKind })}
-                      className="wealth-input min-w-0 w-full px-2 py-2 text-xs font-black sm:text-sm"
-                    >
-                      {TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="min-w-0 sm:col-span-1 lg:col-span-2">
-                    <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
-                      Label
-                    </span>
-                    <input
-                      type="text"
-                      value={row.name}
-                      onChange={(e) => onChange(row.id, { name: e.target.value })}
-                      placeholder="Property name"
-                      className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
-                    />
-                  </label>
-                  <label className="min-w-0 sm:col-span-2 lg:col-span-2">
-                    <span className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
-                      <MapPin className="h-3 w-3 shrink-0 text-teal-400/80" aria-hidden />
-                      Location
-                    </span>
-                    <input
-                      type="text"
-                      value={row.location ?? ""}
-                      onChange={(e) => onChange(row.id, { location: e.target.value })}
-                      placeholder="e.g. Budhanilkantha, Kathmandu"
-                      autoComplete="street-address"
-                      className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
-                    />
-                  </label>
-                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-2">
-                    <NumericMoneyInput tone="dark"
-                      label="Purchase value"
-                      value={row.purchaseValue}
-                      onChange={(n) => onChange(row.id, { purchaseValue: n })}
-                      variant="amount"
-                      placeholder="0"
-                      formatThousandsWhileTyping
-                      autoScaleFont
-                      className="min-w-0 w-full flex-1 [&>span]:mb-0.5 [&>span]:block [&>span]:text-[10px] [&>span]:font-bold [&>span]:uppercase [&>span]:tracking-wide [&>span]:text-zinc-200"
-                      wrapperClassName="min-w-0 w-full flex-1 rounded-xl border border-teal-400/20 bg-black/35 px-2 py-2 focus-within:border-teal-400/45 focus-within:ring-2 focus-within:ring-teal-500/20"
-                      inputClassName="min-w-0 bg-transparent text-xs font-bold text-emerald-50 outline-none sm:text-sm"
-                    />
+                <div className="space-y-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+                    <label className="min-w-0 sm:col-span-1 lg:col-span-2">
+                      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                        Type
+                      </span>
+                      <select
+                        value={row.propertyType}
+                        onChange={(e) => onChange(row.id, { propertyType: e.target.value as RealEstateKind })}
+                        className="wealth-input min-w-0 w-full px-2 py-2 text-xs font-black sm:text-sm"
+                      >
+                        {TYPES.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="min-w-0 sm:col-span-1 lg:col-span-2">
+                      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                        Label
+                      </span>
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={(e) => onChange(row.id, { name: e.target.value })}
+                        placeholder="Property name"
+                        className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
+                      />
+                    </label>
+                    <label className="min-w-0 sm:col-span-2 lg:col-span-8">
+                      <span className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                        <MapPin className="h-3 w-3 shrink-0 text-teal-400/80" aria-hidden />
+                        Location
+                      </span>
+                      <input
+                        type="text"
+                        value={row.location ?? ""}
+                        onChange={(e) => onChange(row.id, { location: e.target.value })}
+                        placeholder="e.g. Budhanilkantha, Kathmandu"
+                        autoComplete="street-address"
+                        className="wealth-input-text min-w-0 w-full overflow-x-auto px-2.5 py-2 text-xs sm:text-sm"
+                      />
+                    </label>
                   </div>
-                  <div className="flex min-w-0 flex-1 sm:col-span-2 lg:col-span-2">
-                    <NumericMoneyInput tone="dark"
-                      label="Est. current value"
-                      value={row.estimatedValue}
-                      onChange={(n) => onChange(row.id, { estimatedValue: n })}
-                      variant="amount"
-                      placeholder="0"
-                      formatThousandsWhileTyping
-                      autoScaleFont
-                      className="min-w-0 w-full flex-1 [&>span]:mb-0.5 [&>span]:block [&>span]:text-[10px] [&>span]:font-bold [&>span]:uppercase [&>span]:tracking-wide [&>span]:text-zinc-200"
-                      wrapperClassName="min-w-0 w-full flex-1 rounded-xl border border-teal-400/20 bg-black/35 px-2 py-2 focus-within:border-teal-400/45 focus-within:ring-2 focus-within:ring-teal-500/20"
-                      inputClassName="min-w-0 bg-transparent text-xs font-bold text-emerald-50 outline-none sm:text-sm"
-                    />
-                  </div>
-                  <label className="min-w-0 sm:col-span-1 lg:col-span-1">
-                    <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
-                      CCY
-                    </span>
-                    <CurrencySelect
-                      value={row.currency}
-                      onChange={(c) => onChange(row.id, { currency: c })}
-                      className="min-w-0 w-full"
-                    />
-                  </label>
-                  <div className="flex min-w-0 shrink-0 justify-end sm:col-span-1 lg:col-span-1 lg:items-end">
-                    <button
-                      type="button"
-                      aria-label="Remove"
-                      onClick={() => onRemove(row.id)}
-                      className="rounded-xl p-2 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                  {/* Full-width row so purchase / estimate share the row (not squeezed into lg:col-span-2). */}
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-2.5 sm:gap-y-2 lg:flex-wrap lg:gap-x-3">
+                    <div className="min-w-0 w-full sm:flex-1 sm:basis-[calc(50%-0.3125rem)] lg:basis-0 lg:min-w-[11rem]">
+                      <NumericMoneyInput tone="dark"
+                        label="Purchase value"
+                        value={row.purchaseValue}
+                        onChange={(n) => onChange(row.id, { purchaseValue: n })}
+                        variant="amount"
+                        placeholder="0"
+                        formatThousandsWhileTyping
+                        autoScaleFont
+                        className="w-full min-w-0 [&>span]:mb-0.5 [&>span]:block [&>span]:text-[10px] [&>span]:font-bold [&>span]:uppercase [&>span]:tracking-wide [&>span]:text-zinc-200"
+                        wrapperClassName="min-w-0 w-full rounded-xl border border-teal-400/20 bg-black/35 px-2.5 py-2 focus-within:border-teal-400/45 focus-within:ring-2 focus-within:ring-teal-500/20"
+                        inputClassName="min-w-0 bg-transparent text-right text-xs font-bold tabular-nums text-emerald-50 outline-none sm:text-sm"
+                      />
+                    </div>
+                    <div className="min-w-0 w-full sm:flex-1 sm:basis-[calc(50%-0.3125rem)] lg:basis-0 lg:min-w-[11rem]">
+                      <NumericMoneyInput tone="dark"
+                        label="Est. current value"
+                        value={row.estimatedValue}
+                        onChange={(n) => onChange(row.id, { estimatedValue: n })}
+                        variant="amount"
+                        placeholder="0"
+                        formatThousandsWhileTyping
+                        autoScaleFont
+                        className="w-full min-w-0 [&>span]:mb-0.5 [&>span]:block [&>span]:text-[10px] [&>span]:font-bold [&>span]:uppercase [&>span]:tracking-wide [&>span]:text-zinc-200"
+                        wrapperClassName="min-w-0 w-full rounded-xl border border-teal-400/20 bg-black/35 px-2.5 py-2 focus-within:border-teal-400/45 focus-within:ring-2 focus-within:ring-teal-500/20"
+                        inputClassName="min-w-0 bg-transparent text-right text-xs font-bold tabular-nums text-emerald-50 outline-none sm:text-sm"
+                      />
+                    </div>
+                    <div className="flex min-w-0 w-full items-end gap-2 sm:w-auto sm:shrink-0 sm:gap-2">
+                      <label className="min-w-0 w-full shrink-0 sm:w-[5.75rem]">
+                        <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">
+                          CCY
+                        </span>
+                        <CurrencySelect
+                          value={row.currency}
+                          onChange={(c) => onChange(row.id, { currency: c })}
+                          className="w-full min-w-[4.5rem]"
+                        />
+                      </label>
+                      <div className="ml-auto flex shrink-0 items-end sm:ml-0">
+                        <button
+                          type="button"
+                          aria-label="Remove"
+                          onClick={() => onRemove(row.id)}
+                          className="rounded-xl p-2 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
