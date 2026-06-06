@@ -9,10 +9,10 @@ type Row = {
   id: string;
   user_id: string;
   email: string;
-  plan: MembershipRequestPlan;
+  plan_type: MembershipRequestPlan;
   payment_method: MembershipPaymentMethod;
   reference: string | null;
-  submitted_at: string;
+  created_at: string;
   status: "pending" | "approved" | "rejected";
   reviewed_at: string | null;
 };
@@ -182,9 +182,9 @@ export function AdminMembershipRequestsClient() {
                       </p>
                     </td>
                     <td className="px-4 py-3 font-bold text-emerald-100">
-                      {row.plan === "elite" ? "Elite" : "Premium"}
+                      {row.plan_type === "elite" ? "Elite" : "Premium"}
                       <span className="mt-0.5 block text-[10px] font-semibold text-zinc-500">
-                        {formatNpr(MEMBERSHIP_PLAN_PRICE_NPR[row.plan])}/yr
+                        {formatNpr(MEMBERSHIP_PLAN_PRICE_NPR[row.plan_type])}/yr
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs font-semibold">{PAYMENT_METHOD_LABEL[row.payment_method]}</td>
@@ -192,7 +192,7 @@ export function AdminMembershipRequestsClient() {
                       {row.reference ?? "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
-                      {new Date(row.submitted_at).toLocaleString()}
+                      {new Date(row.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
                       <span

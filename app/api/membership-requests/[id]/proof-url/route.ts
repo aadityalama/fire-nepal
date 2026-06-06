@@ -29,7 +29,7 @@ export async function GET(_request: Request, ctx: RouteParams) {
 
     const { data: row, error } = await supabase
       .from("membership_requests")
-      .select("user_id, proof_storage_path")
+      .select("user_id, proof_url")
       .eq("id", id)
       .maybeSingle();
 
@@ -44,7 +44,7 @@ export async function GET(_request: Request, ctx: RouteParams) {
 
     const { data: signed, error: signErr } = await admin.storage
       .from(MEMBERSHIP_PAYMENT_BUCKET)
-      .createSignedUrl(row.proof_storage_path, 120);
+      .createSignedUrl(row.proof_url, 120);
 
     if (signErr || !signed?.signedUrl) {
       return NextResponse.json({ error: signErr?.message ?? "Could not sign URL" }, { status: 500 });

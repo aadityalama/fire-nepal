@@ -63,7 +63,7 @@ export async function PATCH(request: Request, ctx: RouteParams) {
   }
 
   // approve
-  const plan = row.plan as MembershipRequestPlan;
+  const plan = row.plan_type as MembershipRequestPlan;
   const amountNpr = MEMBERSHIP_PLAN_PRICE_NPR[plan];
   const periodStart = now;
   const periodEnd = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();

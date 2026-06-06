@@ -14,9 +14,9 @@ export async function GET() {
   const { data, error } = await admin
     .from("membership_requests")
     .select(
-      "id, user_id, email, plan, payment_method, reference, submitted_at, status, reviewed_at, reviewed_by, proof_storage_path",
+      "id, user_id, email, plan_type, payment_method, reference, created_at, status, reviewed_at, reviewed_by, proof_url",
     )
-    .order("submitted_at", { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

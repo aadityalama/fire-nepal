@@ -165,10 +165,10 @@ function CellIcon({ on, tone = "emerald" }: { on: CompareCell; tone?: "emerald" 
 
 type MyRequestRow = {
   id: string;
-  plan: MembershipRequestPlan;
+  plan_type: MembershipRequestPlan;
   payment_method: MembershipPaymentMethod;
   reference: string | null;
-  submitted_at: string;
+  created_at: string;
   status: "pending" | "approved" | "rejected";
 };
 
@@ -232,9 +232,9 @@ function MembershipMyRequestsPanel() {
           >
             <div>
               <p className="text-sm font-bold text-white">
-                {row.plan === "elite" ? "Elite" : "Premium"} · {PAYMENT_METHOD_LABEL[row.payment_method]}
+                {row.plan_type === "elite" ? "Elite" : "Premium"} · {PAYMENT_METHOD_LABEL[row.payment_method]}
               </p>
-              <p className="text-xs text-zinc-500">{new Date(row.submitted_at).toLocaleString()}</p>
+              <p className="text-xs text-zinc-500">{new Date(row.created_at).toLocaleString()}</p>
               {row.reference ? (
                 <p className="mt-1 text-xs font-medium text-zinc-400">
                   Ref: <span className="font-mono text-zinc-300">{row.reference}</span>

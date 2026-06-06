@@ -38,10 +38,10 @@ export async function GET() {
     const { data, error } = await supabase
       .from("membership_requests")
       .select(
-        "id, email, plan, payment_method, reference, submitted_at, status, reviewed_at, proof_storage_path",
+        "id, email, plan_type, payment_method, reference, created_at, status, reviewed_at, proof_url",
       )
       .eq("user_id", user.id)
-      .order("submitted_at", { ascending: false });
+      .order("created_at", { ascending: false });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -117,10 +117,10 @@ export async function POST(request: Request) {
     }
 
     const id = randomUUID();
-    const proof_storage_path = `${user.id}/${id}.${extFromMime(mime)}`;
+    const proof_url = `${user.id}/${id}.${extFromMime(mime)}`;
     const buf = Buffer.from(await file.arrayBuffer());
 
-    const { error: upErr } = await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).upload(proof_storage_path, buf, {
+    const { error: upErr } = await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).upload(proof_url, buf, {
       contentType: mime,
       upsert: false,
     });
@@ -134,17 +134,17 @@ export async function POST(request: Request) {
         id,
         user_id: user.id,
         email,
-        plan,
+        plan_type: plan,
         payment_method,
-        proof_storage_path,
+        proof_url,
         reference,
         status: "pending",
       })
-      .select("id, submitted_at, status")
+      .select("id, created_at, status")
       .single();
 
     if (insErr) {
-      await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_storage_path]);
+      await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_url]);
       return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
 
