@@ -1,7 +1,7 @@
 "use client";
 
 import { Gem, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
@@ -11,6 +11,11 @@ import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
 import { MetalHoldingPhotos } from "@/components/portfolio/MetalHoldingPhotos";
+import {
+  convertMetalBuyPriceAmountForUnitChange,
+  deriveMetalTotalCostBasisNprPatch,
+  metalBuyPriceNprPerGram,
+} from "@/components/portfolio/metal-buy-basis";
 import { MetalGramTolaFields, MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
@@ -209,6 +214,36 @@ export function MetalsPanel({
   const gramRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
   const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
   const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
+
+  const patchMetalRow = useCallback(
+    (id: string, patch: Partial<MetalRow>) => {
+      const touchesBuyOrQty =
+        Object.prototype.hasOwnProperty.call(patch, "grams") ||
+        Object.prototype.hasOwnProperty.call(patch, "metalBuyPriceAmount") ||
+        Object.prototype.hasOwnProperty.call(patch, "metalBuyPriceUnit");
+      if (!touchesBuyOrQty) {
+        onChange(id, patch);
+        return;
+      }
+
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      const merged: MetalRow = { ...row, ...patch };
+      const basisPatch = deriveMetalTotalCostBasisNprPatch(merged);
+      if (Object.keys(basisPatch).length > 0) {
+        onChange(id, { ...patch, ...basisPatch });
+        return;
+      }
+      const hadBuy = metalBuyPriceNprPerGram(row) != null;
+      const hasBuy = metalBuyPriceNprPerGram(merged) != null;
+      if (hadBuy && !hasBuy) {
+        onChange(id, { ...patch, totalCostBasisNpr: undefined, metalBuyPriceUnit: undefined });
+        return;
+      }
+      onChange(id, patch);
+    },
+    [rows, onChange],
+  );
 
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
@@ -445,7 +480,7 @@ export function MetalsPanel({
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Metal</span>
                     <select
                       value={row.metal}
-                      onChange={(e) => onChange(row.id, { metal: e.target.value as "gold" | "silver" })}
+                      onChange={(e) => patchMetalRow(row.id, { metal: e.target.value as "gold" | "silver" })}
                       className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
                     >
                       <option value="gold">Gold</option>
@@ -453,7 +488,7 @@ export function MetalsPanel({
                     </select>
                   </label>
                   <div className="min-w-0 sm:col-span-2">
-                    <MetalGramTolaFields grams={row.grams} onGramsChange={(n) => onChange(row.id, { grams: n })} />
+                    <MetalGramTolaFields grams={row.grams} onGramsChange={(n) => patchMetalRow(row.id, { grams: n })} />
                   </div>
                   <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:col-span-3 sm:text-xs">
                     <p className="text-emerald-200/55">Live mark</p>
@@ -481,21 +516,80 @@ export function MetalsPanel({
                       </p>
                     ) : (
                       <p className="mt-1 text-[10px] font-bold text-emerald-200/45">
-                        Add cost basis to track unrealized P/L.
+                        Add buy price (per gram or per tola) to track unrealized P/L.
                       </p>
                     )}
                   </div>
                   <div className="min-w-0 sm:col-span-3">
-                    <NumericMoneyInput tone="dark"
-                      label="Total cost basis (NPR)"
-                      value={row.totalCostBasisNpr}
-                      onChange={(n) => onChange(row.id, { totalCostBasisNpr: n })}
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Buy price</p>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {(["gram", "tola"] as const).map((u) => {
+                        const active = (row.metalBuyPriceUnit ?? "gram") === u;
+                        return (
+                          <button
+                            key={u}
+                            type="button"
+                            className={`min-h-[40px] rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition sm:min-h-0 ${
+                              active
+                                ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
+                                : "border-emerald-400/20 bg-black/30 text-emerald-200/70 hover:border-emerald-400/35"
+                            }`}
+                            onClick={() => {
+                              if (active) return;
+                              const converted = convertMetalBuyPriceAmountForUnitChange(
+                                row.metalBuyPriceAmount,
+                                row.metalBuyPriceUnit,
+                                u,
+                              );
+                              patchMetalRow(row.id, {
+                                metalBuyPriceUnit: u,
+                                ...(converted != null ? { metalBuyPriceAmount: converted } : {}),
+                              });
+                            }}
+                          >
+                            NPR / {u === "gram" ? "g" : "tola"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <NumericMoneyInput
+                      tone="dark"
+                      label={row.metalBuyPriceUnit === "tola" ? "Buy price (NPR per UI tola)" : "Buy price (NPR per gram)"}
+                      value={row.metalBuyPriceAmount}
+                      onChange={(n) =>
+                        patchMetalRow(row.id, {
+                          metalBuyPriceAmount: n,
+                          metalBuyPriceUnit: row.metalBuyPriceUnit ?? "gram",
+                        })
+                      }
                       variant="amount"
-                      placeholder="Optional — for realized P/L"
+                      placeholder="0"
                       className="text-[10px] font-bold uppercase tracking-wide text-zinc-200 [&>span]:block"
                       wrapperClassName="rounded-xl border border-emerald-400/15 bg-black/30 px-2 py-2 focus-within:border-emerald-400/40"
                       inputClassName="min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none"
                     />
+                    {(() => {
+                      const ppg = metalBuyPriceNprPerGram(row);
+                      return ppg != null ? (
+                        <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
+                          Implied ≈ <span className="tabular-nums text-amber-100/90">{formatMoney(ppg, "NPR")}</span> / g
+                          {row.metalBuyPriceUnit === "tola" ? (
+                            <span className="text-emerald-200/45"> (from NPR/tola ÷ 11.66)</span>
+                          ) : null}
+                        </p>
+                      ) : null;
+                    })()}
+                    <div className="mt-2 rounded-xl border border-emerald-400/20 bg-black/35 px-2.5 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Total cost basis (NPR)</p>
+                      <p className="mt-0.5 text-sm font-black tabular-nums text-emerald-50">
+                        {typeof row.totalCostBasisNpr === "number" && row.totalCostBasisNpr > 0
+                          ? formatMoney(row.totalCostBasisNpr, "NPR")
+                          : "—"}
+                      </p>
+                      <p className="mt-1 text-[10px] font-semibold leading-snug text-emerald-200/45">
+                        Quantity × buy price. Updates instantly when grams, tola, or buy price changes.
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 border-t border-emerald-400/10 pt-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-4 sm:gap-y-2">

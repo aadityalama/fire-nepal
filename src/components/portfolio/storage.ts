@@ -443,11 +443,25 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
     const basis = m.totalCostBasisNpr;
     const totalCostBasisNpr =
       typeof basis === "number" && Number.isFinite(basis) && basis > 0 ? basis : undefined;
+    const buyAmt = m.metalBuyPriceAmount;
+    const rawUnit = m.metalBuyPriceUnit;
+    const metalBuyPriceUnit =
+      rawUnit === "tola" || rawUnit === "gram" ? rawUnit : undefined;
+    const metalBuyPriceAmount =
+      metalBuyPriceUnit &&
+      typeof buyAmt === "number" &&
+      Number.isFinite(buyAmt) &&
+      buyAmt > 0
+        ? buyAmt
+        : undefined;
+    const metalBuyPriceUnitFinal = metalBuyPriceAmount != null ? metalBuyPriceUnit : undefined;
     const { photoUrls, coverPhotoIndex } = sanitizeMetalPhotoGallery(m.photoUrls, m.coverPhotoIndex);
     return {
       ...r,
       boughtDate: sanitizeIsoDate(m.boughtDate),
       totalCostBasisNpr,
+      metalBuyPriceAmount,
+      metalBuyPriceUnit: metalBuyPriceUnitFinal,
       ...(photoUrls && photoUrls.length > 0 ? { photoUrls, coverPhotoIndex } : { photoUrls: undefined, coverPhotoIndex: undefined }),
     };
   });
