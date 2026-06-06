@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
+import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import {
   annualizedCagrFraction,
   formatCagrPct,
@@ -202,6 +203,7 @@ export function MetalsPremiumDashboard({
   gramRates: MetalRatePair;
   ledger?: readonly PortfolioLedgerEntry[];
 }) {
+  const { totals } = useWealthPortfolio();
   const all = rollupAllMetals(rows, gramRates);
   const gold = rollupMetalBucket(rows, "gold", gramRates);
   const silver = rollupMetalBucket(rows, "silver", gramRates);
@@ -218,6 +220,8 @@ export function MetalsPremiumDashboard({
   const silverHasBasisLots = silverAvgPerG != null;
 
   const holdingApprox = days != null ? formatHoldingDurationApprox(days) : "—";
+  const nw = totals.netWorthNpr;
+  const nwContributionPct = nw > 0 && Number.isFinite(current) ? (current / nw) * 100 : null;
 
   const netTone =
     netPl == null ? "text-emerald-200/50" : netPl >= 0 ? "text-lime-200" : "text-rose-300";
@@ -269,45 +273,65 @@ export function MetalsPremiumDashboard({
             <span className="text-sm font-black">Au</span>
           </div>
           <div>
-            <h3 className="text-xs font-black uppercase tracking-[0.1em] text-emerald-50 sm:text-sm">Premium wealth KPIs</h3>
+            <h3 className="text-xs font-black uppercase tracking-[0.1em] text-emerald-50 sm:text-sm">Portfolio summary</h3>
             <p className="text-[10px] font-bold text-emerald-200/55 sm:text-[11px]">
-              Cost basis from BUY transactions, live marks, return, and holding duration.
+              Totals across all gold and silver items — live marks, cost basis, return, and share of net worth.
             </p>
           </div>
         </div>
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-4 xl:grid-cols-7">
           <MetalPremiumKpiCard
-            label="Purchase (cost basis)"
+            label="Total gold value"
+            labelClassName="text-amber-200/70"
+            shellClassName={premiumShell(true)}
+            valueText={gold.grams > 0 ? formatMoney(gold.currentNpr, "NPR") : "—"}
+            valueClassName="text-amber-100"
+            maxRem={1.45}
+            minRem={0.5}
+            footer={<p className="font-semibold text-emerald-200/45">Live mark × gold grams</p>}
+          />
+          <MetalPremiumKpiCard
+            label="Total silver value"
+            labelClassName="text-slate-200/70"
+            shellClassName={premiumShell(false)}
+            valueText={silver.grams > 0 ? formatMoney(silver.currentNpr, "NPR") : "—"}
+            valueClassName="text-slate-50"
+            maxRem={1.45}
+            minRem={0.5}
+            footer={<p className="font-semibold text-emerald-200/45">Live mark × silver grams</p>}
+          />
+          <MetalPremiumKpiCard
+            label="Total cost basis"
             labelClassName="text-lime-200/70"
             shellClassName={premiumShell(true)}
             valueText={purchase > 0 ? formatMoney(purchase, "NPR") : "—"}
             valueClassName="text-emerald-50"
             maxRem={1.5}
             minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">From BUY transactions (cost basis)</p>}
+            footer={<p className="font-semibold text-emerald-200/45">From BUY transactions</p>}
           />
           <MetalPremiumKpiCard
-            label="Current market value"
+            label="Total current value"
             labelClassName="text-emerald-200/70"
             shellClassName={premiumShell(false)}
             valueText={all.grams > 0 ? formatMoney(current, "NPR") : "—"}
             valueClassName="text-emerald-50"
             maxRem={1.5}
             minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Grams × Nepal board / g</p>}
+            footer={<p className="font-semibold text-emerald-200/45">Gold + silver marks</p>}
           />
           <MetalPremiumKpiCard
-            label="Net profit / loss"
+            label="Total profit / loss"
             labelClassName="text-emerald-200/70"
             shellClassName={premiumShell(false)}
             valueText={netPl != null ? `${netPl >= 0 ? "+" : ""}${formatMoney(netPl, "NPR")}` : "—"}
             valueClassName={netTone}
             maxRem={1.35}
             minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Current − purchase</p>}
+            footer={<p className="font-semibold text-emerald-200/45">Current − cost basis</p>}
           />
           <MetalPremiumKpiCard
-            label="ROI %"
+            label="Total ROI %"
             labelClassName="text-lime-200/70"
             shellClassName={premiumShell(true)}
             valueText={formatRoiPct(roi)}
@@ -316,6 +340,18 @@ export function MetalsPremiumDashboard({
             minRem={0.5}
             footer={<p className="font-semibold text-emerald-200/45">Vs cost basis</p>}
           />
+          <MetalPremiumKpiCard
+            label="Net worth share"
+            labelClassName="text-violet-200/70"
+            shellClassName={premiumShell(false)}
+            valueText={nwContributionPct != null ? `${nwContributionPct.toFixed(2)}%` : "—"}
+            valueClassName="text-emerald-50"
+            maxRem={1.75}
+            minRem={0.5}
+            footer={<p className="font-semibold text-emerald-200/45">Metals ÷ portfolio net worth</p>}
+          />
+        </div>
+        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
           <MetalPremiumKpiCard
             label="CAGR %"
             labelClassName="text-amber-200/70"
@@ -340,8 +376,8 @@ export function MetalsPremiumDashboard({
       </div>
 
       <div className="grid min-w-0 gap-2 lg:grid-cols-2">
-        {summaryCard({ title: "Gold holdings", accent: "amber", rollup: gold })}
-        {summaryCard({ title: "Silver holdings", accent: "slate", rollup: silver })}
+        {summaryCard({ title: "Gold items", accent: "amber", rollup: gold })}
+        {summaryCard({ title: "Silver items", accent: "slate", rollup: silver })}
       </div>
 
       <div>

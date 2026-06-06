@@ -110,6 +110,8 @@ export function sortLedgerByTradeDate(
 export function entryMatchesSearch(e: PortfolioLedgerEntry, q: string): boolean {
   const s = q.trim().toLowerCase();
   if (!s) return true;
+  const meta = e.meta && typeof e.meta === "object" ? (e.meta as Record<string, unknown>) : null;
+  const metalTxItemName = typeof meta?.metalTxItemName === "string" ? meta.metalTxItemName : "";
   const hay = [
     e.assetLabel,
     e.notes,
@@ -118,6 +120,7 @@ export function entryMatchesSearch(e: PortfolioLedgerEntry, q: string): boolean 
     bucketLabel(e),
     e.tradeDate,
     e.investmentKind,
+    metalTxItemName,
   ]
     .filter(Boolean)
     .join(" ")

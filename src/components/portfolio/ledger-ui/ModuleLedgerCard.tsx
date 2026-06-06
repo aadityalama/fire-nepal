@@ -1,9 +1,9 @@
 "use client";
 
 import { BookOpen, ChevronDown, ChevronUp, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ledgerRealizedTotalNpr } from "@/components/portfolio/portfolio-ledger";
-import type { PortfolioLedgerBucket, PortfolioLedgerEntry } from "@/components/portfolio/types";
+import type { PortfolioLedgerBucket, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
 import { LedgerEntryList } from "@/components/portfolio/ledger-ui/LedgerEntryList";
 import {
@@ -46,17 +46,34 @@ export function ModuleLedgerCard({
   bucket,
   ledger,
   defaultOpen = false,
+  ledgerMutate,
 }: {
   title: string;
   subtitle: string;
   bucket: PortfolioLedgerBucket;
   ledger: readonly PortfolioLedgerEntry[];
   defaultOpen?: boolean;
+  /** When set, metal ledger rows can delete attachments in-place. */
+  ledgerMutate?: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [view, setView] = useState<LedgerScopeView>("all");
   const [sort, setSort] = useState<"desc" | "asc">("desc");
   const [search, setSearch] = useState("");
+
+  const onPatchLedgerEntry = useCallback(
+    (entryId: string, patch: (e: PortfolioLedgerEntry) => PortfolioLedgerEntry) => {
+      if (!ledgerMutate || bucket !== "metal") return;
+      ledgerMutate((s) => {
+        const idx = s.ledger.findIndex((x) => x.id === entryId);
+        if (idx < 0) return null;
+        const ledgerNext = [...s.ledger];
+        ledgerNext[idx] = patch(ledgerNext[idx]!);
+        return { ...s, ledger: ledgerNext };
+      });
+    },
+    [ledgerMutate, bucket],
+  );
 
   const tabs = useMemo(() => tabsForBucket(bucket), [bucket]);
 
@@ -138,7 +155,10 @@ export function ModuleLedgerCard({
                 : "No rows match this view or search."}
             </p>
           ) : (
-            <LedgerEntryList entries={filtered} />
+            <LedgerEntryList
+              entries={filtered}
+              onPatchLedgerEntry={bucket === "metal" ? onPatchLedgerEntry : undefined}
+            />
           )}
         </div>
       ) : null}

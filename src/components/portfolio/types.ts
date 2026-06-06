@@ -80,6 +80,8 @@ export type InvestmentRow = {
 export type MetalRow = {
   id: string;
   metal: "gold" | "silver";
+  /** Display name for this item (e.g. Gold Ring, Silver Chain). */
+  name: string;
   grams: number | undefined;
   /** ISO `YYYY-MM-DD` — optional holding timeline. */
   boughtDate?: string;
@@ -89,13 +91,6 @@ export type MetalRow = {
   metalBuyPriceAmount?: number;
   /** @deprecated Synced with `metalBuyPriceAmount`; UI uses transactions only. */
   metalBuyPriceUnit?: "gram" | "tola";
-  /**
-   * Optional photos (jewelry, bars, invoices): inline JPEG data URLs or safe `https` image URLs.
-   * Display / documentation only — does not affect marks or ledger.
-   */
-  photoUrls?: string[];
-  /** Index into `photoUrls` for the cover image (0-based). */
-  coverPhotoIndex?: number;
 };
 
 export type RealEstateRow = {
@@ -231,8 +226,8 @@ export type WealthPortfolioStateV2 = {
   /** Buy / sell ledger (FIFO slices stored on entries for future tax / sync). */
   ledger: PortfolioLedgerEntry[];
   /**
-   * Gold & Silver module: purchase bill / invoice images (JPEG data URLs or https), persisted with the portfolio.
-   * Separate from per-holding `MetalRow.photoUrls` (jewelry/bar photos).
+   * @deprecated Module bills are stored per metal ledger transaction (`meta.metalTxBillUrls`).
+   * Kept for backward-compatible load/save and Supabase sync; cleared on metals reset.
    */
   metalPurchaseBillUrls?: string[];
 };

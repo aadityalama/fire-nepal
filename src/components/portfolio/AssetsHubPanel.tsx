@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { metalCoverPhotoUrl } from "@/components/portfolio/metal-photo-utils";
+import { metalItemCoverFromLedger } from "@/components/portfolio/metal-photo-utils";
 import { formatMoney } from "@/lib/expense-utils";
 
 type HubCardDef = {
@@ -58,11 +58,11 @@ export function AssetsHubPanel() {
 
   const metalsPreviewUrl = useMemo(() => {
     for (const m of state.metals) {
-      const u = metalCoverPhotoUrl(m);
+      const u = metalItemCoverFromLedger(m.id, state.ledger);
       if (u) return u;
     }
     return null;
-  }, [state.metals]);
+  }, [state.metals, state.ledger]);
 
   const gridCls =
     "grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 md:gap-5 lg:grid-cols-4 lg:gap-5 xl:gap-6";

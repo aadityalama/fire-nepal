@@ -51,7 +51,7 @@ export function GoldSilverPageHeader() {
           <div className="min-w-0 lg:flex-1">
             <h1 className={titleCls}>Gold & Silver</h1>
             <p className={`mt-1 max-w-3xl text-xs leading-snug sm:text-sm sm:leading-relaxed ${subtitleCls}`}>
-              Bullion and jewelry holdings with NPR marks.
+              Item-based gold and silver with NPR marks, cost basis, and transaction-level bills and photos.
             </p>
           </div>
           <div className="w-full shrink-0 lg:w-auto lg:max-w-[min(100%,14rem)]">

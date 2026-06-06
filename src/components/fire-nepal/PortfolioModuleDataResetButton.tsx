@@ -21,7 +21,7 @@ const COPY: Record<
   },
   metals: {
     title: "Reset gold & silver?",
-    body: "All metal holdings, purchase bills, photos, and precious-metals ledger rows tied to this module will be removed.",
+    body: "All items, transactions, bills, photos, and calculated values for this module will be removed. Portfolio net worth updates immediately.",
     toast: "Gold & silver data cleared.",
     buttonClass:
       "inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/35 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20 sm:text-xs",

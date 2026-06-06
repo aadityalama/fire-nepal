@@ -20,7 +20,6 @@ import {
   defaultWealthState,
   emptyInvestment,
   emptyLiability,
-  emptyMetal,
   emptyRealEstate,
   emptySimpleLine,
   emptyVehicle,
@@ -103,7 +102,6 @@ export type WealthPortfolioContextValue = {
   addInv: () => void;
   removeInv: (id: string) => void;
   updateMetal: (id: string, patch: Partial<MetalRow>) => void;
-  addMetal: (metal: "gold" | "silver") => void;
   removeMetal: (id: string) => void;
   updateRe: (id: string, patch: Partial<RealEstateRow>) => void;
   addRe: () => void;
@@ -418,13 +416,11 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       metals: s.metals.map((r) => (r.id === id ? { ...r, ...patch } : r)),
     }));
   }, []);
-  const addMetal = useCallback((metal: "gold" | "silver") => {
-    setState((s) => ({ ...s, metals: [...s.metals, emptyMetal(metal)] }));
-  }, []);
   const removeMetal = useCallback((id: string) => {
     setState((s) => ({
       ...s,
       metals: s.metals.filter((r) => r.id !== id),
+      ledger: s.ledger.filter((e) => !(e.bucket === "metal" && e.rowId === id)),
     }));
   }, []);
 
@@ -542,7 +538,6 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       addInv,
       removeInv,
       updateMetal,
-      addMetal,
       removeMetal,
       updateRe,
       addRe,
@@ -591,7 +586,6 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       addInv,
       removeInv,
       updateMetal,
-      addMetal,
       removeMetal,
       updateRe,
       addRe,

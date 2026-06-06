@@ -1,22 +1,22 @@
 "use client";
 
-import { Gem, Plus, Trash2, TrendingDown, TrendingUp, X } from "lucide-react";
+import { Gem, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
 } from "@/components/portfolio/calculations";
-import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
+import { calendarDaysInvested, formatHoldingDurationApprox, parsePurchaseIso } from "@/components/portfolio/holding-stats";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
-import { MetalHoldingPhotos } from "@/components/portfolio/MetalHoldingPhotos";
 import {
-  compressMetalImageFile,
-  METAL_PURCHASE_BILL_MAX_COUNT,
-  sanitizeMetalPurchaseBillUrls,
+  compressMetalLedgerAttachmentFile,
+  METAL_LEDGER_MAX_BILLS_PER_TX,
+  METAL_LEDGER_MAX_PHOTOS_PER_TX,
+  metalItemCoverFromLedger,
 } from "@/components/portfolio/metal-photo-utils";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
-import { metalRowFirstBuyIso } from "@/components/portfolio/metals-premium-metrics";
-import { ensureMetalHoldingRow, recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
+import { metalRowFirstBuyIso, roiPct } from "@/components/portfolio/metals-premium-metrics";
+import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
   portfolioTxnTodayIso,
@@ -34,138 +34,6 @@ function todayIso() {
   return portfolioTxnTodayIso();
 }
 
-function MetalPurchaseBillsGallery({
-  billUrls,
-  onMutate,
-  fileInputRef,
-}: {
-  billUrls: readonly string[];
-  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
-  fileInputRef: RefObject<HTMLInputElement | null>;
-}) {
-  const inputId = useId();
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-    e.target.value = "";
-    if (!files.length) return;
-    setBusy(true);
-    try {
-      const urls: string[] = [];
-      for (const f of files) {
-        const u = await compressMetalImageFile(f);
-        if (u) urls.push(u);
-      }
-      if (!urls.length) {
-        toast.error("Could not process images.");
-        return;
-      }
-      let added = 0;
-      const ok = onMutate((s) => {
-        const cur = sanitizeMetalPurchaseBillUrls(s.metalPurchaseBillUrls);
-        const room = Math.max(0, METAL_PURCHASE_BILL_MAX_COUNT - cur.length);
-        const slice = urls.slice(0, room);
-        if (slice.length === 0) return null;
-        added = slice.length;
-        return { ...s, metalPurchaseBillUrls: [...cur, ...slice] };
-      });
-      if (ok && added > 0) {
-        toast.success(`Saved ${added} bill image(s).`);
-      } else if (!ok) {
-        toast.error(`Bill limit reached (${METAL_PURCHASE_BILL_MAX_COUNT}).`);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeAt = (idx: number) => {
-    const ok = onMutate((s) => {
-      const cur = [...sanitizeMetalPurchaseBillUrls(s.metalPurchaseBillUrls)];
-      if (idx < 0 || idx >= cur.length) return null;
-      cur.splice(idx, 1);
-      return { ...s, metalPurchaseBillUrls: cur };
-    });
-    if (ok) toast.success("Bill removed.");
-  };
-
-  return (
-    <div className="mb-3 rounded-xl border border-emerald-400/15 bg-black/20 px-2.5 py-2 sm:px-3">
-      <input
-        ref={fileInputRef}
-        id={inputId}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        multiple
-        className="sr-only"
-        onChange={(e) => void onFiles(e)}
-      />
-      <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/70">Purchase bills</p>
-      <p className="mt-0.5 text-[10px] font-semibold text-emerald-200/45">
-        Stored with your Gold &amp; Silver portfolio (max {METAL_PURCHASE_BILL_MAX_COUNT} images).
-      </p>
-      {billUrls.length > 0 ? (
-        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6">
-          {billUrls.map((url, idx) => (
-            <div
-              key={`${idx}-${url.slice(0, 32)}`}
-              className="group relative aspect-square overflow-hidden rounded-lg border border-emerald-400/20 bg-black/40"
-            >
-              <button
-                type="button"
-                className="absolute inset-0 z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                onClick={() => setPreviewUrl(url)}
-                aria-label="Preview bill"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-full w-full object-cover" />
-              </button>
-              <button
-                type="button"
-                className="absolute right-0.5 top-0.5 z-20 rounded-md border border-rose-400/40 bg-black/70 p-0.5 text-rose-200 opacity-90 transition hover:bg-rose-500/30"
-                aria-label="Delete bill"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeAt(idx);
-                }}
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-1.5 text-[10px] font-bold text-emerald-200/40">No bills uploaded yet.</p>
-      )}
-      {busy ? (
-        <p className="mt-2 text-[10px] font-bold text-emerald-200/60">Processing…</p>
-      ) : null}
-
-      {previewUrl ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal
-          aria-label="Bill preview"
-        >
-          <button
-            type="button"
-            className="absolute right-3 top-3 rounded-lg border border-white/20 bg-white/10 p-2 text-white"
-            onClick={() => setPreviewUrl(null)}
-            aria-label="Close preview"
-          >
-            <X size={18} />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={previewUrl} alt="Bill preview" className="max-h-[85vh] max-w-full rounded-lg object-contain shadow-2xl" />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "buy", label: "Buy", tone: "in" },
   { id: "sell", label: "Sell", tone: "out" },
@@ -174,14 +42,23 @@ const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
 function UniversalMetalTransactionForm({
   rows,
   onMutate,
+  metalQuickBuy,
+  onMetalQuickBuyConsumed,
+  billsFileInputRef,
 }: {
   rows: MetalRow[];
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  metalQuickBuy?: { metal: "gold" | "silver"; tick: number } | null;
+  onMetalQuickBuyConsumed?: () => void;
+  billsFileInputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [open, setOpen] = useState(true);
   const [formMetal, setFormMetal] = useState<"gold" | "silver">("gold");
-  const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [segmentId, setSegmentId] = useState<string>("buy");
+  const [buyMode, setBuyMode] = useState<"new" | "existing">("new");
+  const [itemName, setItemName] = useState("");
+  const [existingBuyRowId, setExistingBuyRowId] = useState<string | null>(null);
+  const [sellRowId, setSellRowId] = useState<string | null>(null);
   const [gramQtyStr, setGramQtyStr] = useState("");
   const [tolaQtyStr, setTolaQtyStr] = useState("");
   const [buyPriceStr, setBuyPriceStr] = useState("");
@@ -192,23 +69,56 @@ function UniversalMetalTransactionForm({
   const [notes, setNotes] = useState("");
   const [tradeDate, setTradeDate] = useState(todayIso);
   const [err, setErr] = useState<string | null>(null);
+  const [pendingBillUrls, setPendingBillUrls] = useState<string[]>([]);
+  const [pendingPhotoUrls, setPendingPhotoUrls] = useState<string[]>([]);
+  const [attachBusy, setAttachBusy] = useState(false);
+  const internalBillsRef = useRef<HTMLInputElement>(null);
+  const photosInputRef = useRef<HTMLInputElement>(null);
+  const billsInputRef = billsFileInputRef ?? internalBillsRef;
+  const billsInputId = useId();
+  const photosInputId = useId();
 
   const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
+  const sellCandidates = useMemo(() => candidates.filter((r) => (r.grams ?? 0) > 1e-9), [candidates]);
 
-  const resolvedTargetRowId = useMemo(() => {
+  useEffect(() => {
+    if (!metalQuickBuy) return;
+    setFormMetal(metalQuickBuy.metal);
+    setSegmentId("buy");
+    setBuyMode("new");
+    setOpen(true);
+    onMetalQuickBuyConsumed?.();
+  }, [metalQuickBuy, onMetalQuickBuyConsumed]);
+
+  useEffect(() => {
+    if (buyMode === "existing" && candidates.length === 0) setBuyMode("new");
+  }, [buyMode, candidates.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    queueMicrotask(() => {
+      setErr(null);
+    });
+  }, [open, segmentId, formMetal, buyMode, existingBuyRowId, sellRowId]);
+
+  const resolvedSellRowId = useMemo(() => {
+    if (sellCandidates.length === 0) return null;
+    if (sellRowId != null && sellCandidates.some((r) => r.id === sellRowId)) return sellRowId;
+    return sellCandidates[0]!.id;
+  }, [sellCandidates, sellRowId]);
+
+  const resolvedBuyExistingId = useMemo(() => {
     if (candidates.length === 0) return null;
-    if (targetRowId != null && candidates.some((r) => r.id === targetRowId)) return targetRowId;
+    if (existingBuyRowId != null && candidates.some((r) => r.id === existingBuyRowId)) return existingBuyRowId;
     return candidates[0]!.id;
-  }, [candidates, targetRowId]);
-
-  const targetRow = resolvedTargetRowId ? rows.find((r) => r.id === resolvedTargetRowId) : undefined;
-  const held = targetRow?.grams ?? 0;
-  const basis = targetRow?.totalCostBasisNpr;
-  const avgPerG = held > 0 && basis != null && basis > 0 ? basis / held : null;
+  }, [candidates, existingBuyRowId]);
 
   const resetAllFields = () => {
-    setFormMetal("gold");
     setSegmentId("buy");
+    setBuyMode("new");
+    setItemName("");
+    setExistingBuyRowId(null);
+    setSellRowId(null);
     setGramQtyStr("");
     setTolaQtyStr("");
     setBuyPriceStr("");
@@ -218,8 +128,9 @@ function UniversalMetalTransactionForm({
     setFeesStr("");
     setNotes("");
     setTradeDate(todayIso());
-    setTargetRowId(null);
     setErr(null);
+    setPendingBillUrls([]);
+    setPendingPhotoUrls([]);
   };
 
   const onGramQtyChange = useCallback((raw: string) => {
@@ -254,13 +165,6 @@ function UniversalMetalTransactionForm({
     setGramQtyStr(Number(g.toFixed(6)).toString());
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    queueMicrotask(() => {
-      setErr(null);
-    });
-  }, [open, segmentId, formMetal, resolvedTargetRowId]);
-
   const parseQtyGrams = (): number | null => {
     const gRaw = gramQtyStr.replace(/,/g, "").trim();
     if (gRaw !== "") {
@@ -292,6 +196,34 @@ function UniversalMetalTransactionForm({
     return n;
   };
 
+  const appendFiles = async (files: File[], kind: "bill" | "photo") => {
+    setAttachBusy(true);
+    try {
+      const next: string[] = [];
+      for (const f of files) {
+        const u = await compressMetalLedgerAttachmentFile(f);
+        if (u) next.push(u);
+      }
+      if (!next.length) {
+        toast.error("Could not process files (images or small PDFs only).");
+        return;
+      }
+      if (kind === "bill") {
+        setPendingBillUrls((prev) => {
+          const room = Math.max(0, METAL_LEDGER_MAX_BILLS_PER_TX - prev.length);
+          return [...prev, ...next.slice(0, room)];
+        });
+      } else {
+        setPendingPhotoUrls((prev) => {
+          const room = Math.max(0, METAL_LEDGER_MAX_PHOTOS_PER_TX - prev.length);
+          return [...prev, ...next.slice(0, room)];
+        });
+      }
+    } finally {
+      setAttachBusy(false);
+    }
+  };
+
   const submit = async () => {
     setErr(null);
     const grams = parseQtyGrams();
@@ -306,28 +238,33 @@ function UniversalMetalTransactionForm({
     }
 
     if (segmentId === "sell") {
+      if (sellCandidates.length === 0) {
+        setErr("Nothing to sell — record a buy first.");
+        return;
+      }
+      const rowId = resolvedSellRowId;
+      if (!rowId) {
+        setErr("Select an item to sell from.");
+        return;
+      }
       const unitPriceNprPerGram = parseSellUnitPriceNprPerGram();
       if (unitPriceNprPerGram == null) {
         setErr(`Enter sell price (NPR per ${sellPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
-      const ok = onMutate((s) => {
-        let sWork = s;
-        let rowId: string;
-        if (resolvedTargetRowId != null && sWork.metals.some((r) => r.id === resolvedTargetRowId)) {
-          rowId = resolvedTargetRowId;
-        } else {
-          const ensured = ensureMetalHoldingRow(sWork, formMetal);
-          sWork = ensured.state;
-          rowId = ensured.rowId;
-        }
-        const row = sWork.metals.find((r) => r.id === rowId);
-        const g0 = row?.grams ?? 0;
-        if (grams > g0 + 1e-9) return null;
-        return recordMetalSell(sWork, rowId, { grams, unitPriceNprPerGram, tradeDate, feesNpr, notes });
-      });
+      const ok = onMutate((s) =>
+        recordMetalSell(s, rowId, {
+          grams,
+          unitPriceNprPerGram,
+          tradeDate,
+          feesNpr,
+          notes,
+          billAttachmentUrls: pendingBillUrls,
+          photoAttachmentUrls: pendingPhotoUrls,
+        }),
+      );
       if (!ok) {
-        setErr("Could not record sell (check quantity vs. holdings).");
+        setErr("Could not record sell (check quantity vs. item).");
         return;
       }
       toast.success("Sell recorded.");
@@ -337,26 +274,28 @@ function UniversalMetalTransactionForm({
         setErr(`Enter buy price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
-
-      const ok = onMutate((s) => {
-        let sWork = s;
-        let rowId: string;
-        if (resolvedTargetRowId != null && sWork.metals.some((r) => r.id === resolvedTargetRowId)) {
-          rowId = resolvedTargetRowId;
-        } else {
-          const ensured = ensureMetalHoldingRow(sWork, formMetal);
-          sWork = ensured.state;
-          rowId = ensured.rowId;
+      if (buyMode === "new") {
+        const nm = itemName.replace(/\s+/g, " ").trim();
+        if (!nm) {
+          setErr("Item name is required for a new buy.");
+          return;
         }
-        return recordMetalBuy(sWork, rowId, {
+      }
+      const ok = onMutate((s) =>
+        recordMetalBuy(s, {
+          metal: formMetal,
+          existingRowId: buyMode === "existing" ? resolvedBuyExistingId : null,
+          itemName: buyMode === "new" ? itemName : (candidates.find((r) => r.id === resolvedBuyExistingId)?.name ?? ""),
           grams,
           tradeDate,
           buyPriceNpr,
           buyPriceUnit,
           feesNpr,
           notes,
-        });
-      });
+          billAttachmentUrls: pendingBillUrls,
+          photoAttachmentUrls: pendingPhotoUrls,
+        }),
+      );
       if (!ok) {
         setErr("Could not record buy.");
         return;
@@ -370,7 +309,9 @@ function UniversalMetalTransactionForm({
   const previewBuyGrams = parseQtyGrams();
   const previewBuyPrice = parseBuyPriceNpr();
   const previewFees = feesStr.trim() === "" ? 0 : Number(feesStr.replace(/,/g, ""));
-  const previewLineGrams = resolvedTargetRowId != null ? (rows.find((r) => r.id === resolvedTargetRowId)?.grams ?? 0) : 0;
+  const buyTargetRow =
+    buyMode === "existing" && resolvedBuyExistingId ? rows.find((r) => r.id === resolvedBuyExistingId) : undefined;
+  const previewLineGrams = buyTargetRow?.grams ?? 0;
   let previewAddBasis: number | null = null;
   if (
     segmentId === "buy" &&
@@ -386,201 +327,323 @@ function UniversalMetalTransactionForm({
   }
 
   return (
-    <PortfolioTransactionStrip
-      open={open}
-      onOpenChange={setOpen}
-      headerLabel="Transactions"
-      summaryRight={
-        resolvedTargetRowId != null && targetRow ? (
-          <>
-            {held.toLocaleString()} g · basis {basis != null ? formatMoney(basis, "NPR") : "—"}
-            {avgPerG != null ? ` · avg ${formatMoney(avgPerG, "NPR")}/g` : ""}
-          </>
-        ) : (
-          <span className="text-emerald-200/70">No {formMetal} line yet — first buy creates it</span>
-        )
-      }
-      segments={METAL_TX_SEGMENTS}
-      segmentId={segmentId}
-      onSegmentId={setSegmentId}
-      tradeDate={tradeDate}
-      onTradeDate={setTradeDate}
-      feesLabel="Fees (NPR)"
-      feesStr={feesStr}
-      onFeesStrChange={setFeesStr}
-      notes={notes}
-      onNotesChange={setNotes}
-      error={err}
-      submitLabel={segmentId === "sell" ? "Record sell" : "Record buy"}
-      onSubmit={() => void submit()}
-      accent="amber"
-    >
-      <div className="space-y-2">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Metal</span>
-            <select
-              value={formMetal}
-              onChange={(e) => setFormMetal(e.target.value as "gold" | "silver")}
-              className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
-            >
-              <option value="gold">Gold</option>
-              <option value="silver">Silver</option>
-            </select>
-          </label>
-          {candidates.length > 1 ? (
+    <div id="metal-transactions">
+      <PortfolioTransactionStrip
+        open={open}
+        onOpenChange={setOpen}
+        headerLabel="Transactions"
+        summaryRight={
+          segmentId === "sell" && resolvedSellRowId ? (
+            <span className="text-emerald-200/80">
+              Selling from{" "}
+              <span className="font-black text-emerald-50">
+                {rows.find((r) => r.id === resolvedSellRowId)?.name ?? "Item"}
+              </span>
+            </span>
+          ) : segmentId === "buy" && buyMode === "existing" && resolvedBuyExistingId ? (
+            <span className="text-emerald-200/80">
+              Adding to{" "}
+              <span className="font-black text-emerald-50">
+                {rows.find((r) => r.id === resolvedBuyExistingId)?.name ?? "Item"}
+              </span>
+            </span>
+          ) : (
+            <span className="text-emerald-200/70">Buy creates an item; sell reduces quantity</span>
+          )
+        }
+        segments={METAL_TX_SEGMENTS}
+        segmentId={segmentId}
+        onSegmentId={setSegmentId}
+        tradeDate={tradeDate}
+        onTradeDate={setTradeDate}
+        feesLabel="Fees (NPR)"
+        feesStr={feesStr}
+        onFeesStrChange={setFeesStr}
+        notes={notes}
+        onNotesChange={setNotes}
+        error={err}
+        submitLabel={segmentId === "sell" ? "Record sell" : "Record buy"}
+        onSubmit={() => void submit()}
+        accent="amber"
+      >
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Holding line</span>
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Metal</span>
               <select
-                value={resolvedTargetRowId ?? ""}
-                onChange={(e) => setTargetRowId(e.target.value || null)}
+                value={formMetal}
+                onChange={(e) => setFormMetal(e.target.value as "gold" | "silver")}
                 className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
               >
-                {candidates.map((r, i) => (
-                  <option key={r.id} value={r.id}>
-                    #{i + 1} · {(r.grams ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} g
-                  </option>
-                ))}
+                <option value="gold">Gold</option>
+                <option value="silver">Silver</option>
               </select>
             </label>
-          ) : null}
-        </div>
+            {segmentId === "sell" && sellCandidates.length > 1 ? (
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Sell from item</span>
+                <select
+                  value={resolvedSellRowId ?? ""}
+                  onChange={(e) => setSellRowId(e.target.value || null)}
+                  className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+                >
+                  {sellCandidates.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {(r.name || "Item").slice(0, 48)} · {(r.grams ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Grams</span>
-            <input
-              value={gramQtyStr}
-              onChange={(e) => onGramQtyChange(e.target.value)}
-              inputMode="decimal"
-              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-              placeholder="0"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Tola (1 tola = 11.66 g)</span>
-            <input
-              value={tolaQtyStr}
-              onChange={(e) => onTolaQtyChange(e.target.value)}
-              inputMode="decimal"
-              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-              placeholder="0"
-            />
-          </label>
-        </div>
-
-        {segmentId === "sell" ? (
-          <>
+          {segmentId === "buy" ? (
             <div className="flex flex-wrap gap-1.5">
-              <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Sell price unit</span>
-              {(["gram", "tola"] as const).map((u) => {
-                const active = sellPriceUnit === u;
+              <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy type</span>
+              {(["new", "existing"] as const).map((m) => {
+                const active = buyMode === m;
                 return (
                   <button
-                    key={u}
-                    type="button"
-                    className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-                      active
-                        ? "border-rose-400/45 bg-rose-500/15 text-rose-100"
-                        : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
-                    }`}
-                    onClick={() => setSellPriceUnit(u)}
-                  >
-                    NPR / {u === "gram" ? "g" : "tola"}
-                  </button>
-                );
-              })}
-            </div>
-            <label className="block">
-              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
-                Sell price ({sellPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
-              </span>
-              <input
-                value={sellPriceStr}
-                onChange={(e) => setSellPriceStr(e.target.value)}
-                inputMode="decimal"
-                className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-                placeholder="0"
-              />
-            </label>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy price unit</span>
-              {(["gram", "tola"] as const).map((u) => {
-                const active = buyPriceUnit === u;
-                return (
-                  <button
-                    key={u}
+                    key={m}
                     type="button"
                     className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
                       active
                         ? "border-lime-400/45 bg-lime-500/15 text-lime-100"
                         : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
                     }`}
-                    onClick={() => setBuyPriceUnit(u)}
+                    onClick={() => setBuyMode(m)}
                   >
-                    NPR / {u === "gram" ? "g" : "tola"}
+                    {m === "new" ? "New item" : "Add to existing"}
                   </button>
                 );
               })}
             </div>
+          ) : null}
+
+          {segmentId === "buy" && buyMode === "new" ? (
             <label className="block">
-              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
-                Buy price ({buyPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
-              </span>
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item name</span>
               <input
-                value={buyPriceStr}
-                onChange={(e) => setBuyPriceStr(e.target.value)}
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                placeholder="e.g. Gold Ring, Silver Chain"
+                maxLength={120}
+              />
+            </label>
+          ) : null}
+
+          {segmentId === "buy" && buyMode === "existing" && candidates.length > 0 ? (
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item</span>
+              <select
+                value={resolvedBuyExistingId ?? ""}
+                onChange={(e) => setExistingBuyRowId(e.target.value || null)}
+                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+              >
+                {candidates.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {(r.name || "Item").slice(0, 56)} · {(r.grams ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Grams</span>
+              <input
+                value={gramQtyStr}
+                onChange={(e) => onGramQtyChange(e.target.value)}
                 inputMode="decimal"
                 className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
                 placeholder="0"
               />
             </label>
-            {previewAddBasis != null && Number.isFinite(previewAddBasis) && segmentId === "buy" && previewBuyGrams != null ? (
-              <p className="text-[10px] font-bold text-emerald-200/70">
-                This buy total (incl. fees):{" "}
-                <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
-                {" · after submit ~ "}
-                <span className="tabular-nums text-amber-100">
-                  {(previewLineGrams + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
-                </span>{" "}
-                on this line
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Tola (1 tola = 11.66 g)</span>
+              <input
+                value={tolaQtyStr}
+                onChange={(e) => onTolaQtyChange(e.target.value)}
+                inputMode="decimal"
+                className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                placeholder="0"
+              />
+            </label>
+          </div>
+
+          {segmentId === "sell" ? (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Sell price unit</span>
+                {(["gram", "tola"] as const).map((u) => {
+                  const active = sellPriceUnit === u;
+                  return (
+                    <button
+                      key={u}
+                      type="button"
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                        active
+                          ? "border-rose-400/45 bg-rose-500/15 text-rose-100"
+                          : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+                      }`}
+                      onClick={() => setSellPriceUnit(u)}
+                    >
+                      NPR / {u === "gram" ? "g" : "tola"}
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+                  Sell price ({sellPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
+                </span>
+                <input
+                  value={sellPriceStr}
+                  onChange={(e) => setSellPriceStr(e.target.value)}
+                  inputMode="decimal"
+                  className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                  placeholder="0"
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy price unit</span>
+                {(["gram", "tola"] as const).map((u) => {
+                  const active = buyPriceUnit === u;
+                  return (
+                    <button
+                      key={u}
+                      type="button"
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                        active
+                          ? "border-lime-400/45 bg-lime-500/15 text-lime-100"
+                          : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+                      }`}
+                      onClick={() => setBuyPriceUnit(u)}
+                    >
+                      NPR / {u === "gram" ? "g" : "tola"}
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+                  Buy price ({buyPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
+                </span>
+                <input
+                  value={buyPriceStr}
+                  onChange={(e) => setBuyPriceStr(e.target.value)}
+                  inputMode="decimal"
+                  className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+                  placeholder="0"
+                />
+              </label>
+              {previewAddBasis != null && Number.isFinite(previewAddBasis) && segmentId === "buy" && previewBuyGrams != null ? (
+                <p className="text-[10px] font-bold text-emerald-200/70">
+                  This buy total (incl. fees):{" "}
+                  <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
+                  {buyMode === "existing" ? (
+                    <>
+                      {" · after submit ~ "}
+                      <span className="tabular-nums text-amber-100">
+                        {(previewLineGrams + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                      </span>{" "}
+                      on this item
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+            </>
+          )}
+
+          <div className="rounded-lg border border-emerald-400/15 bg-black/25 px-2 py-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/60">Attachments (this transaction)</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-emerald-200/45">
+              Bills / invoices (images or PDF, max {METAL_LEDGER_MAX_BILLS_PER_TX}) · Photos (max {METAL_LEDGER_MAX_PHOTOS_PER_TX})
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <input
+                ref={billsInputRef}
+                id={billsInputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = "";
+                  void appendFiles(files, "bill");
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => billsInputRef.current?.click()}
+                className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-100"
+              >
+                Add bills
+              </button>
+              <input
+                ref={photosInputRef}
+                id={photosInputId}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = "";
+                  void appendFiles(files, "photo");
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => photosInputRef.current?.click()}
+                className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] font-black uppercase text-amber-100"
+              >
+                Add photos
+              </button>
+              {attachBusy ? <span className="text-[10px] font-bold text-emerald-200/60">Processing…</span> : null}
+            </div>
+            {(pendingBillUrls.length > 0 || pendingPhotoUrls.length > 0) && (
+              <p className="mt-1.5 text-[10px] font-bold text-emerald-200/70">
+                {pendingBillUrls.length} bill(s), {pendingPhotoUrls.length} photo(s) — saved when you submit.
               </p>
-            ) : null}
-          </>
-        )}
-      </div>
-    </PortfolioTransactionStrip>
+            )}
+          </div>
+        </div>
+      </PortfolioTransactionStrip>
+    </div>
   );
 }
 
 export function MetalsPanel({
   rows,
   ledger,
-  onChange,
-  onAdd,
+  onChange: _onChange,
   onRemove,
   onMutate,
 }: {
   rows: MetalRow[];
   ledger: readonly PortfolioLedgerEntry[];
   onChange: (id: string, patch: Partial<MetalRow>) => void;
-  onAdd: (metal: "gold" | "silver") => void;
   onRemove: (id: string) => void;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
+  void _onChange;
   const {
     bullionSpot,
     bullionError,
     usdPerNpr,
     bullionPriceLoading,
     bullionPriceRefreshing,
-    state: portfolioState,
   } = useWealthPortfolio();
-  const purchaseBillsInputRef = useRef<HTMLInputElement>(null);
-  const billUrls = portfolioState.metalPurchaseBillUrls ?? [];
+  const txnAnchorRef = useRef<HTMLDivElement>(null);
+  const billsShortcutRef = useRef<HTMLInputElement>(null);
+  const [metalQuickBuy, setMetalQuickBuy] = useState<{ metal: "gold" | "silver"; tick: number } | null>(null);
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -590,29 +653,42 @@ export function MetalsPanel({
   const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
   const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
 
+  const scrollToTransactions = () => {
+    txnAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onClick={() => onAdd("gold")}
+          onClick={() => {
+            setMetalQuickBuy((p) => ({ metal: "gold", tick: (p?.tick ?? 0) + 1 }));
+            scrollToTransactions();
+          }}
           className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20"
         >
           <Plus size={12} className="inline" /> Gold
         </button>
         <button
           type="button"
-          onClick={() => onAdd("silver")}
+          onClick={() => {
+            setMetalQuickBuy((p) => ({ metal: "silver", tick: (p?.tick ?? 0) + 1 }));
+            scrollToTransactions();
+          }}
           className="rounded-full border border-slate-400/25 bg-slate-500/10 px-2.5 py-1 text-[11px] font-black text-slate-100 transition hover:bg-slate-500/20"
         >
           <Plus size={12} className="inline" /> Silver
         </button>
         <button
           type="button"
-          onClick={() => purchaseBillsInputRef.current?.click()}
+          onClick={() => {
+            scrollToTransactions();
+            queueMicrotask(() => billsShortcutRef.current?.click());
+          }}
           className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/20"
         >
-          Upload purchase bills
+          Upload bills
         </button>
         <PortfolioModuleDataResetButton module="metals" onMutate={onMutate} />
       </div>
@@ -624,8 +700,6 @@ export function MetalsPanel({
           Marks follow the <span className="text-emerald-100">FENEGOSIDA Nepal board</span>. USD/oz is reference only.
         </p>
       </div>
-
-      <MetalPurchaseBillsGallery billUrls={billUrls} onMutate={onMutate} fileInputRef={purchaseBillsInputRef} />
 
       <div className="mb-3 space-y-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2.5 sm:px-3">
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:text-[11px]">
@@ -670,9 +744,7 @@ export function MetalsPanel({
                 : "border-amber-400/25 bg-amber-500/[0.07]"
             }`}
           >
-            <p className="text-[10px] font-black uppercase tracking-wide text-amber-200/80">
-              Nepal gold (today)
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-wide text-amber-200/80">Nepal gold (today)</p>
             {bullionPriceLoading && !bullionSpot ? (
               <div className="mt-1.5 space-y-1.5">
                 <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-emerald-400/10" />
@@ -734,9 +806,7 @@ export function MetalsPanel({
                 : "border-slate-400/25 bg-slate-500/[0.07]"
             }`}
           >
-            <p className="text-[10px] font-black uppercase tracking-wide text-slate-200/80">
-              Nepal silver (today)
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-wide text-slate-200/80">Nepal silver (today)</p>
             {bullionPriceLoading && !bullionSpot ? (
               <div className="mt-1.5 space-y-1.5">
                 <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-slate-400/10" />
@@ -804,140 +874,124 @@ export function MetalsPanel({
 
       <MetalsPremiumDashboard rows={rows} gramRates={gramRates} ledger={ledger} />
 
-      <div className="space-y-2">
+      <div className="mb-3 mt-3 grid gap-2 sm:grid-cols-2">
         {rows.map((row) => {
           const g = row.grams ?? 0;
           const uiRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
-          const uiTola = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
           const rate = row.metal === "gold" ? uiRates.goldNprPerGram : uiRates.silverNprPerGram;
-          const rateTola = row.metal === "gold" ? uiTola.goldNprPerTola : uiTola.silverNprPerTola;
           const total = g * rate;
           const basis = row.totalCostBasisNpr;
-          const avgPerG = g > 0 && basis != null && basis > 0 ? basis / g : null;
-          const unrealizedNpr =
-            typeof basis === "number" && basis > 0 && g > 0 ? total - basis : null;
+          const unrealizedNpr = typeof basis === "number" && basis > 0 && g > 0 ? total - basis : null;
+          const roi = basis != null && basis > 0 ? roiPct(basis, total) : null;
           const firstBuyIso = metalRowFirstBuyIso(row, ledger);
+          const start = parsePurchaseIso(firstBuyIso);
+          const daysHeld = start ? calendarDaysInvested(start, new Date()) : null;
+          const holdLabel = daysHeld != null ? formatHoldingDurationApprox(daysHeld) : "—";
+          const cover = metalItemCoverFromLedger(row.id, ledger);
           const metalLabel = row.metal === "gold" ? "Gold" : "Silver";
           return (
             <div
               key={row.id}
-              className="wealth-row-card flex flex-col gap-2 rounded-xl p-2.5 sm:flex-row sm:items-start sm:justify-between"
+              className="wealth-row-card flex gap-2 rounded-xl border border-emerald-400/10 p-2.5 sm:p-3"
             >
-              <div className="flex min-w-0 flex-col gap-2">
-                <p
-                  className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+              {cover ? (
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-amber-400/25 bg-black/40 sm:h-[4.5rem] sm:w-[4.5rem]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={cover} alt="" className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div
+                  className={`grid h-16 w-16 shrink-0 place-items-center rounded-lg border text-[10px] font-black uppercase sm:h-[4.5rem] sm:w-[4.5rem] ${
                     row.metal === "gold"
                       ? "border-amber-400/35 bg-amber-500/15 text-amber-100"
                       : "border-slate-400/35 bg-slate-500/15 text-slate-100"
                   }`}
                 >
-                  {metalLabel} holding
-                </p>
-
-                <div className="rounded-lg border border-emerald-400/15 bg-black/30 px-2.5 py-2 text-[11px] font-bold sm:text-xs">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/70">Holdings (from transactions)</p>
-                  <dl className="mt-1.5 space-y-1">
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-emerald-200/55">Quantity</dt>
-                      <dd className="text-end tabular-nums text-emerald-50">
-                        {g > 0 ? (
-                          <>
-                            {g.toLocaleString(undefined, { maximumFractionDigits: 4 })} g
-                            <span className="text-emerald-200/50"> (~{gramsToTolaUi(g).toFixed(4)} tola UI)</span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-emerald-200/55">Total cost basis</dt>
-                      <dd className="tabular-nums text-emerald-50">
-                        {basis != null && basis > 0 ? formatMoney(basis, "NPR") : "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-emerald-200/55">Average cost</dt>
-                      <dd className="tabular-nums text-emerald-50">
-                        {avgPerG != null ? `${formatMoney(avgPerG, "NPR")} / g` : "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2 border-t border-emerald-400/10 pt-1">
-                      <dt className="text-emerald-200/55">Live mark</dt>
-                      <dd className="text-end text-emerald-50">
-                        <span className="font-black">{formatMoney(rate, "NPR")} / g</span>
-                        <span className="block text-[10px] font-bold text-emerald-200/65">
-                          {formatMoney(rateTola, "NPR")} / tola
+                  {metalLabel}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-black text-emerald-50 sm:text-sm">{row.name || `${metalLabel} item`}</p>
+                <dl className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-bold leading-tight sm:text-[11px]">
+                  <div className="text-emerald-200/55">Qty</div>
+                  <div className="text-end tabular-nums text-emerald-50">
+                    {g > 0 ? (
+                      <>
+                        {g.toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                        <span className="block text-[9px] font-semibold text-emerald-200/45">
+                          ~{gramsToTolaUi(g).toFixed(4)} tola
                         </span>
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-emerald-200/55">Current value</dt>
-                      <dd className="tabular-nums font-black text-amber-100">
-                        {g > 0 ? formatMoney(total, "NPR") : "—"}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <dt className="text-emerald-200/55">Unrealized P/L</dt>
-                      <dd>
-                        {unrealizedNpr != null ? (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${
-                              unrealizedNpr >= 0
-                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
-                                : "border-rose-400/30 bg-rose-500/10 text-rose-200"
-                            }`}
-                          >
-                            {unrealizedNpr >= 0 ? (
-                              <TrendingUp size={12} className="shrink-0" aria-hidden />
-                            ) : (
-                              <TrendingDown size={12} className="shrink-0" aria-hidden />
-                            )}
-                            {unrealizedNpr >= 0 ? "+" : ""}
-                            {formatMoney(unrealizedNpr, "NPR")}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-emerald-200/45">Record a buy with price to track P/L</span>
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-
-                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} uploadEnabled={false} />
-
-                <div className="border-t border-emerald-400/10 pt-2">
-                  {firstBuyIso ? (
-                    <PortfolioDateMeta dateIso={firstBuyIso} leadText="First activity" />
-                  ) : (
-                    <p className="text-[10px] font-bold text-emerald-200/45">
-                      First purchase date appears after you record a buy with a date.
-                    </p>
-                  )}
-                </div>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                  <div className="text-emerald-200/55">Cost basis</div>
+                  <div className="text-end tabular-nums text-emerald-50">
+                    {basis != null && basis > 0 ? formatMoney(basis, "NPR") : "—"}
+                  </div>
+                  <div className="text-emerald-200/55">Value</div>
+                  <div className="text-end font-black tabular-nums text-amber-100">
+                    {g > 0 ? formatMoney(total, "NPR") : "—"}
+                  </div>
+                  <div className="text-emerald-200/55">P/L</div>
+                  <div className="text-end">
+                    {unrealizedNpr != null ? (
+                      <span
+                        className={`tabular-nums ${unrealizedNpr >= 0 ? "text-lime-300" : "text-rose-300"}`}
+                      >
+                        {unrealizedNpr >= 0 ? "+" : ""}
+                        {formatMoney(unrealizedNpr, "NPR")}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                  <div className="text-emerald-200/55">ROI</div>
+                  <div className={`text-end tabular-nums ${roi != null && roi >= 0 ? "text-lime-300" : roi != null ? "text-rose-300" : "text-emerald-200/50"}`}>
+                    {roi != null ? `${roi >= 0 ? "+" : ""}${roi.toFixed(2)}%` : "—"}
+                  </div>
+                  <div className="text-emerald-200/55">Held</div>
+                  <div className="text-end text-emerald-100/90">{holdLabel}</div>
+                </dl>
               </div>
               <button
                 type="button"
-                aria-label="Remove holding"
-                onClick={() => onRemove(row.id)}
-                className="self-end rounded-xl p-2 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300 sm:self-center"
+                aria-label="Remove item"
+                title="Remove item (only when quantity is zero)"
+                onClick={() => {
+                  if (g > 1e-9) {
+                    toast.error("Sell to zero grams before removing an item.");
+                    return;
+                  }
+                  onRemove(row.id);
+                  toast.success("Item removed.");
+                }}
+                className="self-start rounded-lg p-1.5 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
               >
-                <Trash2 size={16} />
+                <Trash2 size={15} />
               </button>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-3 border-t border-emerald-400/10 pt-3">
-        <UniversalMetalTransactionForm rows={rows} onMutate={onMutate} />
+      <div ref={txnAnchorRef} className="mt-1">
+        <UniversalMetalTransactionForm
+          rows={rows}
+          onMutate={onMutate}
+          metalQuickBuy={metalQuickBuy}
+          onMetalQuickBuyConsumed={() => setMetalQuickBuy(null)}
+          billsFileInputRef={billsShortcutRef}
+        />
       </div>
 
       <ModuleLedgerCard
         bucket="metal"
         ledger={ledger}
         title="Gold & Silver ledger"
-        subtitle="Buys and sells for precious metals in this module."
+        subtitle="Each row keeps its own bills and photos forever."
+        ledgerMutate={onMutate}
       />
     </section>
   );

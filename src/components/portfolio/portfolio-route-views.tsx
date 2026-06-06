@@ -106,7 +106,7 @@ export function PortfolioInvestmentsPage() {
 }
 
 export function PortfolioGoldPage() {
-  const { state, applyPortfolioMutate, updateMetal, addMetal, removeMetal } = useWealthPortfolio();
+  const { state, applyPortfolioMutate, updateMetal, removeMetal } = useWealthPortfolio();
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-3 sm:gap-4 lg:gap-5">
       <GoldSilverPageHeader />
@@ -114,7 +114,6 @@ export function PortfolioGoldPage() {
         rows={state.metals}
         ledger={state.ledger}
         onChange={updateMetal}
-        onAdd={addMetal}
         onRemove={removeMetal}
         onMutate={applyPortfolioMutate}
       />

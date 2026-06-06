@@ -101,7 +101,7 @@ function useLivePortfolioRows(): PortfolioRow[] {
       if (npr <= 0 && currentNpr <= 0) continue;
       out.push({
         id: m.id,
-        name: `${m.metal === "gold" ? "Gold" : "Silver"} holdings`,
+        name: (m.name ?? "").trim() || `${m.metal === "gold" ? "Gold" : "Silver"} item`,
         type: "Commodity",
         category: "Metal",
         purchaseNpr: npr,

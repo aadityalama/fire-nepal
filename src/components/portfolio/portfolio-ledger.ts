@@ -7,7 +7,7 @@ import type {
   PortfolioLedgerEntry,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
-import { METAL_PHOTO_MAX_COUNT } from "@/components/portfolio/metal-photo-utils";
+import { sanitizeMetalTxBillUrls, sanitizeMetalTxPhotoUrls } from "@/components/portfolio/metal-photo-utils";
 import type { PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
 import { NEPAL_UI_GRAMS_PER_TOLA } from "@/lib/portfolio/nepal-metal-ui-convert";
 
@@ -50,6 +50,8 @@ export type MetalSellPayload = {
   tradeDate: string;
   feesNpr?: number;
   notes?: string;
+  billAttachmentUrls?: string[];
+  photoAttachmentUrls?: string[];
 };
 
 export type CashflowPayload = {
@@ -60,6 +62,14 @@ export type CashflowPayload = {
 };
 
 export type MetalBuyPayload = {
+  metal: "gold" | "silver";
+  /**
+   * When set, buy adds to this item row (must exist and match `metal`).
+   * When omitted, a new item row is created using `itemName`.
+   */
+  existingRowId?: string | null;
+  /** Required for new items; trimmed to name the created row. */
+  itemName: string;
   grams: number;
   tradeDate: string;
   /** NPR per gram or per UI tola (11.66 g), per `buyPriceUnit`. */
@@ -67,8 +77,8 @@ export type MetalBuyPayload = {
   buyPriceUnit: "gram" | "tola";
   feesNpr?: number;
   notes?: string;
-  /** Optional new photos (data URLs) merged into the holding gallery (capped server-side in UI). */
-  photoUrlsToAppend?: string[];
+  billAttachmentUrls?: string[];
+  photoAttachmentUrls?: string[];
 };
 
 function isoOk(s: string): boolean {
@@ -209,6 +219,7 @@ export function recordInvestmentBuy(
   input: InvestmentTradePayload,
   _fx: LedgerFx,
 ): WealthPortfolioStateV2 | null {
+  void _fx;
   if (!isoOk(input.tradeDate)) return null;
   if (input.quantity <= 0 || !Number.isFinite(input.quantity)) return null;
   if (input.unitPrice < 0 || !Number.isFinite(input.unitPrice)) return null;
@@ -382,20 +393,6 @@ function syncMetalLegacyBuyPriceFields(row: MetalRow): MetalRow {
   return { ...row, metalBuyPriceAmount: undefined, metalBuyPriceUnit: undefined };
 }
 
-/**
- * Ensures at least one holding row exists for the metal so buy/sell ledger APIs can run without a manual "+ Gold" click.
- */
-export function ensureMetalHoldingRow(
-  state: WealthPortfolioStateV2,
-  metal: "gold" | "silver",
-): { state: WealthPortfolioStateV2; rowId: string } {
-  const first = state.metals.find((r) => r.metal === metal);
-  if (first) return { state, rowId: first.id };
-  const id = ledgerNewId();
-  const row: MetalRow = { id, metal, grams: 0 };
-  return { state: { ...state, metals: [...state.metals, row] }, rowId: id };
-}
-
 function minPurchaseIso(a: string | undefined, b: string): string | undefined {
   if (!isoOk(b)) return a;
   if (!a || !isoOk(a)) return b;
@@ -434,12 +431,18 @@ export function recordMetalSell(
     if (newGrams < 1e-9) newBasis = undefined;
   }
 
+  const billUrls = sanitizeMetalTxBillUrls(input.billAttachmentUrls ?? []);
+  const photoUrls = sanitizeMetalTxPhotoUrls(input.photoAttachmentUrls ?? []);
+  const metaSell: Record<string, unknown> = { fifoVersion: 1, proceedsNpr, costNpr, feesNpr, unit: "grams" };
+  if (billUrls.length) metaSell.metalTxBillUrls = billUrls;
+  if (photoUrls.length) metaSell.metalTxPhotoUrls = photoUrls;
+
   const entry: PortfolioLedgerEntry = {
     id: ledgerNewId(),
     txType: "sell",
     bucket: "metal",
     rowId,
-    assetLabel: row.metal === "gold" ? "Gold" : "Silver",
+    assetLabel: (row.name ?? "").trim() || (row.metal === "gold" ? "Gold" : "Silver"),
     ledgerAction: "Sell",
     metal: row.metal,
     quantity: input.grams,
@@ -449,7 +452,7 @@ export function recordMetalSell(
     fees: input.feesNpr,
     notes: input.notes?.trim() || undefined,
     realizedGainNpr,
-    meta: { fifoVersion: 1, proceedsNpr, costNpr, feesNpr, unit: "grams" },
+    meta: metaSell,
   };
 
   const updatedRow: MetalRow = syncMetalLegacyBuyPriceFields({
@@ -463,18 +466,30 @@ export function recordMetalSell(
   return appendEntry({ ...state, metals }, entry);
 }
 
-export function recordMetalBuy(
-  state: WealthPortfolioStateV2,
-  rowId: string,
-  input: MetalBuyPayload,
-): WealthPortfolioStateV2 | null {
+export function recordMetalBuy(state: WealthPortfolioStateV2, input: MetalBuyPayload): WealthPortfolioStateV2 | null {
   if (!isoOk(input.tradeDate)) return null;
   if (input.grams <= 0 || !Number.isFinite(input.grams)) return null;
   if (input.buyPriceNpr <= 0 || !Number.isFinite(input.buyPriceNpr)) return null;
 
-  const idx = state.metals.findIndex((r) => r.id === rowId);
-  if (idx < 0) return null;
-  const row = state.metals[idx];
+  let nextState = state;
+  let idx: number;
+
+  const wantExisting = typeof input.existingRowId === "string" && input.existingRowId.trim().length > 0;
+  if (wantExisting) {
+    const rid = input.existingRowId!.trim();
+    idx = nextState.metals.findIndex((r) => r.id === rid);
+    if (idx < 0) return null;
+    if (nextState.metals[idx]!.metal !== input.metal) return null;
+  } else {
+    const name = input.itemName.replace(/\s+/g, " ").trim().slice(0, 120);
+    if (!name) return null;
+    const newId = ledgerNewId();
+    const newRow: MetalRow = { id: newId, metal: input.metal, name, grams: 0 };
+    nextState = { ...state, metals: [...state.metals, newRow] };
+    idx = nextState.metals.findIndex((r) => r.id === newId);
+  }
+
+  const row = nextState.metals[idx]!;
   const g0 = row.grams ?? 0;
   const newGrams = g0 + input.grams;
   const nprPerGram =
@@ -485,12 +500,27 @@ export function recordMetalBuy(
   const newBasisRaw = (row.totalCostBasisNpr ?? 0) + addBasis;
   const newBasis = newBasisRaw > 0 ? Math.round(newBasisRaw * 100) / 100 : undefined;
 
+  const assetLabel = (row.name ?? "").trim() || (row.metal === "gold" ? "Gold" : "Silver");
+  const billUrls = sanitizeMetalTxBillUrls(input.billAttachmentUrls ?? []);
+  const photoUrls = sanitizeMetalTxPhotoUrls(input.photoAttachmentUrls ?? []);
+
+  const meta: Record<string, unknown> = {
+    fifoVersion: 1,
+    basisNprAdded: addBasis,
+    unit: "grams",
+    buyPriceUnit: input.buyPriceUnit,
+    metalBuyPriceNpr: input.buyPriceNpr,
+    metalTxItemName: assetLabel,
+  };
+  if (billUrls.length) meta.metalTxBillUrls = billUrls;
+  if (photoUrls.length) meta.metalTxPhotoUrls = photoUrls;
+
   const entry: PortfolioLedgerEntry = {
     id: ledgerNewId(),
     txType: "buy",
     bucket: "metal",
-    rowId,
-    assetLabel: row.metal === "gold" ? "Gold" : "Silver",
+    rowId: row.id,
+    assetLabel,
     ledgerAction: "Buy",
     metal: row.metal,
     quantity: input.grams,
@@ -500,39 +530,19 @@ export function recordMetalBuy(
     fees: input.feesNpr,
     notes: input.notes?.trim() || undefined,
     realizedGainNpr: null,
-    meta: {
-      fifoVersion: 1,
-      basisNprAdded: addBasis,
-      unit: "grams",
-      buyPriceUnit: input.buyPriceUnit,
-      metalBuyPriceNpr: input.buyPriceNpr,
-    },
+    meta,
   };
-
-  let photoUrls = row.photoUrls;
-  let coverPhotoIndex = row.coverPhotoIndex;
-  const append = input.photoUrlsToAppend?.filter(Boolean) ?? [];
-  if (append.length > 0) {
-    const base = photoUrls ?? [];
-    const room = Math.max(0, METAL_PHOTO_MAX_COUNT - base.length);
-    const slice = append.slice(0, room);
-    const merged = [...base, ...slice];
-    photoUrls = merged.length > 0 ? merged : undefined;
-    coverPhotoIndex = photoUrls && photoUrls.length > 0 ? Math.min(row.coverPhotoIndex ?? 0, photoUrls.length - 1) : undefined;
-  }
 
   const updatedRow: MetalRow = syncMetalLegacyBuyPriceFields({
     ...row,
     grams: newGrams,
     totalCostBasisNpr: newBasis,
     boughtDate: minPurchaseIso(row.boughtDate, input.tradeDate),
-    photoUrls,
-    coverPhotoIndex,
   });
 
-  const metals = [...state.metals];
+  const metals = [...nextState.metals];
   metals[idx] = updatedRow;
-  return appendEntry({ ...state, metals }, entry);
+  return appendEntry({ ...nextState, metals }, entry);
 }
 
 export function recordLiquidCashAdd(

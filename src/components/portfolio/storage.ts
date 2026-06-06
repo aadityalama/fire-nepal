@@ -19,7 +19,7 @@ import type {
 } from "@/components/portfolio/types";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { deriveMetalTotalCostBasisNprPatch } from "@/components/portfolio/metal-buy-basis";
-import { sanitizeMetalPhotoGallery, sanitizeMetalPurchaseBillUrls } from "@/components/portfolio/metal-photo-utils";
+import { sanitizeMetalPurchaseBillUrls } from "@/components/portfolio/metal-photo-utils";
 import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
@@ -54,7 +54,7 @@ export function emptyInvestment(kind: InvestmentKind = "nepse"): InvestmentRow {
 }
 
 export function emptyMetal(metal: "gold" | "silver"): MetalRow {
-  return { id: newId(), metal, grams: undefined };
+  return { id: newId(), metal, name: "", grams: undefined };
 }
 
 export function emptyRealEstate(propertyType: RealEstateKind = "apartment"): RealEstateRow {
@@ -441,7 +441,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
   });
   const metalsRaw = Array.isArray(parsed.metals) ? parsed.metals : d.metals;
   const metals = metalsRaw.map((r) => {
-    const m = r as MetalRow;
+    const m = r as MetalRow & { photoUrls?: unknown; coverPhotoIndex?: unknown };
     const basis = m.totalCostBasisNpr;
     const totalCostBasisNpr =
       typeof basis === "number" && Number.isFinite(basis) && basis > 0 ? basis : undefined;
@@ -457,14 +457,24 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
         ? buyAmt
         : undefined;
     const metalBuyPriceUnitFinal = metalBuyPriceAmount != null ? metalBuyPriceUnit : undefined;
-    const { photoUrls, coverPhotoIndex } = sanitizeMetalPhotoGallery(m.photoUrls, m.coverPhotoIndex);
+    const rawName = typeof m.name === "string" ? m.name.replace(/\s+/g, " ").trim().slice(0, 120) : "";
+    const name =
+      rawName.length > 0
+        ? rawName
+        : m.metal === "gold"
+          ? "Gold item"
+          : m.metal === "silver"
+            ? "Silver item"
+            : "Precious metal item";
     let row: MetalRow = {
-      ...r,
+      id: typeof m.id === "string" && m.id ? m.id : newId(),
+      metal: m.metal === "gold" || m.metal === "silver" ? m.metal : "gold",
+      name,
+      grams: typeof m.grams === "number" && Number.isFinite(m.grams) && m.grams >= 0 ? m.grams : undefined,
       boughtDate: sanitizeIsoDate(m.boughtDate),
       totalCostBasisNpr,
       metalBuyPriceAmount,
       metalBuyPriceUnit: metalBuyPriceUnitFinal,
-      ...(photoUrls && photoUrls.length > 0 ? { photoUrls, coverPhotoIndex } : { photoUrls: undefined, coverPhotoIndex: undefined }),
     };
     if (row.totalCostBasisNpr == null) {
       const inferred = deriveMetalTotalCostBasisNprPatch(row);
