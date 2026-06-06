@@ -1,7 +1,7 @@
 "use client";
 
 import { Gem, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
@@ -37,15 +37,17 @@ const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "sell", label: "Sell", tone: "out" },
 ];
 
-function MetalTradeStrip({
-  row,
+function UniversalMetalTransactionForm({
+  rows,
   onMutate,
 }: {
-  row: MetalRow;
+  rows: MetalRow[];
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [segmentId, setSegmentId] = useState<string>("sell");
+  const [open, setOpen] = useState(true);
+  const [formMetal, setFormMetal] = useState<"gold" | "silver">("gold");
+  const [targetRowId, setTargetRowId] = useState<string | null>(null);
+  const [segmentId, setSegmentId] = useState<string>("buy");
   const [qtyStr, setQtyStr] = useState("");
   const [qtyUnit, setQtyUnit] = useState<"gram" | "tola">("gram");
   const [buyPriceStr, setBuyPriceStr] = useState("");
@@ -59,17 +61,42 @@ function MetalTradeStrip({
   const buyPhotoInputId = useId();
   const buyPhotoRef = useRef<HTMLInputElement>(null);
 
-  const held = row.grams ?? 0;
-  const basis = row.totalCostBasisNpr;
+  const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
+
+  const resolvedTargetRowId = useMemo(() => {
+    if (candidates.length === 0) return null;
+    if (targetRowId != null && candidates.some((r) => r.id === targetRowId)) return targetRowId;
+    return candidates[0]!.id;
+  }, [candidates, targetRowId]);
+
+  const targetRow = resolvedTargetRowId ? rows.find((r) => r.id === resolvedTargetRowId) : undefined;
+  const held = targetRow?.grams ?? 0;
+  const basis = targetRow?.totalCostBasisNpr;
   const avgPerG = held > 0 && basis != null && basis > 0 ? basis / held : null;
+
+  const resetAllFields = () => {
+    setFormMetal("gold");
+    setSegmentId("buy");
+    setQtyStr("");
+    setQtyUnit("gram");
+    setBuyPriceStr("");
+    setBuyPriceUnit("gram");
+    setSellPriceStr("");
+    setSellPriceUnit("gram");
+    setFeesStr("");
+    setNotes("");
+    setTradeDate(todayIso());
+    setTargetRowId(null);
+    setErr(null);
+    if (buyPhotoRef.current) buyPhotoRef.current.value = "";
+  };
 
   useEffect(() => {
     if (!open) return;
     queueMicrotask(() => {
       setErr(null);
-      setTradeDate(todayIso());
     });
-  }, [open, segmentId, row.id]);
+  }, [open, segmentId, formMetal, resolvedTargetRowId]);
 
   const parseQtyGrams = (): number | null => {
     const raw = qtyStr.replace(/,/g, "").trim();
@@ -99,13 +126,17 @@ function MetalTradeStrip({
 
   const submit = async () => {
     setErr(null);
+    if (!resolvedTargetRowId || !targetRow) {
+      setErr(`Add a ${formMetal === "gold" ? "gold" : "silver"} holding first (use the buttons above).`);
+      return;
+    }
     const grams = parseQtyGrams();
     if (grams == null) {
       setErr(`Enter a valid quantity (${qtyUnit === "gram" ? "grams" : "tola"}).`);
       return;
     }
     if (segmentId === "sell" && grams > held + 1e-9) {
-      setErr("Cannot sell more than you hold.");
+      setErr("Cannot sell more than you hold on the selected line.");
       return;
     }
     const feesNpr = feesStr.trim() === "" ? undefined : Number(feesStr.replace(/,/g, ""));
@@ -121,12 +152,13 @@ function MetalTradeStrip({
         return;
       }
       const ok = onMutate((s) =>
-        recordMetalSell(s, row.id, { grams, unitPriceNprPerGram, tradeDate, feesNpr, notes }),
+        recordMetalSell(s, resolvedTargetRowId, { grams, unitPriceNprPerGram, tradeDate, feesNpr, notes }),
       );
       if (!ok) {
         setErr("Could not record sell.");
         return;
       }
+      toast.success("Sell recorded.");
     } else {
       const buyPriceNpr = parseBuyPriceNpr();
       if (buyPriceNpr == null) {
@@ -138,7 +170,7 @@ function MetalTradeStrip({
       const inputEl = buyPhotoRef.current;
       if (inputEl?.files?.length) {
         const files = Array.from(inputEl.files).filter((f) => f.type.startsWith("image/"));
-        const existing = row.photoUrls?.length ?? 0;
+        const existing = targetRow.photoUrls?.length ?? 0;
         const room = Math.max(0, METAL_PHOTO_MAX_COUNT - existing);
         if (files.length > room && room === 0) {
           setErr(`Photo limit reached (${METAL_PHOTO_MAX_COUNT} per holding).`);
@@ -160,7 +192,7 @@ function MetalTradeStrip({
       }
 
       const ok = onMutate((s) =>
-        recordMetalBuy(s, row.id, {
+        recordMetalBuy(s, resolvedTargetRowId, {
           grams,
           tradeDate,
           buyPriceNpr,
@@ -174,14 +206,11 @@ function MetalTradeStrip({
         setErr("Could not record buy.");
         return;
       }
+      toast.success("Buy recorded.");
       if (inputEl) inputEl.value = "";
     }
 
-    setQtyStr("");
-    setBuyPriceStr("");
-    setSellPriceStr("");
-    setFeesStr("");
-    setNotes("");
+    resetAllFields();
   };
 
   const previewBuyGrams = parseQtyGrams();
@@ -207,10 +236,14 @@ function MetalTradeStrip({
       onOpenChange={setOpen}
       headerLabel="Transactions"
       summaryRight={
-        <>
-          {held.toLocaleString()} g · basis {basis != null ? formatMoney(basis, "NPR") : "—"}
-          {avgPerG != null ? ` · avg ${formatMoney(avgPerG, "NPR")}/g` : ""}
-        </>
+        targetRow ? (
+          <>
+            {held.toLocaleString()} g · basis {basis != null ? formatMoney(basis, "NPR") : "—"}
+            {avgPerG != null ? ` · avg ${formatMoney(avgPerG, "NPR")}/g` : ""}
+          </>
+        ) : (
+          <span className="text-emerald-200/70">Select metal &amp; line</span>
+        )
       }
       segments={METAL_TX_SEGMENTS}
       segmentId={segmentId}
@@ -228,6 +261,40 @@ function MetalTradeStrip({
       accent="amber"
     >
       <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Metal</span>
+            <select
+              value={formMetal}
+              onChange={(e) => setFormMetal(e.target.value as "gold" | "silver")}
+              className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+            >
+              <option value="gold">Gold</option>
+              <option value="silver">Silver</option>
+            </select>
+          </label>
+          {candidates.length > 1 ? (
+            <label className="block">
+              <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Holding line</span>
+              <select
+                value={resolvedTargetRowId ?? ""}
+                onChange={(e) => setTargetRowId(e.target.value || null)}
+                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+              >
+                {candidates.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    #{i + 1} · {(r.grams ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} g
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : candidates.length === 0 ? (
+            <p className="self-end text-[10px] font-bold text-amber-200/90 sm:col-span-1">
+              Add a {formMetal} holding with the + button above.
+            </p>
+          ) : null}
+        </div>
+
         <div className="flex flex-wrap gap-1.5">
           <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Quantity unit</span>
           {(["gram", "tola"] as const).map((u) => {
@@ -347,10 +414,10 @@ function MetalTradeStrip({
                 Attach images
               </label>
               <p className="mt-1 text-[10px] font-semibold text-emerald-200/45">
-                Merged into this holding when you submit the buy (max {METAL_PHOTO_MAX_COUNT} total).
+                Merged into the selected holding on buy (max {METAL_PHOTO_MAX_COUNT} total).
               </p>
             </div>
-            {previewAddBasis != null && Number.isFinite(previewAddBasis) ? (
+            {previewAddBasis != null && Number.isFinite(previewAddBasis) && targetRow ? (
               <p className="text-[10px] font-bold text-emerald-200/70">
                 This buy total (incl. fees):{" "}
                 <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
@@ -361,7 +428,7 @@ function MetalTradeStrip({
                     <span className="tabular-nums text-amber-100">
                       {(held + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
                     </span>{" "}
-                    held
+                    on this line
                   </>
                 ) : null}
               </p>
@@ -414,8 +481,7 @@ export function MetalsPanel({
           <div>
             <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
             <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
-              Use <span className="text-emerald-100">Buy</span> and <span className="text-emerald-100">Sell</span>{" "}
-              transactions for quantities, prices, and cost basis. Portfolio marks follow the{" "}
+              One transaction form below applies to the metal and line you choose. Portfolio marks follow the{" "}
               <span className="text-emerald-100">FENEGOSIDA-published Nepal board</span> (Fine Gold 9999 &amp; Silver per
               10 g and per tola on fenegosida.org; aligned with FNGSGJA industry rates). International USD/oz is
               reference only.
@@ -630,25 +696,22 @@ export function MetalsPanel({
           const unrealizedNpr =
             typeof basis === "number" && basis > 0 && g > 0 ? total - basis : null;
           const firstBuyIso = metalRowFirstBuyIso(row, ledger);
+          const metalLabel = row.metal === "gold" ? "Gold" : "Silver";
           return (
             <div
               key={row.id}
               className="wealth-row-card flex flex-col gap-2 rounded-xl p-2.5 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex min-w-0 flex-col gap-2">
-                <div className="grid gap-2 sm:grid-cols-2 sm:items-end">
-                  <label className="block">
-                    <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Metal</span>
-                    <select
-                      value={row.metal}
-                      onChange={(e) => onChange(row.id, { metal: e.target.value as "gold" | "silver" })}
-                      className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
-                    >
-                      <option value="gold">Gold</option>
-                      <option value="silver">Silver</option>
-                    </select>
-                  </label>
-                </div>
+                <p
+                  className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                    row.metal === "gold"
+                      ? "border-amber-400/35 bg-amber-500/15 text-amber-100"
+                      : "border-slate-400/35 bg-slate-500/15 text-slate-100"
+                  }`}
+                >
+                  {metalLabel} holding
+                </p>
 
                 <div className="rounded-lg border border-emerald-400/15 bg-black/30 px-2.5 py-2 text-[11px] font-bold sm:text-xs">
                   <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/70">Holdings (from transactions)</p>
@@ -731,12 +794,10 @@ export function MetalsPanel({
                     </p>
                   )}
                 </div>
-
-                <MetalTradeStrip row={row} onMutate={onMutate} />
               </div>
               <button
                 type="button"
-                aria-label="Remove"
+                aria-label="Remove holding"
                 onClick={() => onRemove(row.id)}
                 className="self-end rounded-xl p-2 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300 sm:self-center"
               >
@@ -746,6 +807,11 @@ export function MetalsPanel({
           );
         })}
       </div>
+
+      <div className="mt-3 border-t border-emerald-400/10 pt-3">
+        <UniversalMetalTransactionForm rows={rows} onMutate={onMutate} />
+      </div>
+
       <ModuleLedgerCard
         bucket="metal"
         ledger={ledger}
