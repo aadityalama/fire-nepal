@@ -10,6 +10,7 @@ import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
+import { MetalGramTolaFields, MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
@@ -197,6 +198,7 @@ export function MetalsPanel({
     usdPerNpr,
     bullionPriceLoading,
     bullionPriceRefreshing,
+    totals,
   } = useWealthPortfolio();
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
@@ -412,10 +414,12 @@ export function MetalsPanel({
           <span className="text-emerald-200/55">Source:</span>{" "}
           <span className="break-all text-emerald-50">{sourceLabel}</span>
           <span className="mx-1.5 text-emerald-500/40">·</span>
-          <span className="text-emerald-200/55">1 tola =</span> {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g (Nepal bullion
-          convention)
+          <span className="text-emerald-200/55">Board 1 tola =</span> {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g (Nepal bullion
+          convention). <span className="text-emerald-200/55">Holdings UI conversion:</span> 1 tola = 11.66 g.
         </p>
       </div>
+
+      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} totals={totals} />
 
       <div className="space-y-2">
         {rows.map((row) => {
@@ -446,19 +450,10 @@ export function MetalsPanel({
                       <option value="silver">Silver</option>
                     </select>
                   </label>
-                  <div className="min-w-0 sm:col-span-1">
-                    <NumericMoneyInput tone="dark"
-                      label="Grams"
-                      value={row.grams}
-                      onChange={(n) => onChange(row.id, { grams: n })}
-                      variant="amount"
-                      placeholder="0"
-                      className="text-[10px] font-bold uppercase tracking-wide text-zinc-200 [&>span]:block"
-                      wrapperClassName="rounded-xl border border-emerald-400/15 bg-black/30 px-2 py-2 focus-within:border-emerald-400/40"
-                      inputClassName="min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none"
-                    />
+                  <div className="min-w-0 sm:col-span-2">
+                    <MetalGramTolaFields grams={row.grams} onGramsChange={(n) => onChange(row.id, { grams: n })} />
                   </div>
-                  <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:text-xs">
+                  <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:col-span-3 sm:text-xs">
                     <p className="text-emerald-200/55">Live mark</p>
                     <p className="mt-0.5 font-black text-amber-200/95">{formatMoney(rate, "NPR")} / g</p>
                     <p className="mt-0.5 font-bold text-amber-200/75">{formatMoney(rateTola, "NPR")} / tola</p>
