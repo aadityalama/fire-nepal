@@ -30,7 +30,7 @@ export function membershipQrImageUrl(method: MembershipPaymentMethod): string {
   const fallback: Record<MembershipPaymentMethod, string> = {
     khalti_qr: "/payment-qr/khalti.png",
     esewa_qr: "/payment-qr/esewa-placeholder.svg",
-    global_ime_qr: "/payment-qr/global-ime-placeholder.svg",
+    global_ime_qr: "/payment-qr/global-ime.png",
   };
   return fallback[method];
 }

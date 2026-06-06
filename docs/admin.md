@@ -44,7 +44,7 @@ npm run admin:grant -- --email you@example.com
 
 - **`/admin/membership-requests`** — Review pending **Premium** / **Elite** payment proofs (Khalti, eSewa, Global IME QR). **Approve** updates `profiles.plan_type`, upserts `subscriptions` (one year), and appends `revenue_events`. **Reject** only updates request status.
 - **Migration** — `supabase/migrations/20250606180000_membership_payment_requests.sql` adds `public.membership_requests` and private storage bucket `membership_payment_proofs`.
-- **QR artwork** — Optional env: `NEXT_PUBLIC_MEMBERSHIP_QR_KHALTI`, `NEXT_PUBLIC_MEMBERSHIP_QR_ESEWA`, `NEXT_PUBLIC_MEMBERSHIP_QR_GLOBAL_IME`. Khalti defaults to `/public/payment-qr/khalti.png`; eSewa and Global IME use SVG placeholders under `/public/payment-qr/` until you add PNGs or set env URLs.
+- **QR artwork** — Optional env: `NEXT_PUBLIC_MEMBERSHIP_QR_KHALTI`, `NEXT_PUBLIC_MEMBERSHIP_QR_ESEWA`, `NEXT_PUBLIC_MEMBERSHIP_QR_GLOBAL_IME`. Khalti defaults to `/public/payment-qr/khalti.png`, Global IME to `/public/payment-qr/global-ime.png`; eSewa uses `/public/payment-qr/esewa-placeholder.svg` until you add a PNG or set env URLs.
 
 ## Exports
 
