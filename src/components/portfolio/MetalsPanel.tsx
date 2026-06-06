@@ -280,6 +280,9 @@ function UniversalMetalTransactionForm({
           setErr("Item name is required for a new buy.");
           return;
         }
+      } else if (!resolvedBuyExistingId) {
+        setErr("No existing item for this metal — choose New item or a different metal.");
+        return;
       }
       const ok = onMutate((s) =>
         recordMetalBuy(s, {
