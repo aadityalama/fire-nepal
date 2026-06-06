@@ -3,6 +3,13 @@ import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 /** Troy ounce → grams (same as LBMA / spot commodity convention). */
 export const TROY_OZ_GRAMS = 31.1034768;
 
+/** Nepal / South Asia bullion trade convention (1 tola ≈ 180 troy grains). */
+export const NEPAL_METAL_TOLA_GRAMS = 11.6638038;
+
+export function nprPerTolaFromGram(nprPerGram: number): number {
+  return Math.max(nprPerGram, 1e-12) * NEPAL_METAL_TOLA_GRAMS;
+}
+
 /** Conservative USD spot anchors when upstream feeds are unavailable (aligned with historical Yahoo GC=/SI= levels). */
 export const DEFAULT_BULLION_USD_PER_TROY_OZ = {
   goldUsdPerOz: 2680,

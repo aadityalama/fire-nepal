@@ -1,10 +1,19 @@
 import { fetchJson } from "@/lib/api/fetch-json";
-import { DEFAULT_BULLION_USD_PER_TROY_OZ, metalNprPerGramFromUsdSpot } from "@/lib/market/bullion-estimate";
+import {
+  DEFAULT_BULLION_USD_PER_TROY_OZ,
+  metalNprPerGramFromUsdSpot,
+  nprPerTolaFromGram,
+} from "@/lib/market/bullion-estimate";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import { fetchNprForexCross } from "@/services/market/forex-npr";
+import {
+  fetchNepalFenegosidaTolaRates,
+  nprPerGramFromNepalTolaBoard,
+} from "@/services/market/fenegosida-nepal-rates";
 import { fetchYahooLast } from "@/services/market/yahoo-quotes";
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
+/** Align with client refresh (5–15m): server-side coalescing window. */
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cacheExpiresAt = 0;
 let cached: GoldSilverPriceResponse | null = null;
@@ -124,18 +133,47 @@ async function nprPayloadFromSpot(
     spot.silverUsdPerOz,
     forex.usdPerNpr,
   );
+  const gg = Math.max(goldNprPerGram, 1e-6);
+  const sg = Math.max(silverNprPerGram, 1e-6);
   const updatedAt = new Date().toISOString();
   return {
-    goldPerGramNPR: Math.max(goldNprPerGram, 1e-6),
-    silverPerGramNPR: Math.max(silverNprPerGram, 1e-6),
+    goldPerGramNPR: gg,
+    silverPerGramNPR: sg,
+    goldPerTolaNPR: nprPerTolaFromGram(gg),
+    silverPerTolaNPR: nprPerTolaFromGram(sg),
+    goldUsdPerTroyOz: spot.goldUsdPerOz,
+    silverUsdPerTroyOz: spot.silverUsdPerOz,
     source,
     updatedAt,
+    nepalDomesticPrimary: false,
     ...(degraded ? { degraded: true } : {}),
   };
 }
 
+/** Nepal board (FENEGOSIDA) NPR/tola with international USD/oz as secondary reference. */
+function nepalBoardPayload(
+  nepal: { goldNprPerTola: number; silverNprPerTola: number },
+  intl: { spot: { goldUsdPerOz: number; silverUsdPerOz: number }; source: string },
+): GoldSilverPriceResponse {
+  const gg = Math.max(nprPerGramFromNepalTolaBoard(nepal.goldNprPerTola), 1e-6);
+  const sg = Math.max(nprPerGramFromNepalTolaBoard(nepal.silverNprPerTola), 1e-6);
+  const updatedAt = new Date().toISOString();
+  return {
+    goldPerGramNPR: gg,
+    silverPerGramNPR: sg,
+    goldPerTolaNPR: nepal.goldNprPerTola,
+    silverPerTolaNPR: nepal.silverNprPerTola,
+    goldUsdPerTroyOz: intl.spot.goldUsdPerOz,
+    silverUsdPerTroyOz: intl.spot.silverUsdPerOz,
+    source: `Nepal — FENEGOSIDA (Fine Gold 9999 & Silver, official board) · Intl ref: ${intl.source}`,
+    updatedAt,
+    nepalDomesticPrimary: true,
+    internationalRefSource: intl.source,
+  };
+}
+
 /**
- * Returns cached bullion NPR/g for 15 minutes; on hard failure reuses last good values with `degraded: true`.
+ * Returns cached bullion NPR/g for a few minutes; on hard failure reuses last good values with `degraded: true`.
  * Never returns zero prices when any historical or anchor data exists.
  */
 export async function getGoldSilverNprPrice(): Promise<GoldSilverPriceResponse> {
@@ -143,8 +181,10 @@ export async function getGoldSilverNprPrice(): Promise<GoldSilverPriceResponse> 
   if (cached && now < cacheExpiresAt) return cached;
 
   try {
-    const { spot, source } = await resolveUsdSpot();
-    const fresh = await nprPayloadFromSpot(spot, source, false);
+    const [nepalTola, intl] = await Promise.all([fetchNepalFenegosidaTolaRates(), resolveUsdSpot()]);
+    const fresh = nepalTola
+      ? nepalBoardPayload(nepalTola, intl)
+      : await nprPayloadFromSpot(intl.spot, `International spot → NPR (${intl.source})`, false);
     lastGood = fresh;
     cached = fresh;
     cacheExpiresAt = now + CACHE_TTL_MS;
@@ -167,11 +207,18 @@ export async function getGoldSilverNprPrice(): Promise<GoldSilverPriceResponse> 
       spot.silverUsdPerOz,
       usdPerNpr ?? 1 / 133.5,
     );
+    const gg = Math.max(goldNprPerGram, 1e-6);
+    const sg = Math.max(silverNprPerGram, 1e-6);
     const emergency: GoldSilverPriceResponse = {
-      goldPerGramNPR: Math.max(goldNprPerGram, 1e-6),
-      silverPerGramNPR: Math.max(silverNprPerGram, 1e-6),
+      goldPerGramNPR: gg,
+      silverPerGramNPR: sg,
+      goldPerTolaNPR: nprPerTolaFromGram(gg),
+      silverPerTolaNPR: nprPerTolaFromGram(sg),
+      goldUsdPerTroyOz: spot.goldUsdPerOz,
+      silverUsdPerTroyOz: spot.silverUsdPerOz,
       source: "Anchored estimate (no live feed yet)",
       updatedAt: new Date().toISOString(),
+      nepalDomesticPrimary: false,
       degraded: true,
     };
     cached = emergency;

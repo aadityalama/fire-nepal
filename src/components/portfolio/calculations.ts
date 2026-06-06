@@ -11,7 +11,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { resolveLiveUnitNpr } from "@/lib/investment-market/quotes";
-import { fallbackMetalRatesFromUsdAnchors } from "@/lib/market/bullion-estimate";
+import { fallbackMetalRatesFromUsdAnchors, nprPerTolaFromGram } from "@/lib/market/bullion-estimate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, type PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
 import { metalsNprPerGramFromSnapshot } from "@/services/market/metal-convert";
 import { resolveLiveUnitNprFromSnapshot } from "@/services/portfolio/market-quotes";
@@ -360,4 +360,28 @@ export function resolveMetalGramRatesForUi(
     };
   }
   return fallbackMetalRatesFromUsdAnchors(usdPerNpr);
+}
+
+/** NPR/tola for UI — prefers API payload, else gram rate × Nepal tola. */
+export function resolveMetalTolaRatesForUi(
+  bullionSpot: GoldSilverPriceResponse | null,
+  usdPerNpr: number,
+): { goldNprPerTola: number; silverNprPerTola: number } {
+  const grams = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
+  if (
+    bullionSpot &&
+    typeof bullionSpot.goldPerTolaNPR === "number" &&
+    typeof bullionSpot.silverPerTolaNPR === "number" &&
+    bullionSpot.goldPerTolaNPR > 0 &&
+    bullionSpot.silverPerTolaNPR > 0
+  ) {
+    return {
+      goldNprPerTola: bullionSpot.goldPerTolaNPR,
+      silverNprPerTola: bullionSpot.silverPerTolaNPR,
+    };
+  }
+  return {
+    goldNprPerTola: nprPerTolaFromGram(grams.goldNprPerGram),
+    silverNprPerTola: nprPerTolaFromGram(grams.silverNprPerGram),
+  };
 }

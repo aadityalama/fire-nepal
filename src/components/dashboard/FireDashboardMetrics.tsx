@@ -11,6 +11,7 @@ import {
 import { loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
+import { normalizeGoldSilverPriceResponse } from "@/lib/market/normalize-gold-silver-price-response";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 
 function sumIncome(cf: CashflowDashboardState): number {
@@ -63,26 +64,22 @@ export function FireDashboardMetrics({
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const run = async () => {
       try {
         const res = await fetch(`/api/market/gold-price?_t=${Date.now()}`, { cache: "no-store" });
         if (!res.ok || cancelled) return;
-        const j = (await res.json()) as GoldSilverPriceResponse;
-        if (cancelled) return;
-        if (
-          typeof j.goldPerGramNPR === "number" &&
-          typeof j.silverPerGramNPR === "number" &&
-          j.goldPerGramNPR > 0 &&
-          j.silverPerGramNPR > 0
-        ) {
-          setBullionSpot(j);
-        }
+        const raw: unknown = await res.json();
+        const j = normalizeGoldSilverPriceResponse(raw);
+        if (!cancelled && j) setBullionSpot(j);
       } catch {
         /* keep prior / fallback inside computeWealthTotals */
       }
-    })();
+    };
+    void run();
+    const id = window.setInterval(run, 6 * 60 * 1000);
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
   }, [tick, refreshKey]);
 

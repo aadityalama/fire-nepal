@@ -31,7 +31,7 @@ export function LiveMarketStrip() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const { state, totals, krwPerNpr, usdPerNpr } = useWealthPortfolio();
+  const { state, totals, krwPerNpr, usdPerNpr, bullionSpot } = useWealthPortfolio();
   const { snapshot, status, error, overlay } = useRealtimeMarket();
 
   const cagrLive = useMemo(() => {
@@ -148,13 +148,36 @@ export function LiveMarketStrip() {
         <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-3">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-500">
             <Gem size={14} className="text-violet-300" aria-hidden />
-            Bullion spot (USD/oz)
+            Bullion spot
           </div>
           <p className="mt-1.5 text-sm font-black text-white">
             Au {goldOz != null ? `$${goldOz.toFixed(0)}` : "—"} · Ag{" "}
-            {snapshot?.metalsUsdOz.silverUsdPerOz != null ? `$${snapshot.metalsUsdOz.silverUsdPerOz.toFixed(2)}` : "—"}
+            {snapshot?.metalsUsdOz.silverUsdPerOz != null ? `$${snapshot.metalsUsdOz.silverUsdPerOz.toFixed(2)}` : "—"}{" "}
+            <span className="text-zinc-500">(USD/oz)</span>
           </p>
-          <p className="text-[11px] text-zinc-500">Marks metals in your vault tab</p>
+          {bullionSpot ? (
+            <p className="mt-1 text-[11px] font-bold leading-snug text-violet-200/90">
+              {bullionSpot.nepalDomesticPrimary ? (
+                <>
+                  Nepal (FENEGOSIDA): gold {formatMoney(bullionSpot.goldPerGramNPR, "NPR")}/g ·{" "}
+                  {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")}/tola · silver{" "}
+                  {formatMoney(bullionSpot.silverPerGramNPR, "NPR")}/g · {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")}
+                  /tola
+                </>
+              ) : (
+                <>
+                  NPR marks: gold {formatMoney(bullionSpot.goldPerGramNPR, "NPR")}/g · silver{" "}
+                  {formatMoney(bullionSpot.silverPerGramNPR, "NPR")}/g
+                </>
+              )}
+              {bullionSpot.degraded ? (
+                <span className="ml-1 rounded bg-amber-500/20 px-1 text-[10px] font-black text-amber-200">stale</span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="mt-1 text-[11px] text-zinc-500">NPR/g loads from vault feed…</p>
+          )}
+          <p className="mt-1 text-[10px] text-zinc-500">Updates vault & portfolio totals</p>
         </div>
       </div>
 

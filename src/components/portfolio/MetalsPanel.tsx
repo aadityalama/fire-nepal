@@ -1,8 +1,11 @@
 "use client";
 
-import { Gem, Plus, Trash2 } from "lucide-react";
+import { Gem, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { resolveMetalGramRatesForUi } from "@/components/portfolio/calculations";
+import {
+  resolveMetalGramRatesForUi,
+  resolveMetalTolaRatesForUi,
+} from "@/components/portfolio/calculations";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
@@ -16,6 +19,7 @@ import {
 import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
+import { NEPAL_METAL_TOLA_GRAMS } from "@/lib/market/bullion-estimate";
 
 function todayIso() {
   return portfolioTxnTodayIso();
@@ -49,8 +53,10 @@ function MetalTradeStrip({
 
   useEffect(() => {
     if (!open) return;
-    setErr(null);
-    setTradeDate(todayIso());
+    queueMicrotask(() => {
+      setErr(null);
+      setTradeDate(todayIso());
+    });
   }, [open, segmentId, row.id]);
 
   const submit = () => {
@@ -185,12 +191,21 @@ export function MetalsPanel({
   onRemove: (id: string) => void;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
-  const { bullionSpot, bullionError, usdPerNpr } = useWealthPortfolio();
+  const {
+    bullionSpot,
+    bullionError,
+    usdPerNpr,
+    bullionPriceLoading,
+    bullionPriceRefreshing,
+  } = useWealthPortfolio();
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "—";
   const sourceLabel = bullionSpot?.source ?? "FX-anchored estimate";
+  const gramRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
+  const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
+  const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
 
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3.5 sm:rounded-[1.5rem] sm:p-4">
@@ -202,7 +217,10 @@ export function MetalsPanel({
           <div>
             <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
             <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
-              Grams · NPR per gram from global spot (USD) with live NPR/USD.
+              Grams · portfolio marks use{" "}
+              <span className="text-emerald-100">today&apos;s Nepal board rates (FENEGOSIDA)</span> per gram &amp;
+              tola when available; international USD/oz is shown only as a reference. Ledger, cost basis, and
+              transactions are unchanged.
             </p>
           </div>
         </div>
@@ -224,29 +242,148 @@ export function MetalsPanel({
         </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:px-3 sm:text-[11px]">
-        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-black uppercase tracking-wide text-amber-100">
-          Live price
-        </span>
-        <span className="text-emerald-200/75">
-          Last updated: <span className="text-emerald-50">{lastUpdatedLabel}</span>
-        </span>
-        <span className="min-w-0 text-emerald-200/75">
-          Source: <span className="break-all text-emerald-50">{sourceLabel}</span>
-        </span>
-        {showWarning ? (
-          <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-black uppercase tracking-wide text-amber-200">
-            Feed warning
+      <div className="mb-3 space-y-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2.5 sm:px-3">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:text-[11px]">
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2 py-0.5 font-black uppercase tracking-widest text-emerald-100 shadow-[0_0_20px_-6px_rgba(52,211,153,0.45)]"
+            title="Quotes refresh about every 6 minutes while this page is open."
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
+            </span>
+            Live
           </span>
+          {bullionPriceLoading ? (
+            <span className="text-emerald-200/75">Loading spot prices…</span>
+          ) : bullionPriceRefreshing ? (
+            <span className="text-emerald-200/75">Refreshing…</span>
+          ) : null}
+          <span className="text-emerald-200/75">
+            Last updated: <span className="text-emerald-50">{lastUpdatedLabel}</span>
+          </span>
+          {showWarning ? (
+            <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-black uppercase tracking-wide text-amber-200">
+              {bullionSpot?.degraded ? "Stale quote" : "Feed warning"}
+            </span>
+          ) : null}
+        </div>
+
+        {usingFallbackStrip ? (
+          <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-snug text-amber-100/95 sm:text-[11px]">
+            Live feed unavailable ({bullionError}). Showing NPR estimates from USD anchors and your NPR/USD rate — Nepal
+            board (fenegosida.org) could not be reached; add API keys (see .env.example) for stronger international
+            feeds.
+          </p>
         ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div
+            className={`rounded-lg border px-2 py-2 sm:px-2.5 ${
+              bullionPriceLoading && !bullionSpot
+                ? "border-amber-400/15 bg-black/20"
+                : "border-amber-400/25 bg-amber-500/[0.07]"
+            }`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-wide text-amber-200/80">
+              Nepal gold (today)
+            </p>
+            {bullionPriceLoading && !bullionSpot ? (
+              <div className="mt-1.5 space-y-1.5">
+                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-emerald-400/10" />
+                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-emerald-400/10" />
+              </div>
+            ) : (
+              <>
+                <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
+                  {formatMoney(gramRates.goldNprPerGram, "NPR")} / g
+                </p>
+                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
+                  {formatMoney(tolaRates.goldNprPerTola, "NPR")} / tola
+                </p>
+                {bullionSpot?.nepalDomesticPrimary ? (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
+                    Intl reference: ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
+                    USD/troy oz
+                    {bullionSpot.internationalRefSource ? (
+                      <span className="text-emerald-200/40"> ({bullionSpot.internationalRefSource})</span>
+                    ) : null}
+                  </p>
+                ) : bullionSpot ? (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
+                    Spot-derived NPR (intl): ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}{" "}
+                    USD/troy oz
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+          <div
+            className={`rounded-lg border px-2 py-2 sm:px-2.5 ${
+              bullionPriceLoading && !bullionSpot
+                ? "border-slate-400/15 bg-black/20"
+                : "border-slate-400/25 bg-slate-500/[0.07]"
+            }`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-wide text-slate-200/80">
+              Nepal silver (today)
+            </p>
+            {bullionPriceLoading && !bullionSpot ? (
+              <div className="mt-1.5 space-y-1.5">
+                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-slate-400/10" />
+                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-slate-400/10" />
+              </div>
+            ) : (
+              <>
+                <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
+                  {formatMoney(gramRates.silverNprPerGram, "NPR")} / g
+                </p>
+                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
+                  {formatMoney(tolaRates.silverNprPerTola, "NPR")} / tola
+                </p>
+                {bullionSpot?.nepalDomesticPrimary ? (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
+                    Intl reference: ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                    USD/troy oz
+                    {bullionSpot.internationalRefSource ? (
+                      <span className="text-emerald-200/40"> ({bullionSpot.internationalRefSource})</span>
+                    ) : null}
+                  </p>
+                ) : bullionSpot ? (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
+                    Spot-derived NPR (intl): ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    USD/troy oz
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[10px] font-bold leading-snug text-emerald-200/65 sm:text-[11px]">
+          <span className="text-emerald-200/55">Source:</span>{" "}
+          <span className="break-all text-emerald-50">{sourceLabel}</span>
+          <span className="mx-1.5 text-emerald-500/40">·</span>
+          <span className="text-emerald-200/55">1 tola =</span> {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g (Nepal bullion
+          convention)
+        </p>
       </div>
 
       <div className="space-y-2">
         {rows.map((row) => {
           const g = row.grams ?? 0;
           const uiRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
+          const uiTola = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
           const rate = row.metal === "gold" ? uiRates.goldNprPerGram : uiRates.silverNprPerGram;
+          const rateTola = row.metal === "gold" ? uiTola.goldNprPerTola : uiTola.silverNprPerTola;
           const total = g * rate;
+          const basis = row.totalCostBasisNpr;
+          const unrealizedNpr =
+            typeof basis === "number" && basis > 0 && g > 0 ? total - basis : null;
           return (
             <div
               key={row.id}
@@ -278,11 +415,34 @@ export function MetalsPanel({
                     />
                   </div>
                   <div className="rounded-lg bg-black/25 px-2 py-2 text-[11px] font-bold sm:text-xs">
-                    <p className="text-emerald-200/55">Live price</p>
+                    <p className="text-emerald-200/55">Live mark</p>
                     <p className="mt-0.5 font-black text-amber-200/95">{formatMoney(rate, "NPR")} / g</p>
+                    <p className="mt-0.5 font-bold text-amber-200/75">{formatMoney(rateTola, "NPR")} / tola</p>
                     <p className="mt-1 text-emerald-100/90">
-                      Value: <span className="font-black text-emerald-50">{formatMoney(total, "NPR")}</span>
+                      Holdings value:{" "}
+                      <span className="font-black text-emerald-50">{formatMoney(total, "NPR")}</span>
                     </p>
+                    {unrealizedNpr != null ? (
+                      <p
+                        className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${
+                          unrealizedNpr >= 0
+                            ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                            : "border-rose-400/30 bg-rose-500/10 text-rose-200"
+                        }`}
+                      >
+                        {unrealizedNpr >= 0 ? (
+                          <TrendingUp size={12} className="shrink-0" aria-hidden />
+                        ) : (
+                          <TrendingDown size={12} className="shrink-0" aria-hidden />
+                        )}
+                        Unrealized {unrealizedNpr >= 0 ? "+" : ""}
+                        {formatMoney(unrealizedNpr, "NPR")}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[10px] font-bold text-emerald-200/45">
+                        Add cost basis to track unrealized P/L.
+                      </p>
+                    )}
                   </div>
                   <div className="min-w-0 sm:col-span-3">
                     <NumericMoneyInput tone="dark"
