@@ -18,6 +18,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
+import { sanitizeMetalPhotoGallery } from "@/components/portfolio/metal-photo-utils";
 import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
@@ -442,10 +443,12 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
     const basis = m.totalCostBasisNpr;
     const totalCostBasisNpr =
       typeof basis === "number" && Number.isFinite(basis) && basis > 0 ? basis : undefined;
+    const { photoUrls, coverPhotoIndex } = sanitizeMetalPhotoGallery(m.photoUrls, m.coverPhotoIndex);
     return {
       ...r,
       boughtDate: sanitizeIsoDate(m.boughtDate),
       totalCostBasisNpr,
+      ...(photoUrls && photoUrls.length > 0 ? { photoUrls, coverPhotoIndex } : { photoUrls: undefined, coverPhotoIndex: undefined }),
     };
   });
   const reRaw = Array.isArray(parsed.realEstate) ? parsed.realEstate : d.realEstate;

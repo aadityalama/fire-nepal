@@ -85,6 +85,13 @@ export type MetalRow = {
   boughtDate?: string;
   /** Total NPR cost basis for held grams (optional; enables realized P/L on sells). */
   totalCostBasisNpr?: number;
+  /**
+   * Optional photos (jewelry, bars, invoices): inline JPEG data URLs or safe `https` image URLs.
+   * Display / documentation only — does not affect marks or ledger.
+   */
+  photoUrls?: string[];
+  /** Index into `photoUrls` for the cover image (0-based). */
+  coverPhotoIndex?: number;
 };
 
 export type RealEstateRow = {

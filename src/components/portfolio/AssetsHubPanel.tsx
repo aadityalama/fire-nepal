@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { metalCoverPhotoUrl } from "@/components/portfolio/metal-photo-utils";
 import { formatMoney } from "@/lib/expense-utils";
 
 type HubCardDef = {
@@ -17,7 +18,7 @@ type HubCardDef = {
 };
 
 export function AssetsHubPanel() {
-  const { totals, hydrated } = useWealthPortfolio();
+  const { totals, hydrated, state } = useWealthPortfolio();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
 
@@ -55,6 +56,14 @@ export function AssetsHubPanel() {
     [totals.fixedDepositsPrincipalNpr, totals.liquidNpr, totals.metalsNpr, totals.realEstateNpr, totals.vehiclesNpr],
   );
 
+  const metalsPreviewUrl = useMemo(() => {
+    for (const m of state.metals) {
+      const u = metalCoverPhotoUrl(m);
+      if (u) return u;
+    }
+    return null;
+  }, [state.metals]);
+
   const gridCls =
     "grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 md:gap-5 lg:grid-cols-4 lg:gap-5 xl:gap-6";
 
@@ -76,6 +85,16 @@ export function AssetsHubPanel() {
                 : "motion-safe:hover:border-emerald-400/35 motion-safe:hover:shadow-[0_32px_80px_-28px_rgba(0,0,0,0.75),0_0_100px_-22px_rgba(52,211,153,0.22)]"
             } ${shell} backdrop-blur-2xl backdrop-saturate-[1.12]`}
           >
+            {c.href === "/portfolio/gold" && metalsPreviewUrl ? (
+              <div className="pointer-events-none absolute right-4 top-4 z-[1] overflow-hidden rounded-2xl border border-amber-400/35 bg-black/40 shadow-lg ring-1 ring-white/10 sm:right-5 sm:top-5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={metalsPreviewUrl}
+                  alt=""
+                  className="h-14 w-14 object-cover sm:h-16 sm:w-16"
+                />
+              </div>
+            ) : null}
             <div
               aria-hidden
               className={`pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full blur-3xl transition duration-700 ${

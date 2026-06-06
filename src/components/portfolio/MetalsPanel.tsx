@@ -10,6 +10,7 @@ import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { PortfolioDateMeta } from "@/components/portfolio/PortfolioDateMeta";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerCard";
+import { MetalHoldingPhotos } from "@/components/portfolio/MetalHoldingPhotos";
 import { MetalGramTolaFields, MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
@@ -438,6 +439,7 @@ export function MetalsPanel({
               className="wealth-row-card flex flex-col gap-2 rounded-xl p-2.5 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex min-w-0 flex-col gap-2">
+                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} />
                 <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
                   <label className="block">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Metal</span>
