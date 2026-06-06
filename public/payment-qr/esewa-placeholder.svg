@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280" role="img" aria-label="eSewa QR placeholder">
+  <rect width="280" height="280" fill="#1a0b2e"/>
+  <rect x="24" y="24" width="232" height="232" fill="#12081f" stroke="#c4b5fd" stroke-width="3" rx="12"/>
+  <text x="140" y="118" text-anchor="middle" fill="#ddd6fe" font-family="system-ui,sans-serif" font-size="14" font-weight="700">eSewa QR</text>
+  <text x="140" y="148" text-anchor="middle" fill="#a78bfa" font-family="system-ui,sans-serif" font-size="11">Replace via NEXT_PUBLIC_MEMBERSHIP_QR_ESEWA</text>
+  <text x="140" y="178" text-anchor="middle" fill="#8b5cf6" font-family="system-ui,sans-serif" font-size="10">or swap this file in /public/payment-qr/</text>
+</svg>

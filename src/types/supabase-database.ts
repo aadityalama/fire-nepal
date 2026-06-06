@@ -252,6 +252,46 @@ export type Database = {
         };
         Relationships: [];
       };
+      membership_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          plan: "premium" | "elite";
+          payment_method: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          proof_storage_path: string;
+          reference: string | null;
+          submitted_at: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          plan: "premium" | "elite";
+          payment_method: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          proof_storage_path: string;
+          reference?: string | null;
+          submitted_at?: string;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Update: {
+          email?: string;
+          plan?: "premium" | "elite";
+          payment_method?: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          proof_storage_path?: string;
+          reference?: string | null;
+          submitted_at?: string;
+          status?: "pending" | "approved" | "rejected";
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

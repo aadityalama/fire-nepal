@@ -24,7 +24,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               FIRE Nepal Control Room
             </Link>
           </div>
-          <nav className="flex items-center gap-2">
+          <nav className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/membership-requests"
+              className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/18"
+            >
+              Membership payments
+            </Link>
             <Link
               href="/hub"
               className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"

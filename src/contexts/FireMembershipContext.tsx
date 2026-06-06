@@ -4,11 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   applyDemoTierChange,
+  applyServerEntitlement,
   defaultMembershipRecord,
   getMembershipRecordForUser,
   type FireMembershipRecord,
   type FireMembershipTier,
 } from "@/lib/fire-membership";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type FireMembershipContextValue = {
   tier: FireMembershipTier;
@@ -16,6 +18,8 @@ type FireMembershipContextValue = {
   /** Anonymous / logged out → free + default record (not persisted). */
   refresh: () => void;
   setTierDemo: (tier: FireMembershipTier) => void;
+  /** When Supabase is enabled, pull `profiles.plan_type` into local gates (e.g. after admin approval). */
+  syncServerEntitlement: () => Promise<void>;
 };
 
 const FireMembershipContext = createContext<FireMembershipContextValue | null>(null);
@@ -52,14 +56,40 @@ export function FireMembershipProvider({ children }: { children: ReactNode }) {
     [user, refresh],
   );
 
+  const syncServerEntitlement = useCallback(async () => {
+    if (!user || !isSupabaseConfigured()) return;
+    try {
+      const r = await fetch("/api/membership/entitlement", { credentials: "include", cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as { planType?: string; currentPeriodEnd?: string | null };
+      if (j.planType === "premium" || j.planType === "elite") {
+        applyServerEntitlement(user.id, j.planType, j.currentPeriodEnd ?? null);
+        refresh();
+      }
+    } catch {
+      /* offline / misconfigured */
+    }
+  }, [user, refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void syncServerEntitlement();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [syncServerEntitlement]);
+
   const value = useMemo<FireMembershipContextValue>(
     () => ({
       tier,
       record,
       refresh,
       setTierDemo,
+      syncServerEntitlement,
     }),
-    [tier, record, refresh, setTierDemo],
+    [tier, record, refresh, setTierDemo, syncServerEntitlement],
   );
 
   return <FireMembershipContext.Provider value={value}>{children}</FireMembershipContext.Provider>;

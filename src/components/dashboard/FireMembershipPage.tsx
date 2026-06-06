@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
 import {
   deriveFireNepalId,
   membershipActiveIso,
@@ -13,11 +14,14 @@ import {
 import {
   ELITE_FAMILY_WEALTH_DETAILS,
   ELITE_FAMILY_WEALTH_FEATURE_LABEL,
+  isMembershipUpgrade,
   TIER_CATALOG,
   TIER_DISPLAY,
   USAGE_LIMITS,
   type FireMembershipTier,
 } from "@/lib/fire-membership";
+import { PAYMENT_METHOD_LABEL, type MembershipPaymentMethod, type MembershipRequestPlan } from "@/lib/membership-payment";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type CompareCell = boolean | "limited";
 
@@ -159,21 +163,140 @@ function CellIcon({ on, tone = "emerald" }: { on: CompareCell; tone?: "emerald" 
   return <span className="text-zinc-600">—</span>;
 }
 
+type MyRequestRow = {
+  id: string;
+  plan: MembershipRequestPlan;
+  payment_method: MembershipPaymentMethod;
+  reference: string | null;
+  submitted_at: string;
+  status: "pending" | "approved" | "rejected";
+};
+
+function MembershipMyRequestsPanel() {
+  const { user } = useProductAuth();
+  const [rows, setRows] = useState<MyRequestRow[] | null>(null);
+
+  const load = useCallback(async () => {
+    if (!user || !isSupabaseConfigured()) return;
+    try {
+      const r = await fetch("/api/membership-requests", { credentials: "include", cache: "no-store" });
+      const j = (await r.json().catch(() => ({}))) as { requests?: MyRequestRow[] };
+      if (r.ok) setRows(j.requests ?? []);
+    } catch {
+      setRows([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const on = () => void load();
+    window.addEventListener("fn-membership-requests-reload", on);
+    return () => window.removeEventListener("fn-membership-requests-reload", on);
+  }, [load]);
+
+  if (!user || !isSupabaseConfigured()) return null;
+
+  if (rows === null) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+        <p className="text-sm font-medium text-zinc-500">Loading your payment requests…</p>
+      </div>
+    );
+  }
+
+  if (rows.length === 0) return null;
+
+  const preview = async (id: string) => {
+    const r = await fetch(`/api/membership-requests/${id}/proof-url`, { credentials: "include", cache: "no-store" });
+    const j = (await r.json().catch(() => ({}))) as { signedUrl?: string };
+    if (r.ok && j.signedUrl) window.open(j.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+      <h3 className="text-sm font-black uppercase tracking-[0.12em] text-emerald-300/70">Your payment requests</h3>
+      <ul className="mt-4 space-y-3">
+        {rows.map((row) => (
+          <li
+            key={row.id}
+            className="flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-black/25 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="text-sm font-bold text-white">
+                {row.plan === "elite" ? "Elite" : "Premium"} · {PAYMENT_METHOD_LABEL[row.payment_method]}
+              </p>
+              <p className="text-xs text-zinc-500">{new Date(row.submitted_at).toLocaleString()}</p>
+              {row.reference ? (
+                <p className="mt-1 text-xs font-medium text-zinc-400">
+                  Ref: <span className="font-mono text-zinc-300">{row.reference}</span>
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                  row.status === "approved"
+                    ? "border border-emerald-400/35 bg-emerald-500/15 text-emerald-200"
+                    : row.status === "rejected"
+                      ? "border border-rose-400/35 bg-rose-500/15 text-rose-200"
+                      : "border border-amber-400/35 bg-amber-500/15 text-amber-100"
+                }`}
+              >
+                {row.status}
+              </span>
+              <button
+                type="button"
+                onClick={() => void preview(row.id)}
+                className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-emerald-200 transition hover:bg-white/10"
+              >
+                Preview proof
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function FireMembershipPage() {
   const { user } = useProductAuth();
-  const { tier, record, setTierDemo } = useFireMembership();
+  const { tier, record, setTierDemo, syncServerEntitlement } = useFireMembership();
   const [confirmDowngrade, setConfirmDowngrade] = useState<FireMembershipTier | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("yearly");
+  const [paymentPlan, setPaymentPlan] = useState<MembershipRequestPlan | null>(null);
   const founderCountdown = useFounderWindowCountdown();
 
   const onSelectTier = useCallback(
     (next: FireMembershipTier) => {
+      if (next === tier) return;
       if (next === "free" && tier !== "free") {
         setConfirmDowngrade(next);
         return;
       }
-      setTierDemo(next);
-      setConfirmDowngrade(null);
+      if (next === "premium" || next === "elite") {
+        if (isMembershipUpgrade(tier, next) && isSupabaseConfigured()) {
+          setPaymentPlan(next);
+          setConfirmDowngrade(null);
+          return;
+        }
+        setTierDemo(next);
+        setConfirmDowngrade(null);
+        return;
+      }
+      if (next === "free") {
+        setTierDemo("free");
+        setConfirmDowngrade(null);
+      }
     },
     [tier, setTierDemo],
   );
@@ -206,8 +329,8 @@ export function FireMembershipPage() {
       <div className="animate-fade-up">
         <h1 className="text-2xl font-black tracking-tight text-white sm:text-4xl">Membership</h1>
         <p className="mt-2 max-w-2xl text-sm font-medium text-emerald-100/55">
-          Annual founder pricing for early members. Upgrade when checkout goes live — your tier is respected across the
-          workspace today.
+          Annual founder pricing for early members. Pay with Khalti, eSewa, or Global IME QR — upload proof and we
+          activate Premium or Elite after a quick admin review.
         </p>
       </div>
 
@@ -266,7 +389,11 @@ export function FireMembershipPage() {
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
           <p className="text-[10px] font-black uppercase text-zinc-500">Renewal / period end</p>
           <p className="mt-2 text-lg font-bold text-white">{renewalLabel}</p>
-          <p className="mt-1 text-xs text-zinc-500">Your paid period end date will appear here after checkout.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {isSupabaseConfigured()
+              ? "After approval, your plan syncs from your account profile."
+              : "Your paid period end date will appear here after checkout."}
+          </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
           <p className="text-[10px] font-black uppercase text-zinc-500">AI coach quota (mo)</p>
@@ -285,7 +412,9 @@ export function FireMembershipPage() {
           <div>
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-300/70">Choose your plan</h2>
             <p className="mt-2 max-w-xl text-xs font-medium leading-relaxed text-zinc-500 sm:text-sm">
-              Lock founder annual rates while seats last. Checkout will charge in NPR when Stripe is connected.
+              {isSupabaseConfigured()
+                ? "Choose Premium or Elite to open the payment modal, scan a QR in NPR, and submit proof. Without cloud auth, tier changes stay on this device only."
+                : "Lock founder annual rates while seats last. Without Supabase, tier selection stays in this browser only."}
             </p>
           </div>
           <div
@@ -340,10 +469,10 @@ export function FireMembershipPage() {
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute right-[-4.25rem] top-3 z-20 flex w-[19rem] min-w-[19rem] rotate-45 items-center justify-center bg-gradient-to-r from-lime-400 via-emerald-400 to-emerald-600 px-12 py-2.5 text-center text-[9px] font-black uppercase leading-tight tracking-[0.1em] text-emerald-950 shadow-lg sm:right-[-3.75rem] sm:top-4 sm:w-[22rem] sm:min-w-[22rem] sm:px-14 sm:py-3 sm:text-[10px] sm:tracking-[0.12em] md:right-[-3.25rem] md:top-5 md:w-[24rem] md:min-w-[24rem] md:px-16 md:text-[11px] md:tracking-[0.14em]"
+            className="pointer-events-none absolute right-[-5.5rem] top-2 z-20 flex w-[21rem] min-w-[21rem] rotate-45 items-center justify-center bg-gradient-to-r from-lime-400 via-emerald-400 to-emerald-600 px-16 py-3 text-center text-[9px] font-black uppercase leading-snug tracking-[0.08em] text-emerald-950 shadow-lg sm:right-[-4.5rem] sm:top-4 sm:w-[24rem] sm:min-w-[24rem] sm:px-20 sm:py-3.5 sm:text-[10px] sm:tracking-[0.1em] md:right-[-3.75rem] md:top-5 md:w-[26rem] md:min-w-[26rem] md:px-24 md:text-[11px] md:tracking-[0.12em]"
             aria-hidden
           >
-            <span className="block max-w-none whitespace-nowrap px-1">Founding Member Offer</span>
+            <span className="block max-w-none whitespace-nowrap px-2">Founding Member Offer</span>
           </div>
 
           <div className="relative z-10 grid gap-5 overflow-hidden rounded-[1.75rem] p-5 pt-14 sm:p-6 sm:pt-16 lg:grid-cols-[1fr_1.12fr_1fr] lg:items-stretch lg:gap-5 lg:p-7 lg:pt-[4.25rem]">
@@ -529,6 +658,8 @@ export function FireMembershipPage() {
         </div>
       </div>
 
+      <MembershipMyRequestsPanel />
+
       {confirmDowngrade ? (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 backdrop-blur-xl">
           <p className="text-sm font-bold text-amber-50">Switch to Free? Premium surfaces (OCR, AI coach, advanced analytics) will lock until you upgrade again.</p>
@@ -624,17 +755,35 @@ export function FireMembershipPage() {
           </dl>
         </div>
         <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-6 backdrop-blur-xl">
-          <h3 className="text-sm font-black uppercase tracking-[0.12em] text-emerald-300/70">Checkout roadmap</h3>
+          <h3 className="text-sm font-black uppercase tracking-[0.12em] text-emerald-300/70">Billing & renewals</h3>
           <p className="mt-3 text-sm leading-relaxed text-zinc-300">
-            Stripe Checkout, webhooks for renewals, and the customer portal will activate before public billing. Until
-            then, tier selection here keeps product gates in sync in this browser.
+            {isSupabaseConfigured()
+              ? "QR payments are verified manually. Stripe checkout and webhooks can be added later for automatic renewals — your subscription row is already prepared when an admin approves."
+              : "Stripe Checkout, webhooks for renewals, and the customer portal will activate before public billing. Until then, tier selection here keeps product gates in sync in this browser."}
           </p>
         </div>
       </div>
 
       <p className="text-center text-xs font-medium text-zinc-500">
-        Tier is stored in this browser until checkout. Production will confirm entitlements server-side after payment.
+        {isSupabaseConfigured()
+          ? "Paid access is enforced from your Supabase profile after approval. QR placeholders can be replaced with real static QRs via NEXT_PUBLIC_MEMBERSHIP_QR_* or files in /public/payment-qr/."
+          : "Tier is stored in this browser until cloud billing is connected."}
       </p>
+
+      {paymentPlan ? (
+        <MembershipPaymentModal
+          key={paymentPlan}
+          open
+          onOpenChange={(o) => {
+            if (!o) setPaymentPlan(null);
+          }}
+          plan={paymentPlan}
+          onSubmitted={() => {
+            void syncServerEntitlement();
+            window.dispatchEvent(new Event("fn-membership-requests-reload"));
+          }}
+        />
+      ) : null}
     </div>
   );
 }

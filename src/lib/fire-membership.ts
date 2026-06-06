@@ -170,6 +170,27 @@ export function applyDemoTierChange(userId: string, tier: FireMembershipTier): F
   });
 }
 
+/** True when moving to a higher-paid tier (opens payment flow instead of instant demo). */
+export function isMembershipUpgrade(current: FireMembershipTier, target: FireMembershipTier): boolean {
+  return TIER_RANK[target] > TIER_RANK[current];
+}
+
+/** Apply tier from Supabase `profiles` after admin approval (overrides local paid state). */
+export function applyServerEntitlement(
+  userId: string,
+  tier: "premium" | "elite",
+  currentPeriodEnd: string | null,
+): FireMembershipRecord {
+  const end =
+    currentPeriodEnd ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  return setMembershipRecordForUser(userId, {
+    tier,
+    status: "active",
+    currentPeriodEnd: end,
+    trialEndsAt: null,
+  });
+}
+
 export function canAccessFeature(tier: FireMembershipTier, feature: FireFeatureKey): boolean {
   return TIER_RANK[tier] >= TIER_RANK[FEATURE_MIN_TIER[feature]];
 }
