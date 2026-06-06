@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
-import type { WealthTotals } from "@/components/portfolio/calculations";
 import {
   annualizedCagrFraction,
   formatCagrPct,
@@ -197,12 +196,10 @@ export function MetalGramTolaFields({
 export function MetalsPremiumDashboard({
   rows,
   gramRates,
-  totals,
   ledger = [],
 }: {
   rows: readonly MetalRow[];
   gramRates: MetalRatePair;
-  totals: WealthTotals;
   ledger?: readonly PortfolioLedgerEntry[];
 }) {
   const all = rollupAllMetals(rows, gramRates);
@@ -214,10 +211,6 @@ export function MetalsPremiumDashboard({
   const netPl = purchase > 0 ? current - purchase : null;
   const roi = roiPct(purchase, current);
   const cagrFrac = days != null && days >= 1 && purchase > 0 ? annualizedCagrFraction(purchase, current, days) : null;
-  const unrealized = netPl;
-  const appreciation = roi;
-  const nw = totals.netWorthNpr;
-  const contributionPct = nw > 0 && Number.isFinite(totals.metalsNpr) ? (totals.metalsNpr / nw) * 100 : null;
 
   const goldAvgPerG = weightedBasisCostPerGram(rows, "gold");
   const silverAvgPerG = weightedBasisCostPerGram(rows, "silver");
@@ -225,7 +218,6 @@ export function MetalsPremiumDashboard({
   const silverHasBasisLots = silverAvgPerG != null;
 
   const holdingApprox = days != null ? formatHoldingDurationApprox(days) : "—";
-  const holdingDaysText = days != null ? String(days) : "—";
 
   const netTone =
     netPl == null ? "text-emerald-200/50" : netPl >= 0 ? "text-lime-200" : "text-rose-300";
@@ -270,7 +262,7 @@ export function MetalsPremiumDashboard({
   };
 
   return (
-    <div className="mb-4 space-y-4">
+    <div className="mb-3 space-y-3">
       <div className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-950/25 via-black/35 to-lime-950/20 p-3 shadow-inner sm:p-3.5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-lime-500/25 to-emerald-600/20 text-lime-100 ring-1 ring-lime-400/25">
@@ -347,85 +339,6 @@ export function MetalsPremiumDashboard({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-lime-400/20 bg-black/30 p-3 shadow-inner ring-1 ring-lime-400/10 sm:p-3.5">
-        <h3 className="text-xs font-black uppercase tracking-[0.1em] text-lime-100/95 sm:text-sm">Premium performance</h3>
-        <p className="mb-2 text-[10px] font-bold text-emerald-200/55 sm:text-[11px]">Same metrics as real-estate KPI tiles — large type, gradients, hover ring.</p>
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 lg:items-stretch lg:gap-2.5">
-          <MetalPremiumKpiCard
-            label="Purchase value"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={purchase > 0 ? formatMoney(purchase, "NPR") : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={1.5}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Cost basis</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Current value"
-            labelClassName="text-emerald-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={all.grams > 0 ? formatMoney(current, "NPR") : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={1.5}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Live mark</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Net profit"
-            labelClassName="text-sky-200/70"
-            shellClassName="border-sky-400/20 bg-gradient-to-br from-sky-950/30 to-black/40 shadow-inner ring-1 ring-sky-400/10"
-            valueText={netPl != null ? `${netPl >= 0 ? "+" : ""}${formatMoney(netPl, "NPR")}` : "—"}
-            valueClassName={netTone}
-            maxRem={1.35}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Unrealized (module)</p>}
-          />
-          <MetalPremiumKpiCard
-            label="ROI %"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={formatRoiPct(roi)}
-            valueClassName={roiTone}
-            maxRem={2}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Return on basis</p>}
-          />
-        </div>
-        <div className="mt-2 grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-3 lg:items-stretch lg:gap-2.5">
-          <MetalPremiumKpiCard
-            label="CAGR %"
-            labelClassName="text-amber-200/70"
-            shellClassName="border-amber-400/20 bg-black/35 shadow-inner ring-1 ring-amber-400/10"
-            valueText={formatCagrPct(cagrFrac, 2).replace(" p.a.", "")}
-            valueClassName={cagrTone}
-            maxRem={1.75}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Geometric annualized</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Holding days"
-            labelClassName="text-violet-200/70"
-            shellClassName="border-violet-400/20 bg-black/35 shadow-inner ring-1 ring-violet-400/10"
-            valueText={holdingDaysText}
-            valueClassName="text-emerald-50"
-            maxRem={2.25}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Calendar days since oldest lot</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Annualized growth"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={formatCagrPct(cagrFrac, 2).replace(" p.a.", "")}
-            valueClassName={cagrTone}
-            maxRem={1.75}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Matches CAGR over hold</p>}
-          />
-        </div>
-      </div>
-
       <div className="grid min-w-0 gap-2 lg:grid-cols-2">
         {summaryCard({ title: "Gold holdings", accent: "amber", rollup: gold })}
         {summaryCard({ title: "Silver holdings", accent: "slate", rollup: silver })}
@@ -448,60 +361,6 @@ export function MetalsPremiumDashboard({
             boardPerGram: gramRates.silverNprPerGram,
             hasBasisLots: silverHasBasisLots,
           })}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-emerald-400/15 bg-black/25 p-3 sm:p-3.5">
-        <h3 className="text-xs font-black uppercase tracking-[0.08em] text-emerald-100/90">Wealth analytics</h3>
-        <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <MetalPremiumKpiCard
-            label="Unrealized gain / loss"
-            labelClassName="text-emerald-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={unrealized != null ? `${unrealized >= 0 ? "+" : ""}${formatMoney(unrealized, "NPR")}` : "—"}
-            valueClassName={netTone}
-            maxRem={1.25}
-            minRem={0.4375}
-            footer={<p className="font-semibold text-emerald-200/45">Module-level</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total appreciation %"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={formatRoiPct(appreciation)}
-            valueClassName={roiTone}
-            maxRem={2}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">(Current − basis) / basis</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Annualized return %"
-            labelClassName="text-amber-200/70"
-            shellClassName="border-amber-400/20 bg-black/35 shadow-inner"
-            valueText={formatCagrPct(cagrFrac, 2).replace(" p.a.", "")}
-            valueClassName={cagrTone}
-            maxRem={1.75}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">CAGR from basis → mark</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Wealth contribution %"
-            labelClassName="text-teal-200/70"
-            shellClassName="border-teal-400/20 bg-black/35 shadow-inner"
-            valueText={contributionPct != null ? `${contributionPct.toFixed(1)}%` : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={2}
-            minRem={0.5}
-            footer={
-              nw > 0 ? (
-                <p className="font-semibold text-emerald-200/45">
-                  Metals NPR ÷ FIRE Nepal net worth ({formatMoney(totals.metalsNpr, "NPR")} / {formatMoney(nw, "NPR")})
-                </p>
-              ) : (
-                <p className="font-semibold text-emerald-200/40">Net worth not available for share</p>
-              )
-            }
-          />
         </div>
       </div>
     </div>

@@ -394,7 +394,6 @@ export function MetalsPanel({
     usdPerNpr,
     bullionPriceLoading,
     bullionPriceRefreshing,
-    totals,
   } = useWealthPortfolio();
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
@@ -616,7 +615,7 @@ export function MetalsPanel({
         </p>
       </div>
 
-      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} totals={totals} ledger={ledger} />
+      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} ledger={ledger} />
 
       <div className="space-y-2">
         {rows.map((row) => {
@@ -637,7 +636,6 @@ export function MetalsPanel({
               className="wealth-row-card flex flex-col gap-2 rounded-xl p-2.5 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="flex min-w-0 flex-col gap-2">
-                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} uploadEnabled={false} />
                 <div className="grid gap-2 sm:grid-cols-2 sm:items-end">
                   <label className="block">
                     <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-200/55">Metal</span>
@@ -721,6 +719,8 @@ export function MetalsPanel({
                     </div>
                   </dl>
                 </div>
+
+                <MetalHoldingPhotos row={row} onPatch={(patch) => onChange(row.id, patch)} uploadEnabled={false} />
 
                 <div className="border-t border-emerald-400/10 pt-2">
                   {firstBuyIso ? (

@@ -11,7 +11,7 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { formatMoney } from "@/lib/expense-utils";
 
-function PortfolioTotalsStrip() {
+function PortfolioTotalsStrip({ netWorthOnly }: { netWorthOnly?: boolean }) {
   const { totals, hydrated } = useWealthPortfolio();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -25,6 +25,22 @@ function PortfolioTotalsStrip() {
   const liabCard = light
     ? "border-rose-200/80 bg-rose-50/80 text-rose-950"
     : "border-rose-400/15 bg-white/[0.04] text-rose-50/95";
+
+  if (netWorthOnly) {
+    return (
+      <div className="mb-4 sm:mb-5">
+        <div className={`relative mx-auto max-w-lg overflow-hidden rounded-2xl border px-4 py-2.5 backdrop-blur-xl sm:py-3 ${cardBase}`}>
+          <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-black" : muted}`}>
+            <Wallet size={14} className={light ? "text-emerald-600" : "text-lime-300"} />
+            Net worth
+          </div>
+          <p className={`mt-0.5 truncate text-base font-black tracking-tight sm:text-lg ${light ? "text-black" : "text-white"}`}>
+            {!hydrated ? "—" : formatMoney(totals.netWorthNpr, "NPR")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-5 grid gap-3 sm:mb-6 sm:grid-cols-3">
@@ -88,6 +104,7 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
   const { ratesLoading } = useWealthPortfolio();
   const pathname = usePathname() ?? "";
   const hideTotalsStrip = pathname === "/portfolio";
+  const goldPageStrip = pathname === "/portfolio/gold" || pathname.startsWith("/portfolio/gold/");
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const muted = light ? "text-slate-800" : "text-gray-100";
@@ -118,7 +135,7 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
         </>
       }
     >
-      {hideTotalsStrip ? null : <PortfolioTotalsStrip />}
+      {hideTotalsStrip ? null : <PortfolioTotalsStrip netWorthOnly={goldPageStrip} />}
       {children}
       <PortfolioAddAssetFab />
     </WealthDashboardShell>
