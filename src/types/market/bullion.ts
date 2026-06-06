@@ -4,9 +4,12 @@
 export type GoldSilverPriceResponse = {
   goldPerGramNPR: number;
   silverPerGramNPR: number;
-  /** NPR per tola (11.6638038 g), same spot as per-gram. */
+  /** NPR per tola as published on the Nepal board (FENEGOSIDA). */
   goldPerTolaNPR: number;
   silverPerTolaNPR: number;
+  /** Official Nepal board line: Fine Gold (9999) / Silver per 10 g (when `nepalDomesticPrimary`). */
+  goldNepalPer10GramNPR?: number;
+  silverNepalPer10GramNPR?: number;
   /**
    * International reference spot in USD per troy oz.
    * When `nepalDomesticPrimary` is true, portfolio NPR/g comes from Nepal board; these are secondary reference only.

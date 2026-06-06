@@ -148,21 +148,33 @@ export function LiveMarketStrip() {
         <div className="rounded-xl border border-white/10 bg-black/35 px-3 py-3">
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-500">
             <Gem size={14} className="text-violet-300" aria-hidden />
-            Bullion spot
+            Bullion (Nepal board + intl)
           </div>
           <p className="mt-1.5 text-sm font-black text-white">
             Au {goldOz != null ? `$${goldOz.toFixed(0)}` : "—"} · Ag{" "}
             {snapshot?.metalsUsdOz.silverUsdPerOz != null ? `$${snapshot.metalsUsdOz.silverUsdPerOz.toFixed(2)}` : "—"}{" "}
-            <span className="text-zinc-500">(USD/oz)</span>
+            <span className="text-zinc-500">(USD/oz ref.)</span>
           </p>
           {bullionSpot ? (
             <p className="mt-1 text-[11px] font-bold leading-snug text-violet-200/90">
-              {bullionSpot.nepalDomesticPrimary ? (
+              {bullionSpot.nepalDomesticPrimary &&
+              typeof bullionSpot.goldNepalPer10GramNPR === "number" &&
+              bullionSpot.goldNepalPer10GramNPR > 0 &&
+              typeof bullionSpot.silverNepalPer10GramNPR === "number" &&
+              bullionSpot.silverNepalPer10GramNPR > 0 ? (
+                <>
+                  Nepal FENEGOSIDA — gold {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")}/10 g ·{" "}
+                  {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")}/tola · silver{" "}
+                  {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")}/10 g ·{" "}
+                  {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")}/tola · val.{" "}
+                  {formatMoney(bullionSpot.goldPerGramNPR, "NPR")}/g (Au) / {formatMoney(bullionSpot.silverPerGramNPR, "NPR")}
+                  /g (Ag)
+                </>
+              ) : bullionSpot.nepalDomesticPrimary ? (
                 <>
                   Nepal (FENEGOSIDA): gold {formatMoney(bullionSpot.goldPerGramNPR, "NPR")}/g ·{" "}
-                  {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")}/tola · silver{" "}
-                  {formatMoney(bullionSpot.silverPerGramNPR, "NPR")}/g · {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")}
-                  /tola
+                  {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")}/tola · silver {formatMoney(bullionSpot.silverPerGramNPR, "NPR")}
+                  /g · {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")}/tola
                 </>
               ) : (
                 <>

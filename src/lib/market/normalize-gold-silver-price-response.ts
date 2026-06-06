@@ -40,6 +40,17 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
       ? o.internationalRefSource.trim()
       : undefined;
 
+  const goldNepalPer10GramNPR =
+    typeof o.goldNepalPer10GramNPR === "number" && Number.isFinite(o.goldNepalPer10GramNPR) && o.goldNepalPer10GramNPR > 0
+      ? o.goldNepalPer10GramNPR
+      : undefined;
+  const silverNepalPer10GramNPR =
+    typeof o.silverNepalPer10GramNPR === "number" &&
+    Number.isFinite(o.silverNepalPer10GramNPR) &&
+    o.silverNepalPer10GramNPR > 0
+      ? o.silverNepalPer10GramNPR
+      : undefined;
+
   return {
     goldPerGramNPR: gg,
     silverPerGramNPR: sg,
@@ -52,5 +63,7 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
     ...(degraded ? { degraded: true } : {}),
     ...(nepalDomesticPrimary ? { nepalDomesticPrimary: true } : {}),
     ...(internationalRefSource ? { internationalRefSource } : {}),
+    ...(goldNepalPer10GramNPR != null ? { goldNepalPer10GramNPR } : {}),
+    ...(silverNepalPer10GramNPR != null ? { silverNepalPer10GramNPR } : {}),
   };
 }

@@ -7,8 +7,8 @@ import {
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import { fetchNprForexCross } from "@/services/market/forex-npr";
 import {
-  fetchNepalFenegosidaTolaRates,
-  nprPerGramFromNepalTolaBoard,
+  fetchNepalFenegosidaBoardRates,
+  nprPerGramFromNepal10GramBoard,
 } from "@/services/market/fenegosida-nepal-rates";
 import { fetchYahooLast } from "@/services/market/yahoo-quotes";
 
@@ -150,22 +150,29 @@ async function nprPayloadFromSpot(
   };
 }
 
-/** Nepal board (FENEGOSIDA) NPR/tola with international USD/oz as secondary reference. */
+/** Nepal board (FENEGOSIDA) — NPR from published 10 g & tola lines; international USD/oz is reference only. */
 function nepalBoardPayload(
-  nepal: { goldNprPerTola: number; silverNprPerTola: number },
+  nepal: {
+    goldNprPer10Gram: number;
+    goldNprPerTola: number;
+    silverNprPer10Gram: number;
+    silverNprPerTola: number;
+  },
   intl: { spot: { goldUsdPerOz: number; silverUsdPerOz: number }; source: string },
 ): GoldSilverPriceResponse {
-  const gg = Math.max(nprPerGramFromNepalTolaBoard(nepal.goldNprPerTola), 1e-6);
-  const sg = Math.max(nprPerGramFromNepalTolaBoard(nepal.silverNprPerTola), 1e-6);
+  const gg = Math.max(nprPerGramFromNepal10GramBoard(nepal.goldNprPer10Gram), 1e-6);
+  const sg = Math.max(nprPerGramFromNepal10GramBoard(nepal.silverNprPer10Gram), 1e-6);
   const updatedAt = new Date().toISOString();
   return {
     goldPerGramNPR: gg,
     silverPerGramNPR: sg,
     goldPerTolaNPR: nepal.goldNprPerTola,
     silverPerTolaNPR: nepal.silverNprPerTola,
+    goldNepalPer10GramNPR: nepal.goldNprPer10Gram,
+    silverNepalPer10GramNPR: nepal.silverNprPer10Gram,
     goldUsdPerTroyOz: intl.spot.goldUsdPerOz,
     silverUsdPerTroyOz: intl.spot.silverUsdPerOz,
-    source: `Nepal — FENEGOSIDA (Fine Gold 9999 & Silver, official board) · Intl ref: ${intl.source}`,
+    source: `Nepal — FENEGOSIDA / industry board (Fine Gold 9999 & Silver; fenegosida.org) · Intl ref: ${intl.source}`,
     updatedAt,
     nepalDomesticPrimary: true,
     internationalRefSource: intl.source,
@@ -181,9 +188,9 @@ export async function getGoldSilverNprPrice(): Promise<GoldSilverPriceResponse> 
   if (cached && now < cacheExpiresAt) return cached;
 
   try {
-    const [nepalTola, intl] = await Promise.all([fetchNepalFenegosidaTolaRates(), resolveUsdSpot()]);
-    const fresh = nepalTola
-      ? nepalBoardPayload(nepalTola, intl)
+    const [nepalBoard, intl] = await Promise.all([fetchNepalFenegosidaBoardRates(), resolveUsdSpot()]);
+    const fresh = nepalBoard
+      ? nepalBoardPayload(nepalBoard, intl)
       : await nprPayloadFromSpot(intl.spot, `International spot → NPR (${intl.source})`, false);
     lastGood = fresh;
     cached = fresh;

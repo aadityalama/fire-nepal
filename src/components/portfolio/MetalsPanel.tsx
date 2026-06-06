@@ -217,10 +217,10 @@ export function MetalsPanel({
           <div>
             <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
             <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
-              Grams · portfolio marks use{" "}
-              <span className="text-emerald-100">today&apos;s Nepal board rates (FENEGOSIDA)</span> per gram &amp;
-              tola when available; international USD/oz is shown only as a reference. Ledger, cost basis, and
-              transactions are unchanged.
+              Grams · portfolio marks follow the{" "}
+              <span className="text-emerald-100">FENEGOSIDA-published Nepal board</span> (Fine Gold 9999 &amp; Silver per
+              10 g and per tola on fenegosida.org; aligned with FNGSGJA industry rates). International USD/oz is
+              reference only. Ledger, cost basis, and transactions are unchanged.
             </p>
           </div>
         </div>
@@ -295,12 +295,34 @@ export function MetalsPanel({
               </div>
             ) : (
               <>
-                <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
-                  {formatMoney(gramRates.goldNprPerGram, "NPR")} / g
-                </p>
-                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
-                  {formatMoney(tolaRates.goldNprPerTola, "NPR")} / tola
-                </p>
+                {bullionSpot?.nepalDomesticPrimary &&
+                typeof bullionSpot.goldNepalPer10GramNPR === "number" &&
+                bullionSpot.goldNepalPer10GramNPR > 0 ? (
+                  <>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-200/60">
+                      Fine Gold (9999) — FENEGOSIDA board
+                    </p>
+                    <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
+                      {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")} / 10 g
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
+                      {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")} / tola
+                    </p>
+                    <p className="mt-1 border-t border-amber-400/15 pt-1 text-[10px] font-bold text-emerald-200/70">
+                      Portfolio / g (board 10 g ÷ 10):{" "}
+                      <span className="font-black text-amber-100">{formatMoney(gramRates.goldNprPerGram, "NPR")}</span>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
+                      {formatMoney(gramRates.goldNprPerGram, "NPR")} / g
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
+                      {formatMoney(tolaRates.goldNprPerTola, "NPR")} / tola
+                    </p>
+                  </>
+                )}
                 {bullionSpot?.nepalDomesticPrimary ? (
                   <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
                     Intl reference: ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
@@ -337,12 +359,34 @@ export function MetalsPanel({
               </div>
             ) : (
               <>
-                <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
-                  {formatMoney(gramRates.silverNprPerGram, "NPR")} / g
-                </p>
-                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
-                  {formatMoney(tolaRates.silverNprPerTola, "NPR")} / tola
-                </p>
+                {bullionSpot?.nepalDomesticPrimary &&
+                typeof bullionSpot.silverNepalPer10GramNPR === "number" &&
+                bullionSpot.silverNepalPer10GramNPR > 0 ? (
+                  <>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-200/60">
+                      Silver — FENEGOSIDA board
+                    </p>
+                    <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
+                      {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")} / 10 g
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
+                      {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")} / tola
+                    </p>
+                    <p className="mt-1 border-t border-slate-400/15 pt-1 text-[10px] font-bold text-emerald-200/70">
+                      Portfolio / g (board 10 g ÷ 10):{" "}
+                      <span className="font-black text-slate-100">{formatMoney(gramRates.silverNprPerGram, "NPR")}</span>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
+                      {formatMoney(gramRates.silverNprPerGram, "NPR")} / g
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
+                      {formatMoney(tolaRates.silverNprPerTola, "NPR")} / tola
+                    </p>
+                  </>
+                )}
                 {bullionSpot?.nepalDomesticPrimary ? (
                   <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
                     Intl reference: ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
