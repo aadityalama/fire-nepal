@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MEMBERSHIP_PAYMENT_BUCKET } from "@/lib/membership-payment";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -36,7 +37,12 @@ export async function GET(_request: Request, ctx: RouteParams) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { data: signed, error: signErr } = await supabase.storage
+    const admin = createSupabaseServiceRoleClient();
+    if (!admin) {
+      return NextResponse.json({ error: "Server storage is not configured." }, { status: 503 });
+    }
+
+    const { data: signed, error: signErr } = await admin.storage
       .from(MEMBERSHIP_PAYMENT_BUCKET)
       .createSignedUrl(row.proof_storage_path, 120);
 

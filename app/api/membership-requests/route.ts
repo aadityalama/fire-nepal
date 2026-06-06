@@ -6,6 +6,8 @@ import {
   type MembershipRequestPlan,
 } from "@/lib/membership-payment";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { ensureMembershipPaymentProofsBucket } from "@/lib/supabase/ensure-membership-payment-bucket";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -101,11 +103,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Account email is required" }, { status: 400 });
     }
 
+    const ensured = await ensureMembershipPaymentProofsBucket();
+    if (!ensured.ok) {
+      return NextResponse.json({ error: ensured.message }, { status: 503 });
+    }
+
+    const admin = createSupabaseServiceRoleClient();
+    if (!admin) {
+      return NextResponse.json(
+        { error: "Server storage is not configured (missing SUPABASE_SERVICE_ROLE_KEY)." },
+        { status: 503 },
+      );
+    }
+
     const id = randomUUID();
     const proof_storage_path = `${user.id}/${id}.${extFromMime(mime)}`;
     const buf = Buffer.from(await file.arrayBuffer());
 
-    const { error: upErr } = await supabase.storage.from(MEMBERSHIP_PAYMENT_BUCKET).upload(proof_storage_path, buf, {
+    const { error: upErr } = await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).upload(proof_storage_path, buf, {
       contentType: mime,
       upsert: false,
     });
@@ -129,7 +144,7 @@ export async function POST(request: Request) {
       .single();
 
     if (insErr) {
-      await supabase.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_storage_path]);
+      await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_storage_path]);
       return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
 
