@@ -26,6 +26,7 @@ import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
+import { hasActivePaidMembership } from "@/lib/fire-membership";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
@@ -62,11 +63,51 @@ function navActive(href: string, pathname: string | null): boolean {
 
 function DashboardMembershipUpsell() {
   const pathname = usePathname();
-  const { tier } = useFireMembership();
+  const { tier, record, pendingMembershipRequest } = useFireMembership();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   if (pathname?.startsWith("/dashboard/membership")) return null;
   if (pathname?.startsWith("/dashboard/ai-coach")) return null;
+
+  if (pendingMembershipRequest && !hasActivePaidMembership(record)) {
+    return (
+      <div
+        className={
+          light
+            ? "border-b border-amber-200/60 bg-gradient-to-r from-amber-50/98 via-white to-slate-50"
+            : "border-b border-amber-500/25 bg-gradient-to-r from-amber-500/12 via-[#1a1204]/85 to-[#030806]/95"
+        }
+      >
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-center gap-3 px-4 py-2.5 text-center sm:justify-between sm:text-left sm:px-6">
+          <p
+            className={
+              light
+                ? "text-xs font-bold text-amber-950/95 sm:text-sm"
+                : "text-xs font-bold text-amber-100/95 sm:text-sm"
+            }
+          >
+            <Sparkles className="mb-0.5 inline sm:mb-0 sm:mr-2" size={14} aria-hidden />
+            <span className="font-black">Membership Pending Review</span>
+            <span className="font-semibold">
+              {" "}
+              — Premium and Elite features stay locked until an admin approves your payment.
+            </span>
+          </p>
+          <Link
+            href="/dashboard/membership#membership-request-status"
+            className={
+              light
+                ? "shrink-0 rounded-full border border-amber-300/80 bg-amber-100/90 px-4 py-2 text-xs font-black text-amber-950 shadow-sm transition hover:bg-amber-50"
+                : "shrink-0 rounded-full border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-xs font-black text-amber-50 transition hover:bg-amber-500/25"
+            }
+          >
+            View status
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (tier === "elite") return null;
   if (tier === "free") {
     return (

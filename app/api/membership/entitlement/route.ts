@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-/** Current plan from `profiles` + subscription period end (for syncing client gates). */
+type PaidPlan = "premium" | "elite";
+
+/** Current plan from `profiles` + `subscriptions` (only active subscription unlocks paid features). */
 export async function GET() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
@@ -22,15 +24,39 @@ export async function GET() {
 
     const { data: sub } = await supabase
       .from("subscriptions")
-      .select("current_period_end")
+      .select("status, current_period_end, plan")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    const planType = profile?.plan_type ?? "free";
+    const profilePlan = profile?.plan_type ?? "free";
+    const subActive = sub?.status === "active";
+    const subPlan = sub?.plan;
+
+    const profilePaid = profilePlan === "premium" || profilePlan === "elite";
+    const subPaid = subPlan === "premium" || subPlan === "elite";
+
+    const effectivePlan: PaidPlan | "free" =
+      subActive && profilePaid && subPaid && profilePlan === subPlan
+        ? (profilePlan as PaidPlan)
+        : "free";
+
+    const { data: pendingRow } = await supabase
+      .from("membership_requests")
+      .select("plan_type")
+      .eq("user_id", user.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const pendingPlan = pendingRow?.plan_type === "elite" || pendingRow?.plan_type === "premium" ? pendingRow.plan_type : null;
 
     return NextResponse.json({
-      planType,
+      planType: profilePlan,
+      subscriptionStatus: sub?.status ?? null,
+      effectivePlan,
       currentPeriodEnd: sub?.current_period_end ?? null,
+      pendingMembershipRequest: pendingPlan ? { plan: pendingPlan } : null,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Server error";

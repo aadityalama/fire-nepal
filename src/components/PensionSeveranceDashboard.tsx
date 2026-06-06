@@ -74,8 +74,8 @@ function newSlipId() {
 }
 
 export function PensionSeveranceDashboard() {
-  const { tier } = useFireMembership();
-  const pdfOk = canAccessFeature(tier, "pdf_reports");
+  const { record } = useFireMembership();
+  const pdfOk = canAccessFeature(record, "pdf_reports");
   const [hydrated, setHydrated] = useState(false);
   const [locale, setLocale] = useState<PensionLocale>("en");
   const [state, setState] = useState<PensionDashboardState>(() => ({

@@ -17,8 +17,8 @@ type FireFeatureGateProps = {
 };
 
 export function FireFeatureGate({ feature, children, title, description, surface = "dark" }: FireFeatureGateProps) {
-  const { tier } = useFireMembership();
-  const ok = canAccessFeature(tier, feature);
+  const { record } = useFireMembership();
+  const ok = canAccessFeature(record, feature);
 
   if (ok) return <>{children}</>;
 

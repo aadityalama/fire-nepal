@@ -131,9 +131,14 @@ function normalizeRecord(r: Partial<FireMembershipRecord> | undefined): FireMemb
     ocrImports = 0;
     usageMonthYm = ym;
   }
+  const rawTier: FireMembershipTier = r.tier === "premium" || r.tier === "elite" ? r.tier : "free";
+  const status = (r.status ?? "none") as SubscriptionStatus;
+  /** Paid surfaces unlock only with an active subscription (admin-approved), never from local intent alone. */
+  const tier: FireMembershipTier =
+    (rawTier === "premium" || rawTier === "elite") && status === "active" ? rawTier : "free";
   return {
-    tier: r.tier === "premium" || r.tier === "elite" ? r.tier : "free",
-    status: r.status ?? "none",
+    tier,
+    status,
     currentPeriodEnd: r.currentPeriodEnd ?? null,
     trialEndsAt: r.trialEndsAt ?? null,
     stripeCustomerId: r.stripeCustomerId ?? null,
@@ -191,8 +196,29 @@ export function applyServerEntitlement(
   });
 }
 
-export function canAccessFeature(tier: FireMembershipTier, feature: FireFeatureKey): boolean {
-  return TIER_RANK[tier] >= TIER_RANK[FEATURE_MIN_TIER[feature]];
+/** True when the user has an admin-approved, active paid plan (mirrors Supabase profile + subscription). */
+export function hasActivePaidMembership(record: FireMembershipRecord): boolean {
+  return (record.tier === "premium" || record.tier === "elite") && record.status === "active";
+}
+
+/** Tier used for quotas, limits, and product gates (pending payment review → free). */
+export function effectiveFeatureTier(record: FireMembershipRecord): FireMembershipTier {
+  return hasActivePaidMembership(record) ? record.tier : "free";
+}
+
+/** Clear server-mirrored paid state when the account is not actively subscribed (e.g. after sync). */
+export function applyServerFreeEntitlement(userId: string): FireMembershipRecord {
+  return setMembershipRecordForUser(userId, {
+    tier: "free",
+    status: "none",
+    currentPeriodEnd: null,
+    trialEndsAt: null,
+  });
+}
+
+export function canAccessFeature(record: FireMembershipRecord, feature: FireFeatureKey): boolean {
+  if (!hasActivePaidMembership(record)) return false;
+  return TIER_RANK[record.tier] >= TIER_RANK[FEATURE_MIN_TIER[feature]];
 }
 
 export function tierMeets(tier: FireMembershipTier, min: FireMembershipTier): boolean {

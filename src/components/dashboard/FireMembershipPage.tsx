@@ -3,6 +3,7 @@
 import { BadgeCheck, Check, Crown, Gem, Info, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
@@ -15,6 +16,7 @@ import {
 import {
   ELITE_FAMILY_WEALTH_DETAILS,
   ELITE_FAMILY_WEALTH_FEATURE_LABEL,
+  hasActivePaidMembership,
   isMembershipUpgrade,
   TIER_CATALOG,
   TIER_DISPLAY,
@@ -276,7 +278,7 @@ function MembershipMyRequestsPanel() {
 
 export function FireMembershipPage() {
   const { user } = useProductAuth();
-  const { tier, record, setTierDemo, syncServerEntitlement } = useFireMembership();
+  const { tier, record, setTierDemo, syncServerEntitlement, pendingMembershipRequest } = useFireMembership();
   const [confirmDowngrade, setConfirmDowngrade] = useState<FireMembershipTier | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("yearly");
   const [paymentPlan, setPaymentPlan] = useState<MembershipRequestPlan | null>(null);
@@ -291,8 +293,16 @@ export function FireMembershipPage() {
         return;
       }
       if (next === "premium" || next === "elite") {
-        if (isMembershipUpgrade(tier, next) && isSupabaseConfigured()) {
-          setPaymentPlan(next);
+        if (isSupabaseConfigured()) {
+          if (isMembershipUpgrade(tier, next)) {
+            setPaymentPlan(next);
+            setConfirmDowngrade(null);
+            return;
+          }
+          toast.info(
+            "Paid plan changes require admin approval. Choose a higher plan and submit payment proof, or wait for your pending request to be reviewed.",
+            { duration: 7000 },
+          );
           setConfirmDowngrade(null);
           return;
         }
@@ -340,6 +350,19 @@ export function FireMembershipPage() {
           activate Premium or Elite after a quick admin review.
         </p>
       </div>
+
+      {isSupabaseConfigured() && pendingMembershipRequest && !hasActivePaidMembership(record) ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-400/40 bg-gradient-to-r from-amber-500/15 via-[#1a1204]/80 to-[#04140f]/90 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:p-6"
+        >
+          <p className="text-sm font-black uppercase tracking-[0.12em] text-amber-200/90">Membership Pending Review</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-amber-50/90">
+            Your {pendingMembershipRequest.plan === "elite" ? "Elite" : "Premium"} payment proof was received and is
+            pending admin review. Premium and Elite features stay locked until your membership is approved.
+          </p>
+        </div>
+      ) : null}
 
       <div className="relative overflow-hidden rounded-[1.75rem] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.12] via-[#04140f]/95 to-[#020807] p-6 shadow-[0_28px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-8">
         <div className="absolute -left-24 top-0 h-64 w-64 rounded-full bg-lime-400/10 blur-3xl" />
