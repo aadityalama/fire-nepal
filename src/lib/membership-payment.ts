@@ -28,7 +28,7 @@ export function membershipQrImageUrl(method: MembershipPaymentMethod): string {
   const trimmed = typeof env === "string" ? env.trim() : "";
   if (trimmed.length > 4) return trimmed;
   const fallback: Record<MembershipPaymentMethod, string> = {
-    khalti_qr: "/payment-qr/khalti-placeholder.svg",
+    khalti_qr: "/payment-qr/khalti.png",
     esewa_qr: "/payment-qr/esewa-placeholder.svg",
     global_ime_qr: "/payment-qr/global-ime-placeholder.svg",
   };
