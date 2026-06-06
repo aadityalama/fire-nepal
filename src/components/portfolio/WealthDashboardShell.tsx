@@ -8,7 +8,10 @@ import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
+const ASSETS_HUB_HREF = "/portfolio/assets" as const;
+
 const ASSET_MODULE_PATHS = [
+  ASSETS_HUB_HREF,
   "/portfolio/banking",
   "/portfolio/investments",
   "/portfolio/gold",
@@ -20,6 +23,14 @@ const ASSET_MODULE_PATHS = [
 ] as const;
 
 const INVESTMENTS_HREF = "/portfolio/investments" as const;
+
+function isAssetsSectionPath(pathname: string): boolean {
+  if (pathname === ASSETS_HUB_HREF || pathname.startsWith(`${ASSETS_HUB_HREF}/`)) return true;
+  return ASSET_MODULE_PATHS.some((h) => {
+    if (h === INVESTMENTS_HREF || h === ASSETS_HUB_HREF) return false;
+    return pathname === h || pathname.startsWith(`${h}/`);
+  });
+}
 
 type ShellNavItem = { href: string; label: string; isActive: (pathname: string) => boolean };
 
@@ -41,16 +52,17 @@ const SHELL_NAV_BEFORE_FAMILY: readonly ShellNavItem[] = [
     label: "Transactions",
     isActive: (p) => p === "/expense-dashboard" || p.startsWith("/expense-dashboard/"),
   },
-  {
-    href: "/portfolio/banking",
-    label: "Assets",
-    isActive: (p) =>
-      ASSET_MODULE_PATHS.some((h) => {
-        if (h === INVESTMENTS_HREF) return false;
-        return p === h || p.startsWith(`${h}/`);
-      }),
-  },
+] as const;
+
+const SHELL_NAV_PENSION_ITEM: readonly ShellNavItem[] = [
   { href: PENSION_BASE, label: "Pension", isActive: (p) => isPensionModulePath(p) },
+] as const;
+
+const ASSET_CATEGORY_LINKS: readonly { href: string; label: string }[] = [
+  { href: "/portfolio/banking", label: "Banking & Cash" },
+  { href: "/portfolio/gold", label: "Gold" },
+  { href: "/portfolio/vehicles", label: "Vehicle" },
+  { href: "/portfolio/real-estate", label: "Real Estate" },
 ] as const;
 
 const SHELL_NAV_AFTER_FAMILY: readonly ShellNavItem[] = [
@@ -101,6 +113,20 @@ function isFamilyHubActive(pathname: string): boolean {
 function familyHubTriggerClasses(active: boolean, light: boolean) {
   const base =
     "flex w-full min-h-[44px] items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold tracking-[-0.01em] transition-[color,background-color,border-color,transform] duration-200 active:scale-[0.99] sm:text-[0.8125rem] sm:leading-snug";
+  if (active) {
+    return light
+      ? `${base} border-emerald-400/55 bg-emerald-50 text-black`
+      : `${base} border-emerald-400/35 bg-emerald-500/[0.12] text-white`;
+  }
+  return light
+    ? `${base} border-transparent bg-white/55 text-slate-800 font-semibold backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90 hover:text-black`
+    : `${base} border-transparent bg-white/[0.04] text-gray-100 font-semibold backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
+}
+
+/** Header row for Assets hub + expand control (matches Family Hub chrome). */
+function assetsNavHeaderRowClasses(active: boolean, light: boolean) {
+  const base =
+    "flex w-full min-h-[44px] items-stretch overflow-hidden rounded-xl border text-xs font-semibold tracking-[-0.01em] transition-[color,background-color,border-color,transform] duration-200 sm:text-[0.8125rem] sm:leading-snug";
   if (active) {
     return light
       ? `${base} border-emerald-400/55 bg-emerald-50 text-black`
@@ -164,6 +190,69 @@ function FamilyHubNavSection({ pathname, light, close }: FamilyHubNavSectionProp
                 key={item.href}
                 href={item.href}
                 className={familyHubSubLinkClasses(item.isActive(pathname), light)}
+                onClick={close}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type AssetsNavSectionProps = {
+  pathname: string;
+  light: boolean;
+  close: () => void;
+};
+
+function AssetsNavSection({ pathname, light, close }: AssetsNavSectionProps) {
+  const [open, setOpen] = useState(true);
+  const sectionActive = isAssetsSectionPath(pathname);
+  const hubActive = pathname === ASSETS_HUB_HREF || pathname.startsWith(`${ASSETS_HUB_HREF}/`);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className={assetsNavHeaderRowClasses(sectionActive, light)}>
+        <Link
+          href={ASSETS_HUB_HREF}
+          className={`flex min-h-[44px] min-w-0 flex-1 items-center px-3 py-2.5 text-left font-semibold transition active:scale-[0.99] ${
+            hubActive ? "font-black" : ""
+          }`}
+          onClick={close}
+        >
+          Assets
+        </Link>
+        <button
+          type="button"
+          className={`flex w-11 shrink-0 items-center justify-center border-l transition active:scale-[0.99] ${
+            light ? "border-emerald-300/45 hover:bg-emerald-100/70" : "border-emerald-400/20 hover:bg-white/[0.06]"
+          }`}
+          aria-expanded={open}
+          aria-label={open ? "Collapse Assets menu" : "Expand Assets menu"}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <ChevronDown
+            size={18}
+            className={`shrink-0 opacity-80 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "rotate-180" : "rotate-0"}`}
+            aria-hidden
+          />
+        </button>
+      </div>
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-1 pt-1.5">
+            {ASSET_CATEGORY_LINKS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={familyHubSubLinkClasses(pathname === item.href || pathname.startsWith(`${item.href}/`), light)}
                 onClick={close}
               >
                 {item.label}
@@ -375,6 +464,17 @@ export function WealthDashboardShell({
               </div>
               <nav className="mt-1 flex flex-col gap-1.5 xl:mt-0">
                 {SHELL_NAV_BEFORE_FAMILY.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={navLinkClasses(item.isActive(pathname ?? ""), light)}
+                    onClick={close}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                <AssetsNavSection pathname={pathname ?? ""} light={light} close={close} />
+                {SHELL_NAV_PENSION_ITEM.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}

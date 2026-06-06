@@ -148,7 +148,7 @@ export function FirePremiumPortfolioDashboard() {
               records.
             </p>
             <Link
-              href="/portfolio/banking"
+              href="/portfolio/assets"
               className="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-5 py-2.5 text-xs font-black text-emerald-950 shadow-lg transition hover:-translate-y-0.5"
             >
               Add Your First Asset

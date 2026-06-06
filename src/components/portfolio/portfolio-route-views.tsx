@@ -1,6 +1,7 @@
 "use client";
 
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { AssetsHubPanel } from "@/components/portfolio/AssetsHubPanel";
 import { FireFeatureGate } from "@/components/membership/FireFeatureGate";
 import { AiFinancialCoachSection } from "@/components/financial-coach/AiFinancialCoachSection";
 import { SmartFinancialIntelligenceSection } from "@/components/financial-intelligence";
@@ -18,6 +19,19 @@ import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 
 const flow = "flex min-w-0 max-w-full flex-col gap-6 lg:gap-7";
+
+export function PortfolioAssetsHubPage() {
+  return (
+    <div className={flow}>
+      <DashboardSectionHeader
+        accent="emerald"
+        title="Assets Hub"
+        subtitle="Choose a category to view or edit — totals reflect your saved portfolio (NPR base)."
+      />
+      <AssetsHubPanel />
+    </div>
+  );
+}
 
 export function PortfolioBankingPage() {
   const {
