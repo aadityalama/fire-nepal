@@ -126,17 +126,20 @@ export type Database = {
           user_id: string;
           ledger: Json;
           net_worth_history: Json;
+          metal_purchase_bill_urls: Json;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           ledger?: Json;
           net_worth_history?: Json;
+          metal_purchase_bill_urls?: Json;
           updated_at?: string;
         };
         Update: {
           ledger?: Json;
           net_worth_history?: Json;
+          metal_purchase_bill_urls?: Json;
           updated_at?: string;
         };
         Relationships: [];

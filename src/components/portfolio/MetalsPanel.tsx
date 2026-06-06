@@ -1,7 +1,7 @@
 "use client";
 
-import { Gem, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Gem, Plus, Trash2, TrendingDown, TrendingUp, X } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
@@ -11,11 +11,12 @@ import { ModuleLedgerCard } from "@/components/portfolio/ledger-ui/ModuleLedgerC
 import { MetalHoldingPhotos } from "@/components/portfolio/MetalHoldingPhotos";
 import {
   compressMetalImageFile,
-  METAL_PHOTO_MAX_COUNT,
+  METAL_PURCHASE_BILL_MAX_COUNT,
+  sanitizeMetalPurchaseBillUrls,
 } from "@/components/portfolio/metal-photo-utils";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { metalRowFirstBuyIso } from "@/components/portfolio/metals-premium-metrics";
-import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
+import { ensureMetalHoldingRow, recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
   portfolioTxnTodayIso,
@@ -31,6 +32,138 @@ import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/Portfoli
 
 function todayIso() {
   return portfolioTxnTodayIso();
+}
+
+function MetalPurchaseBillsGallery({
+  billUrls,
+  onMutate,
+  fileInputRef,
+}: {
+  billUrls: readonly string[];
+  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+}) {
+  const inputId = useId();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    e.target.value = "";
+    if (!files.length) return;
+    setBusy(true);
+    try {
+      const urls: string[] = [];
+      for (const f of files) {
+        const u = await compressMetalImageFile(f);
+        if (u) urls.push(u);
+      }
+      if (!urls.length) {
+        toast.error("Could not process images.");
+        return;
+      }
+      let added = 0;
+      const ok = onMutate((s) => {
+        const cur = sanitizeMetalPurchaseBillUrls(s.metalPurchaseBillUrls);
+        const room = Math.max(0, METAL_PURCHASE_BILL_MAX_COUNT - cur.length);
+        const slice = urls.slice(0, room);
+        if (slice.length === 0) return null;
+        added = slice.length;
+        return { ...s, metalPurchaseBillUrls: [...cur, ...slice] };
+      });
+      if (ok && added > 0) {
+        toast.success(`Saved ${added} bill image(s).`);
+      } else if (!ok) {
+        toast.error(`Bill limit reached (${METAL_PURCHASE_BILL_MAX_COUNT}).`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeAt = (idx: number) => {
+    const ok = onMutate((s) => {
+      const cur = [...sanitizeMetalPurchaseBillUrls(s.metalPurchaseBillUrls)];
+      if (idx < 0 || idx >= cur.length) return null;
+      cur.splice(idx, 1);
+      return { ...s, metalPurchaseBillUrls: cur };
+    });
+    if (ok) toast.success("Bill removed.");
+  };
+
+  return (
+    <div className="mb-3 rounded-xl border border-emerald-400/15 bg-black/20 px-2.5 py-2 sm:px-3">
+      <input
+        ref={fileInputRef}
+        id={inputId}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
+        className="sr-only"
+        onChange={(e) => void onFiles(e)}
+      />
+      <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/70">Purchase bills</p>
+      <p className="mt-0.5 text-[10px] font-semibold text-emerald-200/45">
+        Stored with your Gold &amp; Silver portfolio (max {METAL_PURCHASE_BILL_MAX_COUNT} images).
+      </p>
+      {billUrls.length > 0 ? (
+        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6">
+          {billUrls.map((url, idx) => (
+            <div
+              key={`${idx}-${url.slice(0, 32)}`}
+              className="group relative aspect-square overflow-hidden rounded-lg border border-emerald-400/20 bg-black/40"
+            >
+              <button
+                type="button"
+                className="absolute inset-0 z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                onClick={() => setPreviewUrl(url)}
+                aria-label="Preview bill"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="h-full w-full object-cover" />
+              </button>
+              <button
+                type="button"
+                className="absolute right-0.5 top-0.5 z-20 rounded-md border border-rose-400/40 bg-black/70 p-0.5 text-rose-200 opacity-90 transition hover:bg-rose-500/30"
+                aria-label="Delete bill"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeAt(idx);
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[10px] font-bold text-emerald-200/40">No bills uploaded yet.</p>
+      )}
+      {busy ? (
+        <p className="mt-2 text-[10px] font-bold text-emerald-200/60">Processing…</p>
+      ) : null}
+
+      {previewUrl ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal
+          aria-label="Bill preview"
+        >
+          <button
+            type="button"
+            className="absolute right-3 top-3 rounded-lg border border-white/20 bg-white/10 p-2 text-white"
+            onClick={() => setPreviewUrl(null)}
+            aria-label="Close preview"
+          >
+            <X size={18} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt="Bill preview" className="max-h-[85vh] max-w-full rounded-lg object-contain shadow-2xl" />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
@@ -49,8 +182,8 @@ function UniversalMetalTransactionForm({
   const [formMetal, setFormMetal] = useState<"gold" | "silver">("gold");
   const [targetRowId, setTargetRowId] = useState<string | null>(null);
   const [segmentId, setSegmentId] = useState<string>("buy");
-  const [qtyStr, setQtyStr] = useState("");
-  const [qtyUnit, setQtyUnit] = useState<"gram" | "tola">("gram");
+  const [gramQtyStr, setGramQtyStr] = useState("");
+  const [tolaQtyStr, setTolaQtyStr] = useState("");
   const [buyPriceStr, setBuyPriceStr] = useState("");
   const [buyPriceUnit, setBuyPriceUnit] = useState<"gram" | "tola">("gram");
   const [sellPriceStr, setSellPriceStr] = useState("");
@@ -59,8 +192,6 @@ function UniversalMetalTransactionForm({
   const [notes, setNotes] = useState("");
   const [tradeDate, setTradeDate] = useState(todayIso);
   const [err, setErr] = useState<string | null>(null);
-  const buyPhotoInputId = useId();
-  const buyPhotoRef = useRef<HTMLInputElement>(null);
 
   const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
 
@@ -78,8 +209,8 @@ function UniversalMetalTransactionForm({
   const resetAllFields = () => {
     setFormMetal("gold");
     setSegmentId("buy");
-    setQtyStr("");
-    setQtyUnit("gram");
+    setGramQtyStr("");
+    setTolaQtyStr("");
     setBuyPriceStr("");
     setBuyPriceUnit("gram");
     setSellPriceStr("");
@@ -89,8 +220,39 @@ function UniversalMetalTransactionForm({
     setTradeDate(todayIso());
     setTargetRowId(null);
     setErr(null);
-    if (buyPhotoRef.current) buyPhotoRef.current.value = "";
   };
+
+  const onGramQtyChange = useCallback((raw: string) => {
+    setGramQtyStr(raw);
+    const trimmed = raw.replace(/,/g, "").trim();
+    if (trimmed === "") {
+      setTolaQtyStr("");
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) {
+      setTolaQtyStr("");
+      return;
+    }
+    const tola = gramsToTolaUi(n);
+    setTolaQtyStr(Number(tola.toFixed(6)).toString());
+  }, []);
+
+  const onTolaQtyChange = useCallback((raw: string) => {
+    setTolaQtyStr(raw);
+    const trimmed = raw.replace(/,/g, "").trim();
+    if (trimmed === "") {
+      setGramQtyStr("");
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) {
+      setGramQtyStr("");
+      return;
+    }
+    const g = tolaUiToGrams(n);
+    setGramQtyStr(Number(g.toFixed(6)).toString());
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -100,12 +262,17 @@ function UniversalMetalTransactionForm({
   }, [open, segmentId, formMetal, resolvedTargetRowId]);
 
   const parseQtyGrams = (): number | null => {
-    const raw = qtyStr.replace(/,/g, "").trim();
-    if (raw === "") return null;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    if (qtyUnit === "gram") return n;
-    return Number(tolaUiToGrams(n).toFixed(6));
+    const gRaw = gramQtyStr.replace(/,/g, "").trim();
+    if (gRaw !== "") {
+      const n = Number(gRaw);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return n;
+    }
+    const tRaw = tolaQtyStr.replace(/,/g, "").trim();
+    if (tRaw === "") return null;
+    const t = Number(tRaw);
+    if (!Number.isFinite(t) || t <= 0) return null;
+    return Number(tolaUiToGrams(t).toFixed(6));
   };
 
   const parseSellUnitPriceNprPerGram = (): number | null => {
@@ -127,17 +294,9 @@ function UniversalMetalTransactionForm({
 
   const submit = async () => {
     setErr(null);
-    if (!resolvedTargetRowId || !targetRow) {
-      setErr(`Add a ${formMetal === "gold" ? "gold" : "silver"} holding first (use the buttons above).`);
-      return;
-    }
     const grams = parseQtyGrams();
     if (grams == null) {
-      setErr(`Enter a valid quantity (${qtyUnit === "gram" ? "grams" : "tola"}).`);
-      return;
-    }
-    if (segmentId === "sell" && grams > held + 1e-9) {
-      setErr("Cannot sell more than you hold on the selected line.");
+      setErr("Enter a valid quantity in grams and/or tola (1 tola = 11.66 g).");
       return;
     }
     const feesNpr = feesStr.trim() === "" ? undefined : Number(feesStr.replace(/,/g, ""));
@@ -152,11 +311,23 @@ function UniversalMetalTransactionForm({
         setErr(`Enter sell price (NPR per ${sellPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
-      const ok = onMutate((s) =>
-        recordMetalSell(s, resolvedTargetRowId, { grams, unitPriceNprPerGram, tradeDate, feesNpr, notes }),
-      );
+      const ok = onMutate((s) => {
+        let sWork = s;
+        let rowId: string;
+        if (resolvedTargetRowId != null && sWork.metals.some((r) => r.id === resolvedTargetRowId)) {
+          rowId = resolvedTargetRowId;
+        } else {
+          const ensured = ensureMetalHoldingRow(sWork, formMetal);
+          sWork = ensured.state;
+          rowId = ensured.rowId;
+        }
+        const row = sWork.metals.find((r) => r.id === rowId);
+        const g0 = row?.grams ?? 0;
+        if (grams > g0 + 1e-9) return null;
+        return recordMetalSell(sWork, rowId, { grams, unitPriceNprPerGram, tradeDate, feesNpr, notes });
+      });
       if (!ok) {
-        setErr("Could not record sell.");
+        setErr("Could not record sell (check quantity vs. holdings).");
         return;
       }
       toast.success("Sell recorded.");
@@ -167,48 +338,30 @@ function UniversalMetalTransactionForm({
         return;
       }
 
-      let photoUrlsToAppend: string[] | undefined;
-      const inputEl = buyPhotoRef.current;
-      if (inputEl?.files?.length) {
-        const files = Array.from(inputEl.files).filter((f) => f.type.startsWith("image/"));
-        const existing = targetRow.photoUrls?.length ?? 0;
-        const room = Math.max(0, METAL_PHOTO_MAX_COUNT - existing);
-        if (files.length > room && room === 0) {
-          setErr(`Photo limit reached (${METAL_PHOTO_MAX_COUNT} per holding).`);
-          return;
+      const ok = onMutate((s) => {
+        let sWork = s;
+        let rowId: string;
+        if (resolvedTargetRowId != null && sWork.metals.some((r) => r.id === resolvedTargetRowId)) {
+          rowId = resolvedTargetRowId;
+        } else {
+          const ensured = ensureMetalHoldingRow(sWork, formMetal);
+          sWork = ensured.state;
+          rowId = ensured.rowId;
         }
-        const urls: string[] = [];
-        for (const f of files.slice(0, room)) {
-          const dataUrl = await compressMetalImageFile(f);
-          if (!dataUrl) {
-            setErr(`Could not compress "${f.name}". Try a smaller image.`);
-            return;
-          }
-          urls.push(dataUrl);
-        }
-        if (urls.length > 0) {
-          photoUrlsToAppend = urls;
-          toast.success(`Added ${urls.length} photo(s) with this buy.`);
-        }
-      }
-
-      const ok = onMutate((s) =>
-        recordMetalBuy(s, resolvedTargetRowId, {
+        return recordMetalBuy(sWork, rowId, {
           grams,
           tradeDate,
           buyPriceNpr,
           buyPriceUnit,
           feesNpr,
           notes,
-          photoUrlsToAppend,
-        }),
-      );
+        });
+      });
       if (!ok) {
         setErr("Could not record buy.");
         return;
       }
       toast.success("Buy recorded.");
-      if (inputEl) inputEl.value = "";
     }
 
     resetAllFields();
@@ -217,6 +370,7 @@ function UniversalMetalTransactionForm({
   const previewBuyGrams = parseQtyGrams();
   const previewBuyPrice = parseBuyPriceNpr();
   const previewFees = feesStr.trim() === "" ? 0 : Number(feesStr.replace(/,/g, ""));
+  const previewLineGrams = resolvedTargetRowId != null ? (rows.find((r) => r.id === resolvedTargetRowId)?.grams ?? 0) : 0;
   let previewAddBasis: number | null = null;
   if (
     segmentId === "buy" &&
@@ -237,13 +391,13 @@ function UniversalMetalTransactionForm({
       onOpenChange={setOpen}
       headerLabel="Transactions"
       summaryRight={
-        targetRow ? (
+        resolvedTargetRowId != null && targetRow ? (
           <>
             {held.toLocaleString()} g · basis {basis != null ? formatMoney(basis, "NPR") : "—"}
             {avgPerG != null ? ` · avg ${formatMoney(avgPerG, "NPR")}/g` : ""}
           </>
         ) : (
-          <span className="text-emerald-200/70">Select metal &amp; line</span>
+          <span className="text-emerald-200/70">No {formMetal} line yet — first buy creates it</span>
         )
       }
       segments={METAL_TX_SEGMENTS}
@@ -289,45 +443,31 @@ function UniversalMetalTransactionForm({
                 ))}
               </select>
             </label>
-          ) : candidates.length === 0 ? (
-            <p className="self-end text-[10px] font-bold text-amber-200/90 sm:col-span-1">
-              Add a {formMetal} holding with the + button above.
-            </p>
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Quantity unit</span>
-          {(["gram", "tola"] as const).map((u) => {
-            const active = qtyUnit === u;
-            return (
-              <button
-                key={u}
-                type="button"
-                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-                  active
-                    ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
-                    : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
-                }`}
-                onClick={() => setQtyUnit(u)}
-              >
-                {u === "gram" ? "Grams" : "Tola (UI)"}
-              </button>
-            );
-          })}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Grams</span>
+            <input
+              value={gramQtyStr}
+              onChange={(e) => onGramQtyChange(e.target.value)}
+              inputMode="decimal"
+              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+              placeholder="0"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Tola (1 tola = 11.66 g)</span>
+            <input
+              value={tolaQtyStr}
+              onChange={(e) => onTolaQtyChange(e.target.value)}
+              inputMode="decimal"
+              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+              placeholder="0"
+            />
+          </label>
         </div>
-        <label className="block">
-          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
-            {qtyUnit === "gram" ? "Quantity (grams)" : "Quantity (tola)"}
-          </span>
-          <input
-            value={qtyStr}
-            onChange={(e) => setQtyStr(e.target.value)}
-            inputMode="decimal"
-            className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
-            placeholder="0"
-          />
-        </label>
 
         {segmentId === "sell" ? (
           <>
@@ -398,40 +538,15 @@ function UniversalMetalTransactionForm({
                 placeholder="0"
               />
             </label>
-            <div className="rounded-lg border border-emerald-400/15 bg-black/30 px-2 py-2">
-              <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/55">Photos (optional)</p>
-              <input
-                ref={buyPhotoRef}
-                id={buyPhotoInputId}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                multiple
-                className="sr-only"
-              />
-              <label
-                htmlFor={buyPhotoInputId}
-                className="mt-1 inline-flex cursor-pointer rounded-full border border-amber-400/35 bg-amber-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-amber-100"
-              >
-                Attach images
-              </label>
-              <p className="mt-1 text-[10px] font-semibold text-emerald-200/45">
-                Merged into the selected holding on buy (max {METAL_PHOTO_MAX_COUNT} total).
-              </p>
-            </div>
-            {previewAddBasis != null && Number.isFinite(previewAddBasis) && targetRow ? (
+            {previewAddBasis != null && Number.isFinite(previewAddBasis) && segmentId === "buy" && previewBuyGrams != null ? (
               <p className="text-[10px] font-bold text-emerald-200/70">
                 This buy total (incl. fees):{" "}
                 <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
-                {previewBuyGrams != null ? (
-                  <>
-                    {" "}
-                    · after submit ~{" "}
-                    <span className="tabular-nums text-amber-100">
-                      {(held + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
-                    </span>{" "}
-                    on this line
-                  </>
-                ) : null}
+                {" · after submit ~ "}
+                <span className="tabular-nums text-amber-100">
+                  {(previewLineGrams + previewBuyGrams).toLocaleString(undefined, { maximumFractionDigits: 4 })} g
+                </span>{" "}
+                on this line
               </p>
             ) : null}
           </>
@@ -462,7 +577,10 @@ export function MetalsPanel({
     usdPerNpr,
     bullionPriceLoading,
     bullionPriceRefreshing,
+    state: portfolioState,
   } = useWealthPortfolio();
+  const purchaseBillsInputRef = useRef<HTMLInputElement>(null);
+  const billUrls = portfolioState.metalPurchaseBillUrls ?? [];
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -474,39 +592,40 @@ export function MetalsPanel({
 
   return (
     <section className="wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-        <div className="flex items-start gap-2">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-amber-200">
-            <Gem size={18} />
-          </div>
-          <div>
-            <h2 className="text-base font-black text-emerald-50 sm:text-lg">Gold & silver</h2>
-            <p className="text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
-              One transaction form below applies to the metal and line you choose. Portfolio marks follow the{" "}
-              <span className="text-emerald-100">FENEGOSIDA-published Nepal board</span> (Fine Gold 9999 &amp; Silver per
-              10 g and per tola on fenegosida.org; aligned with FNGSGJA industry rates). International USD/oz is
-              reference only.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-          <PortfolioModuleDataResetButton module="metals" onMutate={onMutate} />
-          <button
-            type="button"
-            onClick={() => onAdd("gold")}
-            className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20"
-          >
-            <Plus size={12} className="inline" /> Gold
-          </button>
-          <button
-            type="button"
-            onClick={() => onAdd("silver")}
-            className="rounded-full border border-slate-400/25 bg-slate-500/10 px-2.5 py-1 text-[11px] font-black text-slate-100 transition hover:bg-slate-500/20"
-          >
-            <Plus size={12} className="inline" /> Silver
-          </button>
-        </div>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onAdd("gold")}
+          className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20"
+        >
+          <Plus size={12} className="inline" /> Gold
+        </button>
+        <button
+          type="button"
+          onClick={() => onAdd("silver")}
+          className="rounded-full border border-slate-400/25 bg-slate-500/10 px-2.5 py-1 text-[11px] font-black text-slate-100 transition hover:bg-slate-500/20"
+        >
+          <Plus size={12} className="inline" /> Silver
+        </button>
+        <button
+          type="button"
+          onClick={() => purchaseBillsInputRef.current?.click()}
+          className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/20"
+        >
+          Upload purchase bills
+        </button>
+        <PortfolioModuleDataResetButton module="metals" onMutate={onMutate} />
       </div>
+      <div className="mb-2 flex items-start gap-2">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-400/15 text-amber-200">
+          <Gem size={16} />
+        </div>
+        <p className="min-w-0 text-[11px] font-bold leading-snug text-emerald-200/70 sm:text-xs">
+          Marks follow the <span className="text-emerald-100">FENEGOSIDA Nepal board</span>. USD/oz is reference only.
+        </p>
+      </div>
+
+      <MetalPurchaseBillsGallery billUrls={billUrls} onMutate={onMutate} fileInputRef={purchaseBillsInputRef} />
 
       <div className="mb-3 space-y-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2.5 sm:px-3">
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:text-[11px]">

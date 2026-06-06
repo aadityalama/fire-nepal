@@ -6,6 +6,20 @@ export const METAL_PHOTO_MAX_CHARS = 280_000;
 /** Max images per gold/silver holding (localStorage + UX). */
 export const METAL_PHOTO_MAX_COUNT = 12;
 
+/** Max purchase bill / invoice images stored for the Gold & Silver module. */
+export const METAL_PURCHASE_BILL_MAX_COUNT = 24;
+
+export function sanitizeMetalPurchaseBillUrls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const urls: string[] = [];
+  for (const p of raw) {
+    if (urls.length >= METAL_PURCHASE_BILL_MAX_COUNT) break;
+    const s = sanitizePropertyPhotoRef(typeof p === "string" ? p : undefined);
+    if (s) urls.push(s);
+  }
+  return urls;
+}
+
 export type SanitizedMetalPhotos = {
   photoUrls?: string[];
   coverPhotoIndex?: number;

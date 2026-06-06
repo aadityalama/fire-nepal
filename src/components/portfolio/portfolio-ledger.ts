@@ -382,6 +382,20 @@ function syncMetalLegacyBuyPriceFields(row: MetalRow): MetalRow {
   return { ...row, metalBuyPriceAmount: undefined, metalBuyPriceUnit: undefined };
 }
 
+/**
+ * Ensures at least one holding row exists for the metal so buy/sell ledger APIs can run without a manual "+ Gold" click.
+ */
+export function ensureMetalHoldingRow(
+  state: WealthPortfolioStateV2,
+  metal: "gold" | "silver",
+): { state: WealthPortfolioStateV2; rowId: string } {
+  const first = state.metals.find((r) => r.metal === metal);
+  if (first) return { state, rowId: first.id };
+  const id = ledgerNewId();
+  const row: MetalRow = { id, metal, grams: 0 };
+  return { state: { ...state, metals: [...state.metals, row] }, rowId: id };
+}
+
 function minPurchaseIso(a: string | undefined, b: string): string | undefined {
   if (!isoOk(b)) return a;
   if (!a || !isoOk(a)) return b;

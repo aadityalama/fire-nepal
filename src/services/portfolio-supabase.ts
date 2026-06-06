@@ -30,7 +30,7 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
     client.from("vehicles").select("row_id,payload").eq("user_id", userId),
     client.from("liabilities").select("row_id,payload").eq("user_id", userId),
     client.from("retirement_assets").select("row_id,payload").eq("user_id", userId),
-    client.from("portfolio_extensions").select("ledger,net_worth_history").eq("user_id", userId).maybeSingle(),
+    client.from("portfolio_extensions").select("ledger,net_worth_history,metal_purchase_bill_urls").eq("user_id", userId).maybeSingle(),
   ]);
 
   if (banks.error || inv.error || metals.error || re.error || veh.error || liab.error || ret.error || ext.error) {
@@ -78,13 +78,20 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
       globalRetirementAssets.length >
     0;
 
-  const extRow = ext.data as { ledger?: unknown; net_worth_history?: unknown } | null;
+  const extRow = ext.data as {
+    ledger?: unknown;
+    net_worth_history?: unknown;
+    metal_purchase_bill_urls?: unknown;
+  } | null;
   const ledger = Array.isArray(extRow?.ledger) ? (extRow!.ledger as PortfolioLedgerEntry[]) : [];
   const netWorthHistory = Array.isArray(extRow?.net_worth_history)
     ? (extRow!.net_worth_history as NetWorthHistoryPoint[])
     : [];
+  const metalPurchaseBillUrls = Array.isArray(extRow?.metal_purchase_bill_urls)
+    ? (extRow!.metal_purchase_bill_urls as string[])
+    : undefined;
 
-  if (!hasAny && ledger.length === 0 && netWorthHistory.length === 0) {
+  if (!hasAny && ledger.length === 0 && netWorthHistory.length === 0 && !(metalPurchaseBillUrls && metalPurchaseBillUrls.length > 0)) {
     return null;
   }
 
@@ -100,6 +107,7 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
     globalRetirementAssets,
     ledger,
     netWorthHistory,
+    metalPurchaseBillUrls,
   });
 }
 
@@ -207,6 +215,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
       user_id: userId,
       ledger: state.ledger as unknown as Json,
       net_worth_history: state.netWorthHistory as unknown as Json,
+      metal_purchase_bill_urls: (state.metalPurchaseBillUrls ?? []) as unknown as Json,
     },
     { onConflict: "user_id" },
   );

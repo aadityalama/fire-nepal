@@ -230,4 +230,9 @@ export type WealthPortfolioStateV2 = {
   netWorthHistory: NetWorthHistoryPoint[];
   /** Buy / sell ledger (FIFO slices stored on entries for future tax / sync). */
   ledger: PortfolioLedgerEntry[];
+  /**
+   * Gold & Silver module: purchase bill / invoice images (JPEG data URLs or https), persisted with the portfolio.
+   * Separate from per-holding `MetalRow.photoUrls` (jewelry/bar photos).
+   */
+  metalPurchaseBillUrls?: string[];
 };

@@ -19,7 +19,7 @@ import type {
 } from "@/components/portfolio/types";
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { deriveMetalTotalCostBasisNprPatch } from "@/components/portfolio/metal-buy-basis";
-import { sanitizeMetalPhotoGallery } from "@/components/portfolio/metal-photo-utils";
+import { sanitizeMetalPhotoGallery, sanitizeMetalPurchaseBillUrls } from "@/components/portfolio/metal-photo-utils";
 import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
@@ -108,6 +108,7 @@ export function defaultWealthState(): WealthPortfolioStateV2 {
     globalRetirementAssets: [],
     netWorthHistory: [],
     ledger: [],
+    metalPurchaseBillUrls: [],
   };
 }
 
@@ -514,6 +515,7 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
     globalRetirementAssets,
     netWorthHistory: Array.isArray(parsed.netWorthHistory) ? parsed.netWorthHistory : [],
     ledger: sanitizeLedger(parsed.ledger),
+    metalPurchaseBillUrls: sanitizeMetalPurchaseBillUrls(parsed.metalPurchaseBillUrls),
   };
 }
 

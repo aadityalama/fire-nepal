@@ -70,7 +70,7 @@ export function resetPortfolioModuleState(
     case "banking_cash":
       return { ...state, liquidCash: [], fixedDeposits: [], ledger };
     case "metals":
-      return { ...state, metals: [], ledger };
+      return { ...state, metals: [], ledger, metalPurchaseBillUrls: [] };
     case "vehicles":
       return { ...state, vehicles: [], ledger };
     case "real_estate":

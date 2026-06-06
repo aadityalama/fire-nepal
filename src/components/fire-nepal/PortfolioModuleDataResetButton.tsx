@@ -21,7 +21,7 @@ const COPY: Record<
   },
   metals: {
     title: "Reset gold & silver?",
-    body: "All metal holdings, photos, and precious-metals ledger rows tied to this module will be removed.",
+    body: "All metal holdings, purchase bills, photos, and precious-metals ledger rows tied to this module will be removed.",
     toast: "Gold & silver data cleared.",
     buttonClass:
       "inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/35 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20 sm:text-xs",
@@ -79,7 +79,7 @@ export function PortfolioModuleDataResetButton({
     <>
       <button type="button" onClick={() => setOpen(true)} className={c.buttonClass} aria-haspopup="dialog">
         <RotateCcw size={14} className="shrink-0 opacity-90" />
-        Reset data
+        Reset Data
       </button>
       <DataResetConfirmModal
         open={open}

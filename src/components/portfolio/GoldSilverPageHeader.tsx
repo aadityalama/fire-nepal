@@ -44,7 +44,7 @@ export function GoldSilverPageHeader() {
         aria-hidden
       />
       <div
-        className={`relative overflow-hidden rounded-2xl border px-4 py-3 backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-500 ease-out sm:rounded-[1.25rem] sm:px-5 sm:py-3.5 ${shell}`}
+        className={`relative overflow-hidden rounded-2xl border px-4 py-2.5 backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-500 ease-out sm:rounded-[1.25rem] sm:px-5 sm:py-3 ${shell}`}
       >
         <div className={`pointer-events-none absolute inset-0 ${innerGlow}`} aria-hidden />
         <div className="relative flex flex-col gap-3 sm:gap-3.5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
@@ -68,7 +68,7 @@ export function GoldSilverPageHeader() {
             </div>
           </div>
         </div>
-        <div className={`mt-3 h-px w-full rounded-full bg-gradient-to-r ${ACCENT_LINE} opacity-80 sm:mt-3.5`} aria-hidden />
+        <div className={`mt-2.5 h-px w-full rounded-full bg-gradient-to-r ${ACCENT_LINE} opacity-80 sm:mt-3`} aria-hidden />
       </div>
     </header>
   );
