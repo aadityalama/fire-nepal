@@ -333,15 +333,20 @@ export function FireMembershipPage() {
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#030806]/80 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+        <div className="relative isolate rounded-[1.75rem] border border-white/10 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+          {/* Solid fill layer only — avoids clipping the corner ribbon (was overflow-hidden on outer). */}
           <div
-            className="pointer-events-none absolute right-[-2.5rem] top-5 z-20 w-[11.5rem] rotate-45 bg-gradient-to-r from-lime-400 via-emerald-400 to-emerald-600 py-1.5 text-center text-[10px] font-black uppercase tracking-[0.18em] text-emerald-950 shadow-lg sm:right-[-2rem] sm:top-6 sm:w-[13rem] sm:text-[11px]"
+            className="pointer-events-none absolute inset-0 rounded-[1.75rem] bg-[#030806]/80"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute right-[-4.25rem] top-3 z-20 flex w-[19rem] min-w-[19rem] rotate-45 items-center justify-center bg-gradient-to-r from-lime-400 via-emerald-400 to-emerald-600 px-12 py-2.5 text-center text-[9px] font-black uppercase leading-tight tracking-[0.1em] text-emerald-950 shadow-lg sm:right-[-3.75rem] sm:top-4 sm:w-[22rem] sm:min-w-[22rem] sm:px-14 sm:py-3 sm:text-[10px] sm:tracking-[0.12em] md:right-[-3.25rem] md:top-5 md:w-[24rem] md:min-w-[24rem] md:px-16 md:text-[11px] md:tracking-[0.14em]"
             aria-hidden
           >
-            Founding Member Offer
+            <span className="block max-w-none whitespace-nowrap px-1">Founding Member Offer</span>
           </div>
 
-          <div className="relative grid gap-5 p-5 pt-12 sm:p-6 sm:pt-14 lg:grid-cols-[1fr_1.12fr_1fr] lg:items-stretch lg:gap-5 lg:p-7 lg:pt-16">
+          <div className="relative z-10 grid gap-5 overflow-hidden rounded-[1.75rem] p-5 pt-14 sm:p-6 sm:pt-16 lg:grid-cols-[1fr_1.12fr_1fr] lg:items-stretch lg:gap-5 lg:p-7 lg:pt-[4.25rem]">
             {(["free", "premium", "elite"] as const).map((t, i) => {
               const cat = TIER_CATALOG[t];
               const activeCard = tier === t;
