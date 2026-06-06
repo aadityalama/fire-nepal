@@ -1,7 +1,7 @@
 "use client";
 
 import { Gem, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
   resolveMetalTolaRatesForUi,
@@ -39,19 +39,19 @@ const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
   { id: "sell", label: "Sell", tone: "out" },
 ];
 
-function UniversalMetalTransactionForm({
-  rows,
-  onMutate,
-  metalQuickBuy,
-  onMetalQuickBuyConsumed,
-  billsFileInputRef,
-}: {
-  rows: MetalRow[];
-  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
-  metalQuickBuy?: { metal: "gold" | "silver"; tick: number } | null;
-  onMetalQuickBuyConsumed?: () => void;
-  billsFileInputRef?: RefObject<HTMLInputElement | null>;
-}) {
+export type MetalTxnFormHandle = {
+  openBuyForMetal: (metal: "gold" | "silver") => void;
+  focusBillsInput: () => void;
+};
+
+const UniversalMetalTransactionForm = forwardRef<
+  MetalTxnFormHandle,
+  {
+    rows: MetalRow[];
+    onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+    billsFileInputRef?: RefObject<HTMLInputElement | null>;
+  }
+>(function UniversalMetalTransactionForm({ rows, onMutate, billsFileInputRef }, ref) {
   const [open, setOpen] = useState(true);
   const [formMetal, setFormMetal] = useState<"gold" | "silver">("gold");
   const [segmentId, setSegmentId] = useState<string>("buy");
@@ -80,26 +80,31 @@ function UniversalMetalTransactionForm({
 
   const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
   const sellCandidates = useMemo(() => candidates.filter((r) => (r.grams ?? 0) > 1e-9), [candidates]);
+  const canUseExistingBuy = candidates.length > 0;
+  const buyModeActive: "new" | "existing" = buyMode === "existing" && canUseExistingBuy ? "existing" : "new";
 
-  useEffect(() => {
-    if (!metalQuickBuy) return;
-    setFormMetal(metalQuickBuy.metal);
-    setSegmentId("buy");
-    setBuyMode("new");
-    setOpen(true);
-    onMetalQuickBuyConsumed?.();
-  }, [metalQuickBuy, onMetalQuickBuyConsumed]);
-
-  useEffect(() => {
-    if (buyMode === "existing" && candidates.length === 0) setBuyMode("new");
-  }, [buyMode, candidates.length]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      openBuyForMetal(metal) {
+        setFormMetal(metal);
+        setSegmentId("buy");
+        setBuyMode("new");
+        setOpen(true);
+      },
+      focusBillsInput() {
+        billsInputRef.current?.click();
+      },
+    }),
+    [billsInputRef],
+  );
 
   useEffect(() => {
     if (!open) return;
     queueMicrotask(() => {
       setErr(null);
     });
-  }, [open, segmentId, formMetal, buyMode, existingBuyRowId, sellRowId]);
+  }, [open, segmentId, formMetal, buyModeActive, existingBuyRowId, sellRowId]);
 
   const resolvedSellRowId = useMemo(() => {
     if (sellCandidates.length === 0) return null;
@@ -274,7 +279,7 @@ function UniversalMetalTransactionForm({
         setErr(`Enter buy price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
         return;
       }
-      if (buyMode === "new") {
+      if (buyModeActive === "new") {
         const nm = itemName.replace(/\s+/g, " ").trim();
         if (!nm) {
           setErr("Item name is required for a new buy.");
@@ -287,8 +292,8 @@ function UniversalMetalTransactionForm({
       const ok = onMutate((s) =>
         recordMetalBuy(s, {
           metal: formMetal,
-          existingRowId: buyMode === "existing" ? resolvedBuyExistingId : null,
-          itemName: buyMode === "new" ? itemName : (candidates.find((r) => r.id === resolvedBuyExistingId)?.name ?? ""),
+          existingRowId: buyModeActive === "existing" ? resolvedBuyExistingId : null,
+          itemName: buyModeActive === "new" ? itemName : (candidates.find((r) => r.id === resolvedBuyExistingId)?.name ?? ""),
           grams,
           tradeDate,
           buyPriceNpr,
@@ -313,7 +318,7 @@ function UniversalMetalTransactionForm({
   const previewBuyPrice = parseBuyPriceNpr();
   const previewFees = feesStr.trim() === "" ? 0 : Number(feesStr.replace(/,/g, ""));
   const buyTargetRow =
-    buyMode === "existing" && resolvedBuyExistingId ? rows.find((r) => r.id === resolvedBuyExistingId) : undefined;
+    buyModeActive === "existing" && resolvedBuyExistingId ? rows.find((r) => r.id === resolvedBuyExistingId) : undefined;
   const previewLineGrams = buyTargetRow?.grams ?? 0;
   let previewAddBasis: number | null = null;
   if (
@@ -343,7 +348,7 @@ function UniversalMetalTransactionForm({
                 {rows.find((r) => r.id === resolvedSellRowId)?.name ?? "Item"}
               </span>
             </span>
-          ) : segmentId === "buy" && buyMode === "existing" && resolvedBuyExistingId ? (
+          ) : segmentId === "buy" && buyModeActive === "existing" && resolvedBuyExistingId ? (
             <span className="text-emerald-200/80">
               Adding to{" "}
               <span className="font-black text-emerald-50">
@@ -404,17 +409,23 @@ function UniversalMetalTransactionForm({
             <div className="flex flex-wrap gap-1.5">
               <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy type</span>
               {(["new", "existing"] as const).map((m) => {
-                const active = buyMode === m;
+                const active = buyModeActive === m;
                 return (
                   <button
                     key={m}
                     type="button"
+                    disabled={m === "existing" && !canUseExistingBuy}
                     className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                      m === "existing" && !canUseExistingBuy ? "cursor-not-allowed opacity-40" : ""
+                    } ${
                       active
                         ? "border-lime-400/45 bg-lime-500/15 text-lime-100"
                         : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
                     }`}
-                    onClick={() => setBuyMode(m)}
+                    onClick={() => {
+                      if (m === "existing" && !canUseExistingBuy) return;
+                      setBuyMode(m);
+                    }}
                   >
                     {m === "new" ? "New item" : "Add to existing"}
                   </button>
@@ -423,7 +434,7 @@ function UniversalMetalTransactionForm({
             </div>
           ) : null}
 
-          {segmentId === "buy" && buyMode === "new" ? (
+          {segmentId === "buy" && buyModeActive === "new" ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item name</span>
               <input
@@ -436,7 +447,7 @@ function UniversalMetalTransactionForm({
             </label>
           ) : null}
 
-          {segmentId === "buy" && buyMode === "existing" && candidates.length > 0 ? (
+          {segmentId === "buy" && buyModeActive === "existing" && candidates.length > 0 ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item</span>
               <select
@@ -549,7 +560,7 @@ function UniversalMetalTransactionForm({
                 <p className="text-[10px] font-bold text-emerald-200/70">
                   This buy total (incl. fees):{" "}
                   <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
-                  {buyMode === "existing" ? (
+                  {buyModeActive === "existing" ? (
                     <>
                       {" · after submit ~ "}
                       <span className="tabular-nums text-amber-100">
@@ -621,7 +632,9 @@ function UniversalMetalTransactionForm({
       </PortfolioTransactionStrip>
     </div>
   );
-}
+});
+
+UniversalMetalTransactionForm.displayName = "UniversalMetalTransactionForm";
 
 export function MetalsPanel({
   rows,
@@ -645,8 +658,7 @@ export function MetalsPanel({
     bullionPriceRefreshing,
   } = useWealthPortfolio();
   const txnAnchorRef = useRef<HTMLDivElement>(null);
-  const billsShortcutRef = useRef<HTMLInputElement>(null);
-  const [metalQuickBuy, setMetalQuickBuy] = useState<{ metal: "gold" | "silver"; tick: number } | null>(null);
+  const metalFormRef = useRef<MetalTxnFormHandle>(null);
   const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
   const lastUpdatedLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -666,8 +678,8 @@ export function MetalsPanel({
         <button
           type="button"
           onClick={() => {
-            setMetalQuickBuy((p) => ({ metal: "gold", tick: (p?.tick ?? 0) + 1 }));
             scrollToTransactions();
+            metalFormRef.current?.openBuyForMetal("gold");
           }}
           className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20"
         >
@@ -676,8 +688,8 @@ export function MetalsPanel({
         <button
           type="button"
           onClick={() => {
-            setMetalQuickBuy((p) => ({ metal: "silver", tick: (p?.tick ?? 0) + 1 }));
             scrollToTransactions();
+            metalFormRef.current?.openBuyForMetal("silver");
           }}
           className="rounded-full border border-slate-400/25 bg-slate-500/10 px-2.5 py-1 text-[11px] font-black text-slate-100 transition hover:bg-slate-500/20"
         >
@@ -687,7 +699,7 @@ export function MetalsPanel({
           type="button"
           onClick={() => {
             scrollToTransactions();
-            queueMicrotask(() => billsShortcutRef.current?.click());
+            queueMicrotask(() => metalFormRef.current?.focusBillsInput());
           }}
           className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/20"
         >
@@ -980,13 +992,7 @@ export function MetalsPanel({
       </div>
 
       <div ref={txnAnchorRef} className="mt-1">
-        <UniversalMetalTransactionForm
-          rows={rows}
-          onMutate={onMutate}
-          metalQuickBuy={metalQuickBuy}
-          onMetalQuickBuyConsumed={() => setMetalQuickBuy(null)}
-          billsFileInputRef={billsShortcutRef}
-        />
+        <UniversalMetalTransactionForm ref={metalFormRef} rows={rows} onMutate={onMutate} />
       </div>
 
       <ModuleLedgerCard

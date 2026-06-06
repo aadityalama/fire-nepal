@@ -286,11 +286,13 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const monthDelta = useMemo(() => monthlyWealthGrowthNpr(state.netWorthHistory), [state.netWorthHistory]);
 
   const cashflowForCoach = useMemo(() => {
+    void coachDataTick;
     if (typeof window === "undefined" || !hydrated) return defaultCashflowState();
     return loadCashflowState();
   }, [hydrated, coachDataTick]);
 
   const coachSnapshot = useMemo(() => {
+    void coachDataTick;
     const payslipMoM = computePayslipTrendAnalytics(loadPayslipHistoryState().entries).grossSalaryMoM_pct;
     return buildFinancialCoachSnapshot({
       hydrated,
