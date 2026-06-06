@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "generate:investment-registry": "node scripts/generate-investment-registry.mjs",
     "verify:membership-storage": "node scripts/verify-membership-payment-storage.mjs",
-    "db:push:remote": "npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes"
+    "db:push:remote": "npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
+    "db:apply-verify:membership": "node scripts/apply-and-verify-supabase-membership.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

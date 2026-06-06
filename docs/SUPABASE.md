@@ -36,15 +36,25 @@ When they are **unset** in production, legacy `/api/auth/*` routes return **503*
 
    **Local development:** use a separate Supabase project, *or* temporarily add `http://localhost:3000/auth/callback` to Redirect URLs while testing—then remove it from the production project before go-live.
 
-3. **Authentication → Emails**  
-   Configure **SMTP** or a provider so sign-up, verification, magic links, and password reset emails actually send.
+3. **Authentication → Emails / SMTP**  
+   Configure **custom SMTP** for production. Supabase’s **built-in (default) mailer is not intended for production**: without custom SMTP it only sends to addresses authorized for your **organization team**, and other addresses fail with **`Email address not authorized`** (see [Supabase: custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp)).  
+   **Recommended:** Resend (or another SMTP provider) in **Authentication → SMTP Settings** — exact host/user/port/password and DNS steps: **`docs/password-reset-email-delivery.md`**.  
+   **Important:** when Supabase is enabled, reset mail is sent by **Supabase Auth**, not by the app’s **Resend API** keys (`RESEND_API_KEY` is for legacy OTP, reminders, and cron—not Supabase’s `resetPasswordForEmail` pipeline).
 
 4. **Forgot password flow**  
-   The app calls `resetPasswordForEmail` with `redirectTo` → `/auth/callback?next=/dashboard/security%3Fpw%3D1`. After the user opens the email link, they land on **Security center** with a short banner and an authenticated recovery session; they set a new password with **Update password** (`auth.updateUser`).
+   The app calls **`POST /api/auth/request-password-reset`**, which invokes Supabase `resetPasswordForEmail` with `redirectTo` → `/auth/callback?next=/dashboard/security%3Fpw%3D1` (origin from `NEXT_PUBLIC_SITE_URL` or the request host). After the user opens the email link, they land on **Security center** with a short banner and an authenticated recovery session; they set a new password with **Update password** (`auth.updateUser`). Server logs use the prefix `[FIRE Nepal auth][request-password-reset]` (events: `reset_request_received`, `supabase_reset_attempt`, `supabase_reset_accepted`, `supabase_reset_rejected`).
 
 ## Database
 
 Migrations live in `supabase/migrations/` (see `supabase/config.toml`). Apply them in **timestamp order** so foreign keys resolve (`scheduled_reminders` before `admin_dashboard`).
+
+**Remote (production) apply + membership checks** — set `SUPABASE_DB_URL` (Dashboard → **Connect** → Postgres URI; percent-encode special characters in the password), `NEXT_PUBLIC_SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`, then:
+
+```bash
+npm run db:apply-verify:membership
+```
+
+This runs `supabase db push`, `supabase migration list --db-url`, confirms `public.membership_requests` and the `membership_payment_proofs` storage bucket, hits the public `POST /api/membership-requests` smoke URL (expects **401** without cookies), and by default runs a **service-role** upload + row insert + cleanup (same columns/paths as the app). Set `MEMBERSHIP_E2E_INFRA=0` to skip that write test.
 
 **Recommended (repeatable):** from this repo root, with the **Postgres connection URI** exported (Dashboard → **Project Settings → Database** → *Connection string* → URI):
 
@@ -52,6 +62,37 @@ Migrations live in `supabase/migrations/` (see `supabase/config.toml`). Apply th
 export SUPABASE_DB_URL='postgresql://...'
 npm run db:push:remote
 ```
+
+**Optional — fill `.env.local` from Supabase CLI** (same account as the dashboard project; no secrets in git):
+
+```bash
+npx supabase login
+export SUPABASE_PROJECT_REF=your_ref   # from URL: app.supabase.com/project/<ref>
+npm run env:sync:supabase
+```
+
+Then run `npm run reminders:status` and `npm run db:verify:reminders`.
+
+After migrations, confirm **`public.scheduled_reminders`** and smoke-test inserts:
+
+```bash
+npm run reminders:status
+npm run db:verify:reminders
+```
+
+`reminders:status` loads `.env.local` (if present) and prints each variable and table probe. Apply migrations and reload in one step when `SUPABASE_DB_URL` is set:
+
+```bash
+npm run reminders:status:push
+```
+
+**PostgREST schema cache:** if the table exists in Postgres but the app still errors with “relation does not exist”, reload the API schema: **Dashboard → Project Settings → Data API → Reload schema**, or run in the **SQL Editor**:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+The migration `20250603120000_postgrest_reload_schema.sql` runs this automatically after other pending migrations apply.
 
 **Alternative:** open each file under `supabase/migrations/` in the Supabase **SQL Editor** and run in order.
 
@@ -77,11 +118,13 @@ After migrations, insert the auth user’s UUID into **`public.admin_users`** (S
 ### Scheduled reminder emails (Vercel + Resend)
 
 1. Set **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only; never expose to the client). The cron route uses it to read all active reminders and insert send rows.
-2. Set **`CRON_SECRET`** and add a **Vercel Cron** (Project → Settings → Cron Jobs) that **`GET`**s **`/api/cron/scheduled-reminders`** with header `Authorization: Bearer <CRON_SECRET>`. On **Pro** and above you can use a **per-minute** schedule (e.g. `* * * * *`). **Hobby** plans only allow **once-per-day** crons—use an external scheduler (or upgrade) if you need sub-daily email checks.
+2. Set **`CRON_SECRET`** in Vercel (recommended). Vercel will send `Authorization: Bearer <CRON_SECRET>` on cron invocations when this variable is set. Cron is declared in **`vercel.json`** (`/api/cron/scheduled-reminders`). You can also add or override jobs under **Project → Settings → Cron Jobs**. On **Pro** and above you can use a **per-minute** schedule (e.g. `* * * * *`) in `vercel.json` for sub-daily reminder windows. **Hobby** plans only allow **once-per-day** crons—use an external scheduler (or upgrade) if you need sub-daily email checks.
 3. Configure **`RESEND_API_KEY`** and **`RESEND_FROM_EMAIL`** (or `EMAIL_FROM`) so transactional emails can send.
+
+**GitHub Actions (Hobby / sub-daily Vercel cron):** add repo secrets **`CRON_TARGET_URL`** (full `https://…/api/cron/scheduled-reminders`) and **`CRON_SECRET`**, then enable the workflow in `.github/workflows/scheduled-reminders-cron.yml` (runs every 5 minutes).
 
 ## Auth URLs in code
 
-Sign-up uses `emailRedirectTo` → `{origin}/auth/callback`. Password reset uses `redirectTo` → `/auth/callback?next=/dashboard/security?pw=1`. Resend verification passes the same `emailRedirectTo`.
+Sign-up uses `emailRedirectTo` → `{origin}/auth/callback`. Password reset (`POST /api/auth/request-password-reset`) uses the same `{origin}` with `redirectTo` → `/auth/callback?next=/dashboard/security?pw=1`. Resend verification passes the same `emailRedirectTo`.
 
-The app resolves `{origin}` as **`NEXT_PUBLIC_SITE_URL`** (trimmed, no trailing slash) when set, otherwise the current browser origin. Set `NEXT_PUBLIC_SITE_URL=https://firenepal.com` on Vercel Production so email links always target the live site. Ensure those full URLs are allowed under **Redirect URLs** as above.
+The app resolves `{origin}` as **`NEXT_PUBLIC_SITE_URL`** (trimmed, no trailing slash) when set; otherwise the **browser** uses `window.location.origin`, and **forgot-password API routes** use the incoming request origin. Set `NEXT_PUBLIC_SITE_URL=https://firenepal.com` on Vercel Production so email links always target the live site. Ensure those full URLs are allowed under **Redirect URLs** as above.
