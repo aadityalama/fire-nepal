@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
+import { MembershipPaymentSuccessDialog } from "@/components/membership/MembershipPaymentSuccessDialog";
 import {
   deriveFireNepalId,
   membershipActiveIso,
@@ -20,7 +21,12 @@ import {
   USAGE_LIMITS,
   type FireMembershipTier,
 } from "@/lib/fire-membership";
-import { PAYMENT_METHOD_LABEL, type MembershipPaymentMethod, type MembershipRequestPlan } from "@/lib/membership-payment";
+import {
+  PAYMENT_METHOD_LABEL,
+  type MembershipPaymentSuccessPayload,
+  type MembershipPaymentMethod,
+  type MembershipRequestPlan,
+} from "@/lib/membership-payment";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type CompareCell = boolean | "limited";
@@ -274,6 +280,7 @@ export function FireMembershipPage() {
   const [confirmDowngrade, setConfirmDowngrade] = useState<FireMembershipTier | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("yearly");
   const [paymentPlan, setPaymentPlan] = useState<MembershipRequestPlan | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState<MembershipPaymentSuccessPayload | null>(null);
   const founderCountdown = useFounderWindowCountdown();
 
   const onSelectTier = useCallback(
@@ -658,7 +665,9 @@ export function FireMembershipPage() {
         </div>
       </div>
 
-      <MembershipMyRequestsPanel />
+      <section id="membership-request-status" className="scroll-mt-28">
+        <MembershipMyRequestsPanel />
+      </section>
 
       {confirmDowngrade ? (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 backdrop-blur-xl">
@@ -770,6 +779,23 @@ export function FireMembershipPage() {
           : "Tier is stored in this browser until cloud billing is connected."}
       </p>
 
+      <MembershipPaymentSuccessDialog
+        open={paymentSuccess !== null}
+        onOpenChange={(o) => {
+          if (!o) setPaymentSuccess(null);
+        }}
+        payload={paymentSuccess}
+        onViewMembershipStatus={() => {
+          window.dispatchEvent(new Event("fn-membership-requests-reload"));
+          requestAnimationFrame(() => {
+            document.getElementById("membership-request-status")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          });
+        }}
+      />
+
       {paymentPlan ? (
         <MembershipPaymentModal
           key={paymentPlan}
@@ -778,7 +804,8 @@ export function FireMembershipPage() {
             if (!o) setPaymentPlan(null);
           }}
           plan={paymentPlan}
-          onSubmitted={() => {
+          onSubmitted={(payload) => {
+            setPaymentSuccess(payload);
             void syncServerEntitlement();
             window.dispatchEvent(new Event("fn-membership-requests-reload"));
           }}

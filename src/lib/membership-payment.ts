@@ -4,6 +4,14 @@ export const MEMBERSHIP_PAYMENT_BUCKET = "membership_payment_proofs" as const;
 
 export type MembershipRequestPlan = "premium" | "elite";
 
+/** Client payload after a successful POST /api/membership-requests */
+export type MembershipPaymentSuccessPayload = {
+  requestId: string;
+  plan: MembershipRequestPlan;
+  createdAtIso: string;
+  status: "pending" | "approved" | "rejected";
+};
+
 export type MembershipPaymentMethod = "khalti_qr" | "esewa_qr" | "global_ime_qr";
 
 export const MEMBERSHIP_PLAN_PRICE_NPR: Record<MembershipRequestPlan, number> = {

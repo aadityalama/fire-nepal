@@ -8,6 +8,7 @@ import {
   MEMBERSHIP_PLAN_PRICE_NPR,
   PAYMENT_METHOD_LABEL,
   type MembershipPaymentMethod,
+  type MembershipPaymentSuccessPayload,
   type MembershipRequestPlan,
   membershipQrImageUrl,
   paymentInstructions,
@@ -17,7 +18,7 @@ export type MembershipPaymentModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   plan: MembershipRequestPlan;
-  onSubmitted?: () => void;
+  onSubmitted?: (payload: MembershipPaymentSuccessPayload) => void;
 };
 
 const METHODS: MembershipPaymentMethod[] = ["khalti_qr", "esewa_qr", "global_ime_qr"];
@@ -86,10 +87,34 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
         toast.error(msg);
         return;
       }
-      toast.success("Payment proof submitted. We will review and activate your plan shortly.");
+      const j = (await r.json().catch(() => ({}))) as {
+        request?: {
+          id?: string;
+          created_at?: string;
+          status?: MembershipPaymentSuccessPayload["status"];
+          plan_type?: MembershipRequestPlan;
+        };
+      };
+      const row = j.request;
+      if (!row?.id || !row.created_at || (row.plan_type !== "premium" && row.plan_type !== "elite")) {
+        toast.error(
+          "We received an unexpected response. Your payment may still have been saved — check membership status.",
+        );
+        onOpenChange(false);
+        window.dispatchEvent(new Event("fn-membership-requests-reload"));
+        return;
+      }
+      const payload: MembershipPaymentSuccessPayload = {
+        requestId: row.id,
+        plan: row.plan_type,
+        createdAtIso: row.created_at,
+        status: row.status === "approved" || row.status === "rejected" ? row.status : "pending",
+      };
       onOpenChange(false);
-      onSubmitted?.();
-    } catch {
+      toast.success("Payment submitted. We will review your membership request within 24 hours.");
+      onSubmitted?.(payload);
+    } catch (e) {
+      console.error("MEMBERSHIP_CLIENT_SUBMIT_NETWORK", e);
       toast.error("Network error — try again.");
     } finally {
       setBusy(false);

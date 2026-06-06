@@ -13,18 +13,6 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
 
-function formatPostgrestError(err: {
-  message?: string;
-  details?: string | null;
-  hint?: string | null;
-  code?: string | null;
-}): string {
-  const parts = [err.message, err.details, err.hint].filter((p) => typeof p === "string" && p.trim().length > 0);
-  const base = parts.join(" — ").trim();
-  if (base) return err.code ? `${base} (${err.code})` : base;
-  return err.code ? `Database error (${err.code})` : "Database error";
-}
-
 function extFromMime(mime: string): string {
   if (mime === "image/png") return "png";
   if (mime === "image/webp") return "webp";
@@ -57,13 +45,14 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("MEMBERSHIP_LIST_ERROR", error);
+      return NextResponse.json({ error: "Could not load your membership requests." }, { status: 500 });
     }
 
     return NextResponse.json({ requests: data ?? [] });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("MEMBERSHIP_GET_UNHANDLED", e instanceof Error ? e.stack ?? e.message : e);
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }
 
@@ -139,9 +128,11 @@ export async function POST(request: Request) {
       upsert: false,
     });
     if (upErr) {
-      console.error("MEMBERSHIP_UPLOAD_ERROR", upErr);
-      const msg = upErr.message?.trim() || "Storage upload failed";
-      return NextResponse.json({ error: msg }, { status: 500 });
+      console.error("MEMBERSHIP_UPLOAD_ERROR", JSON.stringify(upErr, null, 2), upErr);
+      return NextResponse.json(
+        { error: "We couldn't upload your payment proof. Check your file and connection, then try again." },
+        { status: 500 },
+      );
     }
 
     // Service-role insert: proof is already stored with service role; RLS `to authenticated` can block
@@ -158,19 +149,24 @@ export async function POST(request: Request) {
         reference,
         status: "pending",
       })
-      .select("id, created_at, status")
+      .select("id, created_at, status, plan_type")
       .single();
 
     if (insErr) {
-      console.error("MEMBERSHIP_INSERT_ERROR", insErr);
+      console.error("MEMBERSHIP_INSERT_ERROR", JSON.stringify(insErr, null, 2), insErr);
       await admin.storage.from(MEMBERSHIP_PAYMENT_BUCKET).remove([proof_url]);
-      return NextResponse.json({ error: formatPostgrestError(insErr) }, { status: 500 });
+      return NextResponse.json(
+        { error: "We couldn't save your membership request. Please try again in a few minutes." },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ request: row });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Server error";
-    console.error("MEMBERSHIP_POST_UNHANDLED", e);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("MEMBERSHIP_POST_UNHANDLED", e instanceof Error ? e.stack ?? e.message : e);
+    return NextResponse.json(
+      { error: "Something went wrong while submitting your request. Please try again." },
+      { status: 500 },
+    );
   }
 }
