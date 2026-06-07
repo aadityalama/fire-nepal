@@ -38,6 +38,13 @@ function formatNpr(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(n);
 }
 
+function formatLastCronSubtitle(lastCronStatus: string | null): string {
+  if (!lastCronStatus) return "No runs recorded";
+  if (lastCronStatus === "never") return "Awaiting first cron execution";
+  if (lastCronStatus === "running") return "Last run started; check again if this persists";
+  return lastCronStatus;
+}
+
 function StatTile({
   label,
   value,
@@ -304,7 +311,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
                 ? format(parseISO(snapshot.systemHealth.lastCronAt), "MMM d, HH:mm")
                 : "—"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">{snapshot.systemHealth.lastCronStatus ?? "No runs recorded"}</p>
+            <p className="mt-1 text-xs text-zinc-500">{formatLastCronSubtitle(snapshot.systemHealth.lastCronStatus)}</p>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Deployment</p>

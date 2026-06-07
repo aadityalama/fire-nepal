@@ -347,9 +347,17 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   let lastCronAt: string | null = null;
   let lastCronStatus: string | null = null;
   if (sb) {
-    const { data: health } = await sb.from("system_health").select("*").eq("id", "scheduled_reminders_cron").maybeSingle();
-    lastCronAt = health?.last_run_at ?? null;
-    lastCronStatus = health?.last_status ?? null;
+    const { data: health, error: healthErr } = await sb
+      .from("system_health")
+      .select("*")
+      .eq("id", "scheduled_reminders_cron")
+      .maybeSingle();
+    if (healthErr) {
+      lastCronStatus = `system_health read failed: ${healthErr.message}`.slice(0, 220);
+    } else {
+      lastCronAt = health?.last_run_at ?? null;
+      lastCronStatus = health?.last_status ?? null;
+    }
   }
 
   return {

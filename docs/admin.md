@@ -40,6 +40,13 @@ npm run admin:grant -- --email you@example.com
 - **`reminder_logs`** — `email_failed` rows are written when the scheduled reminder cron cannot deliver via Resend.
 - **`scheduled_reminder_email_sends`** — Deduped send log; counts drive “reminder emails sent” and activity charts.
 
+## Smart reminders cron (`system_health`)
+
+- **Vercel** — `vercel.json` registers `GET /api/cron/scheduled-reminders` (see `crons[].schedule`). The handler writes `public.system_health` row `scheduled_reminders_cron` (`last_run_at`, `last_status`, `metadata`) so **Admin → System health → Last cron** stays accurate.
+- **`CRON_SECRET`** — Optional in dev; in production, set a random secret on Vercel. Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations; the route returns `401` if the header does not match.
+- **Plan limits** — Vercel **Hobby** allows at most **once-per-day** cron expressions; a per-minute schedule requires **Pro** (or another scheduler hitting the same route). If deploy fails with a Hobby cron error, either upgrade or change `vercel.json` to a daily expression and accept that reminders only reconcile around that UTC window unless you use an external pinger.
+- **Database** — If “Last cron” shows an error or empty metrics, confirm migrations ran (including `system_health` seed / `20260608120000_system_health_cron_row.sql`) and that **`SUPABASE_SERVICE_ROLE_KEY`** is set on Vercel (the cron cannot log health or send without it).
+
 ## Membership QR payments
 
 - **`/admin/membership-requests`** — Review pending **Premium** / **Elite** payment proofs (Khalti, eSewa, Global IME QR). Each request stores **`amount_npr`** at submission (quoted price for that submission). **Approve** updates `profiles.plan_type`, upserts `subscriptions` (one year, `amount_minor` from that stored NPR amount), and appends **`revenue_events`** with `event_type = membership_payment`, the same `amount_npr`, `plan_type`, `payment_method`, and `membership_request_id`. **Reject** only updates request status. Missing ledger rows for older approvals: `npm run revenue:backfill-membership` (optional `--dry-run`). After a run, the script prints **verification** (row count, sums, catalog 500/800 check). Read-only check: `npm run revenue:verify-membership` (same env as backfill).
