@@ -11,8 +11,15 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminMembersPage() {
+export default async function AdminMembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
   await requireAdminUserId();
+  const sp = await searchParams;
   const { members, error } = await fetchAdminMembers();
-  return <AdminMembersClient initialMembers={members} initialError={error} />;
+  return (
+    <AdminMembersClient initialMembers={members} initialError={error} initialFilter={sp.filter} />
+  );
 }

@@ -3,6 +3,7 @@ import "server-only";
 import { endOfDay, formatISO, startOfDay, subDays } from "date-fns";
 import type { User } from "@supabase/supabase-js";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
+import { buildMembershipRenewalSnapshot, type AdminMembershipRenewalSnapshot } from "@/lib/admin/membership-renewal-snapshot";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -16,11 +17,19 @@ export type AdminSignupRow = {
 
 export type AdminDailyPoint = { date: string; value: number };
 
+export type AdminMembershipRequestsSummary = {
+  pending: number;
+  approvedToday: number;
+  rejectedToday: number;
+};
+
 export type AdminSnapshot = {
   configured: boolean;
   serviceRoleConfigured: boolean;
   /** When service role or listUsers fails, partial UI still renders. */
   loadError: string | null;
+  membershipRenewal: AdminMembershipRenewalSnapshot;
+  membershipRequestsSummary: AdminMembershipRequestsSummary;
   metrics: {
     totalUsers: number;
     newUsersToday: number;
@@ -83,6 +92,19 @@ function cumulativeSeries(daily: AdminDailyPoint[]): AdminDailyPoint[] {
   });
 }
 
+function emptyMembershipRenewal(): AdminMembershipRenewalSnapshot {
+  return {
+    queue: { expiringIn7Days: 0, expiringIn30DaysExcluding7: 0, alreadyExpired: 0 },
+    kpi: { expiringThisWeek: 0, expiredMembers: 0, pendingRenewals: 0 },
+    expiringSoonWidget: [],
+    expiredWidget: [],
+  };
+}
+
+function emptyMembershipRequestsSummary(): AdminMembershipRequestsSummary {
+  return { pending: 0, approvedToday: 0, rejectedToday: 0 };
+}
+
 export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   const emptyCharts = (): AdminSnapshot["charts"] => ({
     userGrowth30d: [],
@@ -96,6 +118,8 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       configured: false,
       serviceRoleConfigured: false,
       loadError: "Supabase is not configured.",
+      membershipRenewal: emptyMembershipRenewal(),
+      membershipRequestsSummary: emptyMembershipRequestsSummary(),
       metrics: {
         totalUsers: 0,
         newUsersToday: 0,
@@ -149,12 +173,55 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     loadError = "SUPABASE_SERVICE_ROLE_KEY is not set — admin metrics need the service role on the server.";
   }
 
-  const profileByUser = new Map<string, { plan_type: string; last_active_at: string | null }>();
+  const profileByUser = new Map<
+    string,
+    { plan_type: string; last_active_at: string | null; expires_at: string | null; suspended_at: string | null }
+  >();
   if (sb) {
-    const { data: profiles, error: pErr } = await sb.from("profiles").select("id, plan_type, last_active_at");
+    const { data: profiles, error: pErr } = await sb
+      .from("profiles")
+      .select("id, plan_type, last_active_at, expires_at, suspended_at");
     if (pErr) loadError = loadError ?? pErr.message;
     for (const row of profiles ?? []) {
-      profileByUser.set(row.id, { plan_type: row.plan_type, last_active_at: row.last_active_at });
+      profileByUser.set(row.id, {
+        plan_type: row.plan_type,
+        last_active_at: row.last_active_at,
+        expires_at: row.expires_at,
+        suspended_at: row.suspended_at,
+      });
+    }
+  }
+
+  const subEndByUser = new Map<string, string | null>();
+  if (sb) {
+    const { data: subs, error: sErr } = await sb.from("subscriptions").select("user_id, current_period_end");
+    if (sErr) loadError = loadError ?? sErr.message;
+    for (const row of subs ?? []) {
+      subEndByUser.set(row.user_id, row.current_period_end);
+    }
+  }
+
+  let pendingMembershipRequests = 0;
+  let approvedMembershipToday = 0;
+  let rejectedMembershipToday = 0;
+  if (sb) {
+    const { count: pendC, error: pendErr } = await sb
+      .from("membership_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending");
+    if (pendErr) loadError = loadError ?? pendErr.message;
+    pendingMembershipRequests = pendC ?? 0;
+
+    const { data: reviewedToday, error: revErr } = await sb
+      .from("membership_requests")
+      .select("status, reviewed_at")
+      .not("reviewed_at", "is", null)
+      .gte("reviewed_at", todayStart.toISOString())
+      .lte("reviewed_at", todayEnd.toISOString());
+    if (revErr) loadError = loadError ?? revErr.message;
+    for (const row of reviewedToday ?? []) {
+      if (row.status === "approved") approvedMembershipToday += 1;
+      if (row.status === "rejected") rejectedMembershipToday += 1;
     }
   }
 
@@ -360,10 +427,27 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     }
   }
 
+  const membershipRenewal =
+    users.length > 0
+      ? buildMembershipRenewalSnapshot(
+          users,
+          profileByUser,
+          subEndByUser,
+          userProfilesName,
+          pendingMembershipRequests,
+        )
+      : emptyMembershipRenewal();
+
   return {
     configured: true,
     serviceRoleConfigured,
     loadError,
+    membershipRenewal,
+    membershipRequestsSummary: {
+      pending: pendingMembershipRequests,
+      approvedToday: approvedMembershipToday,
+      rejectedToday: rejectedMembershipToday,
+    },
     metrics: {
       totalUsers,
       newUsersToday,

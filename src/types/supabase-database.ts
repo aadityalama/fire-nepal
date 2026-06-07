@@ -252,6 +252,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      admin_member_notes: {
+        Row: {
+          id: string;
+          user_id: string;
+          body: string;
+          author_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          body: string;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          author_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       membership_requests: {
         Row: {
           id: string;

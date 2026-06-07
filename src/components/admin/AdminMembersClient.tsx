@@ -19,8 +19,24 @@ type MemberFilter =
   | "elite"
   | "active"
   | "expiring_soon"
+  | "expiring_in_30"
   | "expired"
   | "suspended";
+
+function parseMemberFilter(v: string | undefined): MemberFilter {
+  const allowed = new Set<MemberFilter>([
+    "all",
+    "free",
+    "premium",
+    "elite",
+    "active",
+    "expiring_soon",
+    "expiring_in_30",
+    "expired",
+    "suspended",
+  ]);
+  return v && allowed.has(v as MemberFilter) ? (v as MemberFilter) : "all";
+}
 
 function StatusBadge({ bucket }: { bucket: MembershipUiBucket }) {
   const styles: Record<MembershipUiBucket, string> = {
@@ -63,14 +79,16 @@ function PlanPill({ plan }: { plan: AdminMemberRow["planType"] }) {
 export function AdminMembersClient({
   initialMembers,
   initialError,
+  initialFilter,
 }: {
   initialMembers: AdminMemberRow[];
   initialError: string | null;
+  initialFilter?: string;
 }) {
   const [members, setMembers] = useState<AdminMemberRow[]>(initialMembers);
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<MemberFilter>("all");
+  const [filter, setFilter] = useState<MemberFilter>(() => parseMemberFilter(initialFilter));
   const [menuUserId, setMenuUserId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [renewTarget, setRenewTarget] = useState<AdminMemberRow | null>(null);
@@ -114,6 +132,12 @@ export function AdminMembersClient({
       if (filter === "elite" && row.planType !== "elite") return false;
       if (filter === "active" && bucket !== "active") return false;
       if (filter === "expiring_soon" && bucket !== "expiring_soon") return false;
+      if (filter === "expiring_in_30") {
+        if (row.suspendedAt) return false;
+        if (row.planType !== "premium" && row.planType !== "elite") return false;
+        const d = membershipDaysRemaining(row.expiresAt);
+        return d !== null && d >= 8 && d <= 30;
+      }
       if (filter === "expired" && bucket !== "expired") return false;
       if (filter === "suspended" && bucket !== "suspended") return false;
       if (!q) return true;
@@ -229,7 +253,8 @@ export function AdminMembersClient({
                 <option value="premium">Premium</option>
                 <option value="elite">Elite</option>
                 <option value="active">Active</option>
-                <option value="expiring_soon">Expiring soon</option>
+                <option value="expiring_soon">Expiring soon (≤7d)</option>
+                <option value="expiring_in_30">Expiring 8–30 days</option>
                 <option value="expired">Expired</option>
                 <option value="suspended">Suspended</option>
               </select>
@@ -239,7 +264,7 @@ export function AdminMembersClient({
         </div>
 
         <div className="mt-5 overflow-x-auto rounded-xl border border-white/[0.06]" ref={menuRef}>
-          <table className="w-full min-w-[960px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] bg-black/25 text-[10px] font-black uppercase tracking-widest text-zinc-500">
                 <th className="px-4 py-3">Member</th>
@@ -248,6 +273,7 @@ export function AdminMembersClient({
                 <th className="px-4 py-3">Activated</th>
                 <th className="px-4 py-3">Expires</th>
                 <th className="px-4 py-3">Days left</th>
+                <th className="px-4 py-3">Details</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -304,6 +330,14 @@ export function AdminMembersClient({
                         {daysLabel}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/members/${row.id}`}
+                        className="text-xs font-bold text-emerald-300 underline-offset-2 hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </td>
                     <td className="relative px-4 py-3 text-right">
                       <button
                         type="button"
@@ -318,12 +352,19 @@ export function AdminMembersClient({
                       </button>
                       {open ? (
                         <div className="absolute right-4 z-20 mt-1 w-48 rounded-xl border border-white/10 bg-[#0a1a14] py-1 shadow-xl">
+                          <Link
+                            href={`/admin/members/${row.id}`}
+                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/[0.06]"
+                            onClick={() => setMenuUserId(null)}
+                          >
+                            Member detail
+                          </Link>
                           <button
                             type="button"
-                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/[0.06]"
+                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-zinc-400 hover:bg-white/[0.06]"
                             onClick={() => scrollToUser(row.id)}
                           >
-                            View (scroll to row)
+                            Scroll to row
                           </button>
                           {(row.planType === "premium" || row.planType === "elite") && !row.suspendedAt ? (
                             <button

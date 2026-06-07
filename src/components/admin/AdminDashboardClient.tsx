@@ -3,14 +3,18 @@
 import { format, isBefore, parseISO, subDays } from "date-fns";
 import {
   Activity,
+  AlertOctagon,
   ArrowDownRight,
   ArrowUpRight,
+  CalendarClock,
   Download,
+  Inbox,
   Mail,
   RefreshCw,
   Server,
   Shield,
   Sparkles,
+  Timer,
   Users,
   Wallet,
 } from "lucide-react";
@@ -170,6 +174,8 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
 
   const overview = snapshot.metrics;
   const re = snapshot.reminderEngine;
+  const mr = snapshot.membershipRenewal;
+  const mrq = snapshot.membershipRequestsSummary;
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -202,13 +208,13 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a
+          <Link
             href="/admin/members"
             className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/12 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/20"
           >
             <Users className="h-3.5 w-3.5" aria-hidden />
             Members
-          </a>
+          </Link>
           <a
             href="/api/admin/export/users"
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"
@@ -245,6 +251,193 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
             hint={`${re.emailsSentThisMonth} sends this month`}
             icon={Activity}
           />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-emerald-200/50">Membership KPIs</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatTile
+            label="Expiring this week"
+            value={String(mr.kpi.expiringThisWeek)}
+            hint="Paid · not suspended · ≤7 days"
+            icon={CalendarClock}
+          />
+          <StatTile
+            label="Expired members"
+            value={String(mr.kpi.expiredMembers)}
+            hint="Paid plan · past expiry"
+            icon={AlertOctagon}
+          />
+          <StatTile
+            label="Pending renewals"
+            value={String(mr.kpi.pendingRenewals)}
+            hint="Membership payment requests"
+            icon={Inbox}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200/55">Renewal queue</h2>
+          <Link
+            href="/admin/members"
+            className="text-xs font-bold text-emerald-300 underline-offset-2 hover:underline"
+          >
+            Members directory
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-200/70">Expiring in 7 days</p>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mr.queue.expiringIn7Days}</p>
+            <Link
+              href="/admin/members?filter=expiring_soon"
+              className="mt-3 inline-block text-xs font-bold text-amber-100 underline-offset-2 hover:underline"
+            >
+              Review →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-200/70">Expiring in 30 days</p>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mr.queue.expiringIn30DaysExcluding7}</p>
+            <p className="mt-1 text-[11px] font-medium text-zinc-500">8–30 day window (excl. next 7 days)</p>
+            <Link
+              href="/admin/members?filter=expiring_in_30"
+              className="mt-2 inline-block text-xs font-bold text-emerald-100 underline-offset-2 hover:underline"
+            >
+              Review →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-200/70">Already expired</p>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mr.queue.alreadyExpired}</p>
+            <Link
+              href="/admin/members?filter=expired"
+              className="mt-3 inline-block text-xs font-bold text-rose-100 underline-offset-2 hover:underline"
+            >
+              Renewals →
+            </Link>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Today&apos;s payment queue:{" "}
+          <span className="font-semibold text-zinc-300">{mrq.pending}</span> pending ·{" "}
+          <span className="font-semibold text-emerald-300/90">{mrq.approvedToday}</span> approved ·{" "}
+          <span className="font-semibold text-rose-300/90">{mrq.rejectedToday}</span> rejected ·{" "}
+          <Link href="/admin/membership-requests" className="font-bold text-emerald-400 hover:underline">
+            Open requests
+          </Link>
+        </p>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">Expiring soon (≤7d)</h3>
+            <Timer className="h-4 w-4 text-amber-300/80" aria-hidden />
+          </div>
+          <div className="mt-3 overflow-x-auto rounded-xl border border-white/[0.06]">
+            <table className="w-full min-w-[280px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/[0.06] text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Plan</th>
+                  <th className="px-3 py-2">Expires</th>
+                  <th className="px-3 py-2 text-right">Days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mr.expiringSoonWidget.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-zinc-500">
+                      No members in this window.
+                    </td>
+                  </tr>
+                ) : (
+                  mr.expiringSoonWidget.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/admin/members/${row.id}`}
+                          className="font-semibold text-emerald-200 hover:underline"
+                        >
+                          {row.name}
+                        </Link>
+                        <p className="truncate font-mono text-[10px] text-zinc-600">{row.email}</p>
+                      </td>
+                      <td className="px-3 py-2 font-bold capitalize text-zinc-200">{row.planType}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">
+                        {format(parseISO(row.expiresAt), "MMM d, yyyy")}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-amber-100">
+                        {row.daysRemaining ?? "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">Expired memberships</h3>
+            <AlertOctagon className="h-4 w-4 text-rose-300/80" aria-hidden />
+          </div>
+          <div className="mt-3 overflow-x-auto rounded-xl border border-white/[0.06]">
+            <table className="w-full min-w-[320px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/[0.06] text-[10px] font-black uppercase tracking-wider text-zinc-500">
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Plan</th>
+                  <th className="px-3 py-2">Expired</th>
+                  <th className="px-3 py-2 text-right">Days out</th>
+                  <th className="px-3 py-2 text-right">Renew</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mr.expiredWidget.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-zinc-500">
+                      No expired paid members in snapshot.
+                    </td>
+                  </tr>
+                ) : (
+                  mr.expiredWidget.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/admin/members/${row.id}`}
+                          className="font-semibold text-emerald-200 hover:underline"
+                        >
+                          {row.name}
+                        </Link>
+                        <p className="truncate font-mono text-[10px] text-zinc-600">{row.email}</p>
+                      </td>
+                      <td className="px-3 py-2 font-bold capitalize text-zinc-200">{row.planType}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">
+                        {format(parseISO(row.expiresAt), "MMM d, yyyy")}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-rose-200">
+                        {row.daysSinceExpired ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Link
+                          href={`/admin/members/${row.id}?renew=1`}
+                          className="rounded-lg border border-emerald-500/35 bg-emerald-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-100 hover:bg-emerald-500/25"
+                        >
+                          Renew
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
