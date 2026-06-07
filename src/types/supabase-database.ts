@@ -259,6 +259,7 @@ export type Database = {
           email: string;
           plan_type: "premium" | "elite";
           payment_method: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          amount_npr: number;
           proof_url: string;
           reference: string | null;
           created_at: string;
@@ -272,6 +273,7 @@ export type Database = {
           email: string;
           plan_type: "premium" | "elite";
           payment_method: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          amount_npr: number;
           proof_url: string;
           reference?: string | null;
           created_at?: string;
@@ -283,6 +285,7 @@ export type Database = {
           email?: string;
           plan_type?: "premium" | "elite";
           payment_method?: "khalti_qr" | "esewa_qr" | "global_ime_qr";
+          amount_npr?: number;
           proof_url?: string;
           reference?: string | null;
           created_at?: string;
@@ -359,6 +362,10 @@ export type Database = {
           note: string | null;
           external_ref: string | null;
           created_at: string;
+          membership_request_id: string | null;
+          plan_type: "premium" | "elite" | null;
+          payment_method: "khalti_qr" | "esewa_qr" | "global_ime_qr" | null;
+          event_type: "membership_payment" | null;
         };
         Insert: {
           id?: string;
@@ -368,6 +375,10 @@ export type Database = {
           note?: string | null;
           external_ref?: string | null;
           created_at?: string;
+          membership_request_id?: string | null;
+          plan_type?: "premium" | "elite" | null;
+          payment_method?: "khalti_qr" | "esewa_qr" | "global_ime_qr" | null;
+          event_type?: "membership_payment" | null;
         };
         Update: {
           user_id?: string | null;
@@ -376,6 +387,10 @@ export type Database = {
           note?: string | null;
           external_ref?: string | null;
           created_at?: string;
+          membership_request_id?: string | null;
+          plan_type?: "premium" | "elite" | null;
+          payment_method?: "khalti_qr" | "esewa_qr" | "global_ime_qr" | null;
+          event_type?: "membership_payment" | null;
         };
         Relationships: [];
       };

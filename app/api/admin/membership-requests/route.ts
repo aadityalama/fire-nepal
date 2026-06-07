@@ -14,7 +14,7 @@ export async function GET() {
   const { data, error } = await admin
     .from("membership_requests")
     .select(
-      "id, user_id, email, plan_type, payment_method, reference, created_at, status, reviewed_at, reviewed_by, proof_url",
+      "id, user_id, email, plan_type, payment_method, amount_npr, reference, created_at, status, reviewed_at, reviewed_by, proof_url",
     )
     .order("created_at", { ascending: false });
 

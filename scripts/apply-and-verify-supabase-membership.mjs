@@ -130,6 +130,7 @@ if (process.env.MEMBERSHIP_E2E_INFRA !== "0") {
       proof_url: proofPath,
       reference: "e2e-smoke",
       status: "pending",
+      amount_npr: 500,
     });
     if (insErr) {
       await admin.storage.from(BUCKET).remove([proofPath]);

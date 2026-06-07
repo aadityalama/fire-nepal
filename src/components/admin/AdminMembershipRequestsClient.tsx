@@ -11,6 +11,8 @@ type Row = {
   email: string;
   plan_type: MembershipRequestPlan;
   payment_method: MembershipPaymentMethod;
+  /** NPR amount quoted at submission time (stored on the request). */
+  amount_npr: number;
   reference: string | null;
   created_at: string;
   status: "pending" | "approved" | "rejected";
@@ -171,6 +173,10 @@ export function AdminMembershipRequestsClient() {
               (rows ?? []).map((row) => {
                 const pending = row.status === "pending";
                 const busy = busyId === row.id;
+                const amount =
+                  typeof row.amount_npr === "number" && Number.isFinite(row.amount_npr)
+                    ? row.amount_npr
+                    : MEMBERSHIP_PLAN_PRICE_NPR[row.plan_type];
                 return (
                   <tr key={row.id} className="border-b border-white/[0.04]">
                     <td className="max-w-[14rem] px-4 py-3">
@@ -184,7 +190,7 @@ export function AdminMembershipRequestsClient() {
                     <td className="px-4 py-3 font-bold text-emerald-100">
                       {row.plan_type === "elite" ? "Elite" : "Premium"}
                       <span className="mt-0.5 block text-[10px] font-semibold text-zinc-500">
-                        {formatNpr(MEMBERSHIP_PLAN_PRICE_NPR[row.plan_type])}/yr
+                        {formatNpr(amount)}/yr
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs font-semibold">{PAYMENT_METHOD_LABEL[row.payment_method]}</td>

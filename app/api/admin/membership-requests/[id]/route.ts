@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { MEMBERSHIP_PLAN_PRICE_NPR, type MembershipRequestPlan } from "@/lib/membership-payment";
+import { type MembershipRequestPlan } from "@/lib/membership-payment";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
@@ -62,9 +62,20 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     return NextResponse.json({ ok: true, status: "rejected" });
   }
 
-  // approve
+  // approve — NPR amount and plan snapshot come from the request row (price at submission time).
   const plan = row.plan_type as MembershipRequestPlan;
-  const amountNpr = MEMBERSHIP_PLAN_PRICE_NPR[plan];
+  const amountNpr = Number((row as { amount_npr?: unknown }).amount_npr);
+  if (!Number.isFinite(amountNpr) || amountNpr <= 0) {
+    return NextResponse.json(
+      { error: "This membership request has no valid amount_npr; apply DB migrations and ensure new requests store amount_npr." },
+      { status: 500 },
+    );
+  }
+  const paymentMethod = (row as { payment_method?: string }).payment_method;
+  if (paymentMethod !== "khalti_qr" && paymentMethod !== "esewa_qr" && paymentMethod !== "global_ime_qr") {
+    return NextResponse.json({ error: "Request has invalid payment_method" }, { status: 500 });
+  }
+
   const periodStart = now;
   const periodEnd = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -112,9 +123,13 @@ export async function PATCH(request: Request, ctx: RouteParams) {
 
   const { error: revErr } = await admin.from("revenue_events").insert({
     user_id: row.user_id,
+    membership_request_id: id,
+    plan_type: plan,
     amount_npr: amountNpr,
+    payment_method: paymentMethod,
+    event_type: "membership_payment",
     kind: "subscription",
-    note: `Manual membership approval (${plan})`,
+    created_at: now,
     external_ref: `membership_request:${id}`,
   });
 

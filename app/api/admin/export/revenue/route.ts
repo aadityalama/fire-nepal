@@ -13,7 +13,9 @@ export async function GET() {
 
   const { data, error } = await sb
     .from("revenue_events")
-    .select("id,user_id,amount_npr,kind,note,external_ref,created_at")
+    .select(
+      "id,user_id,amount_npr,kind,note,external_ref,created_at,membership_request_id,plan_type,payment_method,event_type",
+    )
     .order("created_at", { ascending: false })
     .limit(20000);
 
@@ -21,7 +23,19 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 502 });
   }
 
-  const headers = ["id", "user_id", "amount_npr", "kind", "note", "external_ref", "created_at"];
+  const headers = [
+    "id",
+    "user_id",
+    "amount_npr",
+    "kind",
+    "note",
+    "external_ref",
+    "created_at",
+    "membership_request_id",
+    "plan_type",
+    "payment_method",
+    "event_type",
+  ];
   const rows = (data ?? []).map((r) =>
     headers.map((h) => {
       const v = (r as Record<string, unknown>)[h];

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   MEMBERSHIP_PAYMENT_BUCKET,
+  MEMBERSHIP_PLAN_PRICE_NPR,
   type MembershipPaymentMethod,
   type MembershipRequestPlan,
 } from "@/lib/membership-payment";
@@ -39,7 +40,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("membership_requests")
       .select(
-        "id, email, plan_type, payment_method, reference, created_at, status, reviewed_at, proof_url",
+        "id, email, plan_type, payment_method, amount_npr, reference, created_at, status, reviewed_at, proof_url",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -137,6 +138,8 @@ export async function POST(request: Request) {
 
     // Service-role insert: proof is already stored with service role; RLS `to authenticated` can block
     // the user-scoped PostgREST client in some server contexts even when `getUser()` succeeds.
+    const amount_npr = MEMBERSHIP_PLAN_PRICE_NPR[plan];
+
     const { data: row, error: insErr } = await admin
       .from("membership_requests")
       .insert({
@@ -148,8 +151,9 @@ export async function POST(request: Request) {
         proof_url,
         reference,
         status: "pending",
+        amount_npr,
       })
-      .select("id, created_at, status, plan_type")
+      .select("id, created_at, status, plan_type, amount_npr")
       .single();
 
     if (insErr) {
