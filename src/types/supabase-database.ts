@@ -300,6 +300,9 @@ export type Database = {
           id: string;
           plan_type: "free" | "premium" | "elite";
           last_active_at: string | null;
+          membership_activated_at: string | null;
+          expires_at: string | null;
+          suspended_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -307,12 +310,18 @@ export type Database = {
           id: string;
           plan_type?: "free" | "premium" | "elite";
           last_active_at?: string | null;
+          membership_activated_at?: string | null;
+          expires_at?: string | null;
+          suspended_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           plan_type?: "free" | "premium" | "elite";
           last_active_at?: string | null;
+          membership_activated_at?: string | null;
+          expires_at?: string | null;
+          suspended_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];

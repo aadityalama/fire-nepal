@@ -92,8 +92,20 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     return NextResponse.json({ error: reqErr.message }, { status: 500 });
   }
 
+  const { data: existingProfile } = await admin.from("profiles").select("*").eq("id", row.user_id).maybeSingle();
+
   const { error: profErr } = await admin.from("profiles").upsert(
-    { id: row.user_id, plan_type: plan, updated_at: now },
+    {
+      id: row.user_id,
+      plan_type: plan,
+      last_active_at: (existingProfile as { last_active_at?: string | null } | null)?.last_active_at ?? null,
+      membership_activated_at:
+        (existingProfile as { membership_activated_at?: string | null } | null)?.membership_activated_at ??
+        periodStart,
+      expires_at: periodEnd,
+      suspended_at: (existingProfile as { suspended_at?: string | null } | null)?.suspended_at ?? null,
+      updated_at: now,
+    },
     { onConflict: "id" },
   );
 

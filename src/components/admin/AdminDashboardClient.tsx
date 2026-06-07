@@ -203,6 +203,13 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
         </div>
         <div className="flex flex-wrap gap-2">
           <a
+            href="/admin/members"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/12 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/20"
+          >
+            <Users className="h-3.5 w-3.5" aria-hidden />
+            Members
+          </a>
+          <a
             href="/api/admin/export/users"
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"
           >
