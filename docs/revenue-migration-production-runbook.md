@@ -127,5 +127,6 @@ select coalesce(sum(amount_npr), 0) as total_npr from revenue_events;
 |---------|--------|
 | Script exits: need URL / service key | Complete step 3; ensure no quotes broken and no trailing spaces. |
 | `Inserted: 0`, high `Skipped invalid` | Inspect `membership_requests`: `amount_npr`, `payment_method`, `plan_type` must match API rules (`khalti_qr` / `esewa_qr` / `global_ime_qr`, `premium` / `elite`). |
-| `column revenue_events.membership_request_id does not exist` | Apply migration **`20260607120000_revenue_events_membership_ledger_columns.sql`** (or full **`20250607180000_membership_amount_and_revenue_event_details.sql`** if `membership_requests.amount_npr` is also missing). Then `notify pgrst, 'reload schema';` if PostgREST caches old schema. |
+| `column revenue_events.membership_request_id does not exist` | Apply **`20260607120000_revenue_events_membership_ledger_columns.sql`** (or **`20250607180000_...`** revenue_events section). |
+| `column membership_requests.amount_npr does not exist` | Apply **`20260608100000_membership_requests_amount_npr.sql`**, or the **`membership_requests`** section of **`20250607180000_membership_amount_and_revenue_event_details.sql`**. If **`SET NOT NULL`** fails, some rows still have null `amount_npr` after the `UPDATE` (e.g. invalid `plan_type`); fix those rows, then re-run. |
 | Admin still 0 | Same Supabase project as backfill + redeploy/cache bust (step 7). |
