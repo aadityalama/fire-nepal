@@ -11,6 +11,8 @@
  *   node scripts/backfill-membership-revenue-events.mjs --dry-run
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (.env.local via loadDotEnvLocal).
+ * Production (Node 20+): `node --env-file=.env.production.local scripts/backfill-membership-revenue-events.mjs`
+ * (loads before the script; pair with loadDotEnvLocal or put both keys only in that file).
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -31,6 +33,13 @@ if (!url || !service) {
 const sb = createClient(url, service, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+try {
+  const host = new URL(url).hostname;
+  console.log(`Supabase host: ${host} (verify this is the project you intend to modify)`);
+} catch {
+  console.warn("Could not parse NEXT_PUBLIC_SUPABASE_URL for logging.");
+}
 
 function externalRefForRequest(id) {
   return `membership_request:${id}`;
