@@ -175,6 +175,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
   const overview = snapshot.metrics;
   const re = snapshot.reminderEngine;
   const mr = snapshot.membershipRenewal;
+  const mrr = snapshot.membershipRenewalReminders;
   const mrq = snapshot.membershipRequestsSummary;
 
   return (
@@ -332,6 +333,113 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
         </p>
       </section>
 
+      <section>
+        <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-emerald-200/50">Renewal reminder emails</h2>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Reminders sent (30d)"
+            value={String(mrr.analytics.reminderEmailsSent30d)}
+            hint="Successful membership renewal emails"
+            icon={Mail}
+          />
+          <StatTile
+            label="Pending (due today)"
+            value={String(mrr.analytics.pendingRemindersDueToday)}
+            hint="Auto reminders not yet sent for today"
+            icon={Timer}
+          />
+          <StatTile
+            label="Renewals (30d)"
+            value={String(mrr.analytics.renewalsGenerated30d)}
+            hint="Ledger: membership_payment + admin renew"
+            icon={ArrowUpRight}
+          />
+          <StatTile
+            label="Expired 30d+"
+            value={String(mrr.analytics.expiredMembersNotRenewed30dPlus)}
+            hint="Paid profiles with effective expiry more than 30 days ago"
+            icon={ArrowDownRight}
+          />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">Sent today</h3>
+              <Mail className="h-4 w-4 text-emerald-300/80" aria-hidden />
+            </div>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mrr.renewalEmailsSentToday}</p>
+            <p className="mt-1 text-[11px] font-medium text-zinc-500">Successful sends since midnight (server TZ).</p>
+            <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+              {                mrr.recentSentToday.filter((row) => row.deliveryStatus === "sent").length === 0 ? (
+                <li className="text-zinc-500">No sends logged yet today.</li>
+              ) : (
+                mrr.recentSentToday
+                  .filter((row) => row.deliveryStatus === "sent")
+                  .slice(0, 6)
+                  .map((row) => (
+                  <li key={`${row.userId}-${row.sentAt}`} className="border-b border-white/[0.04] pb-2">
+                    <span className="font-semibold text-emerald-200/90">{row.reminderType}</span>
+                    <span className="mx-1 text-zinc-600">·</span>
+                    <span className="text-zinc-400">{row.email}</span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-zinc-600">
+                      {format(parseISO(row.sentAt), "HH:mm")} · {row.deliveryStatus}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">Upcoming (14d)</h3>
+              <CalendarClock className="h-4 w-4 text-amber-300/80" aria-hidden />
+            </div>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mrr.upcomingRemindersCount}</p>
+            <p className="mt-1 text-[11px] font-medium text-zinc-500">Members with at least one unsent auto reminder in the next two weeks.</p>
+            <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+              {mrr.upcomingSample.length === 0 ? (
+                <li className="text-zinc-500">No upcoming auto reminders in window.</li>
+              ) : (
+                mrr.upcomingSample.map((row) => (
+                  <li key={`${row.userId}-${row.dueDay}-${row.reminderType}`} className="border-b border-white/[0.04] pb-2">
+                    <Link href={`/admin/members/${row.userId}`} className="font-semibold text-emerald-200 hover:underline">
+                      {row.name}
+                    </Link>
+                    <span className="mt-0.5 block text-[10px] text-zinc-500">
+                      {row.reminderType} · due {row.dueDay}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase tracking-[0.16em] text-rose-200/55">Failed (7d)</h3>
+              <AlertOctagon className="h-4 w-4 text-rose-300/80" aria-hidden />
+            </div>
+            <p className="mt-2 font-mono text-3xl font-black text-white">{mrr.failedDeliveries7d}</p>
+            <p className="mt-1 text-[11px] font-medium text-zinc-500">Check Resend dashboard and provider_message in DB.</p>
+            <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+              {mrr.recentFailed.length === 0 ? (
+                <li className="text-zinc-500">No recent failures.</li>
+              ) : (
+                mrr.recentFailed.map((row) => (
+                  <li key={`${row.userId}-${row.sentAt}-fail`} className="border-b border-white/[0.04] pb-2">
+                    <span className="font-semibold text-rose-200/90">{row.reminderType}</span>
+                    <span className="mx-1 text-zinc-600">·</span>
+                    <span className="text-zinc-400">{row.email}</span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-zinc-600">
+                      {format(parseISO(row.sentAt), "MMM d, HH:mm")}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-4 backdrop-blur-xl sm:p-5">
           <div className="flex items-center justify-between gap-2">
@@ -477,7 +585,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
           <Server className="h-4 w-4 text-emerald-400/80" aria-hidden />
           <h2 className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200/55">System health</h2>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Supabase</p>
             <p className={`mt-2 text-sm font-bold ${snapshot.systemHealth.supabaseOk ? "text-emerald-300" : "text-rose-300"}`}>
@@ -504,14 +612,30 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
             </p>
             <p className="mt-1 text-xs text-zinc-500">{snapshot.systemHealth.resendMessage}</p>
           </div>
-          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Last cron</p>
-            <p className="mt-2 text-sm font-bold text-white">
-              {snapshot.systemHealth.lastCronAt
-                ? format(parseISO(snapshot.systemHealth.lastCronAt), "MMM d, HH:mm")
-                : "—"}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">{formatLastCronSubtitle(snapshot.systemHealth.lastCronStatus)}</p>
+          <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4 sm:col-span-2 lg:col-span-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Crons (Vercel daily)</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Smart reminders</p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {snapshot.systemHealth.lastCronAt
+                    ? format(parseISO(snapshot.systemHealth.lastCronAt), "MMM d, HH:mm")
+                    : "—"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">{formatLastCronSubtitle(snapshot.systemHealth.lastCronStatus)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Membership renewal emails</p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {snapshot.systemHealth.membershipRenewalCronAt
+                    ? format(parseISO(snapshot.systemHealth.membershipRenewalCronAt), "MMM d, HH:mm")
+                    : "—"}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {formatLastCronSubtitle(snapshot.systemHealth.membershipRenewalCronStatus)}
+                </p>
+              </div>
+            </div>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Deployment</p>

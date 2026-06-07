@@ -319,6 +319,72 @@ export type Database = {
         };
         Relationships: [];
       };
+      membership_reminder_emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          reminder_type: string;
+          sent_at: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          membership_plan: "premium" | "elite";
+          expires_at: string;
+          subject: string | null;
+          provider_message: string | null;
+          resend_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          reminder_type: string;
+          sent_at?: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          membership_plan: "premium" | "elite";
+          expires_at: string;
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          email?: string;
+          reminder_type?: string;
+          sent_at?: string;
+          delivery_status?: "sent" | "failed" | "skipped";
+          membership_plan?: "premium" | "elite";
+          expires_at?: string;
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+        };
+        Relationships: [];
+      };
+      membership_reminder_queue: {
+        Row: {
+          id: string;
+          user_id: string;
+          reminder_type: string;
+          membership_expires_at: string;
+          scheduled_for: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          reminder_type: string;
+          membership_expires_at: string;
+          scheduled_for: string;
+          created_at?: string;
+        };
+        Update: {
+          reminder_type?: string;
+          membership_expires_at?: string;
+          scheduled_for?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

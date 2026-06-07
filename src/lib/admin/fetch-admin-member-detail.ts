@@ -1,5 +1,12 @@
 import "server-only";
 
+import { parseISO, startOfDay } from "date-fns";
+import type { AutoReminderType } from "@/lib/membership-renewal-reminders/reminder-eligibility";
+import {
+  formatMembershipReminderType,
+  MEMBERSHIP_AUTO_REMINDER_TYPES,
+  nextUnsentAutoReminder,
+} from "@/lib/membership-renewal-reminders/reminder-next";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
 export type AdminMemberNoteRow = {
@@ -9,6 +16,23 @@ export type AdminMemberNoteRow = {
   author_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type AdminMemberReminderRow = {
+  id: string;
+  reminder_type: string;
+  sent_at: string;
+  delivery_status: string;
+  membership_plan: string;
+  expires_at: string;
+  subject: string | null;
+};
+
+export type AdminMemberReminderSummary = {
+  lastSentAt: string | null;
+  lastReminderTypeLabel: string | null;
+  nextReminderLabel: string | null;
+  nextReminderDueDay: string | null;
 };
 
 export type AdminMemberDetail = {
@@ -26,6 +50,8 @@ export type AdminMemberDetail = {
     current_period_end: string | null;
   } | null;
   notes: AdminMemberNoteRow[];
+  reminders: AdminMemberReminderRow[];
+  reminderSummary: AdminMemberReminderSummary;
 };
 
 export async function fetchAdminMemberDetail(userId: string): Promise<AdminMemberDetail | null> {
@@ -70,6 +96,56 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
   const noteRows: AdminMemberNoteRow[] =
     !nErr && notes ? (notes as AdminMemberNoteRow[]) : [];
 
+  const { data: remRows, error: remErr } = await admin
+    .from("membership_reminder_emails")
+    .select("id, reminder_type, sent_at, delivery_status, membership_plan, expires_at, subject")
+    .eq("user_id", userId)
+    .order("sent_at", { ascending: false })
+    .limit(80);
+
+  const reminders: AdminMemberReminderRow[] =
+    !remErr && remRows
+      ? remRows.map((r) => ({
+          id: r.id,
+          reminder_type: r.reminder_type,
+          sent_at: r.sent_at,
+          delivery_status: r.delivery_status,
+          membership_plan: r.membership_plan,
+          expires_at: r.expires_at,
+          subject: r.subject ?? null,
+        }))
+      : [];
+
+  const lastSent = reminders.find((r) => r.delivery_status === "sent");
+  let nextReminderLabel: string | null = null;
+  let nextReminderDueDay: string | null = null;
+  const summaryExpiresIso = expiresAt;
+  if (
+    summaryExpiresIso &&
+    (planType === "premium" || planType === "elite") &&
+    !(prof?.suspended_at ?? null)
+  ) {
+    const expDt = parseISO(summaryExpiresIso);
+    if (!Number.isNaN(expDt.getTime())) {
+      const sentTypes = new Set<AutoReminderType>();
+      const autoList = MEMBERSHIP_AUTO_REMINDER_TYPES as readonly string[];
+      for (const r of reminders) {
+        if (
+          r.expires_at === summaryExpiresIso &&
+          r.delivery_status === "sent" &&
+          autoList.includes(r.reminder_type)
+        ) {
+          sentTypes.add(r.reminder_type as AutoReminderType);
+        }
+      }
+      const next = nextUnsentAutoReminder(expDt, new Date(), sentTypes, 180);
+      if (next) {
+        nextReminderLabel = formatMembershipReminderType(next.kind);
+        nextReminderDueDay = startOfDay(next.on).toISOString().slice(0, 10);
+      }
+    }
+  }
+
   return {
     userId,
     email: u.email ?? "—",
@@ -87,5 +163,12 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
         }
       : null,
     notes: noteRows,
+    reminders,
+    reminderSummary: {
+      lastSentAt: lastSent?.sent_at ?? null,
+      lastReminderTypeLabel: lastSent ? formatMembershipReminderType(lastSent.reminder_type) : null,
+      nextReminderLabel,
+      nextReminderDueDay,
+    },
   };
 }

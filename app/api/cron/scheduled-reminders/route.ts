@@ -1,7 +1,47 @@
 import { NextResponse } from "next/server";
-import { upsertScheduledRemindersCronHealth } from "@/lib/scheduled-reminders/cron-health";
+import { runMembershipRenewalRemindersCron } from "@/lib/membership-renewal-reminders/cron-dispatch";
+import {
+  upsertMembershipRenewalRemindersCronHealth,
+  upsertScheduledRemindersCronHealth,
+} from "@/lib/scheduled-reminders/cron-health";
 import { runScheduledRemindersCron } from "@/lib/scheduled-reminders/cron-dispatch";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+
+type ServiceSb = NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+
+async function runMembershipRenewalWithHealth(sb: ServiceSb, scheduleFromVercel: string | null) {
+  try {
+    const membershipRenewal = await runMembershipRenewalRemindersCron(new Date());
+    const mh = await upsertMembershipRenewalRemindersCronHealth(sb, {
+      last_status: membershipRenewal.ok ? "ok" : "error",
+      metadata: {
+        ...membershipRenewal,
+        schedule: scheduleFromVercel,
+      },
+    });
+    if (!mh.ok) {
+      console.error("[cron/scheduled-reminders] membership renewal system_health upsert failed:", mh.message);
+    }
+    return membershipRenewal;
+  } catch (me) {
+    const inner = me instanceof Error ? me.message : "Membership renewal cron failed";
+    const mh = await upsertMembershipRenewalRemindersCronHealth(sb, {
+      last_status: "exception",
+      metadata: { error: inner, schedule: scheduleFromVercel },
+    });
+    if (!mh.ok) {
+      console.error("[cron/scheduled-reminders] membership renewal exception upsert failed:", mh.message);
+    }
+    return {
+      ok: false as const,
+      error: inner,
+      candidates: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+    };
+  }
+}
 
 /** Hobby-safe daily cron in `vercel.json`; route reconciles a multi-day lookback window per run. */
 export const maxDuration = 300;
@@ -61,9 +101,12 @@ export async function GET(request: Request) {
       console.error("[cron/scheduled-reminders] system_health finish upsert failed:", done.message);
     }
 
+    const membershipRenewal = await runMembershipRenewalWithHealth(sb, scheduleFromVercel);
+
     return NextResponse.json(
       {
         ...result,
+        membershipRenewal,
         mode: secret ? "authenticated" : "dev-open",
         schedule: scheduleFromVercel ?? "0 6 * * *",
         provider: "resend",
@@ -80,6 +123,10 @@ export async function GET(request: Request) {
     if (!done.ok) {
       console.error("[cron/scheduled-reminders] system_health exception upsert failed:", done.message);
     }
-    return NextResponse.json({ ok: false, error: msg, healthLogged: done.ok }, { status: 500 });
+    const membershipRenewal = await runMembershipRenewalWithHealth(sb, scheduleFromVercel);
+    return NextResponse.json(
+      { ok: false, error: msg, healthLogged: done.ok, membershipRenewal },
+      { status: 500 },
+    );
   }
 }

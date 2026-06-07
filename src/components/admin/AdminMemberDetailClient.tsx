@@ -1,10 +1,12 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { ArrowLeft, Loader2, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, Eye, Loader2, Mail, Pencil, Plus, Send } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import type { AdminMemberDetail, AdminMemberNoteRow } from "@/lib/admin/fetch-admin-member-detail";
+import { formatMembershipReminderType } from "@/lib/membership-renewal-reminders/reminder-next";
 import {
   membershipUiBucket,
   type MembershipUiBucket,
@@ -46,6 +48,7 @@ export function AdminMemberDetailClient({
   detail: AdminMemberDetail;
   initialRenewOpen: boolean;
 }) {
+  const router = useRouter();
   const bucket = membershipUiBucket({
     planType: detail.planType,
     expiresAtIso: detail.expiresAt,
@@ -61,6 +64,14 @@ export function AdminMemberDetailClient({
   const [renewDays, setRenewDays] = useState("365");
   const [renewAmount, setRenewAmount] = useState("");
   const [renewBusy, setRenewBusy] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+
+  const reminderTimeline = useMemo(
+    () => [...detail.reminders].sort((a, b) => a.sent_at.localeCompare(b.sent_at)),
+    [detail.reminders],
+  );
 
   const reloadNotes = useCallback(async () => {
     const r = await fetch(`/api/admin/members/${detail.userId}/notes`, {
@@ -150,6 +161,35 @@ export function AdminMemberDetailClient({
   };
 
   const canRenew = detail.planType === "premium" || detail.planType === "elite";
+  const remindersDisabled = Boolean(detail.suspendedAt);
+
+  const runReminderAction = async (action: "preview" | "send_now" | "resend_last") => {
+    setReminderBusy(true);
+    try {
+      const r = await fetch(`/api/admin/members/${detail.userId}/reminders`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const j = (await r.json()) as {
+        error?: string;
+        preview?: { subject: string; html: string; text: string };
+      };
+      if (!r.ok) {
+        window.alert(j.error ?? "Request failed");
+        return;
+      }
+      if (action === "preview" && j.preview?.html) {
+        setPreviewHtml(j.preview.html);
+        setPreviewOpen(true);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setReminderBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -221,6 +261,95 @@ export function AdminMemberDetailClient({
           ) : null}
         </div>
       </div>
+
+      {canRenew ? (
+        <section className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-5 backdrop-blur-xl sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200/55">Renewal reminders</h2>
+              <p className="mt-1 text-xs text-zinc-500">Logged sends and manual actions via Resend.</p>
+              {remindersDisabled ? (
+                <p className="mt-2 text-xs font-semibold text-amber-200/90">Suspended — renewal emails are blocked.</p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={reminderBusy || remindersDisabled}
+                onClick={() => void runReminderAction("preview")}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07] disabled:opacity-40"
+              >
+                {reminderBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" aria-hidden />}
+                Preview email
+              </button>
+              <button
+                type="button"
+                disabled={reminderBusy || remindersDisabled}
+                onClick={() => void runReminderAction("send_now")}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-black text-emerald-50 hover:bg-emerald-500/25 disabled:opacity-40"
+              >
+                <Send className="h-3.5 w-3.5" aria-hidden />
+                Send now
+              </button>
+              <button
+                type="button"
+                disabled={reminderBusy || remindersDisabled}
+                onClick={() => void runReminderAction("resend_last")}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07] disabled:opacity-40"
+              >
+                <Mail className="h-3.5 w-3.5" aria-hidden />
+                Resend last
+              </button>
+            </div>
+          </div>
+
+          <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-xl border border-white/[0.06] bg-black/25 p-3">
+              <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Last reminder sent</dt>
+              <dd className="mt-1 font-mono text-zinc-200">
+                {detail.reminderSummary.lastSentAt
+                  ? format(parseISO(detail.reminderSummary.lastSentAt), "MMM d, yyyy HH:mm")
+                  : "—"}
+              </dd>
+              {detail.reminderSummary.lastReminderTypeLabel ? (
+                <p className="mt-1 text-xs text-zinc-500">{detail.reminderSummary.lastReminderTypeLabel}</p>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-white/[0.06] bg-black/25 p-3">
+              <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Next reminder due</dt>
+              <dd className="mt-1 font-mono text-zinc-200">
+                {detail.reminderSummary.nextReminderDueDay
+                  ? format(parseISO(`${detail.reminderSummary.nextReminderDueDay}T12:00:00`), "MMM d, yyyy")
+                  : "—"}
+              </dd>
+              {detail.reminderSummary.nextReminderLabel ? (
+                <p className="mt-1 text-xs text-zinc-500">{detail.reminderSummary.nextReminderLabel}</p>
+              ) : null}
+            </div>
+          </dl>
+
+          <div className="relative mt-6 pl-5">
+            <div className="absolute bottom-0 left-[7px] top-0 w-px bg-white/[0.08]" aria-hidden />
+            <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Reminder history</p>
+            {reminderTimeline.length === 0 ? (
+              <p className="text-sm text-zinc-500">No renewal emails logged for this member yet.</p>
+            ) : (
+              <ul className="space-y-4">
+                {reminderTimeline.map((row) => (
+                  <li key={row.id} className="relative">
+                    <span className="absolute -left-[13px] top-1.5 h-2.5 w-2.5 rounded-full border border-emerald-500/40 bg-emerald-500/70" />
+                    <p className="text-xs font-bold text-emerald-200/90">{formatMembershipReminderType(row.reminder_type)}</p>
+                    <p className="mt-0.5 font-mono text-[11px] text-zinc-500">
+                      {format(parseISO(row.sent_at), "MMM d, yyyy HH:mm")} · {row.delivery_status} · {row.membership_plan}
+                    </p>
+                    {row.subject ? <p className="mt-1 text-xs text-zinc-400">{row.subject}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-white/[0.08] bg-[#04120d]/60 p-5 backdrop-blur-xl sm:p-6">
         <div className="flex items-center justify-between gap-2">
@@ -311,6 +440,29 @@ export function AdminMemberDetailClient({
           </button>
         </div>
       </section>
+
+      {previewOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-white/10 bg-[#0a1a14] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <h2 className="text-sm font-black text-white">Email preview</h2>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold text-zinc-300"
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              title="Renewal email preview"
+              className="min-h-[420px] flex-1 w-full bg-white"
+              sandbox="allow-same-origin"
+              srcDoc={previewHtml}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {renewOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">

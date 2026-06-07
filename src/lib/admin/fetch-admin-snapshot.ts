@@ -4,6 +4,11 @@ import { endOfDay, formatISO, startOfDay, subDays } from "date-fns";
 import type { User } from "@supabase/supabase-js";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { buildMembershipRenewalSnapshot, type AdminMembershipRenewalSnapshot } from "@/lib/admin/membership-renewal-snapshot";
+import {
+  buildMembershipRenewalReminderSnapshot,
+  emptyMembershipRenewalReminderSnapshot,
+  type MembershipRenewalReminderSnapshot,
+} from "@/lib/admin/membership-renewal-reminder-snapshot";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -29,6 +34,7 @@ export type AdminSnapshot = {
   /** When service role or listUsers fails, partial UI still renders. */
   loadError: string | null;
   membershipRenewal: AdminMembershipRenewalSnapshot;
+  membershipRenewalReminders: MembershipRenewalReminderSnapshot;
   membershipRequestsSummary: AdminMembershipRequestsSummary;
   metrics: {
     totalUsers: number;
@@ -62,6 +68,8 @@ export type AdminSnapshot = {
     resendMessage: string;
     lastCronAt: string | null;
     lastCronStatus: string | null;
+    membershipRenewalCronAt: string | null;
+    membershipRenewalCronStatus: string | null;
     lastDeploymentSha: string | null;
     lastDeploymentAt: string | null;
   };
@@ -119,6 +127,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       serviceRoleConfigured: false,
       loadError: "Supabase is not configured.",
       membershipRenewal: emptyMembershipRenewal(),
+      membershipRenewalReminders: emptyMembershipRenewalReminderSnapshot(),
       membershipRequestsSummary: emptyMembershipRequestsSummary(),
       metrics: {
         totalUsers: 0,
@@ -147,6 +156,8 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
         resendMessage: "Unknown",
         lastCronAt: null,
         lastCronStatus: null,
+        membershipRenewalCronAt: null,
+        membershipRenewalCronStatus: null,
         lastDeploymentSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         lastDeploymentAt: process.env.VERCEL_DEPLOYMENT_CREATED_AT ?? null,
       },
@@ -413,19 +424,48 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
 
   let lastCronAt: string | null = null;
   let lastCronStatus: string | null = null;
+  let membershipRenewalCronAt: string | null = null;
+  let membershipRenewalCronStatus: string | null = null;
   if (sb) {
-    const { data: health, error: healthErr } = await sb
+    const { data: healthRows, error: healthErr } = await sb
       .from("system_health")
-      .select("*")
-      .eq("id", "scheduled_reminders_cron")
-      .maybeSingle();
+      .select("id, last_run_at, last_status")
+      .in("id", ["scheduled_reminders_cron", "membership_renewal_reminders_cron"]);
     if (healthErr) {
       lastCronStatus = `system_health read failed: ${healthErr.message}`.slice(0, 220);
     } else {
-      lastCronAt = health?.last_run_at ?? null;
-      lastCronStatus = health?.last_status ?? null;
+      for (const h of healthRows ?? []) {
+        if (h.id === "scheduled_reminders_cron") {
+          lastCronAt = h.last_run_at ?? null;
+          lastCronStatus = h.last_status ?? null;
+        }
+        if (h.id === "membership_renewal_reminders_cron") {
+          membershipRenewalCronAt = h.last_run_at ?? null;
+          membershipRenewalCronStatus = h.last_status ?? null;
+        }
+      }
     }
   }
+
+  const membershipRenewalReminders =
+    sb && users.length > 0
+      ? await buildMembershipRenewalReminderSnapshot(
+          sb,
+          {
+            users,
+            profileByUser,
+            subEndByUser,
+            userProfilesName,
+            todayStart,
+            todayEnd,
+            thirtyAgo,
+            sevenAgo,
+          },
+          (msg) => {
+            loadError = loadError ?? msg;
+          },
+        )
+      : emptyMembershipRenewalReminderSnapshot();
 
   const membershipRenewal =
     users.length > 0
@@ -443,6 +483,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     serviceRoleConfigured,
     loadError,
     membershipRenewal,
+    membershipRenewalReminders,
     membershipRequestsSummary: {
       pending: pendingMembershipRequests,
       approvedToday: approvedMembershipToday,
@@ -480,6 +521,8 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       resendMessage,
       lastCronAt,
       lastCronStatus,
+      membershipRenewalCronAt,
+      membershipRenewalCronStatus,
       lastDeploymentSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       lastDeploymentAt: process.env.VERCEL_DEPLOYMENT_CREATED_AT ?? null,
     },
