@@ -127,5 +127,5 @@ select coalesce(sum(amount_npr), 0) as total_npr from revenue_events;
 |---------|--------|
 | Script exits: need URL / service key | Complete step 3; ensure no quotes broken and no trailing spaces. |
 | `Inserted: 0`, high `Skipped invalid` | Inspect `membership_requests`: `amount_npr`, `payment_method`, `plan_type` must match API rules (`khalti_qr` / `esewa_qr` / `global_ime_qr`, `premium` / `elite`). |
-| Inserts fail with Postgres/RLS error | Confirm **service_role** key; `revenue_events` has no RLS policies for anon — service role should bypass. |
+| `column revenue_events.membership_request_id does not exist` | Apply migration **`20260607120000_revenue_events_membership_ledger_columns.sql`** (or full **`20250607180000_membership_amount_and_revenue_event_details.sql`** if `membership_requests.amount_npr` is also missing). Then `notify pgrst, 'reload schema';` if PostgREST caches old schema. |
 | Admin still 0 | Same Supabase project as backfill + redeploy/cache bust (step 7). |
