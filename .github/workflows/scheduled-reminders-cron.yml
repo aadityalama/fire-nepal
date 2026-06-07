@@ -1,4 +1,4 @@
-# FIRE Nepal — ping production smart-reminder email cron every 5 minutes (Vercel Hobby-friendly).
+# FIRE Nepal — optional daily ping to production smart-reminder email cron (same cadence as Hobby `vercel.json`).
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   CRON_TARGET_URL  — full URL, e.g. https://firenepal.com/api/cron/scheduled-reminders
@@ -10,8 +10,8 @@ name: Scheduled reminders cron
 
 on:
   schedule:
-    # Every 5 minutes (UTC)
-    - cron: "*/5 * * * *"
+    # Once per day (UTC), after the Vercel cron hour — redundant safety ping if secrets are configured.
+    - cron: "0 7 * * *"
   workflow_dispatch:
 
 concurrency:

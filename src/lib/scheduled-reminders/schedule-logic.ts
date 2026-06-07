@@ -174,6 +174,70 @@ export function overdueFireForMinute(
   };
 }
 
+/** Default lookback for daily (or sparse) cron: cover missed sends between runs + timezone slack. */
+export const SCHEDULED_REMINDERS_CRON_LOOKBACK_MS = 8 * 24 * 60 * 60 * 1000;
+
+function maxYmd(a: string, b: string): string {
+  return a >= b ? a : b;
+}
+
+function inUtcWindow(t: Date, windowStartMs: number, windowEndMs: number): boolean {
+  const x = t.getTime();
+  return x >= windowStartMs && x <= windowEndMs;
+}
+
+/**
+ * Emails that should have fired between `nowUtc - lookbackMs` and `nowUtc` (inclusive).
+ * Used when Vercel Cron runs at most once per day (Hobby); replaces minute-precise `firesDueThisMinute`.
+ */
+export function firesDueCatchUp(
+  r: ScheduledReminderShape,
+  nowUtc: Date,
+  opts?: { rollAnchor?: boolean; lookbackMs?: number },
+): DueSlotFire[] {
+  const lookbackMs = opts?.lookbackMs ?? SCHEDULED_REMINDERS_CRON_LOOKBACK_MS;
+  const roll = opts?.rollAnchor ?? true;
+  const windowEndMs = nowUtc.getTime();
+  const windowStartMs = windowEndMs - lookbackMs;
+
+  let shape = { ...r };
+  if (roll && r.repeatFrequency !== "once") {
+    const rolled = rollForwardDueYmdIfNeeded(r.dueDate, r.repeatFrequency, nowUtc, r.timezone);
+    if (rolled !== r.dueDate) shape = { ...shape, dueDate: rolled };
+  }
+
+  const hits: DueSlotFire[] = [];
+  for (const f of listDueSlotFires(shape)) {
+    if (inUtcWindow(f.fireAtUtc, windowStartMs, windowEndMs)) hits.push(f);
+  }
+
+  if (shape.notifyOverdue) {
+    const t = normalizeDueTime(shape.dueTime);
+    const dueUtc = wallDateTimeToUtc(shape.dueDate, t, shape.timezone);
+    if (windowEndMs > dueUtc.getTime()) {
+      const slackMs = 2 * 86_400_000;
+      const approxStartUtc = new Date(windowStartMs - slackMs);
+      const lowerYmd = utcToLocalYmd(approxStartUtc, shape.timezone);
+      let ymd = maxYmd(addCalendarDaysYmd(shape.dueDate, 1), lowerYmd);
+      const todayYmd = utcToLocalYmd(nowUtc, shape.timezone);
+      for (let i = 0; i < 400 && ymd <= todayYmd; i += 1) {
+        const fireAt = wallDateTimeToUtc(ymd, t, shape.timezone);
+        if (inUtcWindow(fireAt, windowStartMs, windowEndMs)) {
+          hits.push({
+            slot: "overdue",
+            anchorDueDate: shape.dueDate,
+            fireAtUtc: fireAt,
+            overdueLocalDate: ymd,
+          });
+        }
+        ymd = addCalendarDaysYmd(ymd, 1);
+      }
+    }
+  }
+
+  return hits;
+}
+
 export function firesDueThisMinute(
   r: ScheduledReminderShape,
   nowUtc: Date,

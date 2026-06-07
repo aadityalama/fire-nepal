@@ -118,10 +118,10 @@ After migrations, insert the auth user’s UUID into **`public.admin_users`** (S
 ### Scheduled reminder emails (Vercel + Resend)
 
 1. Set **`SUPABASE_SERVICE_ROLE_KEY`** on Vercel (server-only; never expose to the client). The cron route uses it to read all active reminders and insert send rows.
-2. Set **`CRON_SECRET`** in Vercel (recommended). Vercel will send `Authorization: Bearer <CRON_SECRET>` on cron invocations when this variable is set. Cron is declared in **`vercel.json`** (`/api/cron/scheduled-reminders`). You can also add or override jobs under **Project → Settings → Cron Jobs**. On **Pro** and above you can use a **per-minute** schedule (e.g. `* * * * *`) in `vercel.json` for sub-daily reminder windows. **Hobby** plans only allow **once-per-day** crons—use an external scheduler (or upgrade) if you need sub-daily email checks.
+2. Set **`CRON_SECRET`** in Vercel (recommended). Vercel will send `Authorization: Bearer <CRON_SECRET>` on cron invocations when this variable is set. Cron is declared in **`vercel.json`** (`/api/cron/scheduled-reminders`) with a **once-per-day** schedule so **Hobby** deploys succeed. The handler reconciles a multi-day lookback window each run (see `firesDueCatchUp` in `src/lib/scheduled-reminders/schedule-logic.ts`). On **Pro** and above you may switch `vercel.json` to a per-minute expression for tighter timing; keep the lookback behavior in mind if you do.
 3. Configure **`RESEND_API_KEY`** and **`RESEND_FROM_EMAIL`** (or `EMAIL_FROM`) so transactional emails can send.
 
-**GitHub Actions (Hobby / sub-daily Vercel cron):** add repo secrets **`CRON_TARGET_URL`** (full `https://…/api/cron/scheduled-reminders`) and **`CRON_SECRET`**, then enable the workflow in `.github/workflows/scheduled-reminders-cron.yml` (runs every 5 minutes).
+**GitHub Actions (optional backup ping):** add repo secrets **`CRON_TARGET_URL`** (full `https://…/api/cron/scheduled-reminders`) and **`CRON_SECRET`**, then enable the workflow in `.github/workflows/scheduled-reminders-cron.yml` (runs **once per day** UTC, offset from the Vercel job).
 
 ## Auth URLs in code
 

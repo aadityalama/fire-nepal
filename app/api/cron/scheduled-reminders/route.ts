@@ -3,11 +3,11 @@ import { upsertScheduledRemindersCronHealth } from "@/lib/scheduled-reminders/cr
 import { runScheduledRemindersCron } from "@/lib/scheduled-reminders/cron-dispatch";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
-/** Vercel Pro (and above): every minute. Must match `vercel.json` `crons[].schedule`. */
+/** Hobby-safe daily cron in `vercel.json`; route reconciles a multi-day lookback window per run. */
 export const maxDuration = 300;
 
 /**
- * Vercel Cron: checks reminders due in the current UTC minute and sends via Resend.
+ * Vercel Cron: checks reminders due in a rolling lookback window (see `firesDueCatchUp`) and sends via Resend.
  * When `CRON_SECRET` is set on the project, Vercel sends `Authorization: Bearer <CRON_SECRET>`.
  */
 export async function GET(request: Request) {
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       {
         ...result,
         mode: secret ? "authenticated" : "dev-open",
-        schedule: scheduleFromVercel ?? "* * * * *",
+        schedule: scheduleFromVercel ?? "0 6 * * *",
         provider: "resend",
         healthLogged: done.ok,
       },

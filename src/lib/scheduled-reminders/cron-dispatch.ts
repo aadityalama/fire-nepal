@@ -2,7 +2,10 @@ import { resolveResendFromAddress, sendEmailViaResend } from "@/lib/resend-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { ScheduledReminderDbRow } from "@/lib/scheduled-reminders/api-mapper";
 import { dbRowToReminder } from "@/lib/scheduled-reminders/api-mapper";
-import { firesDueThisMinute, type ScheduledReminderShape } from "@/lib/scheduled-reminders/schedule-logic";
+import {
+  firesDueCatchUp,
+  type ScheduledReminderShape,
+} from "@/lib/scheduled-reminders/schedule-logic";
 
 function rowToShape(row: ScheduledReminderDbRow): ScheduledReminderShape {
   const r = dbRowToReminder(row);
@@ -90,7 +93,7 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<{
 
   for (const row of list) {
     const shape = rowToShape(row);
-    const fires = firesDueThisMinute(shape, nowUtc, { rollAnchor: true });
+    const fires = firesDueCatchUp(shape, nowUtc, { rollAnchor: true });
     if (!fires.length) continue;
 
     const r = dbRowToReminder(row);
