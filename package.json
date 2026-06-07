@@ -13,7 +13,8 @@
     "verify:membership-storage": "node scripts/verify-membership-payment-storage.mjs",
     "db:push:remote": "npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
     "db:apply-verify:membership": "node scripts/apply-and-verify-supabase-membership.mjs",
-    "revenue:backfill-membership": "node scripts/backfill-membership-revenue-events.mjs"
+    "revenue:backfill-membership": "node scripts/backfill-membership-revenue-events.mjs",
+    "revenue:verify-membership": "node scripts/backfill-membership-revenue-events.mjs --verify-only"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

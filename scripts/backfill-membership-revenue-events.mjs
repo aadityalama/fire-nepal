@@ -7,8 +7,9 @@
  * or legacy `external_ref` = `membership_request:<id>`.
  *
  * Usage:
- *   node scripts/backfill-membership-revenue-events.mjs           # apply
+ *   node scripts/backfill-membership-revenue-events.mjs           # apply + verification summary
  *   node scripts/backfill-membership-revenue-events.mjs --dry-run
+ *   node scripts/backfill-membership-revenue-events.mjs --verify-only
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (.env.local via loadDotEnvLocal).
  * Production (Node 20+): `node --env-file=.env.production.local scripts/backfill-membership-revenue-events.mjs`
@@ -19,6 +20,11 @@ import { createClient } from "@supabase/supabase-js";
 import { loadDotEnvLocal, getRepoRoot } from "./load-dotenv-local.mjs";
 
 const dryRun = process.argv.includes("--dry-run");
+const verifyOnly = process.argv.includes("--verify-only");
+
+/** Must match `src/lib/membership-payment.ts` MEMBERSHIP_PLAN_PRICE_NPR (list-price sanity check). */
+const CATALOG_PREMIUM_NPR = 500;
+const CATALOG_ELITE_NPR = 800;
 
 loadDotEnvLocal();
 
@@ -39,6 +45,97 @@ try {
   console.log(`Supabase host: ${host} (verify this is the project you intend to modify)`);
 } catch {
   console.warn("Could not parse NEXT_PUBLIC_SUPABASE_URL for logging.");
+}
+
+async function printRevenueVerification() {
+  const { count: revTotalCount, error: cErr } = await sb.from("revenue_events").select("*", { count: "exact", head: true });
+  if (cErr) {
+    console.error("revenue_events count failed:", cErr.message);
+    return;
+  }
+
+  const { data: revRows, error: revErr } = await sb.from("revenue_events").select("amount_npr, membership_request_id, event_type");
+  if (revErr) {
+    console.error("revenue_events select failed:", revErr.message);
+    return;
+  }
+
+  let sumAllLedger = 0;
+  let sumMembershipLinked = 0;
+  let membershipLinkedRows = 0;
+  for (const row of revRows ?? []) {
+    const a = Number(row.amount_npr) || 0;
+    sumAllLedger += a;
+    if (row.membership_request_id) {
+      sumMembershipLinked += a;
+      membershipLinkedRows += 1;
+    }
+  }
+
+  const { data: approved, error: appErr } = await sb.from("membership_requests").select("plan_type, amount_npr").eq("status", "approved");
+  if (appErr) {
+    console.error("membership_requests approved select failed:", appErr.message);
+    return;
+  }
+
+  let nPremium = 0;
+  let nElite = 0;
+  let sumApprovedAmounts = 0;
+  let offCatalog = 0;
+  for (const r of approved ?? []) {
+    const amt = Number(r.amount_npr) || 0;
+    sumApprovedAmounts += amt;
+    if (r.plan_type === "premium") {
+      nPremium += 1;
+      if (Math.abs(amt - CATALOG_PREMIUM_NPR) > 0.01) offCatalog += 1;
+    } else if (r.plan_type === "elite") {
+      nElite += 1;
+      if (Math.abs(amt - CATALOG_ELITE_NPR) > 0.01) offCatalog += 1;
+    }
+  }
+
+  const catalogListPriceTotal = nPremium * CATALOG_PREMIUM_NPR + nElite * CATALOG_ELITE_NPR;
+  const listPriceMatchesApprovedSum = Math.abs(sumApprovedAmounts - catalogListPriceTotal) < 0.01;
+  const ledgerMatchesApprovedSum = Math.abs(sumMembershipLinked - sumApprovedAmounts) < 0.01;
+
+  console.log("");
+  console.log("--- verification (admin dashboard uses sum of all revenue_events.amount_npr) ---");
+  console.log(`revenue_events row count: ${revTotalCount ?? 0}`);
+  console.log(`revenue_events sum(amount_npr) [all rows]: ${sumAllLedger.toFixed(2)} NPR`);
+  console.log(
+    `revenue_events sum(amount_npr) [membership_request_id set]: ${sumMembershipLinked.toFixed(2)} NPR (${membershipLinkedRows} rows)`,
+  );
+  console.log(`approved membership_requests: ${nPremium} premium, ${nElite} elite (total ${(approved ?? []).length})`);
+  console.log(`sum(amount_npr) on approved requests: ${sumApprovedAmounts.toFixed(2)} NPR`);
+  console.log(
+    `catalog list-price total (${CATALOG_PREMIUM_NPR}×${nPremium} + ${CATALOG_ELITE_NPR}×${nElite}): ${catalogListPriceTotal.toFixed(2)} NPR`,
+  );
+  if (offCatalog > 0) {
+    console.log(
+      `Note: ${offCatalog} approved row(s) have amount_npr ≠ current list price for their plan; ledger should match per-request amounts, not catalog total.`,
+    );
+  }
+  if (!listPriceMatchesApprovedSum && offCatalog === 0 && (approved ?? []).length > 0) {
+    console.log("Note: approved amount_npr totals differ from catalog list-price total (unexpected if all rows use list price).");
+  }
+  if (ledgerMatchesApprovedSum && (approved ?? []).length === membershipLinkedRows) {
+    console.log("OK: membership-linked ledger sum matches sum of approved request amounts, and row counts align.");
+  } else if (!ledgerMatchesApprovedSum) {
+    console.log("WARN: membership-linked ledger sum does not match sum(approved membership_requests.amount_npr) — run backfill or inspect mismatches.");
+  } else if ((approved ?? []).length !== membershipLinkedRows) {
+    console.log(
+      `WARN: approved request count (${(approved ?? []).length}) ≠ revenue_events rows with membership_request_id (${membershipLinkedRows}).`,
+    );
+  }
+  if (listPriceMatchesApprovedSum && offCatalog === 0 && (approved ?? []).length > 0) {
+    console.log("OK: sum of approved amounts equals catalog list price (500 NPR × premium + 800 NPR × elite).");
+  }
+}
+
+if (verifyOnly) {
+  console.log("[verify-only] no inserts");
+  await printRevenueVerification();
+  process.exit(0);
 }
 
 function externalRefForRequest(id) {
@@ -149,3 +246,5 @@ console.log(
   dryRun ? `[dry-run] would insert: ${inserted}` : `Inserted: ${inserted}`,
   `| Already had ledger row: ${skipped} | Skipped invalid request: ${skippedBad} | Repo: ${getRepoRoot()}`,
 );
+
+await printRevenueVerification();
