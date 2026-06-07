@@ -11,11 +11,13 @@
  *   node scripts/backfill-membership-revenue-events.mjs --dry-run
  *   node scripts/backfill-membership-revenue-events.mjs --verify-only
  *
- * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (.env.local via loadDotEnvLocal).
- * Production (Node 20+): `node --env-file=.env.production.local scripts/backfill-membership-revenue-events.mjs`
- * (loads before the script; pair with loadDotEnvLocal or put both keys only in that file).
+ * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+ * Loads `.env.local` first; then fills any still-empty keys from `.env.production.local` if present.
+ * Production (Node 20+): you may still use `node --env-file=.env.production.local scripts/...`.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { loadDotEnvLocal, getRepoRoot } from "./load-dotenv-local.mjs";
 
@@ -26,13 +28,37 @@ const verifyOnly = process.argv.includes("--verify-only");
 const CATALOG_PREMIUM_NPR = 500;
 const CATALOG_ELITE_NPR = 800;
 
+/** Fill `process.env` keys that are still missing or empty (same line format as `.env.local`). */
+function applyEnvFileMissingKeys(relPath) {
+  const full = join(getRepoRoot(), relPath);
+  if (!existsSync(full)) return;
+  const text = readFileSync(full, "utf8");
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    const cur = process.env[key];
+    const curEmpty = cur === undefined || cur === null || String(cur).trim() === "";
+    if (curEmpty && val) process.env[key] = val;
+  }
+}
+
 loadDotEnvLocal();
+applyEnvFileMissingKeys(".env.production.local");
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
 if (!url || !service) {
-  console.error("Need NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  console.error(
+    "Need NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (set in .env.local and/or .env.production.local at repo root, or export in shell).",
+  );
   process.exit(1);
 }
 
