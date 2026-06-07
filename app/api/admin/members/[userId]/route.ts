@@ -1,6 +1,7 @@
 import { addDays } from "date-fns";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
+import { insertAdminMemberCrmEvent } from "@/lib/admin/member-crm-events";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
 type RouteParams = { params: Promise<{ userId: string }> };
@@ -66,6 +67,14 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     if (!updated?.length) {
       return NextResponse.json({ error: "Profile not found for this user" }, { status: 404 });
     }
+    const log = await insertAdminMemberCrmEvent(admin, {
+      user_id: userId,
+      event_type: "user_suspended",
+      title: "Membership suspended",
+      body: "Paid access blocked until reactivation.",
+      actor_id: adminUserId,
+    });
+    if (!log.ok) console.error("[admin/members] crm event suspend:", log.message);
     return NextResponse.json({ ok: true, status: "suspended", actor: adminUserId });
   }
 
@@ -81,6 +90,14 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     if (!updated?.length) {
       return NextResponse.json({ error: "Profile not found for this user" }, { status: 404 });
     }
+    const logR = await insertAdminMemberCrmEvent(admin, {
+      user_id: userId,
+      event_type: "user_reactivated",
+      title: "Membership reactivated",
+      body: "Suspension cleared.",
+      actor_id: adminUserId,
+    });
+    if (!logR.ok) console.error("[admin/members] crm event reactivate:", logR.message);
     return NextResponse.json({ ok: true, status: "reactivated", actor: adminUserId });
   }
 
@@ -154,6 +171,16 @@ export async function PATCH(request: Request, ctx: RouteParams) {
   if (revErr) {
     return NextResponse.json({ error: `Revenue log failed: ${revErr.message}` }, { status: 500 });
   }
+
+  const logRen = await insertAdminMemberCrmEvent(admin, {
+    user_id: userId,
+    event_type: "membership_renewed",
+    title: "Membership renewed",
+    body: `Extended ${extendDays} days. New expiry ${newEndIso.slice(0, 10)}.`,
+    meta: { extendDays, amount_npr: amountNpr, new_expires_at: newEndIso },
+    actor_id: adminUserId,
+  });
+  if (!logRen.ok) console.error("[admin/members] crm event renew:", logRen.message);
 
   return NextResponse.json({
     ok: true,

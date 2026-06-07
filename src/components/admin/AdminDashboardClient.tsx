@@ -402,7 +402,10 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
               ) : (
                 mrr.upcomingSample.map((row) => (
                   <li key={`${row.userId}-${row.dueDay}-${row.reminderType}`} className="border-b border-white/[0.04] pb-2">
-                    <Link href={`/admin/members/${row.userId}`} className="font-semibold text-emerald-200 hover:underline">
+                    <Link
+                      href={`/admin/members?crm=${encodeURIComponent(row.userId)}`}
+                      className="font-semibold text-emerald-200 hover:underline"
+                    >
                       {row.name}
                     </Link>
                     <span className="mt-0.5 block text-[10px] text-zinc-500">
@@ -468,7 +471,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
                     <tr key={row.id} className="border-b border-white/[0.04]">
                       <td className="px-3 py-2">
                         <Link
-                          href={`/admin/members/${row.id}`}
+                          href={`/admin/members?crm=${encodeURIComponent(row.id)}`}
                           className="font-semibold text-emerald-200 hover:underline"
                         >
                           {row.name}
@@ -518,7 +521,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
                     <tr key={row.id} className="border-b border-white/[0.04]">
                       <td className="px-3 py-2">
                         <Link
-                          href={`/admin/members/${row.id}`}
+                          href={`/admin/members?crm=${encodeURIComponent(row.id)}`}
                           className="font-semibold text-emerald-200 hover:underline"
                         >
                           {row.name}
@@ -534,7 +537,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
                       </td>
                       <td className="px-3 py-2 text-right">
                         <Link
-                          href={`/admin/members/${row.id}?renew=1`}
+                          href={`/admin/members?crm=${encodeURIComponent(row.id)}`}
                           className="rounded-lg border border-emerald-500/35 bg-emerald-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-100 hover:bg-emerald-500/25"
                         >
                           Renew

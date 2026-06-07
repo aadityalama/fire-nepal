@@ -276,6 +276,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      admin_member_crm_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_type: "membership_renewed" | "user_suspended" | "user_reactivated";
+          title: string;
+          body: string | null;
+          meta: Json;
+          occurred_at: string;
+          actor_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_type: "membership_renewed" | "user_suspended" | "user_reactivated";
+          title: string;
+          body?: string | null;
+          meta?: Json;
+          occurred_at?: string;
+          actor_id?: string | null;
+        };
+        Update: {
+          title?: string;
+          body?: string | null;
+          meta?: Json;
+          occurred_at?: string;
+          actor_id?: string | null;
+        };
+        Relationships: [];
+      };
       membership_requests: {
         Row: {
           id: string;
@@ -393,6 +423,10 @@ export type Database = {
           membership_activated_at: string | null;
           expires_at: string | null;
           suspended_at: string | null;
+          last_login_at: string | null;
+          country: string | null;
+          region: string | null;
+          timezone: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -403,6 +437,10 @@ export type Database = {
           membership_activated_at?: string | null;
           expires_at?: string | null;
           suspended_at?: string | null;
+          last_login_at?: string | null;
+          country?: string | null;
+          region?: string | null;
+          timezone?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -412,6 +450,10 @@ export type Database = {
           membership_activated_at?: string | null;
           expires_at?: string | null;
           suspended_at?: string | null;
+          last_login_at?: string | null;
+          country?: string | null;
+          region?: string | null;
+          timezone?: string | null;
           updated_at?: string;
         };
         Relationships: [];

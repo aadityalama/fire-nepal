@@ -14,12 +14,17 @@ export const dynamic = "force-dynamic";
 export default async function AdminMembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; crm?: string }>;
 }) {
   await requireAdminUserId();
   const sp = await searchParams;
   const { members, error } = await fetchAdminMembers();
   return (
-    <AdminMembersClient initialMembers={members} initialError={error} initialFilter={sp.filter} />
+    <AdminMembersClient
+      initialMembers={members}
+      initialError={error}
+      initialFilter={sp.filter}
+      initialCrmUserId={sp.crm}
+    />
   );
 }

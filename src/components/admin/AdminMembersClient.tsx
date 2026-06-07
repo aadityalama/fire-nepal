@@ -3,8 +3,10 @@
 import { format, parseISO } from "date-fns";
 import { ChevronDown, MoreHorizontal, Search, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminMemberRow } from "@/lib/admin/fetch-admin-members";
+import { MemberCrmDrawer } from "@/components/admin/MemberCrmDrawer";
 import {
   formatDaysLeftLabel,
   membershipDaysRemaining,
@@ -80,11 +82,14 @@ export function AdminMembersClient({
   initialMembers,
   initialError,
   initialFilter,
+  initialCrmUserId,
 }: {
   initialMembers: AdminMemberRow[];
   initialError: string | null;
   initialFilter?: string;
+  initialCrmUserId?: string | null;
 }) {
+  const router = useRouter();
   const [members, setMembers] = useState<AdminMemberRow[]>(initialMembers);
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [search, setSearch] = useState("");
@@ -95,6 +100,25 @@ export function AdminMembersClient({
   const [renewDays, setRenewDays] = useState("365");
   const [renewAmount, setRenewAmount] = useState("");
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [crmUserId, setCrmUserId] = useState<string | null>(initialCrmUserId?.trim() || null);
+
+  useEffect(() => {
+    const id = initialCrmUserId?.trim();
+    queueMicrotask(() => {
+      setCrmUserId(id || null);
+    });
+  }, [initialCrmUserId]);
+
+  const openCrm = (id: string) => {
+    setMenuUserId(null);
+    setCrmUserId(id);
+    router.replace(`/admin/members?crm=${encodeURIComponent(id)}`);
+  };
+
+  const closeCrm = () => {
+    setCrmUserId(null);
+    router.replace("/admin/members");
+  };
 
   const reload = useCallback(async () => {
     try {
@@ -273,7 +297,7 @@ export function AdminMembersClient({
                 <th className="px-4 py-3">Activated</th>
                 <th className="px-4 py-3">Expires</th>
                 <th className="px-4 py-3">Days left</th>
-                <th className="px-4 py-3">Details</th>
+                <th className="px-4 py-3">CRM</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -292,7 +316,16 @@ export function AdminMembersClient({
                   <tr
                     key={row.id}
                     id={`member-row-${row.id}`}
-                    className="border-b border-white/[0.04] hover:bg-white/[0.02]"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openCrm(row.id);
+                      }
+                    }}
+                    onClick={() => openCrm(row.id)}
+                    className="cursor-pointer border-b border-white/[0.04] hover:bg-white/[0.03]"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -330,15 +363,10 @@ export function AdminMembersClient({
                         {daysLabel}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/members/${row.id}`}
-                        className="text-xs font-bold text-emerald-300 underline-offset-2 hover:underline"
-                      >
-                        Open
-                      </Link>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-xs font-medium text-zinc-500">Row opens panel</span>
                     </td>
-                    <td className="relative px-4 py-3 text-right">
+                    <td className="relative px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         disabled={busy}
@@ -352,12 +380,19 @@ export function AdminMembersClient({
                       </button>
                       {open ? (
                         <div className="absolute right-4 z-20 mt-1 w-48 rounded-xl border border-white/10 bg-[#0a1a14] py-1 shadow-xl">
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/[0.06]"
+                            onClick={() => openCrm(row.id)}
+                          >
+                            Open CRM panel
+                          </button>
                           <Link
                             href={`/admin/members/${row.id}`}
-                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/[0.06]"
+                            className="block w-full px-3 py-2 text-left text-xs font-semibold text-zinc-400 hover:bg-white/[0.06]"
                             onClick={() => setMenuUserId(null)}
                           >
-                            Member detail
+                            Full detail page
                           </Link>
                           <button
                             type="button"
@@ -412,8 +447,8 @@ export function AdminMembersClient({
           ) : null}
         </div>
         <p className="mt-3 text-xs text-zinc-500">
-          {filtered.length} of {members.length} users shown. Status uses expiry date and suspension from{" "}
-          <code className="rounded bg-black/40 px-1">profiles</code>.
+          {filtered.length} of {members.length} users shown. Click a row to open the CRM side panel. Status uses expiry
+          date and suspension from <code className="rounded bg-black/40 px-1">profiles</code>.
         </p>
       </section>
 
@@ -478,6 +513,13 @@ export function AdminMembersClient({
           </div>
         </div>
       ) : null}
+
+      <MemberCrmDrawer
+        userId={crmUserId}
+        open={Boolean(crmUserId)}
+        onClose={closeCrm}
+        onUpdated={reload}
+      />
 
       <p className="text-center text-xs text-zinc-600">
         <Link href="/admin/membership-requests" className="font-semibold text-emerald-400/90 underline-offset-2 hover:underline">

@@ -193,15 +193,21 @@ export function AdminMemberDetailClient({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/admin/members"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-          Members
-        </Link>
-      </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/admin/members"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            Members
+          </Link>
+          <Link
+            href={`/admin/members?crm=${encodeURIComponent(detail.userId)}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/12 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/20"
+          >
+            CRM panel
+          </Link>
+        </div>
 
       <div className="rounded-2xl border border-white/[0.08] bg-[#04120d]/70 p-5 backdrop-blur-xl sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">

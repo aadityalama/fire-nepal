@@ -3,7 +3,7 @@
 import { format, parseISO } from "date-fns";
 import { Check, Download, Eye, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   MEMBERSHIP_PLAN_PRICE_NPR,
@@ -44,11 +44,19 @@ function formatSubmitted(iso: string): string {
   }
 }
 
-export function AdminMembershipRequestsClient() {
+export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId?: string | null }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [stats, setStats] = useState<Stats>({ pending: 0, approvedToday: 0, rejectedToday: 0 });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [userFilter, setUserFilter] = useState(initialUserId?.trim() ?? "");
+
+  useEffect(() => {
+    const v = initialUserId?.trim() ?? "";
+    queueMicrotask(() => {
+      setUserFilter(v);
+    });
+  }, [initialUserId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +97,13 @@ export function AdminMembershipRequestsClient() {
       cancelled = true;
     };
   }, [load]);
+
+  const visibleRows = useMemo(() => {
+    if (!rows?.length) return rows ?? [];
+    const u = userFilter.trim();
+    if (!u) return rows;
+    return rows.filter((r) => r.user_id === u);
+  }, [rows, userFilter]);
 
   const openProof = async (id: string) => {
     try {
@@ -189,6 +204,16 @@ export function AdminMembershipRequestsClient() {
         </div>
       </div>
 
+      {userFilter.trim() ? (
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-100">
+          Showing payment requests for user{" "}
+          <span className="font-mono font-bold text-white">{userFilter}</span>.{" "}
+          <Link href="/admin/membership-requests" className="font-bold text-emerald-300 underline-offset-2 hover:underline">
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 backdrop-blur-xl">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-200/80">Pending</p>
@@ -223,14 +248,14 @@ export function AdminMembershipRequestsClient() {
             </tr>
           </thead>
           <tbody className="text-zinc-200">
-            {(rows ?? []).length === 0 ? (
+            {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-10 text-center text-sm font-medium text-zinc-500">
                   No membership requests yet.
                 </td>
               </tr>
             ) : (
-              (rows ?? []).map((row) => {
+              visibleRows.map((row) => {
                 const pending = row.status === "pending";
                 const busy = busyId === row.id;
                 const amount =

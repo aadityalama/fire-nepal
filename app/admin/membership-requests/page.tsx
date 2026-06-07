@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AdminMembershipRequestsPage() {
-  return <AdminMembershipRequestsClient />;
+export const dynamic = "force-dynamic";
+
+export default async function AdminMembershipRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ user?: string }>;
+}) {
+  const sp = await searchParams;
+  return <AdminMembershipRequestsClient initialUserId={sp.user?.trim() ?? null} />;
 }
