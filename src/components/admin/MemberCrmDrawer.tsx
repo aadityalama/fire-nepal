@@ -11,10 +11,17 @@ import {
   Sparkles,
   User,
   X,
+  Archive,
+  ArchiveRestore,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { MemberCrmPayload, MemberCrmTimelineRow } from "@/lib/admin/fetch-member-crm";
+import {
+  MEMBER_PERMANENT_DELETE_CONFIRMATION,
+  MEMBER_PERMANENT_DELETE_WARNING,
+} from "@/lib/admin/member-permanent-delete-phrase";
 
 function formatNpr(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(n);
@@ -69,6 +76,9 @@ export function MemberCrmDrawer({
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewDays, setRenewDays] = useState("365");
   const [renewAmount, setRenewAmount] = useState("");
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [permOpen, setPermOpen] = useState(false);
+  const [permPhrase, setPermPhrase] = useState("");
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -92,10 +102,30 @@ export function MemberCrmDrawer({
   }, [userId]);
 
   useEffect(() => {
+    if (!open || !userId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/auth/admin-status", { credentials: "include", cache: "no-store" });
+        const j = (await r.json()) as { isSuperAdmin?: boolean };
+        if (!cancelled) setIsSuperAdmin(Boolean(j.isSuperAdmin));
+      } catch {
+        if (!cancelled) setIsSuperAdmin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, userId]);
+
+  useEffect(() => {
     if (!open) {
       queueMicrotask(() => {
         setCrm(null);
         setRenewOpen(false);
+        setIsSuperAdmin(false);
+        setPermOpen(false);
+        setPermPhrase("");
       });
       return;
     }
@@ -105,8 +135,8 @@ export function MemberCrmDrawer({
     });
   }, [open, userId, load]);
 
-  const patch = async (body: Record<string, unknown>) => {
-    if (!userId) return;
+  const patch = async (body: Record<string, unknown>): Promise<boolean> => {
+    if (!userId) return false;
     setBusy("patch");
     try {
       const r = await fetch(`/api/admin/members/${userId}`, {
@@ -118,10 +148,11 @@ export function MemberCrmDrawer({
       const j = (await r.json()) as { error?: string };
       if (!r.ok) {
         window.alert(j.error ?? "Action failed");
-        return;
+        return false;
       }
       await load();
       await onUpdated();
+      return true;
     } finally {
       setBusy(null);
     }
@@ -170,6 +201,23 @@ export function MemberCrmDrawer({
 
   const paid = crm?.planType === "premium" || crm?.planType === "elite";
   const suspended = crm?.membershipStatus === "Suspended";
+  const archived = Boolean(crm?.isArchived);
+
+  const submitPermanentRemove = async () => {
+    if (permPhrase.trim() !== MEMBER_PERMANENT_DELETE_CONFIRMATION) {
+      window.alert(`Type exactly: ${MEMBER_PERMANENT_DELETE_CONFIRMATION}`);
+      return;
+    }
+    const ok = await patch({
+      action: "permanent_remove",
+      confirmationText: permPhrase.trim(),
+    });
+    if (ok) {
+      setPermOpen(false);
+      setPermPhrase("");
+      onClose();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex justify-end">
@@ -314,7 +362,7 @@ export function MemberCrmDrawer({
                   {paid ? (
                     <button
                       type="button"
-                      disabled={!!busy || suspended}
+                      disabled={!!busy || suspended || archived}
                       onClick={() => setRenewOpen(true)}
                       className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
                     >
@@ -325,7 +373,7 @@ export function MemberCrmDrawer({
                   {paid ? (
                     <button
                       type="button"
-                      disabled={!!busy || suspended}
+                      disabled={!!busy || suspended || archived}
                       onClick={() => void sendReminder()}
                       className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
                     >
@@ -333,26 +381,59 @@ export function MemberCrmDrawer({
                       Send reminder
                     </button>
                   ) : null}
-                  {!suspended ? (
-                    <button
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() => {
-                        if (window.confirm(`Suspend ${crm.email}?`)) void patch({ action: "suspend" });
-                      }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100 disabled:opacity-40"
-                    >
-                      <Shield className="h-3.5 w-3.5" aria-hidden />
-                      Suspend
-                    </button>
+                  {!archived ? (
+                    <>
+                      {!suspended ? (
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() => {
+                            if (window.confirm(`Suspend ${crm.email}?`)) void patch({ action: "suspend" });
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-100 disabled:opacity-40"
+                        >
+                          <Shield className="h-3.5 w-3.5" aria-hidden />
+                          Suspend
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() => void patch({ action: "reactivate" })}
+                          className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={!!busy}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Archive ${crm.email}? They will be hidden from the active roster and lose paid access.`,
+                            )
+                          ) {
+                            void patch({ action: "archive" });
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-500/35 bg-slate-500/10 px-3 py-2 text-xs font-bold text-slate-100 disabled:opacity-40"
+                      >
+                        <Archive className="h-3.5 w-3.5" aria-hidden />
+                        Archive
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
                       disabled={!!busy}
-                      onClick={() => void patch({ action: "reactivate" })}
+                      onClick={() => {
+                        if (window.confirm(`Restore ${crm.email} from archive?`)) void patch({ action: "restore_archive" });
+                      }}
                       className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
                     >
-                      Reactivate
+                      <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
+                      Restore from archive
                     </button>
                   )}
                   <Link
@@ -369,7 +450,24 @@ export function MemberCrmDrawer({
                     <User className="h-3.5 w-3.5" aria-hidden />
                     Full detail page
                   </Link>
+                  {isSuperAdmin ? (
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => setPermOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-xs font-black text-rose-100 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      Permanent remove…
+                    </button>
+                  ) : null}
                 </div>
+                {isSuperAdmin ? (
+                  <p className="mt-2 text-[11px] font-medium text-zinc-500">
+                    Permanent remove is super-admin only. Revenue and reminder history rows are not deleted from the
+                    database.
+                  </p>
+                ) : null}
               </section>
 
               <section>
@@ -511,6 +609,51 @@ export function MemberCrmDrawer({
                   className="rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-black text-emerald-100"
                 >
                   Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {permOpen && crm ? (
+          <div className="absolute inset-0 z-[70] flex items-end justify-center bg-black/70 p-4 sm:items-center">
+            <div className="w-full max-w-md rounded-2xl border border-rose-500/35 bg-[#1a0a0c] p-5 shadow-xl">
+              <h4 className="font-black text-rose-100">Permanent account removal</h4>
+              <p className="mt-2 text-sm font-semibold text-rose-200/95">{MEMBER_PERMANENT_DELETE_WARNING}</p>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                Super-admin only. Bans the account, resets membership fields, and archives the profile. Revenue events,
+                reminder logs, and membership requests are not deleted.
+              </p>
+              <p className="mt-3 font-mono text-[11px] text-zinc-500">
+                Phrase: <span className="text-amber-200/90">{MEMBER_PERMANENT_DELETE_CONFIRMATION}</span>
+              </p>
+              <label className="mt-4 block text-xs font-bold text-zinc-500">
+                Confirmation
+                <input
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-2 font-mono text-sm text-white"
+                  value={permPhrase}
+                  onChange={(e) => setPermPhrase(e.target.value)}
+                  placeholder={MEMBER_PERMANENT_DELETE_CONFIRMATION}
+                  autoComplete="off"
+                />
+              </label>
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPermOpen(false);
+                    setPermPhrase("");
+                  }}
+                  className="rounded-lg px-3 py-1.5 text-xs text-zinc-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => void submitPermanentRemove()}
+                  className="rounded-lg border border-rose-600/50 bg-rose-600/25 px-3 py-1.5 text-xs font-black text-rose-50"
+                >
+                  Remove account
                 </button>
               </div>
             </div>

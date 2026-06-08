@@ -7,6 +7,7 @@ import {
   reminderToInsert,
 } from "@/lib/scheduled-reminders/api-mapper";
 import { REMINDER_TYPES, REPEAT_FREQUENCIES, type RepeatFrequency, type ReminderType } from "@/lib/smart-reminders/types";
+import { formatScheduledRemindersDbError } from "@/lib/supabase/scheduled-reminders-db-error";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -68,7 +69,7 @@ export async function GET() {
       .eq("user_id", u.user.id)
       .eq("is_completed", false)
       .order("due_date", { ascending: true });
-    if (error) return bad(error.message, 500);
+    if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
     const reminders = (data ?? []).map((row) => dbRowToReminder(row as never));
     return NextResponse.json({ ok: true, reminders });
   } catch (e) {
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     if (!u.user) return bad("Unauthorized", 401);
     const insert = reminderToInsert(u.user.id, body);
     const { data, error } = await sb.from("scheduled_reminders").insert(insert).select("*").single();
-    if (error) return bad(error.message, 500);
+    if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
     return NextResponse.json({ ok: true, reminder: dbRowToReminder(data as never) });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);

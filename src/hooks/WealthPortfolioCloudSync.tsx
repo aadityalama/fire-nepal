@@ -9,6 +9,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase, saveWealthPortfolioToSupabase } from "@/services/portfolio-supabase";
 import { toast } from "sonner";
 
+/** Debounce cloud writes so typing does not trigger constant sync work; pairs with stale-save / echo guards below. */
+const CLOUD_SAVE_DEBOUNCE_MS = 1000;
+
 type Props = {
   hydrated: boolean;
   state: WealthPortfolioStateV2;
@@ -62,10 +65,18 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
     const t = window.setTimeout(async () => {
       try {
         const client = getSupabaseBrowserClient();
-        const ok = await saveWealthPortfolioToSupabase(client, user.id, state);
+        // Always persist the latest snapshot (avoids stale closure if the timer was scheduled on an older render).
+        const toSave = stateRef.current;
+        const snapshot = JSON.stringify(toSave);
+        if (snapshot === lastSavedRef.current) return;
+
+        const ok = await saveWealthPortfolioToSupabase(client, user.id, toSave);
         if (ok) {
-          lastSavedRef.current = serialized;
-          toast.success("Portfolio synced to cloud", { id: "portfolio-cloud-save", duration: 2200 });
+          // If the user kept typing while the request was in flight, do not mark as saved or toast — a new debounced save will run.
+          if (JSON.stringify(stateRef.current) === snapshot) {
+            lastSavedRef.current = snapshot;
+            toast.success("Portfolio synced to cloud", { id: "portfolio-cloud-save", duration: 2200 });
+          }
         } else {
           toast.error("Portfolio cloud sync failed.");
         }
@@ -73,7 +84,7 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
         console.error(e);
         toast.error("Portfolio cloud sync failed.");
       }
-    }, 900);
+    }, CLOUD_SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(t);
   }, [state, hydrated, remoteLoaded, user?.id]);
@@ -92,7 +103,11 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
             const remote = await loadWealthPortfolioFromSupabase(client, uid);
             if (!remote) return;
             const incoming = JSON.stringify(remote);
-            if (incoming === JSON.stringify(stateRef.current)) return;
+            const local = JSON.stringify(stateRef.current);
+            if (incoming === local) return;
+            // Do not replace in-memory state while there are edits not yet reflected in `lastSavedRef`
+            // (avoids postgres echo / slow saves wiping text the user is still typing).
+            if (local !== lastSavedRef.current) return;
             setState(remote);
             lastSavedRef.current = incoming;
             toast.message("Portfolio updated from another session.", { duration: 3200 });

@@ -4,8 +4,10 @@ import { format, isBefore, parseISO, subDays } from "date-fns";
 import {
   Activity,
   AlertOctagon,
+  Archive,
   ArrowDownRight,
   ArrowUpRight,
+  Ban,
   CalendarClock,
   Download,
   Inbox,
@@ -15,6 +17,7 @@ import {
   Shield,
   Sparkles,
   Timer,
+  UserCheck,
   Users,
   Wallet,
 } from "lucide-react";
@@ -245,7 +248,12 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile label="Users" value={String(overview.totalUsers)} hint={`+${overview.newUsersToday} today`} icon={Users} />
           <StatTile label="Revenue (NPR)" value={formatNpr(overview.totalRevenueNpr)} hint="Sum of revenue_events" icon={Wallet} />
-          <StatTile label="Premium members" value={String(overview.premiumUsers)} hint="Profiles: premium + elite" icon={Sparkles} />
+          <StatTile
+            label="Premium members"
+            value={String(overview.premiumUsers)}
+            hint="Premium + elite profiles (excludes archived)"
+            icon={Sparkles}
+          />
           <StatTile
             label="Reminder activity"
             value={String(overview.reminderEmailsSent)}
@@ -253,6 +261,41 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
             icon={Activity}
           />
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-emerald-200/50">Member roster</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatTile
+            label="Active members"
+            value={String(overview.activeMembersCount)}
+            hint="Paid · in good standing · not suspended/archived"
+            icon={UserCheck}
+          />
+          <StatTile
+            label="Suspended members"
+            value={String(overview.suspendedMembersCount)}
+            hint="Suspended and not archived"
+            icon={Ban}
+          />
+          <StatTile
+            label="Archived members"
+            value={String(overview.archivedMembersCount)}
+            hint="Hidden from default members roster"
+            icon={Archive}
+          />
+        </div>
+        <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+          <Link href="/admin/members?filter=active_roster" className="font-bold text-emerald-400 hover:underline">
+            Open active roster
+          </Link>
+          <Link href="/admin/members?filter=suspended" className="font-bold text-emerald-400 hover:underline">
+            Suspended only
+          </Link>
+          <Link href="/admin/members?filter=archived" className="font-bold text-emerald-400 hover:underline">
+            Archived only
+          </Link>
+        </p>
       </section>
 
       <section>
@@ -357,7 +400,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
           <StatTile
             label="Expired 30d+"
             value={String(mrr.analytics.expiredMembersNotRenewed30dPlus)}
-            hint="Paid profiles with effective expiry more than 30 days ago"
+            hint="Paid profiles with effective expiry more than 30 days ago (excludes archived)"
             icon={ArrowDownRight}
           />
         </div>

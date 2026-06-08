@@ -22,6 +22,15 @@ type Body = {
   confirmPassword?: string;
 };
 
+const LOG_PREFIX = "[FIRE Nepal auth][reset-password]";
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "(invalid)";
+  const safeLocal = local.length <= 2 ? "***" : `${local.slice(0, 2)}…`;
+  return `${safeLocal}@${domain}`;
+}
+
 function clearResetCookie(res: NextResponse) {
   res.cookies.set(FN_PENDING_RESET_COOKIE, "", {
     httpOnly: true,
@@ -52,6 +61,16 @@ export async function POST(req: Request) {
   if (!email.includes("@")) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
+
+  console.info(
+    LOG_PREFIX,
+    JSON.stringify({
+      event: "completion_request_received",
+      email: maskEmail(email),
+      note: "Legacy OTP flow only; does not send email (use /api/auth/forgot-password then Resend).",
+    }),
+  );
+
   if (code.length !== 6) {
     return NextResponse.json({ error: "Enter the 6-digit code." }, { status: 400 });
   }
@@ -96,6 +115,7 @@ export async function POST(req: Request) {
 
   const user: ProductAuthUser = toPublicUser(updated);
   const token = signUserSession(toSessionClaims(updated), secret);
+  console.info(LOG_PREFIX, JSON.stringify({ event: "password_updated_signed_in", email: maskEmail(email) }));
   const res = NextResponse.json({ user });
   clearResetCookie(res);
   res.cookies.set(FN_SESSION_COOKIE, token, {

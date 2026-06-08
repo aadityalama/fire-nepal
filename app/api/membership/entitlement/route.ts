@@ -29,7 +29,7 @@ export async function GET() {
       error: profileError,
     } = await supabase
       .from("profiles")
-      .select("plan_type, suspended_at, expires_at")
+      .select("plan_type, suspended_at, expires_at, archived_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -61,6 +61,7 @@ export async function GET() {
 
     let profilePlan = profile?.plan_type ?? "free";
     const suspendedAt = (profile as { suspended_at?: string | null } | null)?.suspended_at ?? null;
+    const archivedAt = (profile as { archived_at?: string | null } | null)?.archived_at ?? null;
     const profileExpiresAt = (profile as { expires_at?: string | null } | null)?.expires_at ?? null;
     const subActive = sub?.status === "active";
     const subPlan = sub?.plan;
@@ -87,18 +88,20 @@ export async function GET() {
     const expiryIso = profileExpiresAt ?? sub?.current_period_end ?? null;
     const now = new Date();
     const suspended = Boolean(suspendedAt);
+    const archived = Boolean(archivedAt);
     const expiredByDate = Boolean(expiryIso && !Number.isNaN(new Date(expiryIso).getTime()) && new Date(expiryIso) <= now);
 
     const rawEffective: PaidPlan | "free" =
       subActive && profilePaid && subPaid && profilePlan === subPlan ? (profilePlan as PaidPlan) : "free";
 
     const effectivePlan: PaidPlan | "free" =
-      suspended || expiredByDate ? "free" : rawEffective;
+      suspended || archived || expiredByDate ? "free" : rawEffective;
 
     const uiBucket = membershipUiBucket({
       planType: profilePlan === "premium" || profilePlan === "elite" || profilePlan === "free" ? profilePlan : "free",
       expiresAtIso: expiryIso,
       suspendedAtIso: suspendedAt,
+      archivedAtIso: archivedAt,
       now,
     });
 
@@ -121,6 +124,7 @@ export async function GET() {
       membershipUiBucket: uiBucket,
       expiresAt: expiryIso,
       suspendedAt,
+      archivedAt,
       pendingMembershipRequest: pendingPlan ? { plan: pendingPlan } : null,
     });
   } catch (e) {

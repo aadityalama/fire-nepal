@@ -2,7 +2,7 @@
 
 ## Two modes
 
-1. **Supabase (required for production)** — When `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set, the app uses the Supabase browser client for **sign-up** (`signUp` with `emailRedirectTo`), **sign-in** (`signInWithPassword`), **email verification** (`verifyOtp` for signup type, plus magic links via `/auth/callback`), **resend verification** (`resend` with `emailRedirectTo`), **forgot password** (`resetPasswordForEmail` with `redirectTo`), and **password update** (`updateUser` on **Dashboard → Security**). Redirect targets use `NEXT_PUBLIC_SITE_URL` when set (`getPublicSiteOrigin()` in `src/lib/public-site-url.ts`), otherwise the current browser origin. Sessions use Supabase cookies; middleware refreshes them via `@supabase/ssr`. **User profiles** are stored in `public.user_profiles` (insert trigger on `auth.users` plus client `upsert` after sign-up / verify).
+1. **Supabase (required for production)** — When `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set, the app uses the Supabase browser client for **sign-up** (`signUp` with `emailRedirectTo`), **sign-in** (`signInWithPassword`), **email verification** (`verifyOtp` for signup type, plus magic links via `/auth/callback`), **resend verification** (`resend` with `emailRedirectTo`), and **password update** (`updateUser` on **Dashboard → Security**). **Forgot password** uses **`POST /api/auth/request-password-reset`**, which calls Supabase `resetPasswordForEmail` on the server (logging + clearer API errors). Redirect targets use `NEXT_PUBLIC_SITE_URL` when set (`getPublicSiteOrigin()` / `getSiteOriginForServerAuthRedirect()` in `src/lib/public-site-url.ts`), otherwise the current browser or request origin. Sessions use Supabase cookies; middleware refreshes them via `@supabase/ssr`. **User profiles** are stored in `public.user_profiles` (insert trigger on `auth.users` plus client `upsert` after sign-up / verify).
 
 2. **Legacy (local dev only)** — Without those env vars, the app uses `/api/auth/*` and an **in-memory** user map (`src/auth/server/user-store.ts`). **Production** hosts without Supabase return **HTTP 503** from legacy auth routes so accounts are not silently lost (`src/auth/server/legacy-auth-production.ts`).
 
@@ -17,8 +17,8 @@
 3. **Supabase → Authentication → URL configuration**  
    Set **Site URL** to **`https://firenepal.com`**. Under **Redirect URLs**, allow **`https://firenepal.com/auth/callback`** (and `www` if used). Remove localhost entries from the **production** Supabase project. Details: `docs/SUPABASE.md`.
 
-4. **Supabase → Authentication → Emails**  
-   Configure email delivery (SMTP or built-in provider limits) so sign-up, confirmation, and reset emails send.
+4. **Supabase → Authentication → Emails / SMTP**  
+   Use **custom SMTP** in production. Supabase’s **default** email is restricted (e.g. non–team addresses → **`Email address not authorized`**) and is not meant for production workloads — see [Supabase docs](https://supabase.com/docs/guides/auth/auth-smtp) and **`docs/password-reset-email-delivery.md`** for Resend + DNS + dashboard steps.
 
 5. **Database**  
    Apply `supabase/migrations/20250524120000_fire_nepal_portfolio.sql` (and any follow-up migrations) to the **same** project as your API keys.
@@ -31,7 +31,7 @@ If **Confirm email** is enabled, new users have no password session until they c
 
 ### Forgot password (Supabase)
 
-Reset links are sent by **Supabase Auth**. The app uses `redirectTo` → `/auth/callback?next=/dashboard/security?pw=1`. After opening the link, use **Update password** on **Dashboard → Security** (`auth.updateUser`). Configure redirect allowlist and email in the Supabase dashboard.
+Reset links are sent by **Supabase Auth** (configure **custom SMTP** in the Supabase dashboard — **not** via `RESEND_API_KEY`). The app uses **`POST /api/auth/request-password-reset`** with `redirectTo` → `/auth/callback?next=/dashboard/security?pw=1`. After opening the link, use **Update password** on **Dashboard → Security** (`auth.updateUser`). If the redirect URL is not allowlisted, the API returns **400** with Supabase’s error message. Vercel logs: **`supabase_reset_accepted`** vs **`supabase_reset_rejected`** (`message` / `code` / `status`). **`accepted` does not prove inbox delivery** — see **`docs/password-reset-email-delivery.md`**.
 
 ### Forgot password (legacy)
 

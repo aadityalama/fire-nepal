@@ -82,7 +82,12 @@ export async function buildMembershipRenewalReminderSnapshot(
     users: User[];
     profileByUser: Map<
       string,
-      { plan_type: string; expires_at: string | null; suspended_at: string | null }
+      {
+        plan_type: string;
+        expires_at: string | null;
+        suspended_at: string | null;
+        archived_at: string | null;
+      }
     >;
     subEndByUser: Map<string, string | null>;
     userProfilesName: Map<string, string | null>;
@@ -169,6 +174,7 @@ export async function buildMembershipRenewalReminderSnapshot(
   for (const u of input.users) {
     const prof = input.profileByUser.get(u.id);
     if (!prof) continue;
+    if (prof.archived_at) continue;
     if (prof.plan_type !== "premium" && prof.plan_type !== "elite") continue;
     if (prof.suspended_at) continue;
     const expiresIso = prof.expires_at ?? input.subEndByUser.get(u.id) ?? null;
@@ -223,6 +229,8 @@ export async function buildMembershipRenewalReminderSnapshot(
   const expiredCutoff = subDays(startOfDay(now), 30).toISOString();
   let expiredLong = 0;
   for (const [uid, prof] of input.profileByUser) {
+    if (prof.archived_at) continue;
+    if (prof.suspended_at) continue;
     if (prof.plan_type !== "premium" && prof.plan_type !== "elite") continue;
     const ex = prof.expires_at ?? input.subEndByUser.get(uid) ?? null;
     if (!ex) continue;

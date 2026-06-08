@@ -43,6 +43,7 @@ type ProfileLite = {
   plan_type: string;
   expires_at: string | null;
   suspended_at: string | null;
+  archived_at: string | null;
 };
 
 /** Renewal queue + KPIs + widget rows (sorted, capped). */
@@ -64,6 +65,9 @@ export function buildMembershipRenewalSnapshot(
     const prof = profileById.get(u.id);
     const plan = prof?.plan_type;
     if (plan !== "premium" && plan !== "elite") continue;
+
+    const archivedAt = prof?.archived_at ?? null;
+    if (archivedAt) continue;
 
     const suspendedAt = prof?.suspended_at ?? null;
     const expiresAt = prof?.expires_at ?? subEndById.get(u.id) ?? null;

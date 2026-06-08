@@ -44,6 +44,7 @@ export type AdminMemberDetail = {
   membershipActivatedAt: string | null;
   expiresAt: string | null;
   suspendedAt: string | null;
+  archivedAt: string | null;
   subscription: {
     plan: "premium" | "elite" | null;
     status: string | null;
@@ -87,6 +88,9 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
   const expiresAt = prof?.expires_at ?? sub?.current_period_end ?? null;
   const membershipActivatedAt = prof?.membership_activated_at ?? sub?.current_period_start ?? null;
 
+  const suspendedAt = prof?.suspended_at ?? null;
+  const archivedAt = (prof as { archived_at?: string | null } | null)?.archived_at ?? null;
+
   const { data: notes, error: nErr } = await admin
     .from("admin_member_notes")
     .select("id, user_id, body, author_id, created_at, updated_at")
@@ -123,7 +127,8 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
   if (
     summaryExpiresIso &&
     (planType === "premium" || planType === "elite") &&
-    !(prof?.suspended_at ?? null)
+    !(prof?.suspended_at ?? null) &&
+    !archivedAt
   ) {
     const expDt = parseISO(summaryExpiresIso);
     if (!Number.isNaN(expDt.getTime())) {
@@ -155,6 +160,7 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
     membershipActivatedAt: membershipActivatedAt as string | null,
     expiresAt,
     suspendedAt: prof?.suspended_at ?? null,
+    archivedAt,
     subscription: sub
       ? {
           plan: sub.plan,

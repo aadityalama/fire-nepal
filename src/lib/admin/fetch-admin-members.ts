@@ -18,6 +18,7 @@ export type AdminMemberRow = {
   membershipActivatedAt: string | null;
   expiresAt: string | null;
   suspendedAt: string | null;
+  archivedAt: string | null;
   subscriptionStatus: string | null;
   subscriptionPeriodEnd: string | null;
   uiBucket: MembershipUiBucket;
@@ -39,7 +40,7 @@ export async function fetchAdminMembers(): Promise<{
 
   const { data: profiles, error: pErr } = await sb
     .from("profiles")
-    .select("id, plan_type, membership_activated_at, expires_at, suspended_at");
+    .select("id, plan_type, membership_activated_at, expires_at, suspended_at, archived_at");
 
   if (pErr) {
     return { members: [], error: pErr.message };
@@ -82,10 +83,12 @@ export async function fetchAdminMembers(): Promise<{
       (sub?.current_period_start as string | null | undefined) ??
       null;
     const suspendedAt = (prof?.suspended_at as string | null | undefined) ?? null;
+    const archivedAt = (prof?.archived_at as string | null | undefined) ?? null;
     const uiBucket = membershipUiBucket({
       planType,
       expiresAtIso: expiresAt,
       suspendedAtIso: suspendedAt,
+      archivedAtIso: archivedAt,
     });
     return {
       id: u.id,
@@ -96,6 +99,7 @@ export async function fetchAdminMembers(): Promise<{
       membershipActivatedAt,
       expiresAt,
       suspendedAt,
+      archivedAt,
       subscriptionStatus: sub?.status ?? null,
       subscriptionPeriodEnd: sub?.current_period_end ?? null,
       uiBucket,

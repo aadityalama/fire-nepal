@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BadgeCheck, Brain, ChevronDown, Gem, LayoutDashboard, Lock, LogOut, Settings, Shield, UserRound } from "lucide-react";
+import { BarChart3, BadgeCheck, Brain, ChevronDown, Gem, LayoutDashboard, Lock, LogOut, Settings, Shield, UserRound, Activity } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
@@ -18,7 +18,7 @@ function initials(name: string): string {
 }
 
 export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
-  const { user, logout } = useProductAuth();
+  const { user, logout, isAdmin } = useProductAuth();
   const [open, setOpen] = useState(false);
   const [imgBroken, setImgBroken] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -108,7 +108,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
       {open ? (
         <div
           role="menu"
-          className={`absolute right-0 z-[100] mt-2 min-w-[228px] overflow-hidden rounded-2xl border py-2 ${panel}`}
+          className={`absolute right-0 z-[100] mt-2 w-[min(90vw,20rem)] max-w-[calc(100vw-1rem)] overflow-hidden rounded-2xl border py-2 ${panel}`}
         >
           <div className={`border-b px-4 py-3 ${borderMuted}`}>
             <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${variant === "dark" ? "text-white/45" : "text-zinc-400"}`}>
@@ -120,77 +120,88 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
           <Link
             href="/dashboard/profile"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <UserRound size={16} />
-            My profile
+            <UserRound size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">My profile</span>
           </Link>
           <Link
             href="/dashboard"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <BarChart3 size={16} />
-            Dashboard
+            <BarChart3 size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">Dashboard</span>
           </Link>
           <Link
             href="/dashboard/ai-coach"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <Brain size={16} />
-            AI Coach
+            <Brain size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">AI Coach</span>
           </Link>
           <Link
             href="/dashboard/security"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <Shield size={16} />
-            Security
+            <Shield size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">Security</span>
           </Link>
           <Link
             href="/dashboard/membership"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <Gem size={16} />
-            Membership
+            <Gem size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">Membership</span>
           </Link>
           <Link
             href="/dashboard/settings"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
             onClick={close}
           >
-            <Settings size={16} />
-            Settings
+            <Settings size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">Settings</span>
           </Link>
+          {isAdmin ? (
+            <Link
+              href="/admin"
+              role="menuitem"
+              className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+              onClick={close}
+            >
+              <Activity size={16} className="shrink-0" />
+              <span className="min-w-0 break-words leading-snug">Admin dashboard</span>
+            </Link>
+          ) : null}
           <Link
             href="/hub"
             role="menuitem"
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-emerald-300/90 transition ${hoverRow}`}
+            className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-xs font-bold text-emerald-300/90 transition ${hoverRow}`}
             onClick={close}
           >
-            <LayoutDashboard size={14} />
-            Product hub →
+            <LayoutDashboard size={14} className="shrink-0" />
+            <span className="min-w-0 break-words">Product hub →</span>
           </Link>
           <button
             type="button"
             role="menuitem"
-            className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-rose-200 transition hover:bg-rose-500/15 ${variant === "light" ? "hover:bg-rose-50" : ""}`}
+            className={`flex w-full min-w-0 items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-rose-200 transition hover:bg-rose-500/15 ${variant === "light" ? "hover:bg-rose-50" : ""}`}
             onClick={() => {
               close();
               void logout();
             }}
           >
-            <LogOut size={16} />
-            Log out
+            <LogOut size={16} className="shrink-0" />
+            <span className="min-w-0 break-words">Log out</span>
           </button>
         </div>
       ) : null}

@@ -9,6 +9,7 @@ import {
   emptyMembershipRenewalReminderSnapshot,
   type MembershipRenewalReminderSnapshot,
 } from "@/lib/admin/membership-renewal-reminder-snapshot";
+import { membershipUiBucket, type PlanType } from "@/lib/membership-profile-status";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -41,6 +42,10 @@ export type AdminSnapshot = {
     newUsersToday: number;
     activeUsers7d: number;
     premiumUsers: number;
+    /** Paid + not expired + not suspended + not archived (membershipUiBucket active). */
+    activeMembersCount: number;
+    suspendedMembersCount: number;
+    archivedMembersCount: number;
     totalRevenueNpr: number;
     reminderEmailsSent: number;
     totalRemindersCreated: number;
@@ -134,6 +139,9 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
         newUsersToday: 0,
         activeUsers7d: 0,
         premiumUsers: 0,
+        activeMembersCount: 0,
+        suspendedMembersCount: 0,
+        archivedMembersCount: 0,
         totalRevenueNpr: 0,
         reminderEmailsSent: 0,
         totalRemindersCreated: 0,
@@ -186,12 +194,18 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
 
   const profileByUser = new Map<
     string,
-    { plan_type: string; last_active_at: string | null; expires_at: string | null; suspended_at: string | null }
+    {
+      plan_type: string;
+      last_active_at: string | null;
+      expires_at: string | null;
+      suspended_at: string | null;
+      archived_at: string | null;
+    }
   >();
   if (sb) {
     const { data: profiles, error: pErr } = await sb
       .from("profiles")
-      .select("id, plan_type, last_active_at, expires_at, suspended_at");
+      .select("id, plan_type, last_active_at, expires_at, suspended_at, archived_at");
     if (pErr) loadError = loadError ?? pErr.message;
     for (const row of profiles ?? []) {
       profileByUser.set(row.id, {
@@ -199,6 +213,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
         last_active_at: row.last_active_at,
         expires_at: row.expires_at,
         suspended_at: row.suspended_at,
+        archived_at: (row as { archived_at?: string | null }).archived_at ?? null,
       });
     }
   }
@@ -344,13 +359,41 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
 
   const totalUsers = users.length;
   const newUsersToday = users.filter((u) => u.created_at && new Date(u.created_at) >= todayStart).length;
-  const activeUsers7d = users.filter(
-    (u) => u.last_sign_in_at && new Date(u.last_sign_in_at) >= sevenAgo,
-  ).length;
-  const premiumUsers = users.filter((u) => {
-    const p = profileByUser.get(u.id)?.plan_type;
-    return p === "premium" || p === "elite";
+  const activeUsers7d = users.filter((u) => {
+    if (profileByUser.get(u.id)?.archived_at) return false;
+    return u.last_sign_in_at && new Date(u.last_sign_in_at) >= sevenAgo;
   }).length;
+  const premiumUsers = users.filter((u) => {
+    const p = profileByUser.get(u.id);
+    if (p?.archived_at) return false;
+    const plan = p?.plan_type;
+    return plan === "premium" || plan === "elite";
+  }).length;
+
+  let activeMembersCount = 0;
+  let suspendedMembersCount = 0;
+  let archivedMembersCount = 0;
+  for (const u of users) {
+    const p = profileByUser.get(u.id);
+    const archivedAt = p?.archived_at ?? null;
+    if (archivedAt) {
+      archivedMembersCount += 1;
+      continue;
+    }
+    const suspendedAt = p?.suspended_at ?? null;
+    if (suspendedAt) suspendedMembersCount += 1;
+    const planRaw = p?.plan_type ?? "free";
+    const planType: PlanType =
+      planRaw === "premium" || planRaw === "elite" || planRaw === "free" ? planRaw : "free";
+    const exp = p?.expires_at ?? subEndByUser.get(u.id) ?? null;
+    const bucket = membershipUiBucket({
+      planType,
+      expiresAtIso: exp,
+      suspendedAtIso: suspendedAt,
+      archivedAtIso: null,
+    });
+    if (bucket === "active") activeMembersCount += 1;
+  }
 
   const createdTimes = users
     .map((u) => u.created_at)
@@ -365,8 +408,9 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   for (let i = 29; i >= 0; i--) {
     const dayEnd = endOfDay(subDays(new Date(), i));
     const signedByEnd = users.filter((u) => u.created_at && new Date(u.created_at) <= dayEnd);
-    const denom = signedByEnd.length;
-    const num = signedByEnd.filter((u) => {
+    const activeRoster = signedByEnd.filter((u) => !profileByUser.get(u.id)?.archived_at);
+    const denom = activeRoster.length;
+    const num = activeRoster.filter((u) => {
       const p = profileByUser.get(u.id)?.plan_type;
       return p === "premium" || p === "elite";
     }).length;
@@ -494,6 +538,9 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       newUsersToday,
       activeUsers7d,
       premiumUsers,
+      activeMembersCount,
+      suspendedMembersCount,
+      archivedMembersCount,
       totalRevenueNpr,
       reminderEmailsSent,
       totalRemindersCreated: totalReminders,

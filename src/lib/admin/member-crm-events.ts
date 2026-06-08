@@ -3,7 +3,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/supabase-database";
 
-export type AdminMemberCrmEventType = "membership_renewed" | "user_suspended" | "user_reactivated";
+export type AdminMemberCrmEventType =
+  | "membership_renewed"
+  | "user_suspended"
+  | "user_reactivated"
+  | "user_archived"
+  | "user_restored"
+  | "user_permanently_removed";
 
 export async function insertAdminMemberCrmEvent(
   admin: SupabaseClient<Database>,

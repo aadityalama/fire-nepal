@@ -1,17 +1,41 @@
 import { differenceInCalendarDays, startOfDay } from "date-fns";
 
-export type MembershipUiBucket = "free" | "active" | "expiring_soon" | "expired" | "suspended";
-
 export type PlanType = "free" | "premium" | "elite";
+
+export type MembershipUiBucket =
+  | "free"
+  | "active"
+  | "expiring_soon"
+  | "expired"
+  | "suspended"
+  | "archived";
+
+/** Title-case labels for admin UI, exports, and analytics copy. */
+export const MEMBERSHIP_UI_BUCKET_LABEL: Record<MembershipUiBucket, string> = {
+  free: "Free",
+  active: "Active",
+  expiring_soon: "Expiring Soon",
+  expired: "Expired",
+  suspended: "Suspended",
+  archived: "Archived",
+};
+
+export function planTypeLabel(plan: PlanType): string {
+  if (plan === "premium") return "Premium";
+  if (plan === "elite") return "Elite";
+  return "Free";
+}
 
 /** Mirrors `public.profile_membership_ui_bucket` for admin UI + filters. */
 export function membershipUiBucket(input: {
   planType: PlanType;
   expiresAtIso: string | null | undefined;
   suspendedAtIso: string | null | undefined;
+  archivedAtIso?: string | null | undefined;
   now?: Date;
 }): MembershipUiBucket {
   const now = input.now ?? new Date();
+  if (input.archivedAtIso) return "archived";
   if (input.suspendedAtIso) return "suspended";
   if (input.planType === "free") return "free";
   const exp = input.expiresAtIso ? new Date(input.expiresAtIso) : null;
@@ -37,8 +61,10 @@ export function formatDaysLeftLabel(
   planType: PlanType,
   expiresAtIso: string | null | undefined,
   suspendedAtIso: string | null | undefined,
+  archivedAtIso?: string | null | undefined,
   now?: Date,
 ): string {
+  if (archivedAtIso) return "—";
   if (suspendedAtIso) return "—";
   if (planType === "free") return "—";
   const days = membershipDaysRemaining(expiresAtIso, now);

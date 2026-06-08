@@ -5,8 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
-import { getPublicSiteOrigin } from "@/lib/public-site-url";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export function ForgotPasswordScreen() {
@@ -23,14 +21,14 @@ export function ForgotPasswordScreen() {
     try {
       const trimmed = email.trim().toLowerCase();
       if (isSupabaseConfigured()) {
-        const origin = getPublicSiteOrigin();
-        const sb = getSupabaseBrowserClient();
-        const nextPath = "/dashboard/security?pw=1";
-        const { error } = await sb.auth.resetPasswordForEmail(trimmed, {
-          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        const r = await fetch("/api/auth/request-password-reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: trimmed }),
         });
-        if (error) {
-          setError(error.message);
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        if (!r.ok) {
+          setError(j.error ?? "Could not start password reset.");
           return;
         }
         setDone(true);

@@ -64,6 +64,7 @@ export type MemberCrmPayload = {
     membershipDurationDays: number | null;
     avgRevenuePerRenewalNpr: number | null;
   };
+  isArchived: boolean;
   payments: MemberCrmPaymentRow[];
   timeline: MemberCrmTimelineRow[];
   notes: MemberCrmNoteRow[];
@@ -134,10 +135,12 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
 
   const expiresAt = prof.expires_at ?? sub?.current_period_end ?? null;
+  const archivedAt = (prof as { archived_at?: string | null }).archived_at ?? null;
   const bucket = membershipUiBucket({
     planType,
     expiresAtIso: expiresAt,
     suspendedAtIso: prof.suspended_at,
+    archivedAtIso: archivedAt,
   });
   const statusLabels: Record<string, string> = {
     active: "Active",
@@ -145,11 +148,17 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     expired: "Expired",
     free: "Free",
     suspended: "Suspended",
+    archived: "Archived",
   };
   const membershipStatus = statusLabels[bucket] ?? bucket;
 
   let daysLeftLabel: string | null = null;
-  if (expiresAt && (planType === "premium" || planType === "elite") && !prof.suspended_at) {
+  if (
+    expiresAt &&
+    (planType === "premium" || planType === "elite") &&
+    !prof.suspended_at &&
+    !archivedAt
+  ) {
     const exp = parseISO(expiresAt);
     if (!Number.isNaN(exp.getTime())) {
       const d = differenceInCalendarDays(exp, new Date());
@@ -303,8 +312,15 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   }
 
   for (const e of crmEvents ?? []) {
+    const et = e.event_type as string;
     const tone: MemberCrmTimelineRow["tone"] =
-      e.event_type === "user_suspended" ? "danger" : e.event_type === "user_reactivated" ? "success" : "info";
+      et === "user_suspended" || et === "user_permanently_removed"
+        ? "danger"
+        : et === "user_reactivated" || et === "user_restored"
+          ? "success"
+          : et === "user_archived"
+            ? "warning"
+            : "info";
     timeline.push({
       id: `crm:${e.id}`,
       occurredAt: e.occurred_at,
@@ -394,6 +410,7 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     email: u.email ?? "—",
     planType,
     membershipStatus,
+    isArchived: Boolean(archivedAt),
     joinedAt,
     expiryAt: expiresAt,
     daysLeftLabel,

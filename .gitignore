@@ -34,6 +34,8 @@ yarn-error.log*
 # env files (do not commit secrets)
 .env
 .env*.local
+# Vercel CLI `env pull` output (often includes short-lived OIDC; keep out of git)
+.env.vercel.*
 .env.development.local
 .env.test.local
 .env.production.local

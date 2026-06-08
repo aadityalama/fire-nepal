@@ -1,12 +1,14 @@
 "use client";
 
-import { ArrowRight, Banknote, LineChart, Receipt, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowRight, Banknote, LineChart, Receipt, Sparkles, Target } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
 
 export function HubHomePanel() {
   const onboarding = useMemo(() => loadProductOnboarding(), []);
+  const { isAdmin } = useProductAuth();
 
   const cards = [
     {
@@ -40,7 +42,7 @@ export function HubHomePanel() {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 animate-fade-up">
+    <div className="mx-auto max-w-full min-w-0 space-y-8 animate-fade-up overflow-x-clip">
       <div>
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-200/55">Command center</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome to your hub</h1>
@@ -49,6 +51,27 @@ export function HubHomePanel() {
           exactly as you left them — this shell only unifies navigation.
         </p>
       </div>
+
+      {isAdmin ? (
+        <Link
+          href="/admin"
+          className="flex flex-col gap-2 rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-600/20 to-fuchsia-600/10 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition hover:border-violet-300/40 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-violet-400/30 bg-violet-500/15 text-violet-200">
+              <Activity size={22} />
+            </span>
+            <div>
+              <p className="text-sm font-black text-white">Admin dashboard</p>
+              <p className="mt-1 text-xs font-medium text-violet-100/75">Metrics, exports, and operations — visible only to admin accounts.</p>
+            </div>
+          </div>
+          <span className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-violet-300/30 bg-violet-500/15 px-4 py-2.5 text-xs font-black text-violet-100 transition hover:bg-violet-500/25 sm:self-center">
+            Open control room
+            <ArrowRight size={16} />
+          </span>
+        </Link>
+      ) : null}
 
       {!onboarding.completed ? (
         <div className="flex flex-col gap-4 rounded-2xl border border-amber-400/25 bg-amber-500/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -90,20 +113,20 @@ export function HubHomePanel() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <Link
             key={c.href}
             href={c.href}
-            className="group relative overflow-hidden rounded-2xl border border-emerald-400/15 bg-gradient-to-br p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition duration-500 hover:border-emerald-300/35 hover:shadow-[0_24px_70px_rgba(16,185,129,0.12)]"
+            className="group relative block min-w-0 max-w-full overflow-hidden rounded-2xl border border-emerald-400/15 bg-gradient-to-br p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition duration-500 hover:border-emerald-300/35 hover:shadow-[0_24px_70px_rgba(16,185,129,0.12)]"
           >
             <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${c.accent} opacity-90`} />
             <div className="relative">
               <div className="mb-4 inline-flex rounded-xl border border-white/10 bg-black/30 p-2.5 text-lime-200">
                 <c.icon size={22} />
               </div>
-              <h2 className="text-lg font-black text-white">{c.title}</h2>
-              <p className="mt-2 text-sm font-medium leading-relaxed text-emerald-100/70">{c.body}</p>
+              <h2 className="break-words text-lg font-black text-white">{c.title}</h2>
+              <p className="mt-2 break-words text-sm font-medium leading-relaxed text-emerald-100/70">{c.body}</p>
               <span className="mt-4 inline-flex items-center gap-1 text-xs font-black text-lime-300 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100">
                 Open <ArrowRight size={14} />
               </span>

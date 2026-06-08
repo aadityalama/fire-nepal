@@ -9,12 +9,15 @@ import type { AdminMemberRow } from "@/lib/admin/fetch-admin-members";
 import { MemberCrmDrawer } from "@/components/admin/MemberCrmDrawer";
 import {
   formatDaysLeftLabel,
+  MEMBERSHIP_UI_BUCKET_LABEL,
   membershipDaysRemaining,
   membershipUiBucket,
+  planTypeLabel,
   type MembershipUiBucket,
 } from "@/lib/membership-profile-status";
 
 type MemberFilter =
+  | "active_roster"
   | "all"
   | "free"
   | "premium"
@@ -23,10 +26,12 @@ type MemberFilter =
   | "expiring_soon"
   | "expiring_in_30"
   | "expired"
-  | "suspended";
+  | "suspended"
+  | "archived";
 
 function parseMemberFilter(v: string | undefined): MemberFilter {
   const allowed = new Set<MemberFilter>([
+    "active_roster",
     "all",
     "free",
     "premium",
@@ -36,8 +41,10 @@ function parseMemberFilter(v: string | undefined): MemberFilter {
     "expiring_in_30",
     "expired",
     "suspended",
+    "archived",
   ]);
-  return v && allowed.has(v as MemberFilter) ? (v as MemberFilter) : "all";
+  if (v && allowed.has(v as MemberFilter)) return v as MemberFilter;
+  return "active_roster";
 }
 
 function StatusBadge({ bucket }: { bucket: MembershipUiBucket }) {
@@ -47,19 +54,13 @@ function StatusBadge({ bucket }: { bucket: MembershipUiBucket }) {
     expired: "border-rose-500/35 bg-rose-500/15 text-rose-100",
     free: "border-zinc-600/50 bg-zinc-800/60 text-zinc-300",
     suspended: "border-violet-500/35 bg-violet-500/15 text-violet-100",
-  };
-  const label: Record<MembershipUiBucket, string> = {
-    active: "Active",
-    expiring_soon: "Expiring soon",
-    expired: "Expired",
-    free: "Free",
-    suspended: "Suspended",
+    archived: "border-slate-500/40 bg-slate-800/50 text-slate-200",
   };
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${styles[bucket]}`}
     >
-      {label[bucket]}
+      {MEMBERSHIP_UI_BUCKET_LABEL[bucket]}
     </span>
   );
 }
@@ -73,7 +74,7 @@ function PlanPill({ plan }: { plan: AdminMemberRow["planType"] }) {
         : "border-emerald-500/30 bg-emerald-500/12 text-emerald-100";
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${cls}`}>
-      {plan}
+      {planTypeLabel(plan)}
     </span>
   );
 }
@@ -150,7 +151,10 @@ export function AdminMembersClient({
         planType: row.planType,
         expiresAtIso: row.expiresAt,
         suspendedAtIso: row.suspendedAt,
+        archivedAtIso: row.archivedAt,
       });
+      if (filter === "active_roster" && row.archivedAt) return false;
+      if (filter === "archived" && !row.archivedAt) return false;
       if (filter === "free" && row.planType !== "free") return false;
       if (filter === "premium" && row.planType !== "premium") return false;
       if (filter === "elite" && row.planType !== "elite") return false;
@@ -272,6 +276,7 @@ export function AdminMembersClient({
                 onChange={(e) => setFilter(e.target.value as MemberFilter)}
                 className="appearance-none rounded-xl border border-white/10 bg-black/30 py-2 pl-3 pr-9 text-xs font-bold text-emerald-100"
               >
+                <option value="active_roster">Active roster (hide archived)</option>
                 <option value="all">All users</option>
                 <option value="free">Free</option>
                 <option value="premium">Premium</option>
@@ -281,6 +286,7 @@ export function AdminMembersClient({
                 <option value="expiring_in_30">Expiring 8–30 days</option>
                 <option value="expired">Expired</option>
                 <option value="suspended">Suspended</option>
+                <option value="archived">Archived</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
             </div>
@@ -307,9 +313,10 @@ export function AdminMembersClient({
                   planType: row.planType,
                   expiresAtIso: row.expiresAt,
                   suspendedAtIso: row.suspendedAt,
+                  archivedAtIso: row.archivedAt,
                 });
                 const days = membershipDaysRemaining(row.expiresAt);
-                const daysLabel = formatDaysLeftLabel(row.planType, row.expiresAt, row.suspendedAt);
+                const daysLabel = formatDaysLeftLabel(row.planType, row.expiresAt, row.suspendedAt, row.archivedAt);
                 const open = menuUserId === row.id;
                 const busy = busyId === row.id;
                 return (
@@ -355,7 +362,7 @@ export function AdminMembersClient({
                     <td className="px-4 py-3">
                       <span
                         className={`font-mono text-xs font-bold ${
-                          days !== null && days <= 0 && row.planType !== "free" && !row.suspendedAt
+                          days !== null && days <= 0 && row.planType !== "free" && !row.suspendedAt && !row.archivedAt
                             ? "text-rose-300"
                             : "text-zinc-300"
                         }`}
@@ -401,7 +408,7 @@ export function AdminMembersClient({
                           >
                             Scroll to row
                           </button>
-                          {(row.planType === "premium" || row.planType === "elite") && !row.suspendedAt ? (
+                          {(row.planType === "premium" || row.planType === "elite") && !row.suspendedAt && !row.archivedAt ? (
                             <button
                               type="button"
                               className="block w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/[0.06]"
@@ -413,25 +420,60 @@ export function AdminMembersClient({
                               Renew membership…
                             </button>
                           ) : null}
-                          {!row.suspendedAt ? (
-                            <button
-                              type="button"
-                              className="block w-full px-3 py-2 text-left text-xs font-semibold text-rose-100 hover:bg-white/[0.06]"
-                              onClick={() => {
-                                if (window.confirm(`Suspend ${row.email}? They will lose paid access until reactivated.`)) {
-                                  void patchMember(row.id, { action: "suspend" });
-                                }
-                              }}
-                            >
-                              Suspend user
-                            </button>
+                          {!row.archivedAt ? (
+                            <>
+                              {!row.suspendedAt ? (
+                                <button
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-rose-100 hover:bg-white/[0.06]"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Suspend ${row.email}? They will lose paid access until reactivated.`,
+                                      )
+                                    ) {
+                                      void patchMember(row.id, { action: "suspend" });
+                                    }
+                                  }}
+                                >
+                                  Suspend user
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-emerald-100 hover:bg-white/[0.06]"
+                                  onClick={() => void patchMember(row.id, { action: "reactivate" })}
+                                >
+                                  Reactivate user
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.06]"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Archive ${row.email}? They will be hidden from the active roster and lose paid access. Records are kept.`,
+                                    )
+                                  ) {
+                                    void patchMember(row.id, { action: "archive" });
+                                  }
+                                }}
+                              >
+                                Archive user
+                              </button>
+                            </>
                           ) : (
                             <button
                               type="button"
                               className="block w-full px-3 py-2 text-left text-xs font-semibold text-emerald-100 hover:bg-white/[0.06]"
-                              onClick={() => void patchMember(row.id, { action: "reactivate" })}
+                              onClick={() => {
+                                if (window.confirm(`Restore ${row.email} from archive?`)) {
+                                  void patchMember(row.id, { action: "restore_archive" });
+                                }
+                              }}
                             >
-                              Reactivate user
+                              Restore from archive
                             </button>
                           )}
                         </div>
@@ -447,8 +489,8 @@ export function AdminMembersClient({
           ) : null}
         </div>
         <p className="mt-3 text-xs text-zinc-500">
-          {filtered.length} of {members.length} users shown. Click a row to open the CRM side panel. Status uses expiry
-          date and suspension from <code className="rounded bg-black/40 px-1">profiles</code>.
+          {filtered.length} of {members.length} users shown. Default view hides archived accounts. Status uses expiry,
+          suspension, and archive flags from <code className="rounded bg-black/40 px-1">profiles</code>.
         </p>
       </section>
 

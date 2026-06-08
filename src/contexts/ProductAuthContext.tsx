@@ -21,6 +21,8 @@ export type SignupOptions = {
 type ProductAuthContextValue = {
   user: ProductAuthUser | null;
   loading: boolean;
+  /** Supabase session only: true if `public.admin_users` contains this user. Always false for legacy auth. */
+  isAdmin: boolean;
   authMode: "supabase" | "legacy";
   refreshSession: () => Promise<void>;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ ok: boolean; error?: string }>;
@@ -90,6 +92,7 @@ async function syncLegacySession(): Promise<ProductAuthUser | null> {
 export function ProductAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ProductAuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const authMode: "supabase" | "legacy" = isSupabaseConfigured() ? "supabase" : "legacy";
 
   const refreshSession = useCallback(async () => {
@@ -164,6 +167,27 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [refreshSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!isSupabaseConfigured() || !user) {
+        if (!cancelled) setIsAdmin(false);
+        return;
+      }
+      if (!cancelled) setIsAdmin(false);
+      try {
+        const r = await fetch("/api/auth/admin-status", { credentials: "include", cache: "no-store" });
+        const j = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
+        if (!cancelled) setIsAdmin(Boolean(j.isAdmin));
+      } catch {
+        if (!cancelled) setIsAdmin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const login = useCallback(async (email: string, password: string, rememberMe = false) => {
     const trimmed = email.trim().toLowerCase();
@@ -409,12 +433,14 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => undefined);
     clearProductAuthSession();
     setUser(null);
+    setIsAdmin(false);
   }, []);
 
   const value = useMemo(
     () => ({
       user,
       loading,
+      isAdmin,
       authMode,
       refreshSession,
       login,
@@ -423,7 +449,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       logout,
     }),
-    [user, loading, authMode, refreshSession, login, signup, verifyEmail, resendVerification, logout],
+    [user, loading, isAdmin, authMode, refreshSession, login, signup, verifyEmail, resendVerification, logout],
   );
 
   return <ProductAuthContext.Provider value={value}>{children}</ProductAuthContext.Provider>;

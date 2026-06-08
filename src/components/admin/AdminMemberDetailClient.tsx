@@ -8,7 +8,9 @@ import { useCallback, useMemo, useState } from "react";
 import type { AdminMemberDetail, AdminMemberNoteRow } from "@/lib/admin/fetch-admin-member-detail";
 import { formatMembershipReminderType } from "@/lib/membership-renewal-reminders/reminder-next";
 import {
+  MEMBERSHIP_UI_BUCKET_LABEL,
   membershipUiBucket,
+  planTypeLabel,
   type MembershipUiBucket,
 } from "@/lib/membership-profile-status";
 
@@ -19,19 +21,13 @@ function StatusBadge({ bucket }: { bucket: MembershipUiBucket }) {
     expired: "border-rose-500/35 bg-rose-500/15 text-rose-100",
     free: "border-zinc-600/50 bg-zinc-800/60 text-zinc-300",
     suspended: "border-violet-500/35 bg-violet-500/15 text-violet-100",
-  };
-  const label: Record<MembershipUiBucket, string> = {
-    active: "Active",
-    expiring_soon: "Expiring soon",
-    expired: "Expired",
-    free: "Free",
-    suspended: "Suspended",
+    archived: "border-slate-500/40 bg-slate-800/50 text-slate-200",
   };
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${styles[bucket]}`}
     >
-      {label[bucket]}
+      {MEMBERSHIP_UI_BUCKET_LABEL[bucket]}
     </span>
   );
 }
@@ -53,6 +49,7 @@ export function AdminMemberDetailClient({
     planType: detail.planType,
     expiresAtIso: detail.expiresAt,
     suspendedAtIso: detail.suspendedAt,
+    archivedAtIso: detail.archivedAt,
   });
 
   const [notes, setNotes] = useState<AdminMemberNoteRow[]>(detail.notes);
@@ -160,8 +157,9 @@ export function AdminMemberDetailClient({
     }
   };
 
-  const canRenew = detail.planType === "premium" || detail.planType === "elite";
-  const remindersDisabled = Boolean(detail.suspendedAt);
+  const canRenew =
+    (detail.planType === "premium" || detail.planType === "elite") && !detail.archivedAt;
+  const remindersDisabled = Boolean(detail.suspendedAt) || Boolean(detail.archivedAt);
 
   const runReminderAction = async (action: "preview" | "send_now" | "resend_last") => {
     setReminderBusy(true);
@@ -219,7 +217,7 @@ export function AdminMemberDetailClient({
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge bucket={bucket} />
             <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] font-black uppercase text-zinc-300">
-              {detail.planType}
+              {planTypeLabel(detail.planType)}
             </span>
           </div>
         </div>

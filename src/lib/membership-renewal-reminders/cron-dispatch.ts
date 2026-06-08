@@ -17,6 +17,7 @@ type ProfileRow = {
   plan_type: string;
   expires_at: string | null;
   suspended_at: string | null;
+  archived_at: string | null;
 };
 
 function displayName(u: User): string {
@@ -54,7 +55,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
 
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
-    .select("id, plan_type, expires_at, suspended_at")
+    .select("id, plan_type, expires_at, suspended_at, archived_at")
     .in("plan_type", ["premium", "elite"]);
   if (pErr) {
     return { ok: false, error: pErr.message, candidates: 0, sent: 0, failed: 0, skipped: 0 };
@@ -75,6 +76,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
     if (sent + failed >= MAX_SENDS_PER_RUN) break;
 
     const prof = row as ProfileRow;
+    if (prof.archived_at) continue;
     if (prof.suspended_at) continue;
     const expiresIso = prof.expires_at ?? subEnd.get(prof.id) ?? null;
     if (!expiresIso) continue;

@@ -51,7 +51,7 @@ export async function POST(request: Request, ctx: RouteParams) {
 
   const { data: prof } = await admin
     .from("profiles")
-    .select("plan_type, suspended_at, expires_at")
+    .select("plan_type, suspended_at, expires_at, archived_at")
     .eq("id", userId)
     .maybeSingle();
   const { data: sub } = await admin
@@ -63,6 +63,9 @@ export async function POST(request: Request, ctx: RouteParams) {
   const plan = prof?.plan_type;
   if (plan !== "premium" && plan !== "elite") {
     return NextResponse.json({ error: "Reminders apply to premium or elite members only" }, { status: 400 });
+  }
+  if ((prof as { archived_at?: string | null } | null)?.archived_at) {
+    return NextResponse.json({ error: "Archived accounts cannot receive renewal reminders" }, { status: 400 });
   }
   if (prof?.suspended_at) {
     return NextResponse.json({ error: "Suspended accounts cannot receive renewal reminders" }, { status: 400 });

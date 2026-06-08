@@ -280,7 +280,13 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          event_type: "membership_renewed" | "user_suspended" | "user_reactivated";
+          event_type:
+            | "membership_renewed"
+            | "user_suspended"
+            | "user_reactivated"
+            | "user_archived"
+            | "user_restored"
+            | "user_permanently_removed";
           title: string;
           body: string | null;
           meta: Json;
@@ -290,7 +296,13 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          event_type: "membership_renewed" | "user_suspended" | "user_reactivated";
+          event_type:
+            | "membership_renewed"
+            | "user_suspended"
+            | "user_reactivated"
+            | "user_archived"
+            | "user_restored"
+            | "user_permanently_removed";
           title: string;
           body?: string | null;
           meta?: Json;
@@ -423,6 +435,7 @@ export type Database = {
           membership_activated_at: string | null;
           expires_at: string | null;
           suspended_at: string | null;
+          archived_at: string | null;
           last_login_at: string | null;
           country: string | null;
           region: string | null;
@@ -437,6 +450,7 @@ export type Database = {
           membership_activated_at?: string | null;
           expires_at?: string | null;
           suspended_at?: string | null;
+          archived_at?: string | null;
           last_login_at?: string | null;
           country?: string | null;
           region?: string | null;
@@ -450,6 +464,7 @@ export type Database = {
           membership_activated_at?: string | null;
           expires_at?: string | null;
           suspended_at?: string | null;
+          archived_at?: string | null;
           last_login_at?: string | null;
           country?: string | null;
           region?: string | null;

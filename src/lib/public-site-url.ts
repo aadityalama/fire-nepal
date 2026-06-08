@@ -18,3 +18,16 @@ export function getPublicSiteOrigin(): string {
   }
   return "";
 }
+
+/**
+ * Same-origin base for Supabase auth redirects when running in a Route Handler.
+ * Prefer `NEXT_PUBLIC_SITE_URL` in production; otherwise use the incoming request URL
+ * (e.g. `https://preview.vercel.app` or `http://localhost:3000`).
+ */
+export function getSiteOriginForServerAuthRedirect(request: Request): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
+  if (raw) {
+    return raw.replace(/\/+$/, "");
+  }
+  return new URL(request.url).origin;
+}

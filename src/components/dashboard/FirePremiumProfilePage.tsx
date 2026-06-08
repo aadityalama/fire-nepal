@@ -93,7 +93,7 @@ export function FirePremiumProfilePage() {
     "flex min-h-[4.5rem] flex-col rounded-lg border border-emerald-400/25 bg-black/45 px-3 py-3 shadow-[0_0_28px_rgba(16,185,129,0.1),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md sm:min-h-[4.75rem] sm:px-3.5 sm:py-3.5 lg:px-4 lg:py-4";
 
   return (
-    <div className="space-y-6 pb-20 sm:space-y-7 sm:pb-10">
+    <div className="max-w-full space-y-6 overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:space-y-7 lg:pb-10">
       <div>
         <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Profile dashboard</h1>
         <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed tracking-tight text-emerald-100/60 sm:text-base">
@@ -138,7 +138,7 @@ export function FirePremiumProfilePage() {
                           FIRE Nepal ID
                         </span>
                       </div>
-                      <p className="mt-2 font-mono text-[11px] font-black leading-relaxed tracking-wide text-emerald-100 sm:text-xs md:text-[13px]">
+                      <p className="mt-2 break-all font-mono text-[11px] font-black leading-relaxed tracking-wide text-emerald-100 sm:text-xs md:text-[13px]">
                         {fnId}
                       </p>
                     </div>
@@ -313,7 +313,7 @@ export function FirePremiumProfilePage() {
                       FIRE Nepal ID
                     </span>
                   </div>
-                  <p className="mt-2.5 font-mono text-xs font-black leading-relaxed tracking-wide text-emerald-100 lg:text-[13px] xl:text-sm">
+                  <p className="mt-2.5 break-all font-mono text-xs font-black leading-relaxed tracking-wide text-emerald-100 lg:text-[13px] xl:text-sm">
                     {fnId}
                   </p>
                 </div>

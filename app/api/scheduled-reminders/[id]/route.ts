@@ -5,6 +5,7 @@ import { dbRowToReminder, reminderPatchToUpdate, type CreateScheduledReminderBod
 import { nextDueAfterPaidYmd } from "@/lib/scheduled-reminders/schedule-logic";
 import type { RepeatFrequency } from "@/lib/smart-reminders/types";
 import { REPEAT_FREQUENCIES } from "@/lib/smart-reminders/types";
+import { formatScheduledRemindersDbError } from "@/lib/supabase/scheduled-reminders-db-error";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -57,7 +58,12 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
         .eq("id", id)
         .eq("user_id", u.user.id)
         .single();
-      if (curErr || !cur) return bad("Not found", 404);
+      if (curErr) {
+        const code = "code" in curErr ? String((curErr as { code?: string }).code) : "";
+        if (code === "PGRST116") return bad("Not found", 404);
+        return bad(formatScheduledRemindersDbError(curErr.message), 500);
+      }
+      if (!cur) return bad("Not found", 404);
       const rf = cur.repeat_frequency as RepeatFrequency;
       if (rf === "once") {
         const { data, error } = await sb
@@ -67,7 +73,7 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
           .eq("user_id", u.user.id)
           .select("*")
           .single();
-        if (error) return bad(error.message, 500);
+        if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
         return NextResponse.json({ ok: true, reminder: dbRowToReminder(data as never) });
       }
       const nextDue = nextDueAfterPaidYmd(cur.due_date, rf);
@@ -78,7 +84,7 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
         .eq("user_id", u.user.id)
         .select("*")
         .single();
-      if (error) return bad(error.message, 500);
+      if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
       return NextResponse.json({ ok: true, reminder: dbRowToReminder(data as never) });
     }
 
@@ -93,7 +99,7 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
       .eq("user_id", u.user.id)
       .select("*")
       .single();
-    if (error) return bad(error.message, 500);
+    if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
     return NextResponse.json({ ok: true, reminder: dbRowToReminder(data as never) });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
@@ -109,7 +115,7 @@ export async function DELETE(_request: Request, ctx: { params: { id: string } | 
     const { data: u } = await sb.auth.getUser();
     if (!u.user) return bad("Unauthorized", 401);
     const { error } = await sb.from("scheduled_reminders").delete().eq("id", id).eq("user_id", u.user.id);
-    if (error) return bad(error.message, 500);
+    if (error) return bad(formatScheduledRemindersDbError(error.message), 500);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
