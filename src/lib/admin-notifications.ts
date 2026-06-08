@@ -3,10 +3,20 @@ import { resolveResendFromAddress, sendEmailViaResend } from "@/lib/resend-api";
 
 const LOG_PREFIX = "[FIRE Nepal admin-notify]";
 
-export function getAdminNotificationEmail(): string | null {
+/** Server-only: never log, return in API JSON, or ship to the client. */
+function readAdminNotificationEmail(): string | null {
   const v = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
   if (!v || !v.includes("@")) return null;
   return v;
+}
+
+/** Strip email-like substrings so provider error bodies cannot leak the admin inbox. */
+function redactEmailLikeSubstrings(s: string): string {
+  return s.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted]");
+}
+
+function safeLogDetail(s: string, maxLen: number): string {
+  return redactEmailLikeSubstrings(s).slice(0, maxLen);
 }
 
 /**
@@ -16,11 +26,8 @@ export function getAdminNotificationEmail(): string | null {
 export function scheduleAdminNotification(work: () => Promise<void>): void {
   const run = () =>
     work().catch((e) => {
-      console.error(
-        LOG_PREFIX,
-        "background task failed:",
-        e instanceof Error ? e.stack ?? e.message : String(e),
-      );
+      const raw = e instanceof Error ? e.stack ?? e.message : String(e);
+      console.error(LOG_PREFIX, "background task failed:", safeLogDetail(raw, 800));
     });
 
   try {
@@ -44,9 +51,9 @@ export async function sendAdminNewUserEmail(params: {
   userId: string;
   registeredAtIso: string;
 }): Promise<void> {
-  const to = getAdminNotificationEmail();
+  const to = readAdminNotificationEmail();
   if (!to) {
-    console.info(LOG_PREFIX, JSON.stringify({ event: "skip_new_user", reason: "ADMIN_NOTIFICATION_EMAIL unset" }));
+    console.info(LOG_PREFIX, JSON.stringify({ event: "skip_new_user", reason: "recipient_not_configured" }));
     return;
   }
 
@@ -82,7 +89,11 @@ export async function sendAdminNewUserEmail(params: {
   if (!r.ok) {
     console.error(
       LOG_PREFIX,
-      JSON.stringify({ event: "new_user_email_failed", status: r.status, message: r.message }),
+      JSON.stringify({
+        event: "new_user_email_failed",
+        status: r.status,
+        message: safeLogDetail(r.message, 500),
+      }),
     );
   } else {
     console.info(LOG_PREFIX, JSON.stringify({ event: "new_user_email_sent", status: r.status, resendId: r.id ?? null }));
@@ -98,12 +109,9 @@ export async function sendAdminMembershipRequestEmail(params: {
   paymentProofUrl: string;
   adminReviewUrl: string;
 }): Promise<void> {
-  const to = getAdminNotificationEmail();
+  const to = readAdminNotificationEmail();
   if (!to) {
-    console.info(
-      LOG_PREFIX,
-      JSON.stringify({ event: "skip_membership_request", reason: "ADMIN_NOTIFICATION_EMAIL unset" }),
-    );
+    console.info(LOG_PREFIX, JSON.stringify({ event: "skip_membership_request", reason: "recipient_not_configured" }));
     return;
   }
 
@@ -152,7 +160,11 @@ export async function sendAdminMembershipRequestEmail(params: {
   if (!r.ok) {
     console.error(
       LOG_PREFIX,
-      JSON.stringify({ event: "membership_request_email_failed", status: r.status, message: r.message }),
+      JSON.stringify({
+        event: "membership_request_email_failed",
+        status: r.status,
+        message: safeLogDetail(r.message, 500),
+      }),
     );
   } else {
     console.info(
