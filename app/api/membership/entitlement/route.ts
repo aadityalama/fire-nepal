@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { membershipUiBucket } from "@/lib/membership-profile-status";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ export async function GET() {
       error: profileError,
     } = await supabase
       .from("profiles")
-      .select("plan_type, suspended_at, expires_at, archived_at")
+      .select("plan_type, suspended_at, archived_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -62,7 +63,6 @@ export async function GET() {
     let profilePlan = profile?.plan_type ?? "free";
     const suspendedAt = (profile as { suspended_at?: string | null } | null)?.suspended_at ?? null;
     const archivedAt = (profile as { archived_at?: string | null } | null)?.archived_at ?? null;
-    const profileExpiresAt = (profile as { expires_at?: string | null } | null)?.expires_at ?? null;
     const subActive = sub?.status === "active";
     const subPlan = sub?.plan;
 
@@ -85,7 +85,7 @@ export async function GET() {
     const profilePaid = profilePlan === "premium" || profilePlan === "elite";
     const subPaid = subPlan === "premium" || subPlan === "elite";
 
-    const expiryIso = profileExpiresAt ?? sub?.current_period_end ?? null;
+    const expiryIso = effectiveMembershipPeriodEnd(sub?.current_period_end, null);
     const now = new Date();
     const suspended = Boolean(suspendedAt);
     const archived = Boolean(archivedAt);

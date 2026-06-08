@@ -41,7 +41,6 @@ function displayName(u: User, nameById: Map<string, string | null>): string {
 
 type ProfileLite = {
   plan_type: string;
-  expires_at: string | null;
   suspended_at: string | null;
   archived_at: string | null;
 };
@@ -70,7 +69,7 @@ export function buildMembershipRenewalSnapshot(
     if (archivedAt) continue;
 
     const suspendedAt = prof?.suspended_at ?? null;
-    const expiresAt = prof?.expires_at ?? subEndById.get(u.id) ?? null;
+    const expiresAt = subEndById.get(u.id) ?? null;
     if (!expiresAt) continue;
 
     const exp = new Date(expiresAt);

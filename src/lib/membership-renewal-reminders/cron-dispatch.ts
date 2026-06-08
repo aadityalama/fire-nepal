@@ -15,7 +15,6 @@ const MAX_SENDS_PER_RUN = 120;
 type ProfileRow = {
   id: string;
   plan_type: string;
-  expires_at: string | null;
   suspended_at: string | null;
   archived_at: string | null;
 };
@@ -78,7 +77,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
     const prof = row as ProfileRow;
     if (prof.archived_at) continue;
     if (prof.suspended_at) continue;
-    const expiresIso = prof.expires_at ?? subEnd.get(prof.id) ?? null;
+    const expiresIso = subEnd.get(prof.id) ?? null;
     if (!expiresIso) continue;
     const exp = parseISO(expiresIso);
     if (Number.isNaN(exp.getTime())) continue;

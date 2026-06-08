@@ -33,6 +33,9 @@ function need(name, minLen = 8) {
 
 loadDotEnvLocal();
 
+process.env.SUPABASE_CLI_DISABLE_TELEMETRY = process.env.SUPABASE_CLI_DISABLE_TELEMETRY ?? "1";
+process.env.DO_NOT_TRACK = process.env.DO_NOT_TRACK ?? "1";
+
 const dbUrl = need("SUPABASE_DB_URL", 20);
 const url = need("NEXT_PUBLIC_SUPABASE_URL");
 const serviceKey = need("SUPABASE_SERVICE_ROLE_KEY");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { requireAdminApi, toCsv } from "@/lib/admin/verify-admin-api";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
 export async function GET() {
@@ -17,13 +18,16 @@ export async function GET() {
     return NextResponse.json({ error }, { status: 502 });
   }
 
-  const { data: profiles } = await sb.from("profiles").select("id, plan_type, expires_at, suspended_at, archived_at");
+  const { data: profiles } = await sb.from("profiles").select("id, plan_type, suspended_at, archived_at");
+  const { data: subs } = await sb.from("subscriptions").select("user_id, current_period_end");
   const { data: names } = await sb.from("user_profiles").select("id, display_name");
   const planBy = new Map((profiles ?? []).map((p) => [p.id, p.plan_type]));
   const nameBy = new Map((names ?? []).map((n) => [n.id, n.display_name]));
 
+  const subEndBy = new Map((subs ?? []).map((s) => [s.user_id, s.current_period_end]));
+
   const expBy = new Map(
-    (profiles ?? []).map((p) => [p.id, (p as { expires_at?: string | null }).expires_at ?? ""]),
+    (profiles ?? []).map((p) => [p.id, effectiveMembershipPeriodEnd(subEndBy.get(p.id), null) ?? ""]),
   );
   const suspBy = new Map(
     (profiles ?? []).map((p) => [p.id, (p as { suspended_at?: string | null }).suspended_at ?? ""]),

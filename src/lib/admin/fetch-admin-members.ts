@@ -2,6 +2,7 @@ import "server-only";
 
 import type { User } from "@supabase/supabase-js";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import {
   membershipUiBucket,
   type MembershipUiBucket,
@@ -40,7 +41,7 @@ export async function fetchAdminMembers(): Promise<{
 
   const { data: profiles, error: pErr } = await sb
     .from("profiles")
-    .select("id, plan_type, membership_activated_at, expires_at, suspended_at, archived_at");
+    .select("id, plan_type, membership_activated_at, suspended_at, archived_at");
 
   if (pErr) {
     return { members: [], error: pErr.message };
@@ -76,8 +77,7 @@ export async function fetchAdminMembers(): Promise<{
     const planType: PlanType =
       rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
     const sub = subBy.get(u.id);
-    const expiresAt =
-      (prof?.expires_at as string | null | undefined) ?? sub?.current_period_end ?? null;
+    const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, null);
     const membershipActivatedAt =
       (prof?.membership_activated_at as string | null | undefined) ??
       (sub?.current_period_start as string | null | undefined) ??

@@ -4,6 +4,7 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { formatMembershipReminderType } from "@/lib/membership-renewal-reminders/reminder-next";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { membershipUiBucket } from "@/lib/membership-profile-status";
 
 export type MemberCrmMemberScore = "vip" | "regular" | "new_member" | "inactive";
@@ -134,7 +135,7 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   const planType: MemberCrmPayload["planType"] =
     rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
 
-  const expiresAt = prof.expires_at ?? sub?.current_period_end ?? null;
+  const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, (prof as { expires_at?: string | null }).expires_at);
   const archivedAt = (prof as { archived_at?: string | null }).archived_at ?? null;
   const bucket = membershipUiBucket({
     planType,

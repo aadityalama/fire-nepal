@@ -7,6 +7,7 @@ import {
   MEMBERSHIP_AUTO_REMINDER_TYPES,
   nextUnsentAutoReminder,
 } from "@/lib/membership-renewal-reminders/reminder-next";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
 export type AdminMemberNoteRow = {
@@ -85,7 +86,7 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
     .eq("user_id", userId)
     .maybeSingle();
 
-  const expiresAt = prof?.expires_at ?? sub?.current_period_end ?? null;
+  const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, (prof as { expires_at?: string | null }).expires_at);
   const membershipActivatedAt = prof?.membership_activated_at ?? sub?.current_period_start ?? null;
 
   const suspendedAt = prof?.suspended_at ?? null;

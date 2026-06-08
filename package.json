@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "generate:investment-registry": "node scripts/generate-investment-registry.mjs",
     "verify:membership-storage": "node scripts/verify-membership-payment-storage.mjs",
-    "db:push:remote": "npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
+    "db:push:remote": "env SUPABASE_CLI_DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
+    "db:push-verify:production": "node scripts/push-verify-production-schema.mjs",
     "db:apply-verify:membership": "node scripts/apply-and-verify-supabase-membership.mjs",
     "revenue:backfill-membership": "node scripts/backfill-membership-revenue-events.mjs",
     "revenue:verify-membership": "node scripts/backfill-membership-revenue-events.mjs --verify-only"

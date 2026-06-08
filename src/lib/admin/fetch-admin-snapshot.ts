@@ -9,6 +9,7 @@ import {
   emptyMembershipRenewalReminderSnapshot,
   type MembershipRenewalReminderSnapshot,
 } from "@/lib/admin/membership-renewal-reminder-snapshot";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { membershipUiBucket, type PlanType } from "@/lib/membership-profile-status";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -197,7 +198,6 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     {
       plan_type: string;
       last_active_at: string | null;
-      expires_at: string | null;
       suspended_at: string | null;
       archived_at: string | null;
     }
@@ -205,13 +205,12 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   if (sb) {
     const { data: profiles, error: pErr } = await sb
       .from("profiles")
-      .select("id, plan_type, last_active_at, expires_at, suspended_at, archived_at");
+      .select("id, plan_type, last_active_at, suspended_at, archived_at");
     if (pErr) loadError = loadError ?? pErr.message;
     for (const row of profiles ?? []) {
       profileByUser.set(row.id, {
         plan_type: row.plan_type,
         last_active_at: row.last_active_at,
-        expires_at: row.expires_at,
         suspended_at: row.suspended_at,
         archived_at: (row as { archived_at?: string | null }).archived_at ?? null,
       });
@@ -385,7 +384,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     const planRaw = p?.plan_type ?? "free";
     const planType: PlanType =
       planRaw === "premium" || planRaw === "elite" || planRaw === "free" ? planRaw : "free";
-    const exp = p?.expires_at ?? subEndByUser.get(u.id) ?? null;
+    const exp = effectiveMembershipPeriodEnd(subEndByUser.get(u.id), null);
     const bucket = membershipUiBucket({
       planType,
       expiresAtIso: exp,

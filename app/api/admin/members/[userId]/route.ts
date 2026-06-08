@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { MEMBER_PERMANENT_DELETE_CONFIRMATION } from "@/lib/admin/member-permanent-delete-phrase";
 import { insertAdminMemberCrmEvent } from "@/lib/admin/member-crm-events";
 import { requireAdminApi, requireSuperAdminApi } from "@/lib/admin/verify-admin-api";
+import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
 type RouteParams = { params: Promise<{ userId: string }> };
@@ -279,7 +280,16 @@ export async function PATCH(request: Request, ctx: RouteParams) {
   const amountRaw = body.amountNpr;
   const amountNpr = Number.isFinite(Number(amountRaw)) ? Math.max(0, Number(amountRaw)) : 0;
 
-  const existingExpiry = (profile as { expires_at?: string | null } | null)?.expires_at;
+  const { data: subForRenew } = await admin
+    .from("subscriptions")
+    .select("current_period_end")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const existingExpiry = effectiveMembershipPeriodEnd(
+    subForRenew?.current_period_end,
+    (profile as { expires_at?: string | null }).expires_at,
+  );
   const base = existingExpiry ? new Date(existingExpiry) : now;
   const startFrom = base.getTime() > now.getTime() ? base : now;
   const newEnd = addDays(startFrom, extendDays);
