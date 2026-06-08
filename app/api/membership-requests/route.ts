@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { scheduleAdminNotification, sendAdminMembershipRequestEmail } from "@/lib/admin-notifications";
 import {
   MEMBERSHIP_PAYMENT_BUCKET,
   MEMBERSHIP_PLAN_PRICE_NPR,
   type MembershipPaymentMethod,
   type MembershipRequestPlan,
 } from "@/lib/membership-payment";
+import { getSiteOriginForServerAuthRedirect } from "@/lib/public-site-url";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { ensureMembershipPaymentProofsBucket } from "@/lib/supabase/ensure-membership-payment-bucket";
@@ -164,6 +166,39 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+
+    const origin = getSiteOriginForServerAuthRedirect(request);
+    const adminReviewUrl = `${origin}/admin/membership-requests`;
+    const meta = user.user_metadata as Record<string, unknown> | undefined;
+    const payerName =
+      (typeof meta?.name === "string" && meta.name.trim()) ||
+      (typeof meta?.full_name === "string" && meta.full_name.trim()) ||
+      email.split("@")[0] ||
+      "Member";
+    const planLabel = plan === "elite" ? "Elite" : "Premium";
+    const submittedAtIso = row.created_at ?? new Date().toISOString();
+
+    scheduleAdminNotification(async () => {
+      const { data: signed, error: signErr } = await admin.storage
+        .from(MEMBERSHIP_PAYMENT_BUCKET)
+        .createSignedUrl(proof_url, 604800);
+      if (signErr) {
+        console.error("MEMBERSHIP_ADMIN_NOTIFY_SIGN_URL", signErr.message);
+      }
+      const paymentProofUrl =
+        signed?.signedUrl ??
+        `${adminReviewUrl} (open pending requests; proof storage path: ${MEMBERSHIP_PAYMENT_BUCKET}/${proof_url})`;
+
+      await sendAdminMembershipRequestEmail({
+        name: payerName,
+        email,
+        planLabel,
+        amountNpr: amount_npr,
+        submittedAtIso,
+        paymentProofUrl,
+        adminReviewUrl,
+      });
+    });
 
     return NextResponse.json({ request: row });
   } catch (e) {

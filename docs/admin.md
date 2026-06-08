@@ -8,7 +8,8 @@
 ## Prerequisites
 
 1. **Supabase** — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and server-only `SUPABASE_SERVICE_ROLE_KEY` (used for Auth Admin list, aggregates, CSV exports, and cron health writes).
-2. **Grant admin** — After migration, insert your auth user id:
+2. **Admin email alerts (optional)** — Set `ADMIN_NOTIFICATION_EMAIL` to the inbox that should receive **new user** and **new membership payment request** notifications (sent via Resend using the same `RESEND_API_KEY` / `RESEND_FROM_EMAIL` as other transactional mail). If unset, the app skips these emails and logs a skip reason.
+3. **Grant admin** — After migration, insert your auth user id:
 
 ```sql
 insert into public.admin_users (user_id, role)
@@ -27,7 +28,7 @@ npm run admin:list-users
 npm run admin:grant -- --email you@example.com
 ```
 
-3. **Migrations** — Apply `supabase/migrations/20250602160000_admin_dashboard.sql` (adds `profiles`, `subscriptions`, `revenue_events`, `reminder_logs`, `admin_users`, `system_health`). If that migration is already applied, `admin_users` exists; you only need the insert/upsert above.
+4. **Migrations** — Apply `supabase/migrations/20250602160000_admin_dashboard.sql` (adds `profiles`, `subscriptions`, `revenue_events`, `reminder_logs`, `admin_users`, `system_health`). If that migration is already applied, `admin_users` exists; you only need the insert/upsert above.
 
 ## Troubleshooting
 

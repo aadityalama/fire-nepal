@@ -6,6 +6,7 @@ import { parsePendingVerifyCookie } from "@/auth/server/pending-verify-cookie";
 import { signUserSession } from "@/auth/server/session-token";
 import { toPublicUser, toSessionClaims, verifyOtpAndActivate } from "@/auth/server/user-store";
 import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
+import { scheduleAdminNotification, sendAdminNewUserEmail } from "@/lib/admin-notifications";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
 
 export const runtime = "nodejs";
@@ -56,6 +57,16 @@ export async function POST(req: Request) {
 
   const user: ProductAuthUser = toPublicUser(result.user);
   const token = signUserSession(toSessionClaims(result.user), secret);
+
+  scheduleAdminNotification(async () => {
+    await sendAdminNewUserEmail({
+      name: result.user.name,
+      email: result.user.email,
+      userId: result.user.id,
+      registeredAtIso: result.user.createdAt,
+    });
+  });
+
   const res = NextResponse.json({ user });
   clearPendingCookie(res);
   res.cookies.set(FN_SESSION_COOKIE, token, {

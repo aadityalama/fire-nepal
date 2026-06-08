@@ -268,6 +268,17 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (error) return { ok: false as const, error: error.message };
+        if (data.user) {
+          const origin = getPublicSiteOrigin() || (typeof window !== "undefined" ? window.location.origin : "");
+          if (origin) {
+            void fetch(`${origin}/api/admin-notifications/new-user`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: data.user.id }),
+            }).catch((e) => console.error("[auth] admin new-user notify:", e));
+          }
+        }
         if (data.user && !data.session) {
           return {
             ok: true as const,
