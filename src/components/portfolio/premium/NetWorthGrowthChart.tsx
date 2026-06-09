@@ -108,7 +108,7 @@ export function NetWorthGrowthChart() {
   const compact = useMediaQuery("(max-width: 639px)");
 
   const [range, setRange] = useState<(typeof tabs)[number]["id"]>("yearly");
-  const history = state.netWorthHistory ?? [];
+  const history = useMemo(() => state.netWorthHistory ?? [], [state.netWorthHistory]);
 
   const data = useMemo(() => {
     const pts = bucketHistory(history, range);
@@ -132,28 +132,31 @@ export function NetWorthGrowthChart() {
   const isEmptyHistory = history.length < 2;
 
   return (
-    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-3 sm:p-3.5 xl:p-3.5">
-      <div className="relative z-10 flex flex-col gap-2.5 border-b border-white/[0.07] pb-2.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-3">
-        <div className="min-w-0 space-y-0.5 sm:space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:text-[11px]">Net worth growth</p>
-          <p className="text-[1.38rem] font-semibold tabular-nums tracking-[-0.03em] text-white sm:text-[1.5rem] sm:leading-tight xl:text-[1.42rem]">
-            {formatNpr(hydrated ? totals.netWorthNpr : 0)}
-          </p>
-          <p className="max-w-lg text-[11px] font-medium leading-relaxed text-zinc-400/95 sm:text-xs lg:line-clamp-2">
+    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-2.5 sm:p-3 xl:p-3">
+      <div className="relative z-10 flex flex-col gap-2 border-b border-white/[0.07] pb-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-2">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500 sm:text-[10px]">Net worth growth</p>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+            <p className="text-base font-bold tabular-nums tracking-tight text-white sm:text-lg xl:text-[1.15rem]">
+              {formatNpr(hydrated ? totals.netWorthNpr : 0)}
+            </p>
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px]">Primary</span>
+          </div>
+          <p className="max-w-lg text-[9px] font-medium leading-snug text-zinc-500 line-clamp-2 sm:text-[10px] lg:line-clamp-2">
             {isEmptyHistory
-              ? "Log net worth over time as you update your portfolio — your curve appears here automatically."
-              : "Compounding trajectory from your saved net worth history."}
+              ? "Log snapshots as you update your portfolio — the curve appears automatically."
+              : "Trajectory from saved net worth history."}
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-xl border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:w-auto sm:flex-nowrap sm:rounded-2xl sm:p-0.5">
+        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-lg border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:w-auto sm:flex-nowrap sm:rounded-xl sm:p-0.5">
           {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setRange(t.id)}
-              className={`min-h-[36px] flex-1 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-h-0 sm:flex-none sm:rounded-lg sm:px-3 sm:py-1.5 sm:text-[11px] ${
+              className={`min-h-[32px] flex-1 rounded-md px-2 py-1 text-[9px] font-semibold transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-h-0 sm:flex-none sm:rounded-md sm:px-2.5 sm:py-1 sm:text-[10px] ${
                 range === t.id
-                  ? "bg-gradient-to-b from-white/[0.16] to-white/[0.07] text-white shadow-[0_0_36px_-8px_rgba(52,211,153,0.38)] ring-1 ring-emerald-400/35"
+                  ? "bg-gradient-to-b from-white/[0.16] to-white/[0.07] text-white shadow-[0_0_28px_-8px_rgba(52,211,153,0.35)] ring-1 ring-emerald-400/30"
                   : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-100"
               }`}
             >
@@ -164,15 +167,15 @@ export function NetWorthGrowthChart() {
       </div>
 
       {hasMilestones ? (
-        <div className="relative z-10 mt-1.5 sm:mt-2">
+        <div className="relative z-10 mt-1 sm:mt-1.5">
           <MilestoneCallout points={data} />
         </div>
       ) : null}
 
       <div
-        className={`relative z-10 flex min-h-0 flex-1 flex-col pl-0 sm:pl-0.5 ${hasMilestones ? "mt-1.5 sm:mt-2" : "mt-1.5"}`}
+        className={`relative z-10 flex min-h-0 flex-1 flex-col pl-0 sm:pl-0.5 ${hasMilestones ? "mt-1 sm:mt-1.5" : "mt-1"}`}
       >
-        <div className="min-h-[min(44vw,176px)] w-full flex-1 sm:min-h-[176px] lg:min-h-[188px] xl:min-h-[196px]">
+        <div className="min-h-[min(38vw,140px)] w-full flex-1 sm:min-h-[148px] lg:min-h-[156px] xl:min-h-[160px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}

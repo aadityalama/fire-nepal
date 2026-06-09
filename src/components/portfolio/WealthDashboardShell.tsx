@@ -515,7 +515,7 @@ export function WealthDashboardShell({
           </div>
         </aside>
 
-        <div className="relative min-h-0 w-full min-w-0 flex-1 self-start px-4 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-7 xl:px-6 xl:py-7 2xl:px-8 2xl:py-8">
+        <div className="relative min-h-0 w-full min-w-0 flex-1 self-start px-3 py-4 sm:px-4 sm:py-5 lg:px-5 lg:py-6 xl:px-6 xl:py-6 2xl:px-7 2xl:py-7">
           {children}
         </div>
       </div>

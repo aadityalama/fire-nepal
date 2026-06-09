@@ -39,12 +39,12 @@ function fiCountdownLabel(monthsToFi: number | null | undefined): string {
 
 export function FirePremiumPortfolioDashboard() {
   const { user } = useProductAuth();
-  const { totals, passiveMonthly, state, hydrated, coachSnapshot, usdPerNpr } = useWealthPortfolio();
+  const { totals, passiveMonthly, state, hydrated, coachSnapshot, usdPerNpr, fireScore } = useWealthPortfolio();
   const { summary } = useUnifiedFireSummary();
 
   const displayName = user?.name?.trim() || "Member";
 
-  const nwHistory = state.netWorthHistory ?? [];
+  const nwHistory = useMemo(() => state.netWorthHistory ?? [], [state.netWorthHistory]);
   const nwSpark = useMemo(() => {
     const sorted = [...nwHistory].sort((a, b) => a.month.localeCompare(b.month));
     const vals = sorted.map((p) => p.netWorthNpr);
@@ -80,10 +80,11 @@ export function FirePremiumPortfolioDashboard() {
 
   return (
     <div className="fn-premium-portfolio-root w-full min-w-0 max-w-full">
-      <div className="fn-premium-portfolio-scale-inner fn-premium-portfolio wealth-dash-flow w-full min-w-0 max-w-full overflow-x-hidden pb-2 sm:pb-3 xl:pb-4">
+      <div className="fn-premium-portfolio-scale-inner fn-premium-portfolio wealth-dash-flow w-full min-w-0 max-w-full overflow-x-hidden pb-2 sm:pb-2.5 xl:pb-3">
         <DashboardHeader userName={displayName} />
 
-        <section className="mt-5 grid grid-cols-1 items-stretch gap-3 sm:mt-6 sm:grid-cols-2 sm:gap-3 lg:mt-5 lg:gap-3.5 xl:grid-cols-5 xl:gap-3.5 2xl:gap-4">
+        {/* Mobile: 2×2 core KPIs; tablet: 4-up; desktop: 5 columns with FI date at end */}
+        <section className="mt-3 grid grid-cols-2 items-stretch gap-2 sm:mt-4 sm:gap-2.5 lg:grid-cols-4 lg:gap-2.5 xl:grid-cols-5 xl:gap-2.5 2xl:gap-3">
           <KpiMetricCard
             label="Total net worth"
             icon={Wallet}
@@ -128,20 +129,40 @@ export function FirePremiumPortfolioDashboard() {
               fireNumber > 0 ? `${firePct.toFixed(1)}% of your FIRE number` : "Track Your First Expense in cashflow to set a FIRE number."
             }
           />
-          <KpiMetricCard
-            label="Estimated FIRE date"
-            icon={CalendarClock}
-            value={formatEstFiDate(fiMonths)}
-            deltaLabel="Desk projection from your workspace"
-            deltaPositive
-            sparkline={fiSpark}
-            sparkVariant="violet"
-            footer={fiCountdownLabel(fiMonths)}
-          />
+          <div className="col-span-2 lg:col-span-4 xl:col-span-1">
+            <KpiMetricCard
+              label="Estimated FIRE date"
+              icon={CalendarClock}
+              value={formatEstFiDate(fiMonths)}
+              deltaLabel="Desk projection from your workspace"
+              deltaPositive
+              sparkline={fiSpark}
+              sparkVariant="violet"
+              footer={fiCountdownLabel(fiMonths)}
+            />
+          </div>
         </section>
 
+        {/* Executive strip: dense secondary context (display-only; totals from context) */}
+        <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-xl border border-white/[0.06] bg-black/25 px-2.5 py-2 ring-1 ring-white/[0.04] backdrop-blur-md sm:grid-cols-4 sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-2.5">
+          {(
+            [
+              { name: "Total assets", primary: formatNpr(hydrated ? totals.totalAssetsNpr : 0), sub: "Gross stack" },
+              { name: "Liabilities", primary: formatNpr(hydrated ? totals.liabilitiesNpr : 0), sub: "Debt" },
+              { name: "Investable", primary: formatNpr(hydrated ? totals.investableNpr : 0), sub: "Liquid + listed" },
+              { name: "FIRE readiness score", primary: `${fireScore}`, sub: "/ 100 · composite" },
+            ] as const
+          ).map((row) => (
+            <div key={row.name} className="min-w-0 border-b border-white/[0.04] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
+              <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-500 sm:text-[9px]">{row.name}</p>
+              <p className="mt-0.5 truncate text-[11px] font-black tabular-nums tracking-tight text-white sm:text-xs">{row.primary}</p>
+              <p className="truncate text-[8px] font-semibold text-zinc-500 sm:text-[9px]">{row.sub}</p>
+            </div>
+          ))}
+        </div>
+
         {totals.totalAssetsNpr <= 0 && totals.liabilitiesNpr <= 0 ? (
-          <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] px-5 py-8 text-center">
+          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] px-4 py-5 text-center sm:mt-5 sm:px-5 sm:py-6">
             <p className="text-lg font-black text-white">Start Your FIRE Journey</p>
             <p className="mt-2 text-sm font-medium text-emerald-100/75">
               Your dashboard starts at zero. Add banking, investments, or property from the sidebar — everything updates from your own
@@ -156,9 +177,9 @@ export function FirePremiumPortfolioDashboard() {
           </div>
         ) : null}
 
-        <div className="mt-4 flex min-w-0 flex-col gap-4 sm:mt-5 lg:mt-4 lg:flex-row lg:items-start lg:gap-5 xl:gap-6">
+        <div className="mt-3 flex min-w-0 flex-col gap-2.5 sm:mt-4 lg:mt-3 lg:flex-row lg:items-start lg:gap-3 xl:gap-4">
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0">
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch lg:gap-3 xl:gap-3.5">
+            <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch lg:gap-2.5 xl:gap-3">
               <div className="flex min-h-0 min-w-0">
                 <NetWorthGrowthChart />
               </div>
@@ -168,14 +189,14 @@ export function FirePremiumPortfolioDashboard() {
             </div>
           </div>
 
-          <div className="min-w-0 w-full shrink-0 lg:flex lg:max-h-[min(72dvh,520px)] lg:w-[min(100%,292px)] lg:min-w-[260px] lg:max-w-[320px] lg:flex-col lg:overflow-hidden xl:max-h-[min(64dvh,480px)] xl:w-[280px] xl:min-w-[272px] xl:max-w-[300px]">
+          <div className="min-w-0 w-full shrink-0 lg:flex lg:max-h-[min(78dvh,560px)] lg:w-[min(100%,272px)] lg:min-w-[248px] lg:max-w-[300px] lg:flex-col lg:overflow-hidden xl:max-h-[min(70dvh,440px)] xl:w-[264px] xl:min-w-[256px] xl:max-w-[280px]">
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-full xl:pr-0.5">
               <InsightsSidebar />
             </div>
           </div>
         </div>
 
-        <div id="premium-portfolio-assets" className="mt-4 min-w-0 scroll-mt-28 sm:mt-5 xl:mt-4">
+        <div id="premium-portfolio-assets" className="mt-3 min-w-0 scroll-mt-24 sm:mt-4 xl:mt-3">
           <AssetsDataTable />
         </div>
 
