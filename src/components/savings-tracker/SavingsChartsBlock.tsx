@@ -21,7 +21,7 @@ import {
   MONTHLY_SAVINGS_SERIES,
   YEARLY_GROWTH,
 } from "@/components/savings-tracker/savings-tracker-data";
-import { formatKrwInteger } from "@/components/savings-tracker/savings-currency";
+import { formatNprAxisShort, formatNprInteger } from "@/components/savings-tracker/savings-currency";
 
 function ChartSkeleton({ light }: { light: boolean }) {
   return (
@@ -86,7 +86,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
         <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
           Monthly trend
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Savings (KRW)</p>
+        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Savings (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={monthly} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
@@ -98,7 +98,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
               </defs>
               <CartesianGrid strokeDasharray="3 6" stroke={gridColor} vertical={false} />
               <XAxis dataKey="label" {...axisProps} />
-              <YAxis {...axisProps} tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`} width={40} />
+              <YAxis {...axisProps} tickFormatter={(v) => formatNprAxisShort(Number(v))} width={44} />
               <Tooltip
                 contentStyle={{
                   background: tooltipBg,
@@ -107,11 +107,11 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-                formatter={(value: number) => [formatKrwInteger(value), "Saved"]}
+                formatter={(value: number) => [formatNprInteger(value), "Saved"]}
               />
               <Area
                 type="monotone"
-                dataKey="savingsKrw"
+                dataKey="savingsNpr"
                 stroke="#10b981"
                 strokeWidth={2.25}
                 fill={`url(#${gid}-m)`}
@@ -128,7 +128,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
         <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
           Yearly growth
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Cumulative corpus (KRW)</p>
+        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Cumulative corpus (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={[...YEARLY_GROWTH]} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
@@ -140,7 +140,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
               </defs>
               <CartesianGrid strokeDasharray="3 6" stroke={gridColor} vertical={false} />
               <XAxis dataKey="year" {...axisProps} />
-              <YAxis {...axisProps} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} width={40} />
+              <YAxis {...axisProps} tickFormatter={(v) => formatNprAxisShort(Number(v))} width={44} />
               <Tooltip
                 contentStyle={{
                   background: tooltipBg,
@@ -149,10 +149,10 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-                formatter={(value: number) => [formatKrwInteger(value), "Total"]}
+                formatter={(value: number) => [formatNprInteger(value), "Total"]}
               />
               <Bar
-                dataKey="cumulativeKrw"
+                dataKey="cumulativeNpr"
                 fill={`url(#${gid}-b)`}
                 radius={[10, 10, 4, 4]}
                 isAnimationActive
@@ -168,13 +168,13 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
         <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
           FIRE glide path
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Actual vs projected (KRW)</p>
+        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Actual vs projected (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={FIRE_PROGRESS_SERIES} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 6" stroke={gridColor} />
               <XAxis dataKey="month" {...axisProps} />
-              <YAxis {...axisProps} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} width={44} />
+              <YAxis {...axisProps} tickFormatter={(v) => formatNprAxisShort(Number(v))} width={48} />
               <Tooltip
                 contentStyle={{
                   background: tooltipBg,
@@ -183,7 +183,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-                formatter={(value: number) => formatKrwInteger(value)}
+                formatter={(value: number) => formatNprInteger(value)}
               />
               <Legend
                 wrapperStyle={{ fontSize: 11, fontWeight: 800, paddingTop: 4 }}

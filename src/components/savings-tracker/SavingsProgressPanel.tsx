@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { MONTHLY_SAVINGS_SERIES, SAVINGS_DASH_META } from "@/components/savings-tracker/savings-tracker-data";
-import { formatKrwInteger } from "@/components/savings-tracker/savings-currency";
+import { formatNprInteger } from "@/components/savings-tracker/savings-currency";
 import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
 
 function Meter({
@@ -39,7 +39,7 @@ function Meter({
 export function SavingsProgressPanel() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const max = useMemo(() => Math.max(1, ...MONTHLY_SAVINGS_SERIES.map((m) => m.savingsKrw)), []);
+  const max = useMemo(() => Math.max(1, ...MONTHLY_SAVINGS_SERIES.map((m) => m.savingsNpr)), []);
 
   return (
     <section className={`wealth-glass relative overflow-hidden p-4 sm:p-5 ${light ? "shadow-[0_12px_40px_-24px_rgba(15,23,42,0.08)]" : ""}`}>
@@ -74,13 +74,13 @@ export function SavingsProgressPanel() {
           <p className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Last 12 months</p>
           <div className="flex h-36 items-end gap-1.5 sm:gap-2">
             {MONTHLY_SAVINGS_SERIES.map((m) => {
-              const h = (m.savingsKrw / max) * 100;
+              const h = (m.savingsNpr / max) * 100;
               return (
                 <div key={m.key} className="group flex min-w-0 flex-1 flex-col items-center justify-end">
                   <div
                     className="relative w-full max-w-[2.25rem] rounded-t-lg bg-gradient-to-t from-emerald-800/25 via-emerald-500/80 to-lime-400 shadow-[0_0_24px_-8px_rgba(16,185,129,0.35)] motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-out sm:max-w-[2.75rem] dark:from-emerald-950/40 dark:via-emerald-500/70 dark:to-lime-300/90 dark:shadow-[0_0_28px_-6px_rgba(52,211,153,0.25)] motion-safe:group-hover:brightness-110 motion-safe:group-hover:translate-y-[-2px]"
                     style={{ height: `${Math.max(12, h)}%` }}
-                    title={formatKrwInteger(m.savingsKrw)}
+                    title={formatNprInteger(m.savingsNpr)}
                   />
                   <span className="mt-2 text-[9px] font-black uppercase tracking-wide text-slate-400 dark:text-zinc-500 sm:text-[10px]">
                     {m.label}

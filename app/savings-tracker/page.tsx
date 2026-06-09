@@ -4,7 +4,7 @@ import { SavingsTrackerDashboard } from "@/components/savings-tracker/SavingsTra
 export const metadata: Metadata = {
   title: "Savings Tracker | FIRE Nepal",
   description:
-    "Premium KRW/NPR savings dashboard — FIRE glide path, analytics, and AI-style insights for Nepalis abroad (local-first demo).",
+    "Premium NPR savings dashboard — FIRE glide path, analytics, and AI-style insights for Nepalis abroad (local-first demo).",
 };
 
 export default function SavingsTrackerPage() {

@@ -1,4 +1,4 @@
-import { NPR_PER_KRW } from "@/components/savings-tracker/savings-tracker-data";
+import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
 export const RETURN_PLANNER_STORAGE_KEY = "fn-return-to-nepal-planner-v1";
@@ -11,7 +11,7 @@ export const DEFAULT_RETURN_PLANNER_STATE: ReturnToNepalPlannerState = {
   monthlySavingsKrw: 0,
   koreaYearsWorked: 0,
   plannedKoreaYearsRemaining: 0,
-  nprPerKrw: NPR_PER_KRW,
+  nprPerKrw: 1 / FALLBACK_KRW_PER_NPR,
   nepalInflationPct: 0,
   targetReturnYear: new Date().getFullYear() + 5,
   adults: 1,

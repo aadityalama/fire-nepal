@@ -17,6 +17,7 @@ import {
   type WealthLifecycleResult,
   type WealthSimulationParams,
 } from "@/lib/fire-calculator-model";
+import { formatNprInteger } from "@/components/savings-tracker/savings-currency";
 
 type FireCalculatorContextValue = {
   currentSavingsNpr: number | undefined;
@@ -123,7 +124,7 @@ export function FireCalculatorProvider({ children }: { children: ReactNode }) {
     return ((b - a) / a) * 100;
   }, [wealthResult.yearly]);
 
-  const formatMoney = useCallback((npr: number) => `रु ${Math.round(npr).toLocaleString("en-IN")}`, []);
+  const formatMoney = useCallback((npr: number) => formatNprInteger(npr), []);
 
   const value = useMemo<FireCalculatorContextValue>(
     () => ({

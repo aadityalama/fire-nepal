@@ -121,7 +121,7 @@ export function OnboardingFlow() {
                   placeholder="e.g. 350000"
                 />
               </label>
-              <p className="text-xs font-medium text-zinc-500">Use a single monthly figure in NPR for now — KRW desks still convert live inside tools.</p>
+              <p className="text-xs font-medium text-zinc-500">Use a single monthly figure in NPR for now — other tools keep their own currency rules.</p>
             </div>
           ) : null}
 

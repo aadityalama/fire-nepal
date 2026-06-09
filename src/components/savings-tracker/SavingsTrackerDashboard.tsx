@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { SavingsChartsBlock } from "@/components/savings-tracker/SavingsChartsBlock";
-import { formatKrwInteger, formatNprInteger, formatPct, krwToNpr } from "@/components/savings-tracker/savings-currency";
+import { formatNprInteger, formatPct } from "@/components/savings-tracker/savings-currency";
 import { SavingsInsightsPanel } from "@/components/savings-tracker/SavingsInsightsPanel";
 import { SavingsProgressPanel } from "@/components/savings-tracker/SavingsProgressPanel";
 import { SavingsQuickActionsStrip } from "@/components/savings-tracker/SavingsQuickActionsStrip";
@@ -13,8 +13,6 @@ import { SAVINGS_DASH_META } from "@/components/savings-tracker/savings-tracker-
 import { SavingsStatCounter } from "@/components/savings-tracker/SavingsStatCounter";
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-
-type PrimaryCurrency = "krw" | "npr";
 
 function AnalyticsTile({
   label,
@@ -45,7 +43,6 @@ function AnalyticsTile({
 export function SavingsTrackerDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const [primary, setPrimary] = useState<PrimaryCurrency>("krw");
   const [chartsReady, setChartsReady] = useState(false);
 
   useEffect(() => {
@@ -53,17 +50,8 @@ export function SavingsTrackerDashboard() {
     return () => window.clearTimeout(id);
   }, []);
 
-  const totalNpr = krwToNpr(SAVINGS_DASH_META.totalSavingsKrw);
-  const monthlyNpr = krwToNpr(SAVINGS_DASH_META.monthlySavingsKrw);
-  const primaryTotal = primary === "krw" ? SAVINGS_DASH_META.totalSavingsKrw : totalNpr;
-  const primaryMonthly = primary === "krw" ? SAVINGS_DASH_META.monthlySavingsKrw : monthlyNpr;
-  const secondaryLine =
-    primary === "krw"
-      ? `≈ ${formatNprInteger(totalNpr)} at NPR/KRW reference rate`
-      : `≈ ${formatKrwInteger(SAVINGS_DASH_META.totalSavingsKrw)}`;
-
-  const secondaryMonthly =
-    primary === "krw" ? formatNprInteger(monthlyNpr) : formatKrwInteger(SAVINGS_DASH_META.monthlySavingsKrw);
+  const totalNpr = SAVINGS_DASH_META.totalSavingsNpr;
+  const monthlyNpr = SAVINGS_DASH_META.monthlySavingsNpr;
 
   return (
     <WealthDashboardShell
@@ -101,7 +89,7 @@ export function SavingsTrackerDashboard() {
             </span>
           }
           title="Savings command center"
-          subtitle="KRW earned abroad, NPR home lens, and FIRE acceleration — composed like a modern fintech OS."
+          subtitle="Savings & FIRE Progress — composed like a modern fintech OS."
         />
 
         <section
@@ -124,65 +112,29 @@ export function SavingsTrackerDashboard() {
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
                   Overview
                 </p>
-                <div
-                  className={`inline-flex rounded-full border p-0.5 text-[11px] font-black ${
-                    light ? "border-slate-200/90 bg-white/80" : "border-white/10 bg-black/30"
-                  }`}
-                  role="group"
-                  aria-label="Primary display currency"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setPrimary("krw")}
-                    className={`rounded-full px-3 py-1.5 transition ${
-                      primary === "krw"
-                        ? "bg-gradient-to-r from-emerald-600 to-lime-500 text-white shadow-md"
-                        : "text-slate-600 dark:text-zinc-400"
-                    }`}
-                  >
-                    KRW
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPrimary("npr")}
-                    className={`rounded-full px-3 py-1.5 transition ${
-                      primary === "npr"
-                        ? "bg-gradient-to-r from-emerald-600 to-lime-500 text-white shadow-md"
-                        : "text-slate-600 dark:text-zinc-400"
-                    }`}
-                  >
-                    NPR
-                  </button>
-                </div>
               </div>
 
               <h2 className="mt-3 max-w-xl text-2xl font-black tracking-[-0.04em] text-slate-900 dark:text-white sm:text-3xl lg:text-[2rem] lg:leading-[1.12]">
                 Total savings
               </h2>
               <p className="mt-2 max-w-lg text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
-                {secondaryLine}
+                All figures in NPR with Indian-style grouping (thousand, lakh, crore).
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-500">Balance</p>
                   <p className="mt-1 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100 sm:text-3xl">
-                    {primary === "krw" ? (
-                      <SavingsStatCounter value={primaryTotal} format={formatKrwInteger} />
-                    ) : (
-                      <SavingsStatCounter value={primaryTotal} format={formatNprInteger} />
-                    )}
+                    <SavingsStatCounter value={totalNpr} format={formatNprInteger} />
                   </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">This month · {secondaryMonthly}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">
+                    This month · {formatNprInteger(monthlyNpr)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-500">Monthly savings</p>
                   <p className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-                    {primary === "krw" ? (
-                      <SavingsStatCounter value={primaryMonthly} format={formatKrwInteger} durationMs={880} />
-                    ) : (
-                      <SavingsStatCounter value={primaryMonthly} format={formatNprInteger} durationMs={880} />
-                    )}
+                    <SavingsStatCounter value={monthlyNpr} format={formatNprInteger} durationMs={880} />
                   </p>
                   <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Recurring + one-offs</p>
                 </div>
@@ -208,10 +160,8 @@ export function SavingsTrackerDashboard() {
             >
               <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/80">FIRE target</p>
               <p className="mt-2 text-sm font-bold text-slate-600 dark:text-zinc-300">Corpus target</p>
-              <p className="mt-1 text-xl font-black text-slate-900 dark:text-white">{formatKrwInteger(SAVINGS_DASH_META.fireTargetKrw)}</p>
-              <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">
-                ≈ {formatNprInteger(krwToNpr(SAVINGS_DASH_META.fireTargetKrw))} · glide {SAVINGS_DASH_META.fireTargetProgressPct}%
-              </p>
+              <p className="mt-1 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(SAVINGS_DASH_META.fireTargetNpr)}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Glide {SAVINGS_DASH_META.fireTargetProgressPct}%</p>
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-lime-400 motion-safe:transition-[width] motion-safe:duration-1000 motion-safe:ease-out"
@@ -242,13 +192,13 @@ export function SavingsTrackerDashboard() {
             <AnalyticsTile
               light={light}
               label="Best savings month"
-              value={formatKrwInteger(SAVINGS_DASH_META.bestMonthKrw)}
+              value={formatNprInteger(SAVINGS_DASH_META.bestMonthNpr)}
               hint={SAVINGS_DASH_META.bestMonthLabel}
             />
             <AnalyticsTile
               light={light}
               label="Average monthly"
-              value={formatKrwInteger(SAVINGS_DASH_META.avgMonthlyKrw)}
+              value={formatNprInteger(SAVINGS_DASH_META.avgMonthlyNpr)}
               hint="Trailing 12 months (when tracked)"
             />
             <AnalyticsTile

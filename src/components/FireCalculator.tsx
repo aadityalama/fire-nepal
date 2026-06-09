@@ -31,7 +31,7 @@ export function FireCalculatorInputs() {
     setSpenddownTargetAge,
   } = useFireCalculator();
 
-  const nprPrefix = "रु";
+  const nprPrefix = "₹";
 
   const savingsRateEstimate =
     (monthlyExpenseNpr ?? 0) > 0
