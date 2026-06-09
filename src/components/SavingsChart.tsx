@@ -66,7 +66,7 @@ if (!fireWealthMarkersPluginRegistered) {
 }
 
 export function SavingsChart() {
-  const { wealthResult, result, currency, fromNprToKrw, formatMoney } = useFireCalculator();
+  const { wealthResult, result, formatMoney } = useFireCalculator();
 
   const { chartData, options } = useMemo(() => {
     let yearly = wealthResult.yearly.map((p) => ({ ...p }));
@@ -90,7 +90,7 @@ export function SavingsChart() {
       });
     }
 
-    const toUnit = (npr: number) => (currency === "NPR" ? npr / 1_000_000 : fromNprToKrw(npr) / 1_000_000);
+    const toUnit = (npr: number) => npr / 1_000_000;
     const minAge = yearly[0]!.age;
     const maxAge = yearly[yearly.length - 1]!.age;
     const targetY = toUnit(result.requiredCorpusNpr);
@@ -110,7 +110,7 @@ export function SavingsChart() {
       labels: [],
       datasets: [
         {
-          label: currency === "NPR" ? "Growth path (invested, no drawdown)" : "Growth path (KRW, no drawdown)",
+          label: "Growth path (invested, no drawdown)",
           data: growthData,
           borderColor: "#15803d",
           backgroundColor: "rgba(21, 128, 61, 0.08)",
@@ -124,7 +124,7 @@ export function SavingsChart() {
           parsing: { xAxisKey: "x", yAxisKey: "y" },
         },
         {
-          label: currency === "NPR" ? "Wealth remaining (actual)" : "Wealth remaining (actual, KRW)",
+          label: "Wealth remaining (actual)",
           data: actualData,
           borderColor: "#008a4c",
           backgroundColor: "rgba(0, 138, 76, 0.06)",
@@ -244,7 +244,7 @@ export function SavingsChart() {
     } as ChartOptions<"line">;
 
     return { chartData: data, options: chartOptions };
-  }, [currency, formatMoney, fromNprToKrw, result.requiredCorpusNpr, wealthResult]);
+  }, [formatMoney, result.fireAge, result.requiredCorpusNpr, wealthResult]);
 
   return <Line data={chartData} options={options} />;
 }

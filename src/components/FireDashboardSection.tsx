@@ -6,7 +6,7 @@ import { FireCalculatorProvider, useFireCalculator } from "@/components/FireCalc
 import { SavingsChart } from "@/components/SavingsChart";
 
 function SavingsGrowthHeader() {
-  const { horizonGrowthPct, result, currency } = useFireCalculator();
+  const { horizonGrowthPct, result } = useFireCalculator();
   const badge =
     horizonGrowthPct === null
       ? "—"
@@ -18,7 +18,7 @@ function SavingsGrowthHeader() {
           Wealth lifecycle simulator
         </h2>
         <p className="text-[11px] leading-relaxed text-slate-500 sm:text-xs">
-          Green = growth; orange = drawdown. FIRE ~{result.fireAge} · {currency} scale.
+          Green = growth; orange = drawdown. FIRE ~{result.fireAge} · NPR (millions on axis).
         </p>
       </div>
       <span className="shrink-0 self-start rounded-full border border-emerald-100/80 bg-emerald-50/95 px-2.5 py-0.5 text-[11px] font-black text-emerald-700 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset] sm:self-center sm:px-3 sm:py-1 sm:text-xs">

@@ -2,7 +2,7 @@
 
 import { Calculator, CircleDollarSign, Flame, PiggyBank, TrendingUp } from "lucide-react";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
-import { useFireCalculator, type FireDisplayCurrency } from "@/components/FireCalculatorContext";
+import { useFireCalculator } from "@/components/FireCalculatorContext";
 
 /** Shared shell for homepage FIRE trio (inputs · projection · chart). */
 export const FIRE_CALCULATOR_PANEL_CLASS =
@@ -11,9 +11,6 @@ export const FIRE_CALCULATOR_PANEL_CLASS =
 /** Left column: inputs + drawdown controls (desktop 3-column layout). */
 export function FireCalculatorInputs() {
   const {
-    currency,
-    setCurrency,
-    rateLoading,
     currentSavingsNpr,
     setCurrentSavingsNpr,
     monthlySavingsNpr,
@@ -32,20 +29,9 @@ export function FireCalculatorInputs() {
     setLegacyMode,
     spenddownTargetAge,
     setSpenddownTargetAge,
-    toNprFromKrw,
-    fromNprToKrw,
   } = useFireCalculator();
 
-  const symbol = currency === "KRW" ? "₩" : "रु";
-
-  const displayAmount = (npr: number | undefined): number | undefined => {
-    if (npr == null || !Number.isFinite(npr)) return undefined;
-    return currency === "KRW" ? fromNprToKrw(npr) : npr;
-  };
-  const commitAmount = (displayVal: number | undefined): number | undefined => {
-    if (displayVal == null || !Number.isFinite(displayVal)) return undefined;
-    return currency === "KRW" ? toNprFromKrw(displayVal) : displayVal;
-  };
+  const nprPrefix = "रु";
 
   const savingsRateEstimate =
     (monthlyExpenseNpr ?? 0) > 0
@@ -62,7 +48,7 @@ export function FireCalculatorInputs() {
       aria-labelledby="fire-calculator-heading"
       className={`${FIRE_CALCULATOR_PANEL_CLASS} flex h-full min-h-0 flex-col p-5 sm:p-6`}
     >
-      <div className="mb-4 flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
           <Calculator className="mt-0.5 shrink-0 text-emerald-700 sm:mt-0" size={20} />
           <div className="min-w-0">
@@ -72,42 +58,25 @@ export function FireCalculatorInputs() {
             >
               FIRE Calculator
             </h2>
-            <p className="text-xs font-bold leading-snug text-slate-500 sm:text-sm">
-              Live KRW + NPR retirement planning
-              {rateLoading ? <span className="ml-1 text-emerald-600"> · updating rate…</span> : null}
-            </p>
+            <p className="text-xs font-bold leading-snug text-slate-500 sm:text-sm">Retirement planning for Nepal</p>
           </div>
-        </div>
-        <div className="flex w-full shrink-0 rounded-full border border-emerald-100/90 bg-white/80 p-1 shadow-sm backdrop-blur sm:w-auto">
-          {(["KRW", "NPR"] as FireDisplayCurrency[]).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setCurrency(item)}
-              className={`rounded-full px-3 py-1.5 text-xs font-black transition sm:py-2 sm:text-sm ${
-                currency === item ? "bg-emerald-700 text-white shadow-lg shadow-emerald-900/15" : "text-emerald-800 hover:bg-emerald-50"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 sm:gap-4">
         <NumericMoneyInput
           label="Current savings"
-          prefix={symbol}
-          value={displayAmount(currentSavingsNpr)}
-          onChange={(value) => setCurrentSavingsNpr(commitAmount(value))}
+          prefix={nprPrefix}
+          value={currentSavingsNpr}
+          onChange={setCurrentSavingsNpr}
           placeholder="Enter amount"
           variant="amount"
         />
         <NumericMoneyInput
           label="Monthly savings"
-          prefix={symbol}
-          value={displayAmount(monthlySavingsNpr)}
-          onChange={(value) => setMonthlySavingsNpr(commitAmount(value))}
+          prefix={nprPrefix}
+          value={monthlySavingsNpr}
+          onChange={setMonthlySavingsNpr}
           placeholder="Enter amount"
           variant="amount"
         />
@@ -131,9 +100,9 @@ export function FireCalculatorInputs() {
         </div>
         <NumericMoneyInput
           label="Nepal monthly expense after retirement"
-          prefix={symbol}
-          value={displayAmount(monthlyExpenseNpr)}
-          onChange={(value) => setMonthlyExpenseNpr(commitAmount(value))}
+          prefix={nprPrefix}
+          value={monthlyExpenseNpr}
+          onChange={setMonthlyExpenseNpr}
           placeholder="Enter amount"
           variant="amount"
         />

@@ -4,12 +4,10 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { FALLBACK_KRW_PER_NPR, fetchLiveExchangeRate, type ExchangeRateSnapshot } from "@/lib/exchange-rate";
 import {
   calculateFireProjection,
   simulateWealthLifecycle,
@@ -20,13 +18,7 @@ import {
   type WealthSimulationParams,
 } from "@/lib/fire-calculator-model";
 
-export type FireDisplayCurrency = "KRW" | "NPR";
-
 type FireCalculatorContextValue = {
-  currency: FireDisplayCurrency;
-  setCurrency: (c: FireDisplayCurrency) => void;
-  krwPerNpr: number;
-  rateLoading: boolean;
   currentSavingsNpr: number | undefined;
   setCurrentSavingsNpr: (n: number | undefined) => void;
   monthlySavingsNpr: number | undefined;
@@ -51,8 +43,6 @@ type FireCalculatorContextValue = {
   result: FireProjectionResult;
   wealthResult: WealthLifecycleResult;
   horizonGrowthPct: number | null;
-  toNprFromKrw: (krw: number) => number;
-  fromNprToKrw: (npr: number) => number;
   formatMoney: (npr: number) => string;
 };
 
@@ -81,10 +71,6 @@ function resolveFireInputs(
 }
 
 export function FireCalculatorProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrency] = useState<FireDisplayCurrency>("KRW");
-  const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
-  const [rateLoading, setRateLoading] = useState(true);
-
   const [currentSavingsNpr, setCurrentSavingsNpr] = useState<number | undefined>(undefined);
   const [monthlySavingsNpr, setMonthlySavingsNpr] = useState<number | undefined>(undefined);
   const [currentAge, setCurrentAge] = useState<number | undefined>(undefined);
@@ -94,25 +80,6 @@ export function FireCalculatorProvider({ children }: { children: ReactNode }) {
   const [safeWithdrawalRatePct, setSafeWithdrawalRatePct] = useState<number | undefined>(undefined);
   const [legacyMode, setLegacyMode] = useState<WealthLegacyMode>("default");
   const [spenddownTargetAge, setSpenddownTargetAge] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRateLoading(true);
-    void fetchLiveExchangeRate()
-      .then((snap: ExchangeRateSnapshot) => {
-        if (cancelled) return;
-        setKrwPerNpr(snap.krwPerNpr);
-      })
-      .finally(() => {
-        if (!cancelled) setRateLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const toNprFromKrw = useCallback((krw: number) => krw / krwPerNpr, [krwPerNpr]);
-  const fromNprToKrw = useCallback((npr: number) => npr * krwPerNpr, [krwPerNpr]);
 
   const projection = useMemo<FireProjectionParams>(
     () =>
@@ -156,23 +123,10 @@ export function FireCalculatorProvider({ children }: { children: ReactNode }) {
     return ((b - a) / a) * 100;
   }, [wealthResult.yearly]);
 
-  const formatMoney = useCallback(
-    (npr: number) => {
-      if (currency === "NPR") {
-        return `रु ${Math.round(npr).toLocaleString("en-IN")}`;
-      }
-      const krw = fromNprToKrw(npr);
-      return `₩ ${Math.round(krw).toLocaleString("en-US")}`;
-    },
-    [currency, fromNprToKrw],
-  );
+  const formatMoney = useCallback((npr: number) => `रु ${Math.round(npr).toLocaleString("en-IN")}`, []);
 
   const value = useMemo<FireCalculatorContextValue>(
     () => ({
-      currency,
-      setCurrency,
-      krwPerNpr,
-      rateLoading,
       currentSavingsNpr,
       setCurrentSavingsNpr,
       monthlySavingsNpr,
@@ -196,14 +150,9 @@ export function FireCalculatorProvider({ children }: { children: ReactNode }) {
       result,
       wealthResult,
       horizonGrowthPct,
-      toNprFromKrw,
-      fromNprToKrw,
       formatMoney,
     }),
     [
-      currency,
-      krwPerNpr,
-      rateLoading,
       currentSavingsNpr,
       monthlySavingsNpr,
       currentAge,
@@ -218,8 +167,6 @@ export function FireCalculatorProvider({ children }: { children: ReactNode }) {
       result,
       wealthResult,
       horizonGrowthPct,
-      toNprFromKrw,
-      fromNprToKrw,
       formatMoney,
     ],
   );
