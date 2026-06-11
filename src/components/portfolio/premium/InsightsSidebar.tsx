@@ -96,8 +96,8 @@ export function InsightsSidebar() {
   const cashNarrative = intelModel.cashBurn?.narrative?.trim();
 
   return (
-    <aside className="flex w-full min-w-0 flex-col gap-2 sm:gap-2.5 xl:gap-2.5">
-      <PremiumGlassCard className="relative overflow-hidden p-2.5 sm:p-3 xl:p-2.5">
+    <aside className="flex w-full min-w-0 flex-col gap-5">
+      <PremiumGlassCard className="relative overflow-hidden p-5 xl:p-5">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-600/[0.14] via-transparent to-emerald-500/[0.06]" />
         <div className="pointer-events-none absolute -right-6 top-0 h-20 w-20 rounded-full bg-violet-500/12 blur-2xl" />
         <div className="relative z-10 flex flex-col gap-2">
@@ -113,7 +113,7 @@ export function InsightsSidebar() {
               </div>
               <div className="min-w-0 flex-1 space-y-0.5">
                 <SectionOverline>Guidance</SectionOverline>
-                <h2 className="text-xs font-bold tracking-tight text-white sm:text-[13px]">AI financial coach</h2>
+                <h2 className="min-w-0 truncate text-xs font-bold tracking-tight text-white sm:text-[13px]">AI financial coach</h2>
                 <p className="line-clamp-2 text-[10px] font-medium leading-snug text-zinc-400 sm:text-[11px]">{coachBody}</p>
               </div>
             </div>
@@ -138,9 +138,9 @@ export function InsightsSidebar() {
               {coachExpandedCards.length ? (
                 <ul className="space-y-1.5">
                   {coachExpandedCards.map((c) => (
-                    <li key={c.id} className="rounded-md border border-white/[0.06] bg-black/25 px-2 py-1.5">
-                      <p className="font-semibold text-zinc-200">{c.title}</p>
-                      <p className="mt-0.5 text-[9px] text-zinc-500 sm:text-[10px]">{c.subtitle}</p>
+                    <li key={c.id} className="min-w-0 rounded-md border border-white/[0.06] bg-black/25 px-2 py-1.5">
+                      <p className="min-w-0 truncate font-semibold text-zinc-200">{c.title}</p>
+                      <p className="mt-0.5 line-clamp-2 text-[9px] text-zinc-500 sm:text-[10px]">{c.subtitle}</p>
                     </li>
                   ))}
                 </ul>
@@ -157,14 +157,14 @@ export function InsightsSidebar() {
         </div>
       </PremiumGlassCard>
 
-      <PremiumGlassCard className="p-2.5 sm:p-2.5 xl:p-2.5">
+      <PremiumGlassCard className="p-5 xl:p-5">
         <button
           type="button"
           onClick={() => setMarketsOpen((o) => !o)}
           className="flex w-full items-center justify-between gap-2 rounded-lg text-left hover:bg-white/[0.03]"
           aria-expanded={marketsOpen}
         >
-          <div className="min-w-0 space-y-0.5">
+          <div className="min-w-0 flex-1 space-y-0.5">
             <SectionOverline>Markets</SectionOverline>
             <h2 className="text-xs font-bold tracking-tight text-white sm:text-[13px]">Overview</h2>
             {!marketsOpen && primaryMarket ? (
@@ -197,10 +197,10 @@ export function InsightsSidebar() {
                   return (
                     <li
                       key={m.label}
-                      className="flex items-center justify-between gap-1.5 rounded-md border border-white/[0.06] bg-black/30 px-2 py-1.5 text-[10px] backdrop-blur-sm sm:text-[11px]"
+                      className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-white/[0.06] bg-black/30 px-2 py-1.5 text-[10px] backdrop-blur-sm sm:text-[11px]"
                     >
-                      <span className="font-semibold text-zinc-500">{m.label}</span>
-                      <span className="font-bold tabular-nums text-white">{m.value}</span>
+                      <span className="min-w-0 truncate font-semibold text-zinc-500">{m.label}</span>
+                      <span className="shrink-0 font-bold tabular-nums text-white">{m.value}</span>
                       <span className={`font-bold tabular-nums ${up ? "text-emerald-400" : "text-rose-400"}`}>
                         {up ? "+" : ""}
                         {m.changePct.toFixed(2)}%
@@ -216,7 +216,7 @@ export function InsightsSidebar() {
         ) : null}
       </PremiumGlassCard>
 
-      <PremiumGlassCard className="p-2.5 sm:p-3 xl:p-2.5">
+      <PremiumGlassCard className="p-5 xl:p-5">
         <div className="flex items-center gap-2">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/25 sm:h-8 sm:w-8 sm:rounded-lg">
             <PiggyBank className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={2} />
@@ -226,21 +226,21 @@ export function InsightsSidebar() {
             <h2 className="text-xs font-bold tracking-tight text-white sm:text-[13px]">Quick add</h2>
           </div>
         </div>
-        <div className="mt-1.5 grid grid-cols-1 gap-1 sm:mt-2 sm:grid-cols-2 sm:gap-1 lg:grid-cols-1 xl:grid-cols-2 xl:gap-1">
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {quickAdds.map(({ label, href, icon: Icon }) => (
             <Link
               key={label}
               href={href}
-              className="group/qa flex min-h-[38px] items-center gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.03] px-2 py-1.5 text-[9px] font-semibold text-zinc-200 ring-1 ring-transparent transition hover:border-emerald-400/28 hover:bg-emerald-500/[0.07] hover:text-white sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-[10px]"
+              className="group/qa flex min-h-[40px] min-w-0 items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[10px] font-semibold text-zinc-200 ring-1 ring-transparent transition hover:border-emerald-400/28 hover:bg-emerald-500/[0.07] hover:text-white"
             >
               <Icon className="h-3.5 w-3.5 shrink-0 text-emerald-300/90 group-hover/qa:text-emerald-200" />
-              {label}
+              <span className="min-w-0 truncate">{label}</span>
             </Link>
           ))}
         </div>
       </PremiumGlassCard>
 
-      <PremiumGlassCard glow={false} className="flex items-start gap-1.5 p-2 sm:gap-2 sm:p-2.5 xl:p-2">
+      <PremiumGlassCard glow={false} className="flex items-start gap-2 p-5 xl:p-5">
         <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/25 sm:h-7 sm:w-7 sm:rounded-md">
           <Bitcoin className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={2} />
         </div>

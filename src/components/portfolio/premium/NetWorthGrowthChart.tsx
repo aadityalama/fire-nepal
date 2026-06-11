@@ -132,12 +132,12 @@ export function NetWorthGrowthChart() {
   const isEmptyHistory = history.length < 2;
 
   return (
-    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-2.5 sm:p-3 xl:p-3">
-      <div className="relative z-10 flex flex-col gap-2 border-b border-white/[0.07] pb-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-2">
+    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-5 xl:p-6">
+      <div className="relative z-10 flex flex-col gap-3 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500 sm:text-[10px]">Net worth growth</p>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-            <p className="text-base font-bold tabular-nums tracking-tight text-white sm:text-lg xl:text-[1.15rem]">
+            <p className="min-w-0 truncate text-base font-bold tabular-nums tracking-tight text-white sm:text-lg xl:text-[1.15rem]">
               {formatNpr(hydrated ? totals.netWorthNpr : 0)}
             </p>
             <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px]">Primary</span>
@@ -148,7 +148,7 @@ export function NetWorthGrowthChart() {
               : "Trajectory from saved net worth history."}
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-lg border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:w-auto sm:flex-nowrap sm:rounded-xl sm:p-0.5">
+        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-lg border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:w-auto sm:flex-nowrap sm:rounded-xl">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -175,7 +175,7 @@ export function NetWorthGrowthChart() {
       <div
         className={`relative z-10 flex min-h-0 flex-1 flex-col pl-0 sm:pl-0.5 ${hasMilestones ? "mt-1 sm:mt-1.5" : "mt-1"}`}
       >
-        <div className="min-h-[min(38vw,140px)] w-full flex-1 sm:min-h-[148px] lg:min-h-[156px] xl:min-h-[160px]">
+        <div className="min-h-[min(38vw,164px)] w-full flex-1 sm:min-h-[172px] lg:min-h-[180px] xl:min-h-[188px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}

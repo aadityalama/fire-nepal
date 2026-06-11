@@ -84,7 +84,7 @@ export function FirePremiumPortfolioDashboard() {
         <DashboardHeader userName={displayName} />
 
         {/* Mobile: 2×2 core KPIs; tablet: 4-up; desktop: 5 columns with FI date at end */}
-        <section className="mt-3 grid grid-cols-2 items-stretch gap-2 sm:mt-4 sm:gap-2.5 lg:grid-cols-4 lg:gap-2.5 xl:grid-cols-5 xl:gap-2.5 2xl:gap-3">
+        <section className="mt-5 grid grid-cols-2 items-stretch gap-5 lg:grid-cols-4 xl:grid-cols-5">
           <KpiMetricCard
             label="Total net worth"
             icon={Wallet}
@@ -144,7 +144,7 @@ export function FirePremiumPortfolioDashboard() {
         </section>
 
         {/* Executive strip: dense secondary context (display-only; totals from context) */}
-        <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-xl border border-white/[0.06] bg-black/25 px-2.5 py-2 ring-1 ring-white/[0.04] backdrop-blur-md sm:grid-cols-4 sm:gap-2 sm:rounded-2xl sm:px-3 sm:py-2.5">
+        <div className="mt-5 grid grid-cols-2 gap-5 rounded-2xl border border-white/[0.06] bg-black/25 p-5 ring-1 ring-white/[0.04] backdrop-blur-md sm:grid-cols-4">
           {(
             [
               { name: "Total assets", primary: formatNpr(hydrated ? totals.totalAssetsNpr : 0), sub: "Gross stack" },
@@ -177,9 +177,9 @@ export function FirePremiumPortfolioDashboard() {
           </div>
         ) : null}
 
-        <div className="mt-3 flex min-w-0 flex-col gap-2.5 sm:mt-4 lg:mt-3 lg:flex-row lg:items-start lg:gap-3 xl:gap-4">
+        <div className="mt-5 flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start">
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0">
-            <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch lg:gap-2.5 xl:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch">
               <div className="flex min-h-0 min-w-0">
                 <NetWorthGrowthChart />
               </div>
@@ -189,14 +189,14 @@ export function FirePremiumPortfolioDashboard() {
             </div>
           </div>
 
-          <div className="min-w-0 w-full shrink-0 lg:flex lg:max-h-[min(78dvh,560px)] lg:w-[min(100%,272px)] lg:min-w-[248px] lg:max-w-[300px] lg:flex-col lg:overflow-hidden xl:max-h-[min(70dvh,440px)] xl:w-[264px] xl:min-w-[256px] xl:max-w-[280px]">
+          <div className="min-w-0 w-full shrink-0 lg:flex lg:max-h-[min(78dvh,620px)] lg:w-[320px] lg:min-w-[320px] lg:max-w-[360px] lg:flex-col lg:overflow-hidden xl:max-h-[min(70dvh,520px)] xl:w-[320px] xl:min-w-[320px] xl:max-w-[360px]">
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-full xl:pr-0.5">
               <InsightsSidebar />
             </div>
           </div>
         </div>
 
-        <div id="premium-portfolio-assets" className="mt-3 min-w-0 scroll-mt-24 sm:mt-4 xl:mt-3">
+        <div id="premium-portfolio-assets" className="mt-5 min-w-0 scroll-mt-24">
           <AssetsDataTable />
         </div>
 

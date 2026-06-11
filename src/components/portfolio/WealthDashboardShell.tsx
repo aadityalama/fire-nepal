@@ -349,7 +349,7 @@ export function WealthDashboardShell({
     >
       <div className="wealth-dash-atmosphere wealth-dash-atmosphere-float pointer-events-none fixed inset-0" />
 
-      <div className="relative mx-auto flex w-full max-w-[2020px] min-h-0 flex-col xl:flex-row xl:items-start 2xl:max-w-[2200px]">
+      <div className="relative mx-auto flex w-full min-h-0 flex-col xl:flex-row xl:items-start">
         <header
           className={`wealth-dash-mobile-bar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-emerald-400/10 px-4 py-3 backdrop-blur-xl xl:hidden ${
             light ? "bg-white/90" : "bg-[#021910]/90"
@@ -515,7 +515,7 @@ export function WealthDashboardShell({
           </div>
         </aside>
 
-        <div className="relative min-h-0 w-full min-w-0 flex-1 self-start px-3 py-4 sm:px-4 sm:py-5 lg:px-5 lg:py-6 xl:px-6 xl:py-6 2xl:px-7 2xl:py-7">
+        <div className="relative mx-auto min-h-0 w-full max-w-[1440px] min-w-0 flex-1 self-start px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 xl:px-8 xl:py-6 2xl:px-8 2xl:py-8">
           {children}
         </div>
       </div>

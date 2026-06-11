@@ -27,10 +27,10 @@ export function DashboardHeader({ userName, onPeriodChange }: DashboardHeaderPro
   };
 
   return (
-    <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
+    <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0 max-w-2xl space-y-0.5">
         <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:text-[10px]">Portfolio overview</p>
-        <h1 className="font-nepali text-[1.12rem] font-semibold leading-[1.1] tracking-[-0.03em] text-white sm:text-[1.22rem] sm:leading-tight xl:text-[1.2rem]">
+        <h1 className="font-nepali min-w-0 text-[1.12rem] font-semibold leading-[1.1] tracking-[-0.03em] text-white sm:text-[1.22rem] sm:leading-tight xl:text-[1.2rem]">
           Namaste, {userName} <span className="fire-dash-wave inline-block">👋</span>
         </h1>
         <p className="text-[10px] font-medium leading-snug text-zinc-400/95 line-clamp-2 sm:text-[11px] sm:leading-snug lg:line-clamp-2 xl:text-[0.78rem]">
@@ -38,10 +38,10 @@ export function DashboardHeader({ userName, onPeriodChange }: DashboardHeaderPro
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 sm:gap-1.5 lg:max-w-[min(100%,420px)] lg:justify-end xl:gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 lg:max-w-[min(100%,440px)] lg:justify-end">
         <PremiumGlassCard glow={false} className="flex items-center gap-1.5 px-2 py-1 sm:gap-1.5 sm:px-2.5 sm:py-1.5">
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-emerald-400/90" strokeWidth={2} />
-          <span className="text-[10px] font-semibold tabular-nums text-zinc-200 sm:text-[11px]">{today}</span>
+          <span className="min-w-0 truncate text-[10px] font-semibold tabular-nums text-zinc-200 sm:text-[11px]">{today}</span>
         </PremiumGlassCard>
 
         <div className="flex rounded-xl border border-white/[0.1] bg-black/35 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:rounded-2xl">

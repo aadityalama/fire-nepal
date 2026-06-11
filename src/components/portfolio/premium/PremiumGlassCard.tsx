@@ -10,7 +10,7 @@ type PremiumGlassCardProps = {
 export function PremiumGlassCard({ children, className = "", glow = true }: PremiumGlassCardProps) {
   return (
     <div
-      className={`group/card relative overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.09] via-zinc-950/38 to-black/[0.58] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_28px_72px_-32px_rgba(0,0,0,0.68),0_0_88px_-28px_rgba(16,185,129,0.14)] backdrop-blur-2xl backdrop-saturate-[1.12] motion-safe:transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-safe:hover:-translate-y-0.5 ${
+      className={`group/card relative min-w-0 overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.09] via-zinc-950/38 to-black/[0.58] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_28px_72px_-32px_rgba(0,0,0,0.68),0_0_88px_-28px_rgba(16,185,129,0.14)] backdrop-blur-2xl backdrop-saturate-[1.12] motion-safe:transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-safe:hover:-translate-y-0.5 ${
         glow
           ? "motion-safe:hover:border-emerald-400/35 motion-safe:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.07)_inset,0_32px_80px_-28px_rgba(0,0,0,0.75),0_0_100px_-22px_rgba(52,211,153,0.26)]"
           : ""

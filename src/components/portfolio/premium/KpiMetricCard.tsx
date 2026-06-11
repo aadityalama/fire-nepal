@@ -39,8 +39,8 @@ export function KpiMetricCard({
     <PremiumGlassCard
       className={
         compact
-          ? "flex min-h-[108px] w-full min-w-0 flex-col p-2.5 sm:min-h-[112px] sm:p-3 xl:min-h-[118px]"
-          : "flex min-h-[148px] w-full min-w-0 flex-col p-3.5 sm:min-h-[152px] sm:p-4 xl:min-h-[156px] xl:p-4"
+          ? "flex min-h-[132px] w-full min-w-0 flex-col p-5 sm:min-h-[136px] xl:min-h-[140px] xl:p-6"
+          : "flex min-h-[164px] w-full min-w-0 flex-col p-5 sm:min-h-[168px] xl:min-h-[172px] xl:p-6"
       }
     >
       <div className="relative z-10 flex min-h-0 flex-col">
@@ -88,8 +88,8 @@ export function KpiMetricCard({
             <p
               className={
                 compact
-                  ? "text-[1.02rem] font-black leading-[1.1] tracking-tight text-white sm:text-[1.08rem] xl:text-[1.06rem]"
-                  : "text-[1.14rem] font-black leading-[1.12] tracking-tight text-white sm:text-[1.22rem] xl:text-[1.18rem] xl:leading-tight"
+                  ? "min-w-0 text-[1.02rem] font-black leading-[1.1] tracking-tight text-white sm:text-[1.08rem] xl:text-[1.06rem]"
+                  : "min-w-0 text-[1.14rem] font-black leading-[1.12] tracking-tight text-white sm:text-[1.22rem] xl:text-[1.18rem] xl:leading-tight"
               }
             >
               {value}
@@ -101,8 +101,8 @@ export function KpiMetricCard({
                 <p
                   className={
                     compact
-                      ? "text-[9px] font-semibold leading-none text-zinc-500 sm:text-[10px]"
-                      : "text-[10px] font-semibold leading-none text-zinc-500 sm:text-[11px]"
+                      ? "min-w-0 truncate text-[9px] font-semibold leading-none text-zinc-500 sm:text-[10px]"
+                      : "min-w-0 truncate text-[10px] font-semibold leading-none text-zinc-500 sm:text-[11px]"
                   }
                 >
                   ≈ {usdHint}
@@ -148,7 +148,7 @@ export function KpiMetricCard({
                     compact ? "h-2.5 w-2.5 sm:h-3 sm:w-3" : "h-3 w-3 sm:h-3.5 sm:w-3.5"
                   }`}
                 />
-                <span className="min-w-0">{deltaLabel}</span>
+                <span className="min-w-0 line-clamp-2">{deltaLabel}</span>
               </p>
             ) : (
               <div className={compact ? "h-2.5 sm:h-3" : "h-3.5 sm:h-4"} aria-hidden />

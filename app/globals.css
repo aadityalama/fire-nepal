@@ -714,6 +714,18 @@ input {
   overflow-x: clip;
 }
 
+.portfolio-wealth-dash,
+.portfolio-wealth-dash * {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.portfolio-wealth-dash .truncate {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .portfolio-wealth-dash .wealth-dash-aside {
   background: linear-gradient(180deg, rgba(3, 42, 32, 0.78), rgba(2, 22, 18, 0.92));
   border-color: rgba(52, 211, 153, 0.11);
