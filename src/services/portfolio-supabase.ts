@@ -13,6 +13,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { coerceWealthPortfolioState } from "@/components/portfolio/storage";
+import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
 import type { Database, Json } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
@@ -22,15 +23,19 @@ function asPayload<T>(row: unknown): T {
 }
 
 export async function loadWealthPortfolioFromSupabase(client: Client, userId: string): Promise<WealthPortfolioStateV2 | null> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "loadWealthPortfolioFromSupabase");
+  if (!workspace) return null;
+  const ownerId = workspace.user_id;
+
   const [banks, inv, metals, re, veh, liab, ret, ext] = await Promise.all([
-    client.from("bank_accounts").select("row_id,account_kind,payload").eq("user_id", userId),
-    client.from("investments").select("row_id,payload").eq("user_id", userId),
-    client.from("gold_assets").select("row_id,payload").eq("user_id", userId),
-    client.from("real_estate").select("row_id,payload").eq("user_id", userId),
-    client.from("vehicles").select("row_id,payload").eq("user_id", userId),
-    client.from("liabilities").select("row_id,payload").eq("user_id", userId),
-    client.from("retirement_assets").select("row_id,payload").eq("user_id", userId),
-    client.from("portfolio_extensions").select("ledger,net_worth_history,metal_purchase_bill_urls").eq("user_id", userId).maybeSingle(),
+    client.from("bank_accounts").select("row_id,account_kind,payload").eq("user_id", ownerId),
+    client.from("investments").select("row_id,payload").eq("user_id", ownerId),
+    client.from("gold_assets").select("row_id,payload").eq("user_id", ownerId),
+    client.from("real_estate").select("row_id,payload").eq("user_id", ownerId),
+    client.from("vehicles").select("row_id,payload").eq("user_id", ownerId),
+    client.from("liabilities").select("row_id,payload").eq("user_id", ownerId),
+    client.from("retirement_assets").select("row_id,payload").eq("user_id", ownerId),
+    client.from("portfolio_extensions").select("ledger,net_worth_history,metal_purchase_bill_urls").eq("user_id", ownerId).maybeSingle(),
   ]);
 
   if (banks.error || inv.error || metals.error || re.error || veh.error || liab.error || ret.error || ext.error) {
@@ -114,26 +119,30 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
 async function deleteMissingRows(
   client: Client,
   table: "bank_accounts" | "investments" | "gold_assets" | "real_estate" | "vehicles" | "liabilities" | "retirement_assets",
-  userId: string,
+  ownerId: string,
   keepIds: string[],
 ) {
-  const { data, error } = await client.from(table).select("row_id").eq("user_id", userId);
+  const { data, error } = await client.from(table).select("row_id").eq("user_id", ownerId);
   if (error || !data) return;
   const keep = new Set(keepIds);
   const stale = (data as { row_id: string }[]).map((r) => r.row_id).filter((id) => !keep.has(id));
   if (!stale.length) return;
-  await client.from(table).delete().eq("user_id", userId).in("row_id", stale);
+  await client.from(table).delete().eq("user_id", ownerId).in("row_id", stale);
 }
 
 export async function saveWealthPortfolioToSupabase(client: Client, userId: string, state: WealthPortfolioStateV2): Promise<boolean> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "saveWealthPortfolioToSupabase");
+  if (!workspace) return false;
+  const ownerId = workspace.user_id;
+
   const liquidRows = state.liquidCash.map((payload) => ({
-    user_id: userId,
+    user_id: ownerId,
     row_id: payload.id,
     account_kind: "liquid" as const,
     payload: payload as unknown as Json,
   }));
   const fdRows = (state.fixedDeposits ?? []).map((payload) => ({
-    user_id: userId,
+    user_id: ownerId,
     row_id: payload.id,
     account_kind: "fd" as const,
     payload: payload as unknown as Json,
@@ -144,10 +153,10 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     console.error("[portfolio-supabase] bank upsert", bankUpsertErr);
     return false;
   }
-  await deleteMissingRows(client, "bank_accounts", userId, bankPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id));
 
   const invPayload = state.investments.map((payload) => ({
-    user_id: userId,
+    user_id: ownerId,
     row_id: payload.id,
     payload: payload as unknown as Json,
   }));
@@ -156,10 +165,10 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     console.error("[portfolio-supabase] investments", invErr);
     return false;
   }
-  await deleteMissingRows(client, "investments", userId, invPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id));
 
   const metalPayload = state.metals.map((payload) => ({
-    user_id: userId,
+    user_id: ownerId,
     row_id: payload.id,
     payload: payload as unknown as Json,
   }));
@@ -168,7 +177,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     console.error("[portfolio-supabase] gold_assets", metalErr);
     return false;
   }
-  await deleteMissingRows(client, "gold_assets", userId, metalPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id));
 
   const mapUpsert = async (
     table: "real_estate" | "vehicles" | "liabilities" | "retirement_assets",
@@ -176,7 +185,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     getPayload: (id: string) => Json,
   ) => {
     const payload = rows.map((r) => ({
-      user_id: userId,
+      user_id: ownerId,
       row_id: r.id,
       payload: getPayload(r.id),
     }));
@@ -185,7 +194,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
       console.error(`[portfolio-supabase] ${table}`, e);
       return false;
     }
-    await deleteMissingRows(client, table, userId, payload.map((p) => p.row_id));
+    await deleteMissingRows(client, table, ownerId, payload.map((p) => p.row_id));
     return true;
   };
 
@@ -212,7 +221,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
 
   const { error: extErr } = await client.from("portfolio_extensions").upsert(
     {
-      user_id: userId,
+      user_id: ownerId,
       ledger: state.ledger as unknown as Json,
       net_worth_history: state.netWorthHistory as unknown as Json,
       metal_purchase_bill_urls: (state.metalPurchaseBillUrls ?? []) as unknown as Json,
