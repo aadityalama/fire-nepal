@@ -20,6 +20,24 @@ type KpiMetricCardProps = {
   compact?: boolean;
 };
 
+function kpiLabelLines(label: string): string[] {
+  const normalized = label.trim().toLowerCase();
+  switch (normalized) {
+    case "total net worth":
+      return ["TOTAL NET", "WORTH"];
+    case "monthly passive income":
+      return ["MONTHLY PASSIVE", "INCOME"];
+    case "fire progress":
+      return ["FIRE", "PROGRESS"];
+    case "fire number":
+      return ["FIRE", "NUMBER"];
+    case "estimated fire date":
+      return ["ESTIMATED FIRE", "DATE"];
+    default:
+      return [label.toUpperCase()];
+  }
+}
+
 export function KpiMetricCard({
   label,
   icon: Icon,
@@ -34,6 +52,7 @@ export function KpiMetricCard({
   compact = true,
 }: KpiMetricCardProps) {
   const hasProgress = typeof progressPct === "number";
+  const labelLines = kpiLabelLines(label);
 
   return (
     <PremiumGlassCard
@@ -69,15 +88,19 @@ export function KpiMetricCard({
               <p
                 className={
                   compact
-                    ? "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-bold uppercase leading-none tracking-wider text-white/65 sm:text-xs"
-                    : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-bold uppercase leading-none tracking-wider text-white/65"
+                    ? "min-w-0 text-[9px] font-bold uppercase leading-[1.08] tracking-wider text-white/65 sm:text-[10px]"
+                    : "min-w-0 text-[10px] font-bold uppercase leading-[1.1] tracking-wider text-white/65 sm:text-[11px]"
                 }
                 title={label}
               >
-                {label}
+                {labelLines.map((line) => (
+                  <span key={line} className="block whitespace-nowrap break-normal [overflow-wrap:normal]">
+                    {line}
+                  </span>
+                ))}
               </p>
             </div>
-            <div className="hidden shrink-0 pt-0.5 sm:block">
+            <div className="hidden shrink-0 pt-0.5 2xl:block">
               <div className={compact ? "h-6 w-[54px] lg:w-[62px]" : "h-8 w-[76px] lg:w-[86px]"}>
                 <MiniSparkline data={sparkline} variant={sparkVariant} className="opacity-90" />
               </div>
