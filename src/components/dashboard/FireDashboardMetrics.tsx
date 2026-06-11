@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
+import { defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
 import {
   computeWealthTotals,
   fireReadinessScore,
   passiveIncomeMonthlyNpr,
 } from "@/components/portfolio/calculations";
-import { loadWealthPortfolioState } from "@/components/portfolio/storage";
+import { defaultWealthState, loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { normalizeGoldSilverPriceResponse } from "@/lib/market/normalize-gold-silver-price-response";
@@ -94,8 +94,7 @@ export function FireDashboardMetrics({
   const totals = useMemo(() => {
     void tick;
     void refreshKey;
-    void loading;
-    const state = loadWealthPortfolioState(user?.id);
+    const state = loading ? defaultWealthState() : loadWealthPortfolioState(user?.id);
     const bullionGramRatesNpr = bullionSpot
       ? { goldNprPerGram: bullionSpot.goldPerGramNPR, silverNprPerGram: bullionSpot.silverPerGramNPR }
       : null;
@@ -105,8 +104,7 @@ export function FireDashboardMetrics({
   const cashflow = useMemo(() => {
     void tick;
     void refreshKey;
-    void loading;
-    return loadCashflowState(user?.id);
+    return loading ? defaultCashflowState() : loadCashflowState(user?.id);
   }, [tick, refreshKey, user?.id, loading]);
 
   const income = useMemo(() => sumIncome(cashflow), [cashflow]);

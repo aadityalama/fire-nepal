@@ -13,6 +13,10 @@ const PORTFOLIO_RLS_MIGRATION = readFileSync(
   new URL("../../supabase/migrations/20260611193000_portfolio_rls_self_access.sql", import.meta.url),
   "utf8",
 );
+const FINANCE_RLS_MIGRATION = readFileSync(
+  new URL("../../supabase/migrations/20260611221000_finance_tables_user_rls.sql", import.meta.url),
+  "utf8",
+);
 
 const PORTFOLIO_TABLES = [
   "bank_accounts",
@@ -74,12 +78,30 @@ test("portfolio RLS migration limits portfolio rows to authenticated owner", () 
   assert.match(PORTFOLIO_RLS_MIGRATION, /for delete to authenticated using \(auth\.uid\(\) = user_id\)/);
 });
 
-test("two-account integration harness never leaks Account A portfolio into Account B", async () => {
+test("finance RLS migration applies command-specific user policies to every dashboard finance table", () => {
+  for (const table of ["assets", "liabilities", "income", "expenses", "transactions", "workspaces"]) {
+    assert.match(FINANCE_RLS_MIGRATION, new RegExp(`'${table}'`), `missing finance RLS table ${table}`);
+  }
+
+  assert.match(FINANCE_RLS_MIGRATION, /create policy user_select/);
+  assert.match(FINANCE_RLS_MIGRATION, /for select to authenticated using \(auth\.uid\(\) = user_id\)/);
+  assert.match(FINANCE_RLS_MIGRATION, /create policy user_insert/);
+  assert.match(FINANCE_RLS_MIGRATION, /for insert to authenticated with check \(auth\.uid\(\) = user_id\)/);
+  assert.match(FINANCE_RLS_MIGRATION, /create policy user_update/);
+  assert.match(
+    FINANCE_RLS_MIGRATION,
+    /for update to authenticated using \(auth\.uid\(\) = user_id\) with check \(auth\.uid\(\) = user_id\)/,
+  );
+  assert.match(FINANCE_RLS_MIGRATION, /create policy user_delete/);
+  assert.match(FINANCE_RLS_MIGRATION, /for delete to authenticated using \(auth\.uid\(\) = user_id\)/);
+});
+
+test("two-account integration harness never leaks User A asset into User B", async () => {
   const guardLogs = [];
   const db = {
     authUserId: "account-a",
     workspaces: new Map(),
-    investments: [],
+    assets: [],
   };
 
   async function ensureWorkspace(expectedUserId, context) {
@@ -103,27 +125,32 @@ test("two-account integration harness never leaks Account A portfolio into Accou
     return workspace;
   }
 
-  async function saveInvestment(expectedUserId, rowId) {
+  async function saveAsset(expectedUserId, rowId) {
     const workspace = await ensureWorkspace(expectedUserId, "save");
     if (!workspace) return false;
-    db.investments.push({ user_id: workspace.user_id, row_id: rowId });
+    db.assets.push({ user_id: workspace.user_id, row_id: rowId });
     return true;
   }
 
-  async function loadInvestments(expectedUserId) {
+  async function loadAssets(expectedUserId) {
     const workspace = await ensureWorkspace(expectedUserId, "load");
     if (!workspace) return null;
-    return db.investments.filter((row) => row.user_id === workspace.user_id).map((row) => row.row_id);
+    return db.assets.filter((row) => row.user_id === workspace.user_id).map((row) => row.row_id);
   }
 
-  assert.equal(await saveInvestment("account-a", "ACCOUNT_A_MARKER"), true);
-  assert.deepEqual(await loadInvestments("account-a"), ["ACCOUNT_A_MARKER"]);
+  assert.equal(await saveAsset("account-a", "USER_A_ASSET"), true);
+  assert.deepEqual(await loadAssets("account-a"), ["USER_A_ASSET"]);
 
   db.authUserId = "account-b";
-  assert.equal(await saveInvestment("account-b", "ACCOUNT_B_MARKER"), true);
-  assert.deepEqual(await loadInvestments("account-b"), ["ACCOUNT_B_MARKER"]);
+  assert.deepEqual(await loadAssets("account-b"), []);
+  assert.equal(await saveAsset("account-b", "USER_B_ASSET"), true);
+  assert.deepEqual(await loadAssets("account-b"), ["USER_B_ASSET"]);
 
-  assert.equal(await loadInvestments("account-a"), null);
+  db.authUserId = "account-a";
+  assert.deepEqual(await loadAssets("account-a"), ["USER_A_ASSET"]);
+
+  db.authUserId = "account-b";
+  assert.equal(await loadAssets("account-a"), null);
   assert.deepEqual(guardLogs.at(-1), {
     context: "load",
     requestedUserId: "account-a",
