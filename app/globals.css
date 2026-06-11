@@ -718,7 +718,7 @@ input {
 .portfolio-wealth-dash * {
   min-width: 0;
   overflow-wrap: break-word;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .portfolio-wealth-dash .truncate {

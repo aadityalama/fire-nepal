@@ -39,70 +39,70 @@ export function KpiMetricCard({
     <PremiumGlassCard
       className={
         compact
-          ? "flex min-h-[132px] w-full min-w-0 flex-col p-5 sm:min-h-[136px] xl:min-h-[140px] xl:p-6"
-          : "flex min-h-[164px] w-full min-w-0 flex-col p-5 sm:min-h-[168px] xl:min-h-[172px] xl:p-6"
+          ? "flex min-h-[130px] w-full min-w-0 flex-col p-3 sm:min-h-[134px] xl:min-h-[136px]"
+          : "flex min-h-[150px] w-full min-w-0 flex-col p-3 sm:min-h-[156px] xl:min-h-[160px]"
       }
     >
       <div className="relative z-10 flex min-h-0 flex-col">
         <div
           className={
             compact
-              ? "grid min-h-0 auto-rows-auto grid-rows-[auto_auto_auto] gap-1.5 sm:gap-2"
-              : "grid min-h-0 auto-rows-auto grid-rows-[auto_auto_auto] gap-2.5 sm:gap-3"
+              ? "grid min-h-0 auto-rows-auto grid-rows-[auto_auto_auto] gap-1"
+              : "grid min-h-0 auto-rows-auto grid-rows-[auto_auto_auto] gap-1.5"
           }
         >
           {/* Header: label + icon | spark */}
-          <div className="flex items-start justify-between gap-2 sm:gap-2.5">
-            <div className={`flex min-w-0 flex-1 items-start ${compact ? "gap-2" : "gap-2.5 sm:gap-3"}`}>
+          <div className="flex items-start justify-between gap-2">
+            <div className={`flex min-w-0 flex-1 items-start ${compact ? "gap-1.5" : "gap-2"}`}>
               <div
                 className={
                   compact
-                    ? "grid h-8 w-8 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-emerald-300 shadow-[0_0_16px_-4px_rgba(52,211,153,0.4)] ring-1 ring-emerald-400/22 sm:h-9 sm:w-9 sm:rounded-lg"
-                    : "grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_-4px_rgba(52,211,153,0.45)] ring-1 ring-emerald-400/25 sm:h-11 sm:w-11 sm:rounded-xl"
+                    ? "grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-emerald-300 shadow-[0_0_14px_-4px_rgba(52,211,153,0.4)] ring-1 ring-emerald-400/22 sm:h-8 sm:w-8"
+                    : "grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-300 shadow-[0_0_18px_-4px_rgba(52,211,153,0.45)] ring-1 ring-emerald-400/25 sm:h-9 sm:w-9"
                 }
               >
                 <Icon
-                  className={compact ? "h-4 w-4 sm:h-[17px] sm:w-[17px]" : "h-[18px] w-[18px] sm:h-5 sm:w-5"}
+                  className={compact ? "h-3.5 w-3.5 sm:h-4 sm:w-4" : "h-4 w-4 sm:h-[18px] sm:w-[18px]"}
                   strokeWidth={2}
                 />
               </div>
               <p
                 className={
                   compact
-                    ? "min-w-0 pt-0.5 text-[9px] font-semibold uppercase leading-snug tracking-[0.12em] text-zinc-500 sm:text-[10px]"
-                    : "min-w-0 pt-0.5 text-[10px] font-semibold uppercase leading-snug tracking-[0.14em] text-zinc-500 sm:text-[11px]"
+                    ? "min-w-0 pt-0.5 text-[8px] font-semibold uppercase leading-snug tracking-[0.1em] text-zinc-500 sm:text-[9px]"
+                    : "min-w-0 pt-0.5 text-[9px] font-semibold uppercase leading-snug tracking-[0.12em] text-zinc-500 sm:text-[10px]"
                 }
               >
                 {label}
               </p>
             </div>
             <div className="shrink-0 pt-0.5">
-              <div className={compact ? "h-7 w-[72px] sm:h-8 sm:w-[84px]" : "h-10 w-[92px] sm:h-11 sm:w-[100px]"}>
+              <div className={compact ? "h-6 w-[64px] sm:h-7 sm:w-[76px]" : "h-8 w-[84px] sm:h-9 sm:w-[92px]"}>
                 <MiniSparkline data={sparkline} variant={sparkVariant} className="opacity-90" />
               </div>
             </div>
           </div>
 
           {/* Value block: vertically centered in the flexible middle row */}
-          <div className={`flex min-h-0 flex-col justify-center ${compact ? "gap-1" : "gap-2"}`}>
+          <div className={`flex min-h-0 flex-col justify-center ${compact ? "gap-0.5" : "gap-1"}`}>
             <p
               className={
                 compact
-                  ? "min-w-0 text-[1.02rem] font-black leading-[1.1] tracking-tight text-white sm:text-[1.08rem] xl:text-[1.06rem]"
-                  : "min-w-0 text-[1.14rem] font-black leading-[1.12] tracking-tight text-white sm:text-[1.22rem] xl:text-[1.18rem] xl:leading-tight"
+                  ? "min-w-0 text-[1.05rem] font-black leading-[1.08] tracking-tight text-white sm:text-[1.12rem] xl:text-[1.1rem]"
+                  : "min-w-0 text-[1.16rem] font-black leading-[1.1] tracking-tight text-white sm:text-[1.24rem] xl:text-[1.2rem]"
               }
             >
               {value}
             </p>
 
             {/* Reserve one line so cards align whether or not USD is shown */}
-            <div className={compact ? "min-h-[0.875rem] sm:min-h-[1rem]" : "min-h-[1rem] sm:min-h-[1.125rem]"}>
+            <div className={compact ? "min-h-[0.75rem] sm:min-h-[0.875rem]" : "min-h-[0.875rem] sm:min-h-[1rem]"}>
               {usdHint ? (
                 <p
                   className={
                     compact
-                      ? "min-w-0 truncate text-[9px] font-semibold leading-none text-zinc-500 sm:text-[10px]"
-                      : "min-w-0 truncate text-[10px] font-semibold leading-none text-zinc-500 sm:text-[11px]"
+                      ? "min-w-0 truncate text-[8px] font-semibold leading-none text-zinc-500 sm:text-[9px]"
+                      : "min-w-0 truncate text-[9px] font-semibold leading-none text-zinc-500 sm:text-[10px]"
                   }
                 >
                   ≈ {usdHint}
@@ -111,14 +111,14 @@ export function KpiMetricCard({
             </div>
 
             {/* Reserve progress row height for consistent rhythm */}
-            <div className={`flex items-center ${compact ? "min-h-[14px] sm:min-h-[16px]" : "min-h-[18px] sm:min-h-[20px]"}`}>
+            <div className={`flex items-center ${compact ? "min-h-[10px] sm:min-h-[12px]" : "min-h-[14px] sm:min-h-[16px]"}`}>
               {hasProgress ? (
                 <div className="w-full space-y-0.5">
                   <div
                     className={
                       compact
-                        ? "h-1 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/[0.06] sm:h-1.5"
-                        : "h-1.5 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/[0.06] sm:h-2"
+                        ? "h-1 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/[0.06]"
+                        : "h-1.5 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-white/[0.06]"
                     }
                   >
                     <div
@@ -133,8 +133,8 @@ export function KpiMetricCard({
           <div
             className={
               compact
-                ? "flex flex-col gap-1 border-t border-white/[0.06] pt-1.5 sm:gap-1 sm:pt-2"
-                : "flex flex-col gap-1.5 border-t border-white/[0.06] pt-2.5 sm:gap-1.5 sm:pt-3"
+                ? "flex flex-col gap-0.5 border-t border-white/[0.06] pt-1"
+                : "flex flex-col gap-1 border-t border-white/[0.06] pt-1.5"
             }
           >
             {deltaLabel ? (
@@ -156,8 +156,8 @@ export function KpiMetricCard({
             <div
               className={
                 compact
-                  ? "min-h-[1.35rem] text-[8px] font-semibold leading-snug text-zinc-500 sm:min-h-[1.5rem] sm:text-[9px]"
-                  : "min-h-[2rem] text-[9px] font-semibold leading-snug text-zinc-500 sm:min-h-[2.25rem] sm:text-[10px]"
+                  ? "min-h-[1.1rem] text-[8px] font-semibold leading-snug text-zinc-500 sm:min-h-[1.25rem] sm:text-[9px]"
+                  : "min-h-[1.5rem] text-[9px] font-semibold leading-snug text-zinc-500 sm:min-h-[1.75rem] sm:text-[10px]"
               }
             >
               {footer ?? <div className={compact ? "min-h-[0.875rem]" : "min-h-[1.125rem] sm:min-h-[1.25rem]"} aria-hidden />}
