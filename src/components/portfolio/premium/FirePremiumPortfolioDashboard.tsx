@@ -108,6 +108,7 @@ export function FirePremiumPortfolioDashboard() {
             label="FIRE progress"
             icon={Flame}
             value={`${firePct.toFixed(1)}%`}
+            secondaryValue={fireNumber > 0 ? `${formatNpr(netWorthNpr, true)} / ${formatNpr(fireNumber, true)}` : "Set FIRE number from cashflow"}
             deltaLabel={
               fireProgressDelta != null
                 ? `${fireProgressDelta >= 0 ? "↑" : "↓"} ${Math.abs(fireProgressDelta).toFixed(1)} pts vs last month`
@@ -133,6 +134,11 @@ export function FirePremiumPortfolioDashboard() {
             label="Estimated FIRE date"
             icon={CalendarClock}
             value={formatEstFiDate(fiMonths)}
+            secondaryValue={
+              fiMonths != null && Number.isFinite(fiMonths) && fiMonths >= 1 && fiMonths <= 720
+                ? `${Math.round(fiMonths)} months to FI`
+                : "Add inputs to estimate"
+            }
             deltaLabel="Desk projection from your workspace"
             deltaPositive
             sparkline={fiSpark}

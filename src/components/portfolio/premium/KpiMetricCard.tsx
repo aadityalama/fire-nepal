@@ -8,6 +8,7 @@ type KpiMetricCardProps = {
   icon: LucideIcon;
   value: string;
   usdHint?: string;
+  secondaryValue?: string;
   deltaLabel?: string;
   deltaPositive?: boolean;
   sparkline: number[];
@@ -42,6 +43,7 @@ export function KpiMetricCard({
   icon: Icon,
   value,
   usdHint,
+  secondaryValue,
   deltaLabel,
   deltaPositive = true,
   footer,
@@ -50,24 +52,27 @@ export function KpiMetricCard({
 }: KpiMetricCardProps) {
   const hasProgress = typeof progressPct === "number";
   const labelLines = kpiLabelLines(label);
+  const secondaryText = secondaryValue ?? (usdHint ? `≈ ${usdHint}` : undefined);
+  const trendText = deltaLabel ?? (hasProgress ? "Progress line" : "Live portfolio snapshot");
 
   return (
     <PremiumGlassCard
+      clip={false}
       className={
         compact
-          ? "flex h-[122px] w-full min-w-0 flex-col p-3.5 sm:h-[128px] lg:min-w-[240px] xl:h-[132px]"
-          : "flex h-[136px] w-full min-w-0 flex-col p-4 lg:min-w-[240px] xl:h-[140px]"
+          ? "flex h-[136px] w-full min-w-0 p-3.5 sm:h-[140px] lg:min-w-[240px] xl:h-[148px]"
+          : "flex h-[140px] w-full min-w-0 p-4 lg:min-w-[240px] xl:h-[150px]"
       }
     >
-      <div className="relative z-10 flex h-full min-h-0 flex-col">
+      <div className="relative z-10 flex h-full flex-col">
         <div
           className={
             compact
-              ? "grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-1.5"
-              : "grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2"
+              ? "grid h-full grid-rows-[auto_minmax(2.55rem,1fr)_auto] gap-2"
+              : "grid h-full grid-rows-[auto_minmax(2.75rem,1fr)_auto] gap-2.5"
           }
         >
-          {/* Header: label + icon. KPI sparklines stay out of the header so labels get the full card width. */}
+          {/* Top: icon + full title. */}
           <div className="flex min-w-0 items-start">
             <div className={`flex min-w-0 flex-1 items-center ${compact ? "gap-1.5" : "gap-2"}`}>
               <div
@@ -99,30 +104,29 @@ export function KpiMetricCard({
             </div>
           </div>
 
-          {/* Value block: vertically centered in the flexible middle row */}
-          <div className={`flex min-h-0 flex-col justify-center ${compact ? "gap-1" : "gap-1.5"}`}>
+          {/* Middle: primary metric remains the visual focus and gets guaranteed vertical space. */}
+          <div className={`flex flex-col justify-center ${compact ? "gap-1" : "gap-1.5"}`}>
             <p
               className={
                 compact
-                  ? "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-none tracking-[-0.04em] text-white lg:text-3xl"
-                  : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-none tracking-[-0.04em] text-white lg:text-3xl"
+                  ? "min-w-0 whitespace-nowrap text-2xl font-semibold leading-[1.02] tracking-[-0.04em] text-white lg:text-3xl"
+                  : "min-w-0 whitespace-nowrap text-2xl font-semibold leading-[1.02] tracking-[-0.04em] text-white lg:text-3xl"
               }
               title={value}
             >
               {value}
             </p>
 
-            {/* Reserve one line so cards align whether or not USD is shown */}
             <div className={compact ? "min-h-[0.8rem] sm:min-h-[0.95rem]" : "min-h-[0.95rem]"}>
-              {usdHint ? (
+              {secondaryText ? (
                 <p
                   className={
                     compact
-                      ? "min-w-0 truncate text-[10px] font-semibold leading-none text-[#A7B4C4]"
-                      : "min-w-0 truncate text-[11px] font-semibold leading-none text-[#A7B4C4]"
+                      ? "min-w-0 whitespace-nowrap text-[10px] font-semibold leading-none text-[#A7B4C4]"
+                      : "min-w-0 whitespace-nowrap text-[11px] font-semibold leading-none text-[#A7B4C4]"
                   }
                 >
-                  ≈ {usdHint}
+                  {secondaryText}
                 </p>
               ) : null}
             </div>
@@ -150,31 +154,27 @@ export function KpiMetricCard({
           <div
             className={
               compact
-                ? "flex min-h-0 flex-col gap-0.5 border-t border-white/[0.06] pt-1"
-                : "flex min-h-0 flex-col gap-1 border-t border-white/[0.06] pt-1.5"
+                ? "flex flex-col gap-0.5 border-t border-white/[0.06] pt-1"
+                : "flex flex-col gap-1 border-t border-white/[0.06] pt-1.5"
             }
           >
-            {deltaLabel ? (
-              <p
-                className={`inline-flex min-w-0 items-center gap-1 overflow-hidden font-bold leading-none ${
-                  compact ? "text-[10px]" : "text-[11px]"
-                } ${deltaPositive ? "text-[#38F2A0]" : "text-rose-300"}`}
-              >
-                <TrendingUp
-                  className={`shrink-0 ${deltaPositive ? "" : "rotate-180"} ${
-                    compact ? "h-2.5 w-2.5 sm:h-3 sm:w-3" : "h-3 w-3 sm:h-3.5 sm:w-3.5"
-                  }`}
-                />
-                <span className="min-w-0 truncate">{deltaLabel}</span>
-              </p>
-            ) : (
-              <div className={compact ? "h-3" : "h-3.5"} aria-hidden />
-            )}
+            <p
+              className={`inline-flex min-w-0 items-center gap-1 font-bold leading-none ${
+                compact ? "text-[10px]" : "text-[11px]"
+              } ${deltaLabel ? (deltaPositive ? "text-[#38F2A0]" : "text-rose-300") : "text-[#A7B4C4]"}`}
+            >
+              <TrendingUp
+                className={`shrink-0 ${deltaLabel && !deltaPositive ? "rotate-180" : ""} ${
+                  compact ? "h-2.5 w-2.5 sm:h-3 sm:w-3" : "h-3 w-3 sm:h-3.5 sm:w-3.5"
+                }`}
+              />
+              <span className="min-w-0 whitespace-nowrap">{trendText}</span>
+            </p>
             <div
               className={
                 compact
-                  ? "min-h-[0.9rem] truncate text-[10px] font-semibold leading-none text-[#A7B4C4]"
-                  : "min-h-[1rem] truncate text-[11px] font-semibold leading-none text-[#A7B4C4]"
+                  ? "min-h-[0.9rem] whitespace-nowrap text-[10px] font-semibold leading-none text-[#A7B4C4]"
+                  : "min-h-[1rem] whitespace-nowrap text-[11px] font-semibold leading-none text-[#A7B4C4]"
               }
             >
               {footer ?? <div className={compact ? "min-h-[0.875rem]" : "min-h-[1.125rem] sm:min-h-[1.25rem]"} aria-hidden />}
