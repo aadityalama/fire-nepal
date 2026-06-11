@@ -10,23 +10,23 @@ type PremiumGlassCardProps = {
 export function PremiumGlassCard({ children, className = "", glow = true }: PremiumGlassCardProps) {
   return (
     <div
-      className={`group/card relative min-w-0 overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.09] via-zinc-950/38 to-black/[0.58] shadow-[0_0_0_1px_rgba(255,255,255,0.05)_inset,0_28px_72px_-32px_rgba(0,0,0,0.68),0_0_88px_-28px_rgba(16,185,129,0.14)] backdrop-blur-2xl backdrop-saturate-[1.12] motion-safe:transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-safe:hover:-translate-y-0.5 ${
+      className={`group/card relative min-w-0 overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0B1623]/95 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_18px_42px_-28px_rgba(0,0,0,0.72)] backdrop-blur-xl backdrop-saturate-[1.08] motion-safe:transition-[transform,box-shadow,border-color,background-color] motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-0.5 ${
         glow
-          ? "motion-safe:hover:border-emerald-400/35 motion-safe:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.07)_inset,0_32px_80px_-28px_rgba(0,0,0,0.75),0_0_100px_-22px_rgba(52,211,153,0.26)]"
+          ? "motion-safe:hover:border-white/[0.14] motion-safe:hover:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_22px_48px_-30px_rgba(0,0,0,0.82)]"
           : ""
       } ${className}`}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-14 -top-20 h-44 w-44 rounded-full bg-emerald-500/[0.11] blur-3xl transition duration-700 ease-out group-hover/card:bg-emerald-400/[0.14]"
+        className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-[#38F2A0]/[0.035] blur-3xl transition duration-500 ease-out group-hover/card:bg-[#38F2A0]/[0.055]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -bottom-12 -left-10 h-36 w-36 rounded-full bg-cyan-400/[0.06] blur-3xl transition duration-700 group-hover/card:bg-cyan-300/[0.08]"
+        className="pointer-events-none absolute -bottom-14 -left-12 h-40 w-40 rounded-full bg-[#C06CFF]/[0.03] blur-3xl transition duration-500 group-hover/card:bg-[#C06CFF]/[0.045]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-70"
       />
       {children}
     </div>

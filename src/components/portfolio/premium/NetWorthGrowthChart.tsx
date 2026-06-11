@@ -92,10 +92,10 @@ function NetWorthTooltip({
   const row = payload[0]?.payload;
   if (!row) return null;
   return (
-    <div className="rounded-2xl border border-emerald-400/20 bg-zinc-950/95 px-4 py-3 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.75),0_0_40px_-12px_rgba(52,211,153,0.15)] backdrop-blur-md">
-      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">{label != null ? String(label) : ""}</p>
+    <div className="rounded-[16px] border border-white/[0.08] bg-[#0B1623]/95 px-4 py-3 shadow-[0_18px_42px_-24px_rgba(0,0,0,0.85)] backdrop-blur-md">
+      <p className="text-[10px] font-black uppercase tracking-wider text-white/65">{label != null ? String(label) : ""}</p>
       <p className="mt-1 text-sm font-black text-white">{formatNpr(row.nw)}</p>
-      {row.milestone ? <p className="mt-1 text-[11px] font-medium text-emerald-300/90">{row.milestone}</p> : null}
+      {row.milestone ? <p className="mt-1 text-[11px] font-medium text-[#38F2A0]">{row.milestone}</p> : null}
     </div>
   );
 }
@@ -132,23 +132,23 @@ export function NetWorthGrowthChart() {
   const isEmptyHistory = history.length < 2;
 
   return (
-    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-5 xl:p-6">
-      <div className="relative z-10 flex flex-col gap-3 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-4 xl:p-5">
+      <div className="relative z-10 flex flex-col gap-3 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500 sm:text-[10px]">Net worth growth</p>
+          <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">Net worth growth</p>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-            <p className="min-w-0 truncate text-base font-bold tabular-nums tracking-tight text-white sm:text-lg xl:text-[1.15rem]">
+            <p className="min-w-0 truncate text-xl font-bold tabular-nums tracking-tight text-white sm:text-2xl">
               {formatNpr(hydrated ? totals.netWorthNpr : 0)}
             </p>
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500 sm:text-[10px]">Primary</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A7B4C4]">Primary</span>
           </div>
-          <p className="max-w-lg text-[9px] font-medium leading-snug text-zinc-500 line-clamp-2 sm:text-[10px] lg:line-clamp-2">
+          <p className="max-w-lg text-[11px] font-medium leading-snug text-[#A7B4C4] line-clamp-2">
             {isEmptyHistory
               ? "Log snapshots as you update your portfolio — the curve appears automatically."
               : "Trajectory from saved net worth history."}
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-lg border border-white/[0.1] bg-black/40 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:w-auto sm:flex-nowrap sm:rounded-xl">
+        <div className="flex w-full min-w-0 flex-wrap gap-0.5 rounded-xl border border-white/[0.08] bg-[#07111A]/70 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] backdrop-blur-md sm:w-auto sm:flex-nowrap">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -156,8 +156,8 @@ export function NetWorthGrowthChart() {
               onClick={() => setRange(t.id)}
               className={`min-h-[32px] flex-1 rounded-md px-2 py-1 text-[9px] font-semibold transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:min-h-0 sm:flex-none sm:rounded-md sm:px-2.5 sm:py-1 sm:text-[10px] ${
                 range === t.id
-                  ? "bg-gradient-to-b from-white/[0.16] to-white/[0.07] text-white shadow-[0_0_28px_-8px_rgba(52,211,153,0.35)] ring-1 ring-emerald-400/30"
-                  : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-100"
+                  ? "bg-white/[0.1] text-white ring-1 ring-white/[0.08]"
+                  : "text-[#A7B4C4] hover:bg-white/[0.05] hover:text-white"
               }`}
             >
               {t.label}
@@ -175,35 +175,35 @@ export function NetWorthGrowthChart() {
       <div
         className={`relative z-10 flex min-h-0 flex-1 flex-col pl-0 sm:pl-0.5 ${hasMilestones ? "mt-1 sm:mt-1.5" : "mt-1"}`}
       >
-        <div className="min-h-[min(38vw,164px)] w-full flex-1 sm:min-h-[172px] lg:min-h-[180px] xl:min-h-[188px]">
+        <div className="min-h-[min(46vw,220px)] w-full flex-1 sm:min-h-[220px] lg:min-h-[250px] xl:min-h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={data}
               margin={
                 compact
                   ? { top: 12, right: 4, left: -12, bottom: 4 }
-                  : { top: 20, right: 8, left: 0, bottom: 12 }
+                  : { top: 22, right: 12, left: 0, bottom: 14 }
               }
             >
               <defs>
                 <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5eead4" stopOpacity={0.38} />
-                  <stop offset="40%" stopColor="#10b981" stopOpacity={0.16} />
-                  <stop offset="85%" stopColor="#064e3b" stopOpacity={0.04} />
+                  <stop offset="0%" stopColor="#38F2A0" stopOpacity={0.28} />
+                  <stop offset="40%" stopColor="#38F2A0" stopOpacity={0.1} />
+                  <stop offset="85%" stopColor="#07111A" stopOpacity={0.02} />
                   <stop offset="100%" stopColor="#022c22" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={lineStrokeId} x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#a7f3d0" />
-                  <stop offset="45%" stopColor="#34d399" />
-                  <stop offset="100%" stopColor="#059669" />
+                  <stop offset="0%" stopColor="#38F2A0" />
+                  <stop offset="50%" stopColor="#7CF7C2" />
+                  <stop offset="100%" stopColor="#38F2A0" />
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="5 12" stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <CartesianGrid strokeDasharray="4 10" stroke="rgba(255,255,255,0.055)" vertical={false} />
 
               <XAxis
                 dataKey="label"
-                tick={{ fill: "rgba(161,161,170,0.88)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
+                tick={{ fill: "#A7B4C4", fontSize: compact ? 9 : 11, fontWeight: 700 }}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={compact ? 8 : 14}
@@ -213,7 +213,7 @@ export function NetWorthGrowthChart() {
               <YAxis
                 domain={yDomain as [number, number]}
                 tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`}
-                tick={{ fill: "rgba(113,113,122,0.95)", fontSize: compact ? 9 : 11, fontWeight: 700 }}
+                tick={{ fill: "#A7B4C4", fontSize: compact ? 9 : 11, fontWeight: 700 }}
                 axisLine={false}
                 tickLine={false}
                 width={compact ? 40 : 56}
@@ -222,13 +222,13 @@ export function NetWorthGrowthChart() {
 
               <Tooltip
                 content={(props) => <NetWorthTooltip {...props} />}
-                cursor={{ stroke: "rgba(52,211,153,0.22)", strokeWidth: 1 }}
+                cursor={{ stroke: "rgba(56,242,160,0.28)", strokeWidth: 1 }}
               />
 
               <Line
                 type="monotone"
                 dataKey="nw"
-                stroke="#10b981"
+                stroke="#38F2A0"
                 strokeWidth={14}
                 strokeOpacity={0.14}
                 strokeLinecap="round"
@@ -240,7 +240,7 @@ export function NetWorthGrowthChart() {
               <Line
                 type="monotone"
                 dataKey="nw"
-                stroke="#34d399"
+                stroke="#38F2A0"
                 strokeWidth={6}
                 strokeOpacity={0.22}
                 strokeLinecap="round"

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
-import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
 const ASSETS_HUB_HREF = "/portfolio/assets" as const;
@@ -284,15 +283,15 @@ type WealthDashboardShellProps = {
 
 function navLinkClasses(active: boolean, light: boolean) {
   const base =
-    "flex min-h-[44px] items-center justify-center rounded-xl border px-3 py-2.5 text-xs font-semibold tracking-[-0.01em] transition-colors duration-200 active:scale-[0.99] sm:justify-start sm:text-[0.8125rem] sm:leading-snug";
+    "flex min-h-[40px] items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold tracking-[-0.01em] transition-colors duration-200 active:scale-[0.99] sm:justify-start sm:text-[0.8125rem] sm:leading-snug";
   if (active) {
     return light
       ? `${base} border-emerald-400/55 bg-emerald-50 text-black`
-      : `${base} border-emerald-400/35 bg-emerald-500/[0.12] text-white`;
+      : `${base} border-[#38F2A0]/25 bg-[#38F2A0]/10 text-white shadow-[inset_3px_0_0_rgba(56,242,160,0.85)]`;
   }
   return light
     ? `${base} border-transparent bg-white/55 text-slate-800 font-semibold backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90 hover:text-black`
-    : `${base} border-transparent bg-white/[0.04] text-gray-100 font-semibold backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] hover:text-white`;
+    : `${base} border-transparent bg-transparent text-[#A7B4C4] font-semibold hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-white`;
 }
 
 export function WealthDashboardShell({
@@ -303,8 +302,7 @@ export function WealthDashboardShell({
   wideAside,
 }: WealthDashboardShellProps) {
   const pathname = usePathname();
-  const { resolvedTheme } = useFireTheme();
-  const light = resolvedTheme === "light";
+  const light = false;
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const close = useCallback(() => setDrawerOpen(false), []);
@@ -343,17 +341,13 @@ export function WealthDashboardShell({
 
   return (
     <main
-      className={`portfolio-wealth-dash premium-shell relative min-h-screen pb-24 antialiased transition-[background-color,color] duration-300 ease-out max-xl:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] xl:pb-10 ${
-        light ? "bg-slate-100 text-slate-800" : "bg-[#011a14] text-gray-100"
-      }`}
+      className="portfolio-wealth-dash premium-shell relative min-h-screen bg-[#07111A] pb-24 text-white antialiased transition-[background-color,color] duration-300 ease-out max-xl:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] xl:pb-10"
     >
       <div className="wealth-dash-atmosphere wealth-dash-atmosphere-float pointer-events-none fixed inset-0" />
 
       <div className="relative mx-auto flex w-full min-h-0 flex-col xl:flex-row xl:items-start">
         <header
-          className={`wealth-dash-mobile-bar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-emerald-400/10 px-4 py-3 backdrop-blur-xl xl:hidden ${
-            light ? "bg-white/90" : "bg-[#021910]/90"
-          }`}
+          className="wealth-dash-mobile-bar sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-white/[0.08] bg-[#07111A]/92 px-4 py-3 backdrop-blur-xl xl:hidden"
         >
           <div className="flex items-center gap-2">
             <button
@@ -403,13 +397,9 @@ export function WealthDashboardShell({
 
         <aside
           id="wealth-dash-drawer"
-          className={`wealth-dash-aside wealth-dash-sidebar-shell fixed inset-y-0 left-0 z-50 flex w-[min(90vw,300px)] max-w-[100vw] flex-col transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform xl:static xl:z-auto xl:max-w-none ${
-            wideAside ? "xl:w-[252px]" : "xl:w-[14.75rem]"
+          className={`wealth-dash-aside wealth-dash-sidebar-shell fixed inset-y-0 left-0 z-50 flex w-[min(90vw,300px)] max-w-[100vw] flex-col border-r border-white/[0.08] bg-[#07111A]/95 text-white shadow-[2px_0_34px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform xl:static xl:z-auto xl:max-w-none ${
+            wideAside ? "xl:w-[252px]" : "xl:w-[15.5rem]"
           } xl:translate-x-0 xl:border-b-0 xl:shrink-0 ${
-            light
-              ? "border-r border-emerald-200/55 bg-gradient-to-b from-white/98 via-white/95 to-emerald-50/40 text-slate-800 shadow-none backdrop-blur-xl xl:shadow-[2px_0_32px_-16px_rgba(16,185,129,0.1)]"
-              : "border-r border-emerald-500/12 bg-gradient-to-b from-zinc-950/98 via-[#041a14]/96 to-black/92 text-gray-100 shadow-[2px_0_28px_-12px_rgba(0,0,0,0.55)] backdrop-blur-xl"
-          } ${
             drawerOpen ? "translate-x-0 shadow-2xl shadow-black/50" : "-translate-x-full xl:translate-x-0"
           } xl:sticky xl:top-0 xl:max-h-[min(100dvh,100svh)] xl:min-h-0 xl:overflow-hidden xl:flex xl:flex-col`}
         >
@@ -439,7 +429,7 @@ export function WealthDashboardShell({
             </button>
           </div>
 
-          <div className="flex flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-4 xl:gap-6 xl:p-5">
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4 xl:gap-5 xl:p-5">
             <div className="flex items-center gap-2 xl:flex-col xl:items-stretch xl:gap-3">
               <div className="flex items-center gap-2 xl:gap-3">
                 <div
@@ -462,7 +452,7 @@ export function WealthDashboardShell({
                   </p>
                 </div>
               </div>
-              <nav className="mt-1 flex flex-col gap-1.5 xl:mt-0">
+              <nav className="mt-1 flex flex-col gap-1 xl:mt-0">
                 {SHELL_NAV_BEFORE_FAMILY.map((item) => (
                   <Link
                     key={item.href}

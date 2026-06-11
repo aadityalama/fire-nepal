@@ -84,7 +84,7 @@ export function FirePremiumPortfolioDashboard() {
         <DashboardHeader userName={displayName} />
 
         {/* Mobile: 2×2 core KPIs; tablet: 4-up; desktop: 5 columns with FI date at end */}
-        <section className="mt-3 grid grid-cols-2 items-stretch gap-2.5 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
+        <section className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
           <KpiMetricCard
             label="Total net worth"
             icon={Wallet}
@@ -144,7 +144,7 @@ export function FirePremiumPortfolioDashboard() {
         </section>
 
         {/* Executive strip: dense secondary context (display-only; totals from context) */}
-        <div className="mt-3 grid grid-cols-2 gap-2.5 rounded-2xl border border-white/[0.06] bg-black/25 p-3 ring-1 ring-white/[0.04] backdrop-blur-md sm:grid-cols-4 sm:gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-3 rounded-[20px] border border-white/[0.08] bg-[#0B1623]/80 p-4 shadow-[0_16px_36px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.03] backdrop-blur-xl sm:grid-cols-4 sm:gap-4">
           {(
             [
               { name: "Total assets", primary: formatNpr(hydrated ? totals.totalAssetsNpr : 0), sub: "Gross stack" },
@@ -154,9 +154,9 @@ export function FirePremiumPortfolioDashboard() {
             ] as const
           ).map((row) => (
             <div key={row.name} className="min-w-0 border-b border-white/[0.04] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
-              <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-500 sm:text-[9px]">{row.name}</p>
-              <p className="mt-0.5 truncate text-[11px] font-black tabular-nums tracking-tight text-white sm:text-xs">{row.primary}</p>
-              <p className="truncate text-[8px] font-semibold text-zinc-500 sm:text-[9px]">{row.sub}</p>
+              <p className="truncate text-[10px] font-bold uppercase tracking-wider text-white/65">{row.name}</p>
+              <p className="mt-1 truncate text-sm font-bold tabular-nums tracking-tight text-white">{row.primary}</p>
+              <p className="truncate text-[10px] font-semibold text-[#A7B4C4]">{row.sub}</p>
             </div>
           ))}
         </div>
@@ -177,9 +177,9 @@ export function FirePremiumPortfolioDashboard() {
           </div>
         ) : null}
 
-        <div className="mt-3 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
+        <div className="mt-4 flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start">
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0">
-            <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch">
+            <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.28fr)_minmax(280px,0.72fr)] lg:items-stretch">
               <div className="flex min-h-0 min-w-0">
                 <NetWorthGrowthChart />
               </div>
@@ -196,7 +196,7 @@ export function FirePremiumPortfolioDashboard() {
           </div>
         </div>
 
-        <div id="premium-portfolio-assets" className="mt-3 min-w-0 scroll-mt-24">
+        <div id="premium-portfolio-assets" className="mt-4 min-w-0 scroll-mt-24">
           <AssetsDataTable />
         </div>
 

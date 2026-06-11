@@ -6,7 +6,7 @@ import { formatNpr } from "@/data/fire-premium-dashboard";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 
-const SLICE_COLORS = ["#38bdf8", "#818cf8", "#fbbf24", "#c084fc", "#fb7185", "#34d399", "#94a3b8"];
+const SLICE_COLORS = ["#38F2A0", "#C06CFF", "#F7C948", "#60A5FA", "#FB7185", "#A7B4C4", "#7DD3FC"];
 
 export function AssetAllocationChart() {
   const { totals, allocation, hydrated } = useWealthPortfolio();
@@ -28,24 +28,24 @@ export function AssetAllocationChart() {
   const isEmpty = !hydrated || total <= 0 || data.length === 0 || (data.length === 1 && data[0]!.name === "Empty");
 
   return (
-    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-5 xl:p-6">
-      <div className="relative z-10 flex shrink-0 flex-col gap-2 border-b border-white/[0.07] pb-4 md:flex-row md:items-end md:justify-between md:gap-4">
+    <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-4 xl:p-5">
+      <div className="relative z-10 flex shrink-0 flex-col gap-2 border-b border-white/[0.08] pb-4 md:flex-row md:items-end md:justify-between md:gap-4">
         <div className="min-w-0 space-y-0.5">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500 sm:text-[10px]">Asset allocation</p>
-          <p className="min-w-0 truncate text-base font-bold tabular-nums tracking-tight text-white sm:text-lg sm:leading-tight">
+          <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">Asset allocation</p>
+          <p className="min-w-0 truncate text-xl font-bold tabular-nums tracking-tight text-white sm:text-2xl sm:leading-tight">
             {formatNpr(total)}
           </p>
         </div>
-        <p className="min-w-0 max-w-full truncate text-[9px] font-medium leading-snug text-zinc-500 md:max-w-[20rem] md:text-right sm:text-[10px]">
+        <p className="min-w-0 max-w-full truncate text-[11px] font-medium leading-snug text-[#A7B4C4] md:max-w-[20rem] md:text-right">
           {isEmpty
             ? "Add assets in banking, investments, or property — allocation fills from your balances."
             : "Sleeve mix · NPR marks from your portfolio."}
         </p>
       </div>
 
-      <div className="relative z-10 mt-4 flex min-h-0 flex-1 flex-col gap-4 md:min-h-[136px] md:flex-row md:items-stretch lg:min-h-[150px]">
-        <div className="flex min-h-[116px] shrink-0 items-center justify-center md:min-h-0 md:w-[38%] md:max-w-none lg:w-[36%]">
-          <div className="relative aspect-square w-full max-w-[118px] drop-shadow-[0_0_28px_-10px_rgba(52,211,153,0.18)] md:max-w-[132px] lg:max-w-[144px]">
+      <div className="relative z-10 mt-4 flex min-h-0 flex-1 flex-col gap-4 md:min-h-[180px] md:flex-row md:items-stretch lg:min-h-[220px]">
+        <div className="flex min-h-[140px] shrink-0 items-center justify-center md:min-h-0 md:w-[40%] md:max-w-none lg:w-[42%]">
+          <div className="relative aspect-square w-full max-w-[136px] drop-shadow-[0_14px_36px_-28px_rgba(0,0,0,0.9)] md:max-w-[154px] lg:max-w-[174px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <Pie
@@ -57,7 +57,7 @@ export function AssetAllocationChart() {
                   innerRadius="58%"
                   outerRadius="82%"
                   paddingAngle={2}
-                  stroke="rgba(9,9,11,0.92)"
+                  stroke="#0B1623"
                   strokeWidth={1.5}
                   cornerRadius={2.5}
                 >
@@ -67,12 +67,13 @@ export function AssetAllocationChart() {
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    background: "rgba(9,9,11,0.96)",
-                    border: "1px solid rgba(52,211,153,0.18)",
-                    borderRadius: 14,
+                    background: "rgba(11,22,35,0.96)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 16,
                     fontSize: 12,
                     fontWeight: 600,
-                    boxShadow: "0 16px 48px -12px rgba(0,0,0,0.65), 0 0 40px -14px rgba(52,211,153,0.12)",
+                    color: "#FFFFFF",
+                    boxShadow: "0 18px 42px -24px rgba(0,0,0,0.85)",
                   }}
                   formatter={(value: number, _n, item) => {
                     const pct = (item as { payload?: { pct?: number } })?.payload?.pct;
@@ -86,40 +87,40 @@ export function AssetAllocationChart() {
             </ResponsiveContainer>
 
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-2 text-center">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-zinc-500 sm:text-[9px]">Total</p>
-              <p className="mt-0.5 text-[10px] font-semibold tabular-nums tracking-tight text-white sm:text-xs">{formatNpr(total, true)}</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-white/65">Total</p>
+              <p className="mt-0.5 text-xs font-bold tabular-nums tracking-tight text-white">{formatNpr(total, true)}</p>
             </div>
           </div>
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center md:py-0.5">
-          <div className="mb-2 hidden min-w-0 grid-cols-[10px,minmax(0,1fr),3rem,minmax(5rem,6.5rem)] gap-x-2.5 border-b border-white/[0.06] pb-2 md:grid">
+          <div className="mb-2 hidden min-w-0 grid-cols-[10px,minmax(0,1fr),3rem,minmax(5rem,6.5rem)] gap-x-2.5 border-b border-white/[0.08] pb-2 md:grid">
             <span />
-            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Category</span>
-            <span className="text-right text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Share</span>
-            <span className="text-right text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Amt</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-white/65">Category</span>
+            <span className="text-right text-[9px] font-bold uppercase tracking-wider text-white/65">Share</span>
+            <span className="text-right text-[9px] font-bold uppercase tracking-wider text-white/65">Amt</span>
           </div>
           <ul className="max-h-[min(36vh,220px)] min-h-0 min-w-0 overflow-y-auto overscroll-contain pr-0.5 md:max-h-[min(42vh,260px)] md:pr-0 lg:max-h-none lg:overflow-visible">
             {isEmpty ? (
-              <li className="rounded-md border border-white/[0.06] bg-black/25 px-2 py-2.5 text-center text-[10px] font-medium text-zinc-400 sm:text-xs">
+              <li className="rounded-lg border border-white/[0.08] bg-[#07111A]/70 px-2 py-2.5 text-center text-xs font-medium text-[#A7B4C4]">
                 No allocation yet — add assets to see your mix.
               </li>
             ) : (
               data.map((row) => (
                 <li
                   key={row.name}
-                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 border-b border-white/[0.05] py-2 last:border-b-0 md:grid-cols-[10px,minmax(0,1fr),3rem,minmax(5rem,6.5rem)] md:items-center md:gap-x-2.5"
+                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 border-b border-white/[0.06] py-2 last:border-b-0 md:grid-cols-[10px,minmax(0,1fr),3rem,minmax(5rem,6.5rem)] md:items-center md:gap-x-2.5"
                 >
                   <span
                     className="row-span-2 mt-0.5 h-2.5 w-2.5 shrink-0 self-start rounded-full shadow-[0_0_10px_rgba(255,255,255,0.18)] md:row-span-1 md:mt-0 md:h-3 md:w-3 md:self-center"
                     style={{ background: row.color }}
                   />
-                  <p className="min-w-0 truncate text-xs font-semibold leading-snug text-zinc-100 md:py-0 md:text-[13px]" title={row.name}>
+                  <p className="min-w-0 truncate text-xs font-semibold leading-snug text-white md:py-0 md:text-[13px]" title={row.name}>
                     {row.name}
                   </p>
                   <div className="col-start-2 flex min-w-0 items-baseline justify-between gap-2 pt-0.5 md:contents md:pt-0">
                     <p className="text-[10px] font-bold tabular-nums text-white md:text-right md:text-xs">{row.pct.toFixed(1)}%</p>
-                    <p className="min-w-0 max-w-[55%] truncate text-right text-[10px] font-medium tabular-nums text-zinc-400 md:max-w-none md:text-[11px]">
+                    <p className="min-w-0 max-w-[55%] truncate text-right text-[10px] font-medium tabular-nums text-[#A7B4C4] md:max-w-none md:text-[11px]">
                       {formatNpr(row.value)}
                     </p>
                   </div>
