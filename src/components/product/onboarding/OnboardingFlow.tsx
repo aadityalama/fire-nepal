@@ -59,7 +59,7 @@ export function OnboardingFlow() {
       generated,
     };
     saveProductOnboarding(next);
-    applyOnboardingToCashflowIfEmpty(next);
+    applyOnboardingToCashflowIfEmpty(next, user?.id);
     setBusy(false);
     router.replace("/hub");
   }

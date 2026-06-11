@@ -13,6 +13,7 @@ import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { normalizeGoldSilverPriceResponse } from "@/lib/market/normalize-gold-silver-price-response";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 function sumIncome(cf: CashflowDashboardState): number {
   return Object.values(cf.income).reduce<number>((a, v) => a + (typeof v === "number" && v > 0 ? v : 0), 0);
@@ -44,6 +45,7 @@ export function FireDashboardMetrics({
   monthlyInvestmentTarget,
   refreshKey = 0,
 }: FireDashboardMetricsProps) {
+  const { user, loading } = useProductAuth();
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [tick, setTick] = useState(0);
@@ -92,18 +94,20 @@ export function FireDashboardMetrics({
   const totals = useMemo(() => {
     void tick;
     void refreshKey;
-    const state = loadWealthPortfolioState();
+    void loading;
+    const state = loadWealthPortfolioState(user?.id);
     const bullionGramRatesNpr = bullionSpot
       ? { goldNprPerGram: bullionSpot.goldPerGramNPR, silverNprPerGram: bullionSpot.silverPerGramNPR }
       : null;
     return computeWealthTotals(state, krwPerNpr, usdPerNpr, { bullionGramRatesNpr });
-  }, [krwPerNpr, usdPerNpr, tick, refreshKey, bullionSpot]);
+  }, [krwPerNpr, usdPerNpr, tick, refreshKey, bullionSpot, user?.id, loading]);
 
   const cashflow = useMemo(() => {
     void tick;
     void refreshKey;
-    return loadCashflowState();
-  }, [tick, refreshKey]);
+    void loading;
+    return loadCashflowState(user?.id);
+  }, [tick, refreshKey, user?.id, loading]);
 
   const income = useMemo(() => sumIncome(cashflow), [cashflow]);
   const expenses = useMemo(() => sumExpenses(cashflow), [cashflow]);

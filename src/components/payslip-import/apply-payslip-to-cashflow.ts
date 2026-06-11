@@ -1,10 +1,5 @@
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
-import {
-  CASHFLOW_STORAGE_KEY,
-  loadCashflowState,
-  saveCashflowState,
-  sanitizeCashflowState,
-} from "@/components/cashflow/cashflow-storage";
+import { loadCashflowState, saveCashflowState } from "@/components/cashflow/cashflow-storage";
 import { krwToNpr } from "@/components/payslip-import/krw-normalize";
 import type { PayslipParsed } from "@/components/payslip-import/types";
 
@@ -19,7 +14,7 @@ export type ApplyPayslipResult = {
  * Writes monthly salary + overtime (NPR) into cashflow storage from parsed KRW payslip.
  * Uses gross − overtime as base salary when base monthly salary is ambiguous; falls back to net if needed.
  */
-export function applyPayslipToCashflowStorage(parsed: PayslipParsed, krwPerNpr: number): ApplyPayslipResult {
+export function applyPayslipToCashflowStorage(parsed: PayslipParsed, krwPerNpr: number, userId?: string | null): ApplyPayslipResult {
   if (typeof window === "undefined") {
     return { ok: false, salaryNpr: 0, overtimeNpr: 0, message: "Client only." };
   }
@@ -46,14 +41,13 @@ export function applyPayslipToCashflowStorage(parsed: PayslipParsed, krwPerNpr: 
   const overtimeNpr = otK > 0 ? Math.round(krwToNpr(otK, krwPerNpr)) : 0;
 
   try {
-    const raw = window.localStorage.getItem(CASHFLOW_STORAGE_KEY);
-    const cur = sanitizeCashflowState(raw ? (JSON.parse(raw) as unknown) : undefined);
+    const cur = loadCashflowState(userId);
     const nextIncome = { ...cur.income, salary: salaryNpr };
     if (otK > 0) {
       nextIncome.overtime = overtimeNpr;
     }
     const next = { ...cur, income: nextIncome };
-    saveCashflowState(next);
+    saveCashflowState(next, userId);
     window.dispatchEvent(new Event(CASHFLOW_EXTERNAL_SYNC_EVENT));
     return {
       ok: true,
@@ -67,10 +61,10 @@ export function applyPayslipToCashflowStorage(parsed: PayslipParsed, krwPerNpr: 
 }
 
 /** Read current salary hint (NPR) for FIRE simulation UX — optional. */
-export function readCashflowSalaryNprHint(): number {
+export function readCashflowSalaryNprHint(userId?: string | null): number {
   if (typeof window === "undefined") return 0;
   try {
-    const s = loadCashflowState();
+    const s = loadCashflowState(userId);
     return Math.max(0, Math.round(s.income.salary ?? 0));
   } catch {
     return 0;

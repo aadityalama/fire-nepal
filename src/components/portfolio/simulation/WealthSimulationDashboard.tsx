@@ -4,7 +4,7 @@ import { ArrowLeft, FlaskConical, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
-import { CASHFLOW_STORAGE_KEY, loadCashflowState } from "@/components/cashflow/cashflow-storage";
+import { cashflowStorageKey, loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { readCashflowSalaryNprHint } from "@/components/payslip-import/apply-payslip-to-cashflow";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import {
@@ -12,7 +12,7 @@ import {
   fireReadinessScore,
   passiveIncomeMonthlyNpr,
 } from "@/components/portfolio/calculations";
-import { defaultWealthState, loadWealthPortfolioState, STORAGE_KEY_V2 } from "@/components/portfolio/storage";
+import { defaultWealthState, loadWealthPortfolioState, portfolioStorageKey } from "@/components/portfolio/storage";
 import { SimulationProjectionChart } from "@/components/portfolio/simulation/SimulationProjectionChart";
 import {
   applyScenario,
@@ -34,6 +34,7 @@ import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { formatMoney } from "@/lib/expense-utils";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 function pct(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -64,6 +65,7 @@ function useNarrowViewport(): boolean {
 }
 
 export function WealthSimulationDashboard() {
+  const { user } = useProductAuth();
   const narrow = useNarrowViewport();
   const [state, setState] = useState<WealthPortfolioStateV2>(defaultWealthState);
   const [hydrated, setHydrated] = useState(false);
@@ -96,24 +98,24 @@ export function WealthSimulationDashboard() {
   }, []);
 
   useEffect(() => {
-    const sync = () => setCashflowSalaryNpr(readCashflowSalaryNprHint());
+    const sync = () => setCashflowSalaryNpr(readCashflowSalaryNprHint(user?.id));
     sync();
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, sync);
     return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, sync);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    setState(loadWealthPortfolioState());
+    setState(loadWealthPortfolioState(user?.id));
     setHydrated(true);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY_V2) setState(loadWealthPortfolioState());
+      if (e.key === portfolioStorageKey(user?.id)) setState(loadWealthPortfolioState(user?.id));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,11 +132,11 @@ export function WealthSimulationDashboard() {
   }, []);
 
   useEffect(() => {
-    const read = () => setMonthlyDividendNpr(loadCashflowState().income.dividendIncome ?? 0);
+    const read = () => setMonthlyDividendNpr(loadCashflowState(user?.id).income.dividendIncome ?? 0);
     read();
     const onExternal = () => read();
     const onStorage = (e: StorageEvent) => {
-      if (e.key === CASHFLOW_STORAGE_KEY) read();
+      if (e.key === cashflowStorageKey(user?.id)) read();
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener("storage", onStorage);
@@ -142,9 +144,10 @@ export function WealthSimulationDashboard() {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener("storage", onStorage);
     };
-  }, []);
+  }, [user?.id]);
 
   const totals = useMemo(() => computeWealthTotals(state, krwPerNpr, usdPerNpr), [state, krwPerNpr, usdPerNpr]);
+
   const passiveMonthly = useMemo(
     () =>
       passiveIncomeMonthlyNpr(totals.investableNpr, {

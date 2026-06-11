@@ -22,13 +22,15 @@ import { PAYSLIP_HISTORY_SYNC_EVENT } from "@/components/payslip-import/payslip-
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
 import { WealthMetricGrid } from "@/components/portfolio/WealthMetricGrid";
 import { formatMoney } from "@/lib/expense-utils";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 const moneyFieldClass = "text-[10px] font-bold uppercase tracking-wide text-zinc-200 [&>span]:block";
 const moneyWrap = "rounded-xl border border-emerald-400/15 bg-black/30 px-2 py-2 focus-within:border-emerald-400/40";
 const moneyInput = "min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none sm:text-sm";
 
 export function CashflowDashboard() {
-  const { state, setState, metrics, patchIncome, patchExpense, hydrated } = useCashflowPersistedState();
+  const { user } = useProductAuth();
+  const { state, setState, metrics, patchIncome, patchExpense, hydrated } = useCashflowPersistedState(user?.id);
   const [coachTick, setCoachTick] = useState(0);
   const [intelRollups, setIntelRollups] = useState<FinancialIntelMonthRollup[]>([]);
 

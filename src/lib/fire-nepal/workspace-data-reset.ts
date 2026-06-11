@@ -7,7 +7,7 @@
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { defaultCashflowState, saveCashflowState } from "@/components/cashflow/cashflow-storage";
 import type { PortfolioLedgerBucket, WealthPortfolioStateV2 } from "@/components/portfolio/types";
-import { defaultWealthState, STORAGE_KEY_V2 } from "@/components/portfolio/storage";
+import { defaultWealthState, portfolioStorageKey, STORAGE_KEY_V2 } from "@/components/portfolio/storage";
 import {
   defaultPayslipHistoryState,
   savePayslipHistoryState,
@@ -88,12 +88,19 @@ export function resetPortfolioModuleState(
  * Clears locally persisted FIRE Nepal workspace data (and notifies mounted listeners).
  * Does not clear auth, premium profile, membership, theme, language, or product onboarding.
  */
-export function performGlobalFireNepalWorkspaceDataReset(): void {
+export function performGlobalFireNepalWorkspaceDataReset(userId?: string | null): void {
   if (typeof window === "undefined") return;
 
   const portfolio = defaultWealthState();
   try {
-    window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(portfolio));
+    window.localStorage.setItem(portfolioStorageKey(userId), JSON.stringify(portfolio));
+    if (userId) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY_V2);
+      } catch {
+        /* ignore */
+      }
+    }
   } catch {
     /* quota */
   }
@@ -104,7 +111,7 @@ export function performGlobalFireNepalWorkspaceDataReset(): void {
   }
   window.dispatchEvent(new Event(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT));
 
-  saveCashflowState(defaultCashflowState());
+  saveCashflowState(defaultCashflowState(), userId);
   window.dispatchEvent(new Event(CASHFLOW_EXTERNAL_SYNC_EVENT));
 
   saveDashboardState(emptyExpenseDashboardState());

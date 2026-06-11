@@ -27,6 +27,7 @@ import type { InvestmentKind, InvestmentRow, PortfolioLedgerEntry, WealthPortfol
 import { resolveLiveUnitNpr } from "@/lib/investment-market/quotes";
 import type { PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
 import { formatMoney } from "@/lib/expense-utils";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 const KINDS: { value: InvestmentKind; label: string }[] = [
   { value: "nepse", label: "NEPSE" },
@@ -80,6 +81,7 @@ function InvestmentTradeStrip({
   ledgerFx: LedgerFx;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
+  const { user } = useProductAuth();
   const [open, setOpen] = useState(false);
   const [segmentId, setSegmentId] = useState<string>("buy");
   const [qtyStr, setQtyStr] = useState("");
@@ -118,6 +120,7 @@ function InvestmentTradeStrip({
           row.id,
           { grossAmount, currency: row.currency, tradeDate, fees, notes },
           ledgerFx,
+          user?.id,
         ),
       );
       if (!ok) {

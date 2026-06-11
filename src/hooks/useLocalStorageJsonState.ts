@@ -31,6 +31,9 @@ export function useLocalStorageJsonState<T>({
       setHydrated(true);
       return;
     }
+    // When `storageKey` changes (e.g. signed-in user switch), avoid persisting the previous
+    // document into the new key before we reload from disk.
+    setHydrated(false);
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw !== null && raw !== "") {
@@ -41,9 +44,11 @@ export function useLocalStorageJsonState<T>({
           parsed = undefined;
         }
         setState(sanitizeRef.current(parsed));
+      } else {
+        setState(getDefault());
       }
     } catch {
-      /* ignore corrupt storage */
+      setState(getDefault());
     }
     setHydrated(true);
   }, [storageKey]);

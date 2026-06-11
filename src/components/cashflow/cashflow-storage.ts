@@ -7,6 +7,17 @@ import {
 
 export const CASHFLOW_STORAGE_KEY = "fire-nepal-cashflow-v1";
 
+/** Guest uses legacy key; signed-in users get an isolated key per account (shared-browser safety). */
+export function cashflowStorageKey(userId?: string | null): string {
+  if (userId) return `${CASHFLOW_STORAGE_KEY}:user:${userId}`;
+  return CASHFLOW_STORAGE_KEY;
+}
+
+export function isCashflowLocalStorageKey(key: string | null | undefined): boolean {
+  if (key == null) return false;
+  return key === CASHFLOW_STORAGE_KEY || key.startsWith(`${CASHFLOW_STORAGE_KEY}:user:`);
+}
+
 function sanitizeMoney(raw: unknown): number | undefined {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
   if (raw < 0) return undefined;
@@ -78,10 +89,10 @@ export function sanitizeCashflowState(raw: unknown): CashflowDashboardState {
   };
 }
 
-export function loadCashflowState(): CashflowDashboardState {
+export function loadCashflowState(userId?: string | null): CashflowDashboardState {
   if (typeof window === "undefined") return defaultCashflowState();
   try {
-    const s = window.localStorage.getItem(CASHFLOW_STORAGE_KEY);
+    const s = window.localStorage.getItem(cashflowStorageKey(userId));
     if (!s) return defaultCashflowState();
     return sanitizeCashflowState(JSON.parse(s) as unknown);
   } catch {
@@ -90,10 +101,10 @@ export function loadCashflowState(): CashflowDashboardState {
 }
 
 /** Persist full cashflow document (income, expenses, emergency, override). */
-export function saveCashflowState(state: CashflowDashboardState): void {
+export function saveCashflowState(state: CashflowDashboardState, userId?: string | null): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(CASHFLOW_STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(cashflowStorageKey(userId), JSON.stringify(state));
   } catch {
     /* quota / private mode */
   }

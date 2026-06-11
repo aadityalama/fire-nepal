@@ -345,6 +345,7 @@ export function recordInvestmentCashDividend(
   rowId: string,
   input: CashDividendPayload,
   fx: LedgerFx,
+  cashflowUserId?: string | null,
 ): WealthPortfolioStateV2 | null {
   if (!isoOk(input.tradeDate)) return null;
   if (input.grossAmount <= 0 || !Number.isFinite(input.grossAmount)) return null;
@@ -376,7 +377,7 @@ export function recordInvestmentCashDividend(
     },
   };
 
-  addDividendIncomeToCashflowStorage(netNpr);
+  addDividendIncomeToCashflowStorage(netNpr, cashflowUserId);
   return appendEntry(state, entry);
 }
 

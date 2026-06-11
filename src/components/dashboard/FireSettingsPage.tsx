@@ -5,8 +5,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmModal";
 import { performGlobalFireNepalWorkspaceDataReset } from "@/lib/fire-nepal/workspace-data-reset";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 export function FireSettingsPage() {
+  const { user } = useProductAuth();
   const [digest, setDigest] = useState(false);
   const [alerts, setAlerts] = useState(true);
   const [resetOpen, setResetOpen] = useState(false);
@@ -15,7 +17,7 @@ export function FireSettingsPage() {
   const runGlobalReset = () => {
     setResetBusy(true);
     try {
-      performGlobalFireNepalWorkspaceDataReset();
+      performGlobalFireNepalWorkspaceDataReset(user?.id);
       toast.success("FIRE Nepal workspace data was reset.");
       setResetOpen(false);
     } finally {

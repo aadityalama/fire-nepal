@@ -17,11 +17,13 @@ import {
 import { PortfolioOverviewAnalytics } from "@/components/portfolio/PortfolioOverviewAnalytics";
 import { WealthChartsPanel } from "@/components/portfolio/WealthChartsPanel";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatMoney } from "@/lib/expense-utils";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 
 export function SmartWealthDashboard() {
+  const { user } = useProductAuth();
   const {
     hydrated,
     state,
@@ -48,12 +50,12 @@ export function SmartWealthDashboard() {
   );
   const displayPassiveMonthly = useMemo(() => {
     if (!overlay) return passiveMonthly;
-    const div = loadCashflowState().income.dividendIncome ?? 0;
+    const div = loadCashflowState(user?.id).income.dividendIncome ?? 0;
     return passiveIncomeMonthlyNpr(overlay.totalsLive.investableNpr, {
       monthlyCashDividendNpr: div,
       monthlyFixedDepositInterestNpr: overlay.totalsLive.fixedDepositsEstimatedMonthlyIncomeNpr,
     });
-  }, [overlay, passiveMonthly]);
+  }, [overlay, passiveMonthly, user?.id]);
 
   const displayHealth = useMemo(
     () => financialHealthFromScore(displayFireScore),

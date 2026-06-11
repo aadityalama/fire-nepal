@@ -7,6 +7,7 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase, saveWealthPortfolioToSupabase } from "@/services/portfolio-supabase";
+import { defaultWealthState } from "@/components/portfolio/storage";
 import { toast } from "sonner";
 
 /** Debounce cloud writes so typing does not trigger constant sync work; pairs with stale-save / echo guards below. */
@@ -44,6 +45,12 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
         if (remote) {
           setState(remote);
           lastSavedRef.current = JSON.stringify(remote);
+        } else {
+          // Critical: empty cloud must replace any prior in-memory / localStorage state from another account
+          // on the same browser; previously we only called setState when remote was non-null.
+          const empty = defaultWealthState();
+          setState(empty);
+          lastSavedRef.current = JSON.stringify(empty);
         }
       } catch (e) {
         console.error(e);

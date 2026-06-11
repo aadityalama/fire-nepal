@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { replaceDepositInterestIncomeFromPortfolioNpr } from "@/components/cashflow/portfolio-fd-cashflow-sync";
 import { aggregateFdMonthlyInterestNpr } from "@/components/portfolio/banking-fd";
-import { CASHFLOW_STORAGE_KEY, defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
+import { cashflowStorageKey, defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import {
   allocationPercents,
   computeWealthTotals,
@@ -25,7 +25,7 @@ import { loadPayslipHistoryState, PAYSLIP_HISTORY_SYNC_EVENT } from "@/component
 import {
   defaultWealthState,
   loadWealthPortfolioState,
-  STORAGE_KEY_V2,
+  portfolioStorageKey,
 } from "@/components/portfolio/storage";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { FireFeatureGate } from "@/components/membership/FireFeatureGate";
@@ -84,11 +84,11 @@ export function FireAiCoachDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const readDividend = () => setMonthlyDividendNpr(loadCashflowState().income.dividendIncome ?? 0);
+    const readDividend = () => setMonthlyDividendNpr(loadCashflowState(user?.id).income.dividendIncome ?? 0);
     readDividend();
     const onExternal = () => readDividend();
     const onStorage = (e: StorageEvent) => {
-      if (e.key === CASHFLOW_STORAGE_KEY) readDividend();
+      if (e.key === cashflowStorageKey(user?.id)) readDividend();
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener("storage", onStorage);
@@ -96,12 +96,12 @@ export function FireAiCoachDashboardPage() {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener("storage", onStorage);
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    setState(loadWealthPortfolioState());
+    setState(loadWealthPortfolioState(user?.id));
     setHydrated(true);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,16 +122,17 @@ export function FireAiCoachDashboardPage() {
     const h = window.setTimeout(() => {
       replaceDepositInterestIncomeFromPortfolioNpr(
         aggregateFdMonthlyInterestNpr(state.fixedDeposits ?? [], krwPerNpr, usdPerNpr),
+        user?.id,
       );
     }, 400);
     return () => window.clearTimeout(h);
-  }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr]);
+  }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr, user?.id]);
 
   const cashflow = useMemo(() => {
     void tick;
     if (typeof window === "undefined" || !hydrated) return defaultCashflowState();
-    return loadCashflowState();
-  }, [hydrated, tick]);
+    return loadCashflowState(user?.id);
+  }, [hydrated, tick, user?.id]);
 
   const totals = useMemo(() => computeWealthTotals(state, krwPerNpr, usdPerNpr), [state, krwPerNpr, usdPerNpr]);
   const allocation = useMemo(() => allocationPercents(totals), [totals]);
@@ -498,7 +499,7 @@ export function FireAiCoachDashboardPage() {
       </FireFeatureGate>
 
       <p className="text-center text-[11px] text-zinc-600">
-        Data path: <code className="rounded bg-white/5 px-1.5 py-0.5 text-emerald-500/80">{STORAGE_KEY_V2}</code> + cashflow
+        Data path: <code className="rounded bg-white/5 px-1.5 py-0.5 text-emerald-500/80">{portfolioStorageKey(user?.id)}</code> + cashflow
         storage · refresh via portfolio / cashflow saves.
       </p>
     </div>

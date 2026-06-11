@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useMemo, useState, createContext, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, createContext, type ReactNode } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { replaceDepositInterestIncomeFromPortfolioNpr } from "@/components/cashflow/portfolio-fd-cashflow-sync";
 import { aggregateFdMonthlyInterestNpr } from "@/components/portfolio/banking-fd";
-import { CASHFLOW_STORAGE_KEY, defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
+import { cashflowStorageKey, defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import {
   allocationPercents,
   computeRetirementDashboardSnapshot,
@@ -26,7 +26,7 @@ import {
   emptyFixedDeposit,
   emptyGlobalRetirementAsset,
   loadWealthPortfolioState,
-  STORAGE_KEY_V2,
+  portfolioStorageKey,
 } from "@/components/portfolio/storage";
 import type {
   FixedDepositRow,
@@ -120,7 +120,7 @@ export type WealthPortfolioContextValue = {
 const WealthPortfolioContext = createContext<WealthPortfolioContextValue | null>(null);
 
 export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
-  const { user } = useProductAuth();
+  const { user, loading } = useProductAuth();
   const [state, setState] = useState<WealthPortfolioStateV2>(defaultWealthState);
   const [hydrated, setHydrated] = useState(false);
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
@@ -143,16 +143,15 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      setState(loadWealthPortfolioState());
-      setHydrated(true);
-    });
-  }, []);
+  useLayoutEffect(() => {
+    if (loading) return;
+    setState(loadWealthPortfolioState(user?.id));
+    setHydrated(true);
+  }, [loading, user?.id]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY_V2 || e.newValue == null) return;
+      if (e.key !== portfolioStorageKey(user?.id) || e.newValue == null) return;
       try {
         const parsed = JSON.parse(e.newValue) as WealthPortfolioStateV2;
         setState(parsed);
@@ -162,11 +161,11 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     const reloadFromDisk = () => {
-      setState(loadWealthPortfolioState());
+      setState(loadWealthPortfolioState(user?.id));
     };
     window.addEventListener(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT, reloadFromDisk);
     window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, reloadFromDisk);
@@ -174,19 +173,23 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT, reloadFromDisk);
       window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, reloadFromDisk);
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(state));
-  }, [state, hydrated]);
+    try {
+      window.localStorage.setItem(portfolioStorageKey(user?.id), JSON.stringify(state));
+    } catch {
+      /* quota */
+    }
+  }, [state, hydrated, user?.id]);
 
   useEffect(() => {
-    const readDividend = () => setMonthlyDividendNpr(loadCashflowState().income.dividendIncome ?? 0);
+    const readDividend = () => setMonthlyDividendNpr(loadCashflowState(user?.id).income.dividendIncome ?? 0);
     readDividend();
     const onExternal = () => readDividend();
     const onStorage = (e: StorageEvent) => {
-      if (e.key === CASHFLOW_STORAGE_KEY) readDividend();
+      if (e.key === cashflowStorageKey(user?.id)) readDividend();
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener("storage", onStorage);
@@ -194,7 +197,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener("storage", onStorage);
     };
-  }, []);
+  }, [user?.id, hydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,10 +248,11 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     const h = window.setTimeout(() => {
       replaceDepositInterestIncomeFromPortfolioNpr(
         aggregateFdMonthlyInterestNpr(state.fixedDeposits ?? [], krwPerNpr, usdPerNpr),
+        user?.id,
       );
     }, 450);
     return () => window.clearTimeout(h);
-  }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr]);
+  }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr, user?.id]);
 
   const bullionGramRatesNpr = useMemo((): BullionGramRatesNpr | null => {
     if (!bullionSpot) return null;
@@ -288,8 +292,8 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const cashflowForCoach = useMemo(() => {
     void coachDataTick;
     if (typeof window === "undefined" || !hydrated) return defaultCashflowState();
-    return loadCashflowState();
-  }, [hydrated, coachDataTick]);
+    return loadCashflowState(user?.id);
+  }, [hydrated, coachDataTick, user?.id]);
 
   const coachSnapshot = useMemo(() => {
     void coachDataTick;

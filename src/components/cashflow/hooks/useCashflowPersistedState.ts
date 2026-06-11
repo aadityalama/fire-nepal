@@ -12,7 +12,7 @@ import {
   sumIncome,
 } from "@/components/cashflow/cashflow-metrics";
 import {
-  CASHFLOW_STORAGE_KEY,
+  cashflowStorageKey,
   defaultCashflowState,
   loadCashflowState,
   sanitizeCashflowState,
@@ -45,18 +45,19 @@ export type UseCashflowPersistedStateResult = {
  * and monthly burn override are saved to `localStorage` and restored on refresh.
  * FIRE metric tiles read from `metrics`, which is derived from that same persisted state.
  */
-export function useCashflowPersistedState(): UseCashflowPersistedStateResult {
+export function useCashflowPersistedState(userId?: string | null): UseCashflowPersistedStateResult {
+  const storageKey = cashflowStorageKey(userId);
   const [state, setState, hydrated] = useLocalStorageJsonState<CashflowDashboardState>({
-    storageKey: CASHFLOW_STORAGE_KEY,
+    storageKey,
     getDefault: defaultCashflowState,
     sanitize: sanitizeCashflowState,
   });
 
   useEffect(() => {
-    const onExternal = () => setState(loadCashflowState());
+    const onExternal = () => setState(loadCashflowState(userId));
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-  }, [setState]);
+  }, [setState, userId]);
 
   const metrics = useMemo((): CashflowDerivedMetrics => {
     return {

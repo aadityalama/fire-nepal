@@ -27,6 +27,7 @@ import { mockOcrFromFileName } from "@/components/payslip-import/mock-ocr-respon
 import type { PayslipHistoryEntry, PayslipOCRRaw, PayslipParsed } from "@/components/payslip-import/types";
 import { formatMoney } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR, getCachedExchangeRate } from "@/lib/exchange-rate";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 function fmtKrw(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n) || n <= 0) return "—";
@@ -46,6 +47,7 @@ function row(label: string, value: string, sub?: string) {
 }
 
 export function KoreanPayslipImportPanel() {
+  const { user } = useProductAuth();
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -136,7 +138,7 @@ export function KoreanPayslipImportPanel() {
       setToast({ tone: "err", text: "Extract a payslip first." });
       return;
     }
-    const res = applyPayslipToCashflowStorage(parsed, krwPerNpr);
+    const res = applyPayslipToCashflowStorage(parsed, krwPerNpr, user?.id);
     if (!res.ok) {
       setToast({ tone: "err", text: res.message });
       return;
@@ -148,7 +150,7 @@ export function KoreanPayslipImportPanel() {
     });
     refreshHistory();
     setToast({ tone: "ok", text: res.message });
-  }, [parsed, stagedId, krwPerNpr, refreshHistory]);
+  }, [parsed, stagedId, krwPerNpr, refreshHistory, user?.id]);
 
   return (
     <div id="payslip-import" className="scroll-mt-24">

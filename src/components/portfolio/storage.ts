@@ -25,6 +25,20 @@ import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-pho
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
 const STORAGE_KEY_V1 = "fire-nepal-portfolio-v1";
 
+/**
+ * Portfolio JSON in localStorage. Guest / signed-out uses the legacy unscoped key; signed-in
+ * users use a per-`userId` suffix so two accounts on the same device never read each other's disk cache.
+ */
+export function portfolioStorageKey(userId?: string | null): string {
+  if (userId) return `${STORAGE_KEY_V2}:user:${userId}`;
+  return STORAGE_KEY_V2;
+}
+
+export function isPortfolioLocalStorageKey(key: string | null | undefined): boolean {
+  if (key == null) return false;
+  return key === STORAGE_KEY_V2 || key.startsWith(`${STORAGE_KEY_V2}:user:`);
+}
+
 export function newId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
@@ -180,22 +194,26 @@ function migrateV1ToV2(raw: string): WealthPortfolioStateV2 | null {
   }
 }
 
-export function loadWealthPortfolioState(): WealthPortfolioStateV2 {
+export function loadWealthPortfolioState(userId?: string | null): WealthPortfolioStateV2 {
   if (typeof window === "undefined") return defaultWealthState();
+  const key = portfolioStorageKey(userId);
   try {
-    const v2 = window.localStorage.getItem(STORAGE_KEY_V2);
+    const v2 = window.localStorage.getItem(key);
     if (v2) {
       const parsed = JSON.parse(v2) as Partial<WealthPortfolioStateV2>;
       if (parsed && typeof parsed === "object" && Array.isArray(parsed.investments)) {
         return normalizeV2(parsed);
       }
     }
-    const v1 = window.localStorage.getItem(STORAGE_KEY_V1);
-    if (v1) {
-      const migrated = migrateV1ToV2(v1);
-      if (migrated) {
-        window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(migrated));
-        return migrated;
+    // Legacy v1 migration only for the guest bucket — never fold anonymous legacy data into a signed-in user.
+    if (!userId) {
+      const v1 = window.localStorage.getItem(STORAGE_KEY_V1);
+      if (v1) {
+        const migrated = migrateV1ToV2(v1);
+        if (migrated) {
+          window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(migrated));
+          return migrated;
+        }
       }
     }
   } catch {
