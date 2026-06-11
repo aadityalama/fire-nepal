@@ -22,6 +22,43 @@ function asPayload<T>(row: unknown): T {
   return row as T;
 }
 
+type SupabaseLikeError = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+export class PortfolioSupabaseError extends Error {
+  constructor(
+    message: string,
+    public readonly operation: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "PortfolioSupabaseError";
+  }
+}
+
+function formatSupabaseError(error: unknown, fallback: string): string {
+  if (!error) return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object") {
+    const e = error as SupabaseLikeError;
+    const parts = [e.message, e.details, e.hint].filter(Boolean);
+    if (parts.length > 0) {
+      return e.code ? `${parts.join(" ")} (${e.code})` : parts.join(" ");
+    }
+  }
+  return fallback;
+}
+
+function portfolioSaveError(operation: string, error: unknown, fallback: string): never {
+  const message = formatSupabaseError(error, fallback);
+  console.error(`[portfolio-supabase] ${operation}`, error);
+  throw new PortfolioSupabaseError(message, operation, error);
+}
+
 export async function loadWealthPortfolioFromSupabase(client: Client, userId: string): Promise<WealthPortfolioStateV2 | null> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "loadWealthPortfolioFromSupabase");
   if (!workspace) return null;
@@ -123,16 +160,23 @@ async function deleteMissingRows(
   keepIds: string[],
 ) {
   const { data, error } = await client.from(table).select("row_id").eq("user_id", ownerId);
-  if (error || !data) return;
+  if (error || !data) {
+    portfolioSaveError(`${table} stale row lookup`, error, `Could not verify saved ${table}.`);
+  }
   const keep = new Set(keepIds);
   const stale = (data as { row_id: string }[]).map((r) => r.row_id).filter((id) => !keep.has(id));
   if (!stale.length) return;
-  await client.from(table).delete().eq("user_id", ownerId).in("row_id", stale);
+  const { error: deleteError } = await client.from(table).delete().eq("user_id", ownerId).in("row_id", stale);
+  if (deleteError) {
+    portfolioSaveError(`${table} stale row delete`, deleteError, `Could not remove stale ${table}.`);
+  }
 }
 
 export async function saveWealthPortfolioToSupabase(client: Client, userId: string, state: WealthPortfolioStateV2): Promise<boolean> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "saveWealthPortfolioToSupabase");
-  if (!workspace) return false;
+  if (!workspace) {
+    throw new PortfolioSupabaseError("Authenticated workspace owner mismatch. Please sign in again.", "workspace");
+  }
   const ownerId = workspace.user_id;
 
   const liquidRows = state.liquidCash.map((payload) => ({
@@ -150,8 +194,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   const bankPayload = [...liquidRows, ...fdRows];
   const { error: bankUpsertErr } = await client.from("bank_accounts").upsert(bankPayload, { onConflict: "user_id,row_id" });
   if (bankUpsertErr) {
-    console.error("[portfolio-supabase] bank upsert", bankUpsertErr);
-    return false;
+    portfolioSaveError("bank_accounts upsert", bankUpsertErr, "Could not save portfolio accounts.");
   }
   await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id));
 
@@ -162,8 +205,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   }));
   const { error: invErr } = await client.from("investments").upsert(invPayload, { onConflict: "user_id,row_id" });
   if (invErr) {
-    console.error("[portfolio-supabase] investments", invErr);
-    return false;
+    portfolioSaveError("investments upsert", invErr, "Could not save investment accounts.");
   }
   await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id));
 
@@ -174,8 +216,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   }));
   const { error: metalErr } = await client.from("gold_assets").upsert(metalPayload, { onConflict: "user_id,row_id" });
   if (metalErr) {
-    console.error("[portfolio-supabase] gold_assets", metalErr);
-    return false;
+    portfolioSaveError("gold_assets upsert", metalErr, "Could not save metal accounts.");
   }
   await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id));
 
@@ -191,8 +232,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     }));
     const { error: e } = await client.from(table).upsert(payload, { onConflict: "user_id,row_id" });
     if (e) {
-      console.error(`[portfolio-supabase] ${table}`, e);
-      return false;
+      portfolioSaveError(`${table} upsert`, e, `Could not save ${table}.`);
     }
     await deleteMissingRows(client, table, ownerId, payload.map((p) => p.row_id));
     return true;
@@ -229,8 +269,7 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     { onConflict: "user_id" },
   );
   if (extErr) {
-    console.error("[portfolio-supabase] portfolio_extensions", extErr);
-    return false;
+    portfolioSaveError("portfolio_extensions upsert", extErr, "Could not save portfolio transactions.");
   }
 
   return true;

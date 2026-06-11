@@ -3,9 +3,14 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const PORTFOLIO_SERVICE = readFileSync(new URL("../../src/services/portfolio-supabase.ts", import.meta.url), "utf8");
+const PORTFOLIO_SYNC_HOOK = readFileSync(new URL("../../src/hooks/WealthPortfolioCloudSync.tsx", import.meta.url), "utf8");
 const WORKSPACE_SERVICE = readFileSync(new URL("../../src/services/workspace-supabase.ts", import.meta.url), "utf8");
 const WORKSPACE_MIGRATION = readFileSync(
   new URL("../../supabase/migrations/20260611130000_user_workspaces_rls.sql", import.meta.url),
+  "utf8",
+);
+const PORTFOLIO_RLS_MIGRATION = readFileSync(
+  new URL("../../supabase/migrations/20260611193000_portfolio_rls_self_access.sql", import.meta.url),
   "utf8",
 );
 
@@ -44,6 +49,29 @@ test("runtime guard logs and rejects mismatched workspace ownership", () => {
   assert.match(WORKSPACE_SERVICE, /workspace owner mismatch/);
   assert.match(WORKSPACE_SERVICE, /requested user does not match auth user/);
   assert.match(WORKSPACE_SERVICE, /client\.auth\.getUser\(\)/);
+});
+
+test("portfolio cloud save surfaces exact Supabase errors to console and toast", () => {
+  assert.match(PORTFOLIO_SERVICE, /throw new PortfolioSupabaseError/);
+  assert.match(PORTFOLIO_SERVICE, /portfolioSaveError\("bank_accounts upsert"/);
+  assert.match(PORTFOLIO_SERVICE, /portfolioSaveError\("portfolio_extensions upsert"/);
+  assert.match(PORTFOLIO_SYNC_HOOK, /client\.auth\.getUser\(\)/);
+  assert.match(PORTFOLIO_SYNC_HOOK, /console\.error\("Portfolio save failed:", error\)/);
+  assert.match(PORTFOLIO_SYNC_HOOK, /toast\.error\(portfolioErrorMessage\(error\)\)/);
+});
+
+test("portfolio RLS migration limits portfolio rows to authenticated owner", () => {
+  for (const table of [...PORTFOLIO_TABLES, "portfolios", "portfolio_accounts", "transactions"]) {
+    assert.match(PORTFOLIO_RLS_MIGRATION, new RegExp(`'${table}'`), `missing RLS refresh for ${table}`);
+  }
+
+  assert.match(PORTFOLIO_RLS_MIGRATION, /for select to authenticated using \(auth\.uid\(\) = user_id\)/);
+  assert.match(PORTFOLIO_RLS_MIGRATION, /for insert to authenticated with check \(auth\.uid\(\) = user_id\)/);
+  assert.match(
+    PORTFOLIO_RLS_MIGRATION,
+    /for update to authenticated using \(auth\.uid\(\) = user_id\) with check \(auth\.uid\(\) = user_id\)/,
+  );
+  assert.match(PORTFOLIO_RLS_MIGRATION, /for delete to authenticated using \(auth\.uid\(\) = user_id\)/);
 });
 
 test("two-account integration harness never leaks Account A portfolio into Account B", async () => {

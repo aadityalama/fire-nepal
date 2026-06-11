@@ -5,6 +5,26 @@ type Client = SupabaseClient<Database>;
 
 export type FireWorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 
+export class WorkspaceSupabaseError extends Error {
+  constructor(
+    message: string,
+    public readonly context: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "WorkspaceSupabaseError";
+  }
+}
+
+function formatSupabaseError(error: unknown, fallback: string): string {
+  if (!error) return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  return fallback;
+}
+
 export function logWorkspaceOwnerMismatch(
   workspace: Pick<FireWorkspaceRow, "id" | "user_id"> | null | undefined,
   authUserId: string,
@@ -30,7 +50,11 @@ export async function ensureAuthenticatedWorkspace(
   const authUserId = authData.user?.id ?? null;
   if (authError || !authUserId) {
     console.error("[workspace-security] missing authenticated user", { context, error: authError });
-    return null;
+    throw new WorkspaceSupabaseError(
+      formatSupabaseError(authError, "No authenticated Supabase user found. Please sign in again."),
+      context,
+      authError,
+    );
   }
 
   if (expectedUserId && expectedUserId !== authUserId) {
@@ -39,7 +63,7 @@ export async function ensureAuthenticatedWorkspace(
       requestedUserId: expectedUserId,
       authUserId,
     });
-    return null;
+    throw new WorkspaceSupabaseError("Authenticated user changed before portfolio save. Please refresh and try again.", context);
   }
 
   const selected = await client
@@ -50,7 +74,11 @@ export async function ensureAuthenticatedWorkspace(
 
   if (selected.error) {
     console.error("[workspace-security] workspace load failed", { context, error: selected.error });
-    return null;
+    throw new WorkspaceSupabaseError(
+      formatSupabaseError(selected.error, "Could not load authenticated workspace."),
+      context,
+      selected.error,
+    );
   }
 
   if (selected.data) {
@@ -66,7 +94,11 @@ export async function ensureAuthenticatedWorkspace(
 
   if (created.error || !created.data) {
     console.error("[workspace-security] workspace create failed", { context, error: created.error });
-    return null;
+    throw new WorkspaceSupabaseError(
+      formatSupabaseError(created.error, "Could not create authenticated workspace."),
+      context,
+      created.error,
+    );
   }
 
   if (logWorkspaceOwnerMismatch(created.data, authUserId, context)) return null;

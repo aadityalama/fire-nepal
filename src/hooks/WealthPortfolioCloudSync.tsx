@@ -13,6 +13,12 @@ import { toast } from "sonner";
 /** Debounce cloud writes so typing does not trigger constant sync work; pairs with stale-save / echo guards below. */
 const CLOUD_SAVE_DEBOUNCE_MS = 1000;
 
+function portfolioErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "message" in error && typeof error.message === "string") return error.message;
+  return "Portfolio cloud sync failed.";
+}
+
 type Props = {
   hydrated: boolean;
   state: WealthPortfolioStateV2;
@@ -72,6 +78,13 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
     const t = window.setTimeout(async () => {
       try {
         const client = getSupabaseBrowserClient();
+        const { data: authData, error: authError } = await client.auth.getUser();
+        if (authError) throw authError;
+        if (!authData.user?.id) throw new Error("No authenticated Supabase user found. Please sign in again.");
+        if (authData.user.id !== user.id) {
+          throw new Error("Authenticated user changed before portfolio save. Please refresh and try again.");
+        }
+
         // Always persist the latest snapshot (avoids stale closure if the timer was scheduled on an older render).
         const toSave = stateRef.current;
         const snapshot = JSON.stringify(toSave);
@@ -87,9 +100,9 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
         } else {
           toast.error("Portfolio cloud sync failed.");
         }
-      } catch (e) {
-        console.error(e);
-        toast.error("Portfolio cloud sync failed.");
+      } catch (error) {
+        console.error("Portfolio save failed:", error);
+        toast.error(portfolioErrorMessage(error));
       }
     }, CLOUD_SAVE_DEBOUNCE_MS);
 
