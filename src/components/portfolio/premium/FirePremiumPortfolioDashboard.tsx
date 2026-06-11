@@ -83,8 +83,8 @@ export function FirePremiumPortfolioDashboard() {
       <div className="fn-premium-portfolio-scale-inner fn-premium-portfolio wealth-dash-flow w-full min-w-0 max-w-full overflow-x-hidden pb-2 sm:pb-2.5 xl:pb-3">
         <DashboardHeader userName={displayName} />
 
-        {/* Mobile: 2×2 core KPIs; tablet: 4-up; desktop: 5 columns with FI date at end */}
-        <section className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+        {/* Mobile: 2×2 core KPIs; desktop: auto-fit cards with a readable width floor. */}
+        <section className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(240px,1fr))] 2xl:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
           <KpiMetricCard
             label="Total net worth"
             icon={Wallet}
@@ -129,18 +129,16 @@ export function FirePremiumPortfolioDashboard() {
               fireNumber > 0 ? `${firePct.toFixed(1)}% of your FIRE number` : "Track Your First Expense in cashflow to set a FIRE number."
             }
           />
-          <div className="col-span-2 lg:col-span-4 xl:col-span-1">
-            <KpiMetricCard
-              label="Estimated FIRE date"
-              icon={CalendarClock}
-              value={formatEstFiDate(fiMonths)}
-              deltaLabel="Desk projection from your workspace"
-              deltaPositive
-              sparkline={fiSpark}
-              sparkVariant="violet"
-              footer={fiCountdownLabel(fiMonths)}
-            />
-          </div>
+          <KpiMetricCard
+            label="Estimated FIRE date"
+            icon={CalendarClock}
+            value={formatEstFiDate(fiMonths)}
+            deltaLabel="Desk projection from your workspace"
+            deltaPositive
+            sparkline={fiSpark}
+            sparkVariant="violet"
+            footer={fiCountdownLabel(fiMonths)}
+          />
         </section>
 
         {/* Executive strip: dense secondary context (display-only; totals from context) */}
@@ -154,9 +152,9 @@ export function FirePremiumPortfolioDashboard() {
             ] as const
           ).map((row) => (
             <div key={row.name} className="min-w-0 border-b border-white/[0.04] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
-              <p className="truncate text-[10px] font-bold uppercase tracking-wider text-white/65">{row.name}</p>
-              <p className="mt-1 truncate text-sm font-bold tabular-nums tracking-tight text-white">{row.primary}</p>
-              <p className="truncate text-[10px] font-semibold text-[#A7B4C4]">{row.sub}</p>
+              <p className="text-[10px] font-bold uppercase leading-snug tracking-wider text-white/65">{row.name}</p>
+              <p className="mt-1 text-sm font-bold leading-tight tabular-nums tracking-tight text-white">{row.primary}</p>
+              <p className="text-[10px] font-semibold leading-snug text-[#A7B4C4]">{row.sub}</p>
             </div>
           ))}
         </div>
@@ -177,9 +175,9 @@ export function FirePremiumPortfolioDashboard() {
           </div>
         ) : null}
 
-        <div className="mt-4 flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="mt-4 flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start">
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-h-0">
-            <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.28fr)_minmax(280px,0.72fr)] lg:items-stretch">
+            <div className="grid min-w-0 grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.72fr)] 2xl:items-stretch">
               <div className="flex min-h-0 min-w-0">
                 <NetWorthGrowthChart />
               </div>
@@ -189,8 +187,8 @@ export function FirePremiumPortfolioDashboard() {
             </div>
           </div>
 
-          <div className="min-w-0 w-full shrink-0 lg:flex lg:max-h-[min(78dvh,620px)] lg:w-[320px] lg:min-w-[320px] lg:max-w-[360px] lg:flex-col lg:overflow-hidden xl:max-h-[min(70dvh,520px)] xl:w-[320px] xl:min-w-[320px] xl:max-w-[360px]">
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-full xl:pr-0.5">
+          <div className="min-w-0 w-full shrink-0 xl:flex xl:max-h-[min(70dvh,560px)] xl:w-[320px] xl:min-w-[320px] xl:max-w-[360px] xl:flex-col xl:overflow-hidden">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain xl:max-h-full xl:pr-0.5">
               <InsightsSidebar />
             </div>
           </div>

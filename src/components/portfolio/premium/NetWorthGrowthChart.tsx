@@ -135,9 +135,9 @@ export function NetWorthGrowthChart() {
     <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col p-4 xl:p-5">
       <div className="relative z-10 flex flex-col gap-3 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">Net worth growth</p>
+          <p className="text-xs font-bold uppercase leading-snug tracking-wider text-white/65">Net worth growth</p>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-            <p className="min-w-0 truncate text-xl font-bold tabular-nums tracking-tight text-white sm:text-2xl">
+            <p className="min-w-0 whitespace-normal break-normal text-xl font-bold tabular-nums tracking-tight text-white [overflow-wrap:normal] [word-break:normal] sm:text-2xl">
               {formatNpr(hydrated ? totals.netWorthNpr : 0)}
             </p>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A7B4C4]">Primary</span>

@@ -29,7 +29,7 @@ const quickAdds = [
 ] as const;
 
 function SectionOverline({ children }: { children: string }) {
-  return <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">{children}</p>;
+  return <p className="text-xs font-bold uppercase leading-snug tracking-wider text-white/65">{children}</p>;
 }
 
 function accordionChevron(open: boolean) {
@@ -113,7 +113,7 @@ export function InsightsSidebar() {
               </div>
               <div className="min-w-0 flex-1 space-y-0.5">
                 <SectionOverline>Guidance</SectionOverline>
-                <h2 className="min-w-0 truncate text-sm font-bold tracking-tight text-white">AI financial coach</h2>
+                <h2 className="min-w-0 text-sm font-bold leading-snug tracking-tight text-white">AI financial coach</h2>
                 <p className="line-clamp-2 text-xs font-medium leading-snug text-[#A7B4C4]">{coachBody}</p>
               </div>
             </div>
@@ -139,7 +139,7 @@ export function InsightsSidebar() {
                 <ul className="space-y-1.5">
                   {coachExpandedCards.map((c) => (
                     <li key={c.id} className="min-w-0 rounded-lg border border-white/[0.08] bg-[#07111A]/70 px-2.5 py-2">
-                      <p className="min-w-0 truncate font-semibold text-zinc-200">{c.title}</p>
+                      <p className="min-w-0 font-semibold leading-snug text-zinc-200">{c.title}</p>
                       <p className="mt-0.5 line-clamp-2 text-[10px] text-[#A7B4C4]">{c.subtitle}</p>
                     </li>
                   ))}
@@ -166,9 +166,9 @@ export function InsightsSidebar() {
         >
           <div className="min-w-0 flex-1 space-y-0.5">
             <SectionOverline>Markets</SectionOverline>
-            <h2 className="truncate text-sm font-bold tracking-tight text-white">Overview</h2>
+            <h2 className="text-sm font-bold leading-snug tracking-tight text-white">Overview</h2>
             {!marketsOpen && primaryMarket ? (
-              <p className="truncate text-xs font-semibold tabular-nums text-[#A7B4C4]">
+              <p className="text-xs font-semibold leading-snug tabular-nums text-[#A7B4C4]">
                 <span className="text-[#A7B4C4]">{primaryMarket.label}</span>{" "}
                 <span className="text-white">{primaryMarket.value}</span>{" "}
                 <span className={primaryMarket.changePct >= 0 ? "text-[#38F2A0]" : "text-rose-300"}>
@@ -199,7 +199,7 @@ export function InsightsSidebar() {
                       key={m.label}
                       className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/[0.08] bg-[#07111A]/70 px-2.5 py-2 text-[11px] backdrop-blur-sm"
                     >
-                      <span className="min-w-0 truncate font-semibold text-[#A7B4C4]">{m.label}</span>
+                      <span className="min-w-0 font-semibold leading-snug text-[#A7B4C4]">{m.label}</span>
                       <span className="shrink-0 font-bold tabular-nums text-white">{m.value}</span>
                       <span className={`font-bold tabular-nums ${up ? "text-[#38F2A0]" : "text-rose-300"}`}>
                         {up ? "+" : ""}
@@ -223,7 +223,7 @@ export function InsightsSidebar() {
           </div>
           <div className="min-w-0 flex-1 space-y-0.5">
             <SectionOverline>Insights</SectionOverline>
-            <h2 className="truncate text-sm font-bold tracking-tight text-white">{primaryInsight?.title ?? "Portfolio intelligence"}</h2>
+            <h2 className="text-sm font-bold leading-snug tracking-tight text-white">{primaryInsight?.title ?? "Portfolio intelligence"}</h2>
             <p className="line-clamp-3 text-xs font-medium leading-snug text-[#A7B4C4]">
               {primaryInsight?.subtitle ?? "AI insights, concentration reads, and alternative sleeves are staged inside your premium workspace."}
             </p>
@@ -238,7 +238,7 @@ export function InsightsSidebar() {
           </div>
           <div className="min-w-0 space-y-0.5">
             <SectionOverline>Shortcuts</SectionOverline>
-            <h2 className="truncate text-sm font-bold tracking-tight text-white">Quick Actions</h2>
+            <h2 className="text-sm font-bold leading-snug tracking-tight text-white">Quick Actions</h2>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -249,7 +249,7 @@ export function InsightsSidebar() {
               className="group/qa flex min-h-[38px] min-w-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#07111A]/70 px-2.5 py-2 text-[10px] font-semibold text-[#A7B4C4] ring-1 ring-transparent transition hover:border-[#38F2A0]/25 hover:bg-[#38F2A0]/10 hover:text-white"
             >
               <Icon className="h-3.5 w-3.5 shrink-0 text-[#38F2A0] group-hover/qa:text-[#38F2A0]" />
-              <span className="min-w-0 truncate">{label}</span>
+              <span className="min-w-0 leading-snug">{label}</span>
             </Link>
           ))}
         </div>

@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { TrendingUp } from "lucide-react";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
-import { MiniSparkline } from "@/components/portfolio/premium/MiniSparkline";
 
 type KpiMetricCardProps = {
   label: string;
@@ -45,8 +44,6 @@ export function KpiMetricCard({
   usdHint,
   deltaLabel,
   deltaPositive = true,
-  sparkline,
-  sparkVariant = "emerald",
   footer,
   progressPct,
   compact = true,
@@ -58,8 +55,8 @@ export function KpiMetricCard({
     <PremiumGlassCard
       className={
         compact
-          ? "flex h-[122px] w-full min-w-0 flex-col p-3.5 sm:h-[128px] xl:h-[132px]"
-          : "flex h-[136px] w-full min-w-0 flex-col p-4 xl:h-[140px]"
+          ? "flex h-[122px] w-full min-w-0 flex-col p-3.5 sm:h-[128px] lg:min-w-[240px] xl:h-[132px]"
+          : "flex h-[136px] w-full min-w-0 flex-col p-4 lg:min-w-[240px] xl:h-[140px]"
       }
     >
       <div className="relative z-10 flex h-full min-h-0 flex-col">
@@ -70,8 +67,8 @@ export function KpiMetricCard({
               : "grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2"
           }
         >
-          {/* Header: label + icon | spark */}
-          <div className="flex min-w-0 items-start justify-between gap-2">
+          {/* Header: label + icon. KPI sparklines stay out of the header so labels get the full card width. */}
+          <div className="flex min-w-0 items-start">
             <div className={`flex min-w-0 flex-1 items-center ${compact ? "gap-1.5" : "gap-2"}`}>
               <div
                 className={
@@ -94,16 +91,11 @@ export function KpiMetricCard({
                 title={label}
               >
                 {labelLines.map((line) => (
-                  <span key={line} className="block whitespace-nowrap break-normal [overflow-wrap:normal]">
+                  <span key={line} className="block whitespace-normal break-normal [overflow-wrap:normal] [word-break:normal]">
                     {line}
                   </span>
                 ))}
               </p>
-            </div>
-            <div className="hidden shrink-0 pt-0.5 2xl:block">
-              <div className={compact ? "h-6 w-[54px] lg:w-[62px]" : "h-8 w-[76px] lg:w-[86px]"}>
-                <MiniSparkline data={sparkline} variant={sparkVariant} className="opacity-90" />
-              </div>
             </div>
           </div>
 
@@ -112,8 +104,8 @@ export function KpiMetricCard({
             <p
               className={
                 compact
-                  ? "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xl font-bold leading-none tracking-[-0.035em] text-white sm:text-2xl xl:text-3xl"
-                  : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-none tracking-[-0.035em] text-white xl:text-3xl"
+                  ? "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-none tracking-[-0.04em] text-white lg:text-3xl"
+                  : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-2xl font-bold leading-none tracking-[-0.04em] text-white lg:text-3xl"
               }
               title={value}
             >

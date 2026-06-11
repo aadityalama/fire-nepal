@@ -31,12 +31,12 @@ export function AssetAllocationChart() {
     <PremiumGlassCard className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden p-4 xl:p-5">
       <div className="relative z-10 flex shrink-0 flex-col gap-2 border-b border-white/[0.08] pb-4 md:flex-row md:items-end md:justify-between md:gap-4">
         <div className="min-w-0 space-y-0.5">
-          <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">Asset allocation</p>
-          <p className="min-w-0 truncate text-xl font-bold tabular-nums tracking-tight text-white sm:text-2xl sm:leading-tight">
+          <p className="text-xs font-bold uppercase leading-snug tracking-wider text-white/65">Asset allocation</p>
+          <p className="min-w-0 whitespace-normal break-normal text-xl font-bold tabular-nums tracking-tight text-white [overflow-wrap:normal] [word-break:normal] sm:text-2xl sm:leading-tight">
             {formatNpr(total)}
           </p>
         </div>
-        <p className="min-w-0 max-w-full truncate text-[11px] font-medium leading-snug text-[#A7B4C4] md:max-w-[20rem] md:text-right">
+        <p className="min-w-0 max-w-full text-[11px] font-medium leading-snug text-[#A7B4C4] md:max-w-[24rem] md:text-right">
           {isEmpty
             ? "Add assets in banking, investments, or property — allocation fills from your balances."
             : "Sleeve mix · NPR marks from your portfolio."}
@@ -44,8 +44,8 @@ export function AssetAllocationChart() {
       </div>
 
       <div className="relative z-10 mt-4 flex min-h-0 flex-1 flex-col gap-4 md:min-h-[180px] md:flex-row md:items-stretch lg:min-h-[220px]">
-        <div className="flex min-h-[140px] shrink-0 items-center justify-center md:min-h-0 md:w-[40%] md:max-w-none lg:w-[42%]">
-          <div className="relative aspect-square w-full max-w-[136px] drop-shadow-[0_14px_36px_-28px_rgba(0,0,0,0.9)] md:max-w-[154px] lg:max-w-[174px]">
+        <div className="flex min-h-[140px] shrink-0 items-center justify-center md:min-h-0 md:w-[38%] md:max-w-none lg:w-[40%]">
+          <div className="relative aspect-square w-full max-w-[136px] drop-shadow-[0_14px_36px_-28px_rgba(0,0,0,0.9)] md:max-w-[164px] lg:max-w-[184px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                 <Pie
@@ -115,12 +115,12 @@ export function AssetAllocationChart() {
                     className="row-span-2 mt-0.5 h-2.5 w-2.5 shrink-0 self-start rounded-full shadow-[0_0_10px_rgba(255,255,255,0.18)] md:row-span-1 md:mt-0 md:h-3 md:w-3 md:self-center"
                     style={{ background: row.color }}
                   />
-                  <p className="min-w-0 truncate text-xs font-semibold leading-snug text-white md:py-0 md:text-[13px]" title={row.name}>
+                  <p className="min-w-0 text-xs font-semibold leading-snug text-white md:py-0 md:text-[13px]" title={row.name}>
                     {row.name}
                   </p>
                   <div className="col-start-2 flex min-w-0 items-baseline justify-between gap-2 pt-0.5 md:contents md:pt-0">
                     <p className="text-[10px] font-bold tabular-nums text-white md:text-right md:text-xs">{row.pct.toFixed(1)}%</p>
-                    <p className="min-w-0 max-w-[55%] truncate text-right text-[10px] font-medium tabular-nums text-[#A7B4C4] md:max-w-none md:text-[11px]">
+                    <p className="min-w-0 max-w-[55%] whitespace-normal break-normal text-right text-[10px] font-medium tabular-nums text-[#A7B4C4] [overflow-wrap:normal] [word-break:normal] md:max-w-none md:text-[11px]">
                       {formatNpr(row.value)}
                     </p>
                   </div>
