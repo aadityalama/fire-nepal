@@ -47,9 +47,9 @@ function daysToYearEnd(year: number): number {
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">{label}</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">{label}</span>
       {children}
-      {hint ? <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{hint}</span> : null}
+      {hint ? <span className="text-[11px] font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.72)]">{hint}</span> : null}
     </label>
   );
 }
@@ -71,15 +71,15 @@ function AutoCalculateToggleGroup({
         ? "bg-teal-600 text-white shadow-sm ring-1 ring-teal-500/40"
         : light
           ? "text-slate-600 hover:bg-slate-100/90"
-          : "text-zinc-400 hover:bg-white/[0.06]"
+          : "text-[rgba(255,255,255,0.85)] hover:bg-white/[0.08]"
     }`;
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <span id={labelledById} className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">
+      <span id={labelledById} className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">
         Auto calculate
       </span>
       <div
-        className={`inline-flex rounded-xl border p-0.5 ${light ? "border-slate-200/90 bg-slate-50/90" : "border-white/10 bg-black/25"}`}
+        className={`inline-flex rounded-xl border p-0.5 ${light ? "border-slate-200/90 bg-slate-50/90" : "border-white/[0.14] bg-black/30"}`}
         role="group"
         aria-labelledby={labelledById}
       >
@@ -97,15 +97,19 @@ function AutoCalculateToggleGroup({
 function SummaryCard({ label, value, hint, light }: { label: string; value: string; hint: string; light: boolean }) {
   return (
     <div
-      className={`wealth-glass flex min-h-[128px] flex-col justify-between p-4 motion-safe:transition-[transform,box-shadow] motion-safe:duration-300 sm:min-h-[140px] ${
-        light ? "shadow-sm ring-1 ring-slate-900/[0.04]" : "motion-safe:hover:shadow-[0_20px_50px_-22px_rgba(45,212,191,0.12)]"
+      className={`wealth-glass flex min-h-[140px] flex-col justify-between p-4 motion-safe:transition-[transform,box-shadow] motion-safe:duration-300 sm:min-h-[152px] ${
+        light
+          ? "shadow-sm ring-1 ring-slate-900/[0.04]"
+          : "ring-1 ring-white/[0.08] motion-safe:hover:shadow-[0_20px_50px_-22px_rgba(79,255,209,0.14)]"
       }`}
     >
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-teal-700/90 dark:text-teal-300/75">{label}</p>
-        <p className="mt-1.5 text-lg font-black tracking-tight text-slate-900 dark:text-white sm:text-xl">{value}</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1] sm:text-[11px]">{label}</p>
+        <p className="mt-1.5 text-[clamp(1.05rem,3.8vw,1.2rem)] font-extrabold tracking-tight text-slate-900 dark:text-white [text-shadow:0_0_28px_rgba(255,255,255,0.12)] sm:text-xl">
+          {value}
+        </p>
       </div>
-      <p className="text-[11px] font-semibold leading-relaxed text-slate-500 dark:text-zinc-400">{hint}</p>
+      <p className="text-[11px] font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.72)] sm:text-xs">{hint}</p>
     </div>
   );
 }
@@ -127,7 +131,7 @@ function SectionTitle({
         </span>
         <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white sm:text-xl">{title}</h2>
       </div>
-      {subtitle ? <p className="max-w-3xl text-sm font-semibold text-slate-600 dark:text-zinc-400">{subtitle}</p> : null}
+      {subtitle ? <p className="max-w-3xl text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{subtitle}</p> : null}
     </div>
   );
 }
@@ -144,7 +148,7 @@ export function ReturnToNepalPlannerDashboard() {
   }, []);
 
   const sg = (extra = "") =>
-    `wealth-glass scroll-mt-28 p-4 sm:p-5 lg:p-6 ${light ? "ring-1 ring-slate-900/[0.04] shadow-[0_16px_48px_-24px_rgba(15,23,42,0.08)]" : ""} ${extra}`;
+    `wealth-glass scroll-mt-28 p-4 sm:p-5 lg:p-6 ${light ? "ring-1 ring-slate-900/[0.04] shadow-[0_16px_48px_-24px_rgba(15,23,42,0.08)]" : "ring-1 ring-white/[0.06]"} ${extra}`;
 
   const overrun = useMemo(() => budgetOverrunRisk(state, snapshot), [state, snapshot]);
   const phaseRatio = phaseCompletionRatio(state.completedPhases);
@@ -183,7 +187,7 @@ export function ReturnToNepalPlannerDashboard() {
         : "Early stage — add fees, healthcare, and checklist detail.";
 
   const inputClass =
-    "rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white";
+    "rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-white/[0.14] dark:bg-white/[0.08] dark:text-white";
 
   return (
     <WealthDashboardShell
@@ -216,11 +220,11 @@ export function ReturnToNepalPlannerDashboard() {
               >
                 <span className="text-center text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
                   {snapshot.retirementReadinessPct.toFixed(0)}
-                  <span className="block text-[10px] font-black uppercase tracking-widest text-teal-700 dark:text-teal-300">%</span>
+                  <span className="block text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-[#4FFFD1]">%</span>
                 </span>
               </div>
             </div>
-            <p className="max-w-xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+            <p className="max-w-xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
               {snapshot.aiHeadline} {snapshot.freedomMilestone}
             </p>
           </div>
@@ -263,29 +267,29 @@ export function ReturnToNepalPlannerDashboard() {
             className={`mb-6 rounded-2xl border p-4 sm:p-5 ${
               light
                 ? "border-teal-200/70 bg-gradient-to-br from-white/95 to-teal-50/50"
-                : "border-teal-400/15 bg-gradient-to-br from-white/[0.07] to-emerald-950/20"
+                : "border-[rgba(79,255,209,0.2)] bg-gradient-to-br from-white/[0.1] via-[rgba(6,78,59,0.32)] to-[rgba(2,18,16,0.5)]"
             }`}
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-teal-700 dark:text-teal-200/90">Guidance read</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700 dark:text-[#4FFFD1]">Guidance read</p>
             <p className="mt-2 text-base font-black text-slate-900 dark:text-white sm:text-lg">{snapshot.aiSecondary}</p>
           </div>
 
           <ReturnToNepalCharts snapshot={snapshot} chartsReady={chartsReady} />
 
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300/80">Return countdown</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-[#4FFFD1]">Return countdown</p>
               <p className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{countdownDays.toLocaleString()}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-zinc-400">days to Dec 31, {state.targetReturnYear}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">days to Dec 31, {state.targetReturnYear}</p>
             </div>
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-800 dark:text-cyan-200/80">Stress radar</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-800 dark:text-[#4FFFD1]">Stress radar</p>
               <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{snapshot.stressScore.toFixed(0)}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-zinc-500">Gap + runway composite (lower is calmer)</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Gap + runway composite (lower is calmer)</p>
             </div>
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300/80">Emotional pulse</p>
-              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-300">{snapshot.emotionalLine}</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-[#4FFFD1]">Emotional pulse</p>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{snapshot.emotionalLine}</p>
             </div>
           </div>
         </section>
@@ -298,19 +302,19 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <div className="mb-6 space-y-5">
             <div>
-              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-zinc-400">
+              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
                 <span>Korea implied spend / mo (NPR)</span>
                 <span>{formatNprInteger(snapshot.koreaImpliedMonthlySpendNpr)}</span>
               </div>
               <div className={`h-3 overflow-hidden rounded-full ${light ? "bg-slate-200" : "bg-white/10"}`}>
                 <div className="h-full rounded-full bg-gradient-to-r from-teal-600 to-emerald-500" style={{ width: `${koreaBarPct}%` }} />
               </div>
-              <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-zinc-500">
+              <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">
                 From {formatKrwInteger(state.monthlySalaryKrw)} salary − {formatKrwInteger(state.monthlySavingsKrw)} savings
               </p>
             </div>
             <div>
-              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-zinc-400">
+              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
                 <span>Nepal living model / mo (NPR)</span>
                 <span>{formatNprInteger(snapshot.monthlyNepalLivingNpr)}</span>
               </div>
@@ -368,24 +372,26 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4 dark:bg-emerald-500/[0.08]">
-              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-800 dark:text-emerald-200/85">Monthly (today)</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800 dark:text-[#4FFFD1]">Monthly (today)</p>
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingNpr)}</p>
             </div>
             <div className="rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4 dark:bg-teal-500/[0.08]">
-              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800 dark:text-teal-200/85">At return ({state.targetReturnYear})</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">At return ({state.targetReturnYear})</p>
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-zinc-400">×{snapshot.inflationFactorAtReturn.toFixed(2)} factor</p>
+              <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">×{snapshot.inflationFactorAtReturn.toFixed(2)} factor</p>
             </div>
           </div>
-          <div className={`mt-4 rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-slate-50/80" : "border-white/10 bg-white/[0.04]"}`}>
-            <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${light ? "text-slate-500" : "text-zinc-500"}`}>Village vs Kathmandu (same lifestyle)</p>
+          <div className={`mt-4 rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-slate-50/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.07] to-white/[0.02]"}`}>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-500" : "text-[rgba(255,255,255,0.72)]"}`}>
+              Village vs Kathmandu (same lifestyle)
+            </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-bold text-slate-500">Village</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Village</p>
                 <p className="text-lg font-black text-slate-900 dark:text-white">{formatNprInteger(villageCol)}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-500">Kathmandu</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Kathmandu</p>
                 <p className="text-lg font-black text-slate-900 dark:text-white">{formatNprInteger(ktmCol)}</p>
               </div>
             </div>
@@ -410,7 +416,7 @@ export function ReturnToNepalPlannerDashboard() {
             ))}
           </div>
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
-            <p className="text-sm font-black text-emerald-950 dark:text-emerald-50">Passive after return ({state.targetReturnYear} money, inflated)</p>
+            <p className="text-sm font-black text-emerald-950 dark:text-white">Passive after return ({state.targetReturnYear} money, inflated)</p>
             <p className="mt-2 text-2xl font-black text-emerald-950 dark:text-white">{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
           </div>
         </section>
@@ -426,7 +432,7 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5">
-            <div className="mb-2 flex justify-between text-xs font-bold text-slate-600 dark:text-zinc-400">
+            <div className="mb-2 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
               <span>Runway vs target</span>
               <span>
                 {snapshot.emergencyReserveMonths.toFixed(1)} / {state.emergencyMonthsTarget} mo
@@ -438,7 +444,7 @@ export function ReturnToNepalPlannerDashboard() {
                 style={{ width: `${runwayProgressPct}%` }}
               />
             </div>
-            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-zinc-400">{emergencyHint}</p>
+            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{emergencyHint}</p>
           </div>
         </section>
 
@@ -459,13 +465,13 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
             <div
               className={`flex flex-col gap-3 rounded-2xl border p-4 sm:col-span-2 ${
-                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/10 bg-white/[0.03]"
+                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/[0.14] bg-gradient-to-br from-white/[0.06] to-white/[0.02]"
               }`}
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Severance (KRW)</p>
-                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Severance (KRW)</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
                     Model uses salary × total Korea years (worked + planned).
                   </p>
                 </div>
@@ -487,10 +493,10 @@ export function ReturnToNepalPlannerDashboard() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Override amount (KRW)</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Override amount (KRW)</span>
                 {state.severanceAutoCalculate !== false ? (
                   <div
-                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-zinc-400`}
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]`}
                     aria-readonly="true"
                   >
                     Manual entry off — estimate below is used
@@ -519,10 +525,10 @@ export function ReturnToNepalPlannerDashboard() {
               ) : (
                 <p
                   className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
-                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/10 bg-black/20 text-zinc-300"
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
                   }`}
                 >
-                  <span className="font-black text-teal-800 dark:text-teal-200">Manual mode</span>
+                  <span className="font-black text-teal-800 dark:text-[#4FFFD1]">Manual mode</span>
                   {" — "}Enter your lump sum in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
                   <span className="font-bold">no severance payout</span> (different from Auto On, which uses the estimate).
                 </p>
@@ -530,13 +536,13 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
             <div
               className={`flex flex-col gap-3 rounded-2xl border p-4 sm:col-span-2 ${
-                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/10 bg-white/[0.03]"
+                light ? "border-slate-200/90 bg-slate-50/50" : "border-white/[0.14] bg-gradient-to-br from-white/[0.06] to-white/[0.02]"
               }`}
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">National pension maturity (KRW)</p>
-                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">National pension maturity (KRW)</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
                     Rough maturity from contributions + growth (illustrative).
                   </p>
                 </div>
@@ -558,10 +564,10 @@ export function ReturnToNepalPlannerDashboard() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-800/85 dark:text-teal-200/75">Override amount (KRW)</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Override amount (KRW)</span>
                 {state.nationalPensionAutoCalculate !== false ? (
                   <div
-                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-zinc-400`}
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]`}
                     aria-readonly="true"
                   >
                     Manual entry off — estimate below is used
@@ -595,10 +601,10 @@ export function ReturnToNepalPlannerDashboard() {
               ) : (
                 <p
                   className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
-                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/10 bg-black/20 text-zinc-300"
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
                   }`}
                 >
-                  <span className="font-black text-teal-800 dark:text-teal-200">Manual mode</span>
+                  <span className="font-black text-teal-800 dark:text-[#4FFFD1]">Manual mode</span>
                   {" — "}Enter maturity in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
                   <span className="font-bold">no national-pension lump sum</span> at return.
                 </p>
@@ -609,7 +615,7 @@ export function ReturnToNepalPlannerDashboard() {
             <p className="text-sm font-black text-slate-900 dark:text-white">
               Target return year {state.targetReturnYear} · You are {snapshot.returnGoalProgressPct.toFixed(0)}% closer to funded house + relocation.
             </p>
-            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-zinc-400">
+            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
               Projected Korea-side corpus (NPR): {formatNprInteger(snapshot.koreaSavingsAfterPlannedYearsNpr)} · Severance (model){" "}
               {formatNprInteger(snapshot.projectedSeveranceNpr)} · National pension (rough) {formatNprInteger(snapshot.projectedNationalPensionNpr)}
             </p>
@@ -633,7 +639,7 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5">
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-teal-700 dark:text-teal-300/80">Settlement checklist</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700 dark:text-[#4FFFD1]">Settlement checklist</p>
             <div className="mt-2 flex flex-col gap-2">
               {SETTLEMENT_CHECKLIST_ITEMS.map((row) => {
                 const done = state.settlementChecklist.includes(row.id);
@@ -647,20 +653,20 @@ export function ReturnToNepalPlannerDashboard() {
                         ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100"
                         : light
                           ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
-                          : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-teal-400/25"
+                          : "border-white/[0.12] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.3)]"
                     }`}
                   >
                     <span>{row.label}</span>
-                    <span className="shrink-0 text-[11px] font-black uppercase text-teal-600 dark:text-teal-300">{done ? "Done" : "Todo"}</span>
+                    <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-teal-600 dark:text-[#4FFFD1]">{done ? "Done" : "Todo"}</span>
                   </button>
                 );
               })}
             </div>
           </div>
-          <div className="mt-5 rounded-2xl border border-teal-500/15 p-4">
+          <div className="mt-5 rounded-2xl border border-teal-500/20 bg-teal-500/[0.06] p-4 ring-1 ring-white/[0.04] dark:bg-teal-500/[0.1]">
             <p className="text-sm font-black text-slate-900 dark:text-white">Family readiness score</p>
-            <p className="mt-2 text-3xl font-black text-teal-700 dark:text-teal-200">{snapshot.familyRelocationScore.toFixed(0)}%</p>
-            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-zinc-400">Includes checklist completion vs stress index {snapshot.stressScore.toFixed(0)}.</p>
+            <p className="mt-2 text-3xl font-extrabold text-teal-700 dark:text-white [text-shadow:0_0_28px_rgba(255,255,255,0.12)]">{snapshot.familyRelocationScore.toFixed(0)}%</p>
+            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">Includes checklist completion vs stress index {snapshot.stressScore.toFixed(0)}.</p>
           </div>
         </section>
 
@@ -705,7 +711,7 @@ export function ReturnToNepalPlannerDashboard() {
                   type="button"
                   onClick={() => togglePhase(ph.id)}
                   className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition ${
-                    done ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100" : "border-white/10 bg-white/[0.04] text-zinc-400 hover:border-teal-400/30"
+                    done ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100" : "border-white/[0.12] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.28)]"
                   }`}
                 >
                   {ph.label}
@@ -720,9 +726,9 @@ export function ReturnToNepalPlannerDashboard() {
             </p>
           </div>
           <div className="mt-4 rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4">
-            <p className="text-xs font-bold text-slate-500 dark:text-zinc-400">Total build budget</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]">Total build budget</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.houseTotalBudgetNpr)}</p>
-            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
               EMI (model): {formatNprInteger(Math.round(snapshot.houseLoanEmiNpr))} / mo
             </p>
           </div>
@@ -741,32 +747,32 @@ export function ReturnToNepalPlannerDashboard() {
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
             <p className="text-sm font-black text-slate-900 dark:text-white">Implied monthly from yield model</p>
             <p className="mt-2 text-2xl font-black text-emerald-800 dark:text-emerald-100">{formatNprInteger(snapshot.businessPassiveMonthlyHintNpr)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-emerald-100/80">{snapshot.aiSecondary}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.72)]">{snapshot.aiSecondary}</p>
           </div>
         </section>
 
         <section id="rtn-gap" className={sg("mt-2")}>
           <SectionTitle icon={LineChart} title="Retirement gap analysis" subtitle="Future need vs passive stack; sustainability if drawing on principal." />
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase text-slate-500">Future need / mo</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Future need / mo</p>
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
             </div>
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase text-slate-500">Passive / mo (inflated)</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Passive / mo (inflated)</p>
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
             </div>
-            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/10 bg-white/[0.04]"}`}>
-              <p className="text-[11px] font-black uppercase text-slate-500">Sustainability yrs</p>
+            <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Sustainability yrs</p>
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{snapshot.sustainabilityYears.toFixed(1)}</p>
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-teal-500/20 bg-teal-500/[0.07] p-4">
             <p className="text-sm font-black text-slate-900 dark:text-white">Monthly surplus / deficit</p>
-            <p className="mt-2 text-2xl font-black text-teal-800 dark:text-teal-100">
+            <p className="mt-2 text-2xl font-extrabold text-teal-800 dark:text-white [text-shadow:0_0_24px_rgba(255,255,255,0.1)]">
               {snapshot.monthlyDeficitNpr > 0 ? `−${formatNprInteger(snapshot.monthlyDeficitNpr)}` : `+${formatNprInteger(snapshot.monthlySurplusNpr)}`}
             </p>
-            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-zinc-300">
+            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
               Extra corpus needed (4.25% SWR heuristic): {formatNprInteger(snapshot.requiredExtraCorpusNpr)}
             </p>
           </div>
@@ -775,9 +781,9 @@ export function ReturnToNepalPlannerDashboard() {
         <section id="rtn-coach" className={sg("mt-2 mb-2")}>
           <SectionTitle icon={Heart} title="Coach, legal prep & milestones" subtitle="Motivation layer plus lightweight tax/banking sliders — confirm with a CA." />
           <div className="rounded-2xl border border-teal-400/20 bg-gradient-to-br from-teal-500/15 to-emerald-600/10 p-4 sm:p-5">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-teal-800 dark:text-teal-200/90">Assistant</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-800 dark:text-[#4FFFD1]">Assistant</p>
             <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{snapshot.aiHeadline}</p>
-            <p className="mt-2 text-sm font-semibold text-teal-900/90 dark:text-teal-50/85">{snapshot.aiSecondary}</p>
+            <p className="mt-2 text-sm font-semibold text-teal-900/90 dark:text-[rgba(255,255,255,0.85)]">{snapshot.aiSecondary}</p>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Tax readiness %">
@@ -795,24 +801,24 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <div
-              className="relative h-40 overflow-hidden rounded-3xl border border-white/10 shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
+              className="relative h-40 overflow-hidden rounded-3xl border border-white/[0.14] shadow-[0_0_40px_-12px_rgba(52,211,153,0.35)]"
               style={{
                 background: `linear-gradient(135deg, rgba(15,118,110,0.5) ${state.houseProgressPct}%, rgba(2,6,23,0.88) ${state.houseProgressPct}%)`,
               }}
             >
               <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-white/75">Dream build</p>
-                <p className="text-3xl font-black text-white">{state.houseProgressPct}%</p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[rgba(255,255,255,0.85)]">Dream build</p>
+                <p className="text-3xl font-extrabold text-white [text-shadow:0_0_32px_rgba(255,255,255,0.18)]">{state.houseProgressPct}%</p>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] p-4">
               <p className="text-sm font-black text-emerald-950 dark:text-emerald-50">Milestones</p>
-              <ul className="mt-2 space-y-2 text-sm font-semibold text-emerald-900 dark:text-emerald-100/90">
+              <ul className="mt-2 space-y-2 text-sm font-semibold text-emerald-900 dark:text-[rgba(255,255,255,0.85)]">
                 <li>• Runway {snapshot.emergencyReserveMonths.toFixed(1)} mo</li>
                 <li>• Return goal {snapshot.returnGoalProgressPct.toFixed(0)}%</li>
                 <li>• Readiness {snapshot.retirementReadinessPct.toFixed(0)}%</li>
               </ul>
-              <p className="mt-3 text-xs font-semibold text-emerald-900/85 dark:text-emerald-100/80">{snapshot.emotionalLine}</p>
+              <p className="mt-3 text-xs font-semibold text-emerald-900/85 dark:text-[rgba(255,255,255,0.72)]">{snapshot.emotionalLine}</p>
             </div>
           </div>
         </section>

@@ -148,7 +148,7 @@ export function FirePremiumPortfolioDashboard() {
         </section>
 
         {/* Executive strip: dense secondary context (display-only; totals from context) */}
-        <div className="mt-4 grid grid-cols-2 gap-3 rounded-[20px] border border-white/[0.08] bg-[#0B1623]/80 p-4 shadow-[0_16px_36px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/[0.03] backdrop-blur-xl sm:grid-cols-4 sm:gap-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 rounded-[20px] border border-white/[0.14] bg-gradient-to-br from-[#0f1f2d]/88 to-[#071018]/82 p-4 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06] backdrop-blur-lg sm:grid-cols-4 sm:gap-4">
           {(
             [
               { name: "Total assets", primary: formatNpr(hydrated ? totals.totalAssetsNpr : 0), sub: "Gross stack" },
@@ -157,10 +157,12 @@ export function FirePremiumPortfolioDashboard() {
               { name: "FIRE readiness score", primary: `${fireScore}`, sub: "/ 100 · composite" },
             ] as const
           ).map((row) => (
-            <div key={row.name} className="min-w-0 border-b border-white/[0.04] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
-              <p className="text-[10px] font-bold uppercase leading-snug tracking-wider text-white/65">{row.name}</p>
-              <p className="mt-1 text-sm font-bold leading-tight tabular-nums tracking-tight text-white">{row.primary}</p>
-              <p className="text-[10px] font-semibold leading-snug text-[#A7B4C4]">{row.sub}</p>
+            <div key={row.name} className="min-w-0 border-b border-white/[0.08] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
+              <p className="text-[10px] font-bold uppercase leading-snug tracking-[0.14em] text-[#4FFFD1]">{row.name}</p>
+              <p className="mt-1 text-[clamp(0.875rem,2.8vw,0.95rem)] font-extrabold leading-tight tabular-nums tracking-tight text-white [text-shadow:0_0_20px_rgba(255,255,255,0.1)]">
+                {row.primary}
+              </p>
+              <p className="text-[10px] font-semibold leading-snug text-[rgba(255,255,255,0.72)]">{row.sub}</p>
             </div>
           ))}
         </div>

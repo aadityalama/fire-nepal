@@ -53,7 +53,7 @@ export function ReturnToNepalChrome({
           className={`inline-flex min-h-[44px] w-fit items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black shadow-sm backdrop-blur-md transition duration-300 active:scale-[0.98] sm:text-sm ${
             light
               ? "border-emerald-200/90 bg-white/95 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50/90"
-              : "border-emerald-400/18 bg-white/[0.06] text-emerald-50/95 hover:border-teal-300/35 hover:bg-white/10"
+              : "border-white/[0.14] bg-white/[0.06] text-white hover:border-teal-300/40 hover:bg-white/[0.1]"
           }`}
         >
           <ArrowLeft size={15} /> Wealth dashboard
@@ -61,10 +61,10 @@ export function ReturnToNepalChrome({
         <div className="flex flex-wrap items-center gap-2">
           <div
             className={`flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-[11px] ${
-              light ? "text-emerald-800/75" : "text-emerald-200/65"
+              light ? "text-emerald-800/75" : "text-[rgba(255,255,255,0.72)]"
             }`}
           >
-            <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/25 bg-teal-500/10 px-2 py-1 text-teal-800 dark:text-teal-200/90">
+            <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/30 bg-teal-500/12 px-2 py-1 text-teal-800 dark:border-[rgba(79,255,209,0.28)] dark:bg-white/[0.06] dark:text-[#4FFFD1]">
               <Plane size={12} className="opacity-80" />
               Return OS
             </span>
@@ -76,7 +76,7 @@ export function ReturnToNepalChrome({
             className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black transition active:scale-[0.98] sm:text-sm ${
               light
                 ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                : "border-white/10 bg-white/[0.05] text-white hover:bg-white/10"
+                : "border-white/[0.14] bg-white/[0.06] text-white hover:bg-white/[0.1]"
             }`}
           >
             <RefreshCw size={14} /> Reset workspace
@@ -86,7 +86,7 @@ export function ReturnToNepalChrome({
 
       <section
         className={`wealth-glass relative overflow-hidden p-4 sm:p-5 ${
-          light ? "ring-1 ring-emerald-950/[0.04] shadow-[0_16px_48px_-24px_rgba(15,23,42,0.1)]" : ""
+          light ? "ring-1 ring-emerald-950/[0.04] shadow-[0_16px_48px_-24px_rgba(15,23,42,0.1)]" : "ring-1 ring-white/[0.06]"
         }`}
       >
         <div
@@ -97,7 +97,7 @@ export function ReturnToNepalChrome({
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">{title}</h1>
             {subtitle ? (
-              <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{subtitle}</p>
+              <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{subtitle}</p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -110,7 +110,7 @@ export function ReturnToNepalChrome({
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 sm:text-xs ${
                     light
                       ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-300/80 hover:bg-teal-50/80"
-                      : "border-white/10 bg-white/[0.05] text-zinc-100 hover:border-teal-400/35 hover:bg-white/[0.08]"
+                      : "border-white/[0.14] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.35)] hover:bg-white/[0.1] hover:text-white"
                   }`}
                 >
                   <Icon size={14} className="opacity-80" />
@@ -123,27 +123,35 @@ export function ReturnToNepalChrome({
           <div className="grid gap-3 sm:grid-cols-3">
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-teal-200/80 bg-teal-50/70 text-teal-950" : "border-teal-400/20 bg-teal-500/10 text-teal-50"
+                light ? "border-teal-200/80 bg-teal-50/70 text-teal-950" : "border-[rgba(79,255,209,0.22)] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">Retirement readiness</span>
-              <span className="text-base font-black">{snapshot.retirementReadinessPct.toFixed(0)}%</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800/80 dark:text-[#4FFFD1]">
+                Retirement readiness
+              </span>
+              <span className="text-base font-extrabold text-teal-950 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+                {snapshot.retirementReadinessPct.toFixed(0)}%
+              </span>
             </div>
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-emerald-200/80 bg-emerald-50/60 text-emerald-950" : "border-emerald-400/15 bg-white/[0.04] text-emerald-50"
+                light ? "border-emerald-200/80 bg-emerald-50/60 text-emerald-950" : "border-emerald-400/22 bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">Nepal COL (model)</span>
-              <span className="text-base font-black">{formatNprInteger(snapshot.monthlyNepalLivingNpr)} / mo</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-900/80 dark:text-[#4FFFD1]">Nepal COL (model)</span>
+              <span className="text-base font-extrabold text-emerald-950 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+                {formatNprInteger(snapshot.monthlyNepalLivingNpr)} / mo
+              </span>
             </div>
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/10 bg-white/[0.04] text-white"
+                light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">Emergency runway</span>
-              <span className="text-base font-black">{snapshot.emergencyReserveMonths.toFixed(1)} mo</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:text-[#4FFFD1]">Emergency runway</span>
+              <span className="text-base font-extrabold text-slate-900 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+                {snapshot.emergencyReserveMonths.toFixed(1)} mo
+              </span>
             </div>
           </div>
         </div>
@@ -160,7 +168,7 @@ export function ReturnToNepalChrome({
             className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 sm:px-3.5 sm:text-xs ${
               light
                 ? "border-slate-200/80 bg-white/80 text-slate-700 hover:border-teal-200"
-                : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-teal-400/25 hover:text-white"
+                : "border-white/[0.14] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.28)] hover:text-white"
             }`}
           >
             {item.label}

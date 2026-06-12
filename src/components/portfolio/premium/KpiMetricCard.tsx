@@ -20,6 +20,12 @@ type KpiMetricCardProps = {
   compact?: boolean;
 };
 
+const kpiLabelClass =
+  "min-w-0 font-bold uppercase leading-[1.08] tracking-[0.14em] text-[#4FFFD1] sm:tracking-[0.16em]";
+const kpiValueClass =
+  "min-w-0 whitespace-nowrap font-extrabold leading-[1.02] tracking-[-0.035em] text-white [text-shadow:0_0_32px_rgba(255,255,255,0.14),0_1px_0_rgba(0,0,0,0.35)] text-[clamp(1.35rem,4.8vw,1.65rem)] sm:text-[1.65rem] lg:text-[1.85rem]";
+const kpiMutedClass = "min-w-0 font-semibold leading-snug text-[rgba(255,255,255,0.72)]";
+
 function kpiLabelLines(label: string): string[] {
   const normalized = label.trim().toLowerCase();
   switch (normalized) {
@@ -60,16 +66,16 @@ export function KpiMetricCard({
       clip={false}
       className={
         compact
-          ? "flex h-[136px] w-full min-w-0 p-3.5 sm:h-[140px] lg:min-w-[240px] xl:h-[148px]"
-          : "flex h-[140px] w-full min-w-0 p-4 lg:min-w-[240px] xl:h-[150px]"
+          ? "flex min-h-[148px] w-full min-w-0 p-3.5 sm:min-h-[152px] sm:h-[152px] lg:min-w-[240px] xl:h-[156px]"
+          : "flex min-h-[152px] w-full min-w-0 p-4 sm:h-[156px] lg:min-w-[240px] xl:h-[162px]"
       }
     >
       <div className="relative z-10 flex h-full flex-col">
         <div
           className={
             compact
-              ? "grid h-full grid-rows-[auto_minmax(2.55rem,1fr)_auto] gap-2"
-              : "grid h-full grid-rows-[auto_minmax(2.75rem,1fr)_auto] gap-2.5"
+              ? "grid h-full grid-rows-[auto_minmax(2.65rem,1fr)_auto] gap-2"
+              : "grid h-full grid-rows-[auto_minmax(2.85rem,1fr)_auto] gap-2.5"
           }
         >
           {/* Top: icon + full title. */}
@@ -78,8 +84,8 @@ export function KpiMetricCard({
               <div
                 className={
                   compact
-                    ? "grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#38F2A0]/10 text-[#38F2A0] ring-1 ring-[#38F2A0]/20 sm:h-8 sm:w-8"
-                    : "grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#38F2A0]/10 text-[#38F2A0] ring-1 ring-[#38F2A0]/20 sm:h-9 sm:w-9"
+                    ? "grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#4FFFD1]/12 text-[#4FFFD1] ring-1 ring-[#4FFFD1]/25 sm:h-8 sm:w-8"
+                    : "grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#4FFFD1]/12 text-[#4FFFD1] ring-1 ring-[#4FFFD1]/25 sm:h-9 sm:w-9"
                 }
               >
                 <Icon
@@ -87,14 +93,7 @@ export function KpiMetricCard({
                   strokeWidth={2}
                 />
               </div>
-              <p
-                className={
-                  compact
-                    ? "min-w-0 text-[9px] font-bold uppercase leading-[1.08] tracking-wider text-white/65 sm:text-[10px]"
-                    : "min-w-0 text-[10px] font-bold uppercase leading-[1.1] tracking-wider text-white/65 sm:text-[11px]"
-                }
-                title={label}
-              >
+              <p className={`${kpiLabelClass} ${compact ? "text-[9px] sm:text-[10px]" : "text-[10px] sm:text-[11px]"}`} title={label}>
                 {labelLines.map((line) => (
                   <span key={line} className="block whitespace-normal break-normal [overflow-wrap:normal] [word-break:normal]">
                     {line}
@@ -106,26 +105,13 @@ export function KpiMetricCard({
 
           {/* Middle: primary metric remains the visual focus and gets guaranteed vertical space. */}
           <div className={`flex flex-col justify-center ${compact ? "gap-1" : "gap-1.5"}`}>
-            <p
-              className={
-                compact
-                  ? "min-w-0 whitespace-nowrap text-2xl font-semibold leading-[1.02] tracking-[-0.04em] text-white lg:text-3xl"
-                  : "min-w-0 whitespace-nowrap text-2xl font-semibold leading-[1.02] tracking-[-0.04em] text-white lg:text-3xl"
-              }
-              title={value}
-            >
+            <p className={kpiValueClass} title={value}>
               {value}
             </p>
 
-            <div className={compact ? "min-h-[0.8rem] sm:min-h-[0.95rem]" : "min-h-[0.95rem]"}>
+            <div className={compact ? "min-h-[0.85rem] sm:min-h-[1rem]" : "min-h-[1rem]"}>
               {secondaryText ? (
-                <p
-                  className={
-                    compact
-                      ? "min-w-0 whitespace-nowrap text-[10px] font-semibold leading-none text-[#A7B4C4]"
-                      : "min-w-0 whitespace-nowrap text-[11px] font-semibold leading-none text-[#A7B4C4]"
-                  }
-                >
+                <p className={`${kpiMutedClass} ${compact ? "whitespace-nowrap text-[10px] sm:text-[11px]" : "whitespace-nowrap text-[11px]"}`}>
                   {secondaryText}
                 </p>
               ) : null}
@@ -138,12 +124,12 @@ export function KpiMetricCard({
                   <div
                     className={
                       compact
-                        ? "h-1 overflow-hidden rounded-full bg-white/[0.07] ring-1 ring-white/[0.04]"
-                        : "h-1.5 overflow-hidden rounded-full bg-white/[0.07] ring-1 ring-white/[0.04]"
+                        ? "h-1 overflow-hidden rounded-full bg-white/[0.1] ring-1 ring-white/[0.06]"
+                        : "h-1.5 overflow-hidden rounded-full bg-white/[0.1] ring-1 ring-white/[0.06]"
                     }
                   >
                     <div
-                      className="h-full rounded-full bg-[#38F2A0] transition-all duration-500"
+                      className="h-full rounded-full bg-[#4FFFD1] transition-all duration-500"
                       style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
                     />
                   </div>
@@ -154,14 +140,14 @@ export function KpiMetricCard({
           <div
             className={
               compact
-                ? "flex flex-col gap-0.5 border-t border-white/[0.06] pt-1"
-                : "flex flex-col gap-1 border-t border-white/[0.06] pt-1.5"
+                ? "flex flex-col gap-0.5 border-t border-white/[0.1] pt-1"
+                : "flex flex-col gap-1 border-t border-white/[0.1] pt-1.5"
             }
           >
             <p
-              className={`inline-flex min-w-0 items-center gap-1 font-bold leading-none ${
-                compact ? "text-[10px]" : "text-[11px]"
-              } ${deltaLabel ? (deltaPositive ? "text-[#38F2A0]" : "text-rose-300") : "text-[#A7B4C4]"}`}
+              className={`inline-flex min-w-0 items-center gap-1 font-bold leading-snug text-[rgba(255,255,255,0.85)] ${
+                compact ? "text-[10px] sm:text-[11px]" : "text-[11px]"
+              } ${deltaLabel ? (deltaPositive ? "text-[#4FFFD1]" : "text-rose-300") : ""}`}
             >
               <TrendingUp
                 className={`shrink-0 ${deltaLabel && !deltaPositive ? "rotate-180" : ""} ${
@@ -173,8 +159,8 @@ export function KpiMetricCard({
             <div
               className={
                 compact
-                  ? "min-h-[0.9rem] whitespace-nowrap text-[10px] font-semibold leading-none text-[#A7B4C4]"
-                  : "min-h-[1rem] whitespace-nowrap text-[11px] font-semibold leading-none text-[#A7B4C4]"
+                  ? `min-h-[0.9rem] whitespace-nowrap text-[10px] leading-snug sm:text-[11px] ${kpiMutedClass}`
+                  : `min-h-[1rem] whitespace-nowrap text-[11px] leading-snug ${kpiMutedClass}`
               }
             >
               {footer ?? <div className={compact ? "min-h-[0.875rem]" : "min-h-[1.125rem] sm:min-h-[1.25rem]"} aria-hidden />}

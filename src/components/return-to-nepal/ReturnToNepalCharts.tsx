@@ -61,10 +61,10 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
     [snapshot.monthlyNepalLivingFutureNpr, snapshot.passiveMonthlyFutureNpr],
   );
 
-  const tickColor = light ? "#64748b" : "#a1a1aa";
-  const gridColor = light ? "rgba(15, 23, 42, 0.08)" : "rgba(255,255,255, 0.06)";
-  const tooltipBg = light ? "rgba(255,255,255,0.96)" : "rgba(3, 8, 6, 0.94)";
-  const tooltipBorder = light ? "rgba(45, 212, 191, 0.28)" : "rgba(52, 211, 153, 0.22)";
+  const tickColor = light ? "#64748b" : "rgba(255,255,255,0.72)";
+  const gridColor = light ? "rgba(15, 23, 42, 0.08)" : "rgba(255,255,255,0.09)";
+  const tooltipBg = light ? "rgba(255,255,255,0.96)" : "rgba(7, 18, 26, 0.94)";
+  const tooltipBorder = light ? "rgba(45, 212, 191, 0.28)" : "rgba(79, 255, 209, 0.28)";
 
   const axisProps = {
     stroke: tickColor,
@@ -85,10 +85,10 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/80" : ""}`}>
-        <p className="mb-1 text-[11px] font-black uppercase tracking-[0.14em] text-teal-700/90 dark:text-teal-300/80">
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">
           Korea corpus → NPR
         </p>
-        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-zinc-400">
+        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
           Modelled path with contributions + modest portfolio return.
         </p>
         <div className="h-[220px] w-full sm:h-[240px]">
@@ -120,10 +120,10 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
       </div>
 
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/80" : ""}`}>
-        <p className="mb-1 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/80">
+        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-800 dark:text-[#4FFFD1]">
           Nepal expense vs passive
         </p>
-        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-zinc-400">
+        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
           Inflated to your target return year for apples-to-apples intuition.
         </p>
         <div className="h-[220px] w-full sm:h-[240px]">
@@ -142,7 +142,7 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
                 }}
                 formatter={(value: number) => [formatNprInteger(value), "NPR / mo"]}
               />
-              <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800 }} />
+              <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800, color: light ? "#334155" : "rgba(255,255,255,0.85)" }} />
               <Bar dataKey="v" name="Monthly" fill={light ? "#0d9488" : "#34d399"} radius={[10, 10, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

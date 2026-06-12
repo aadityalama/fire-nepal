@@ -3,7 +3,7 @@
 import { type ChangeEvent, type FocusEvent, useState } from "react";
 
 const premiumInputClass =
-  "min-h-[44px] w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-sm font-bold tabular-nums text-slate-900 caret-teal-600 outline-none transition-[border-color,box-shadow,background-color] duration-150 selection:bg-teal-500/20 selection:text-slate-900 placeholder:text-slate-400/80 focus:border-teal-400/80 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.18)] focus:ring-0 dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:caret-teal-300 dark:selection:bg-teal-400/25 dark:selection:text-white dark:placeholder:text-zinc-500/80 dark:focus:border-teal-400/45 dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.12)] sm:px-4 sm:text-[15px]";
+  "min-h-[44px] w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-sm font-bold tabular-nums text-slate-900 caret-teal-600 outline-none transition-[border-color,box-shadow,background-color] duration-150 selection:bg-teal-500/20 selection:text-slate-900 placeholder:text-slate-400/80 focus:border-teal-400/80 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.18)] focus:ring-0 dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:caret-teal-300 dark:selection:bg-teal-400/25 dark:selection:text-white dark:placeholder:text-[rgba(255,255,255,0.72)] dark:focus:border-teal-400/45 dark:focus:shadow-[0_0_0_3px_rgba(45,212,191,0.12)] sm:px-4 sm:text-[15px]";
 
 type Props = {
   value: number;

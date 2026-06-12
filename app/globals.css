@@ -475,22 +475,23 @@ input {
 /* Scoped premium wealth dashboard — semantic tokens (see html[data-fire-theme="light"]) */
 .portfolio-wealth-dash {
   color-scheme: dark;
-  --text-primary: #f4f4f5;
-  --text-secondary: rgba(226, 232, 240, 0.9);
-  --text-muted: rgba(148, 163, 184, 0.78);
-  --text-label: rgba(167, 243, 208, 0.72);
+  /* Readable on glass: WCAG-friendly hierarchy (dark shell) */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+  --text-muted: rgba(255, 255, 255, 0.72);
+  --text-label: #4fffd1;
   --text-on-accent: #022c22;
-  --border-color: rgba(52, 211, 153, 0.14);
+  --border-color: rgba(52, 211, 153, 0.22);
   --accent-color: #34d399;
   --accent-strong: #6ee7b7;
   --card-background: rgba(0, 0, 0, 0.22);
-  --surface-subtle: rgba(255, 255, 255, 0.045);
-  --surface-muted: rgba(255, 255, 255, 0.06);
+  --surface-subtle: rgba(255, 255, 255, 0.055);
+  --surface-muted: rgba(255, 255, 255, 0.08);
   --positive: rgba(190, 242, 100, 0.95);
   --negative: rgba(251, 113, 133, 0.95);
   --warning: rgba(253, 224, 71, 0.95);
   color: var(--text-primary);
-  --dash-ring-inset: 0 0 0 1px rgba(255, 255, 255, 0.045) inset;
+  --dash-ring-inset: 0 0 0 1px rgba(255, 255, 255, 0.07) inset;
   --dash-shadow-float: 0 22px 56px -28px rgba(0, 0, 0, 0.55);
   --dash-glow-emerald: 0 0 90px -22px rgba(52, 211, 153, 0.14);
   --dash-glow-emerald-strong: 0 0 100px -18px rgba(52, 211, 153, 0.22);
@@ -760,14 +761,15 @@ input {
 
 .portfolio-wealth-dash .wealth-glass {
   border-radius: clamp(1.15rem, 1.4vw, 1.65rem);
-  background: linear-gradient(152deg, rgba(8, 88, 68, 0.28), rgba(2, 38, 30, 0.58) 45%, rgba(0, 0, 0, 0.35));
-  border: 1px solid rgba(52, 211, 153, 0.13);
+  /* Lighter veil + less blur: readability-first glassmorphism */
+  background: linear-gradient(152deg, rgba(12, 96, 78, 0.34), rgba(4, 48, 38, 0.52) 48%, rgba(0, 0, 0, 0.2));
+  border: 1px solid rgba(79, 255, 209, 0.2);
   box-shadow:
     var(--dash-ring-inset),
-    0 18px 48px -20px rgba(0, 0, 0, 0.42),
+    0 18px 48px -20px rgba(0, 0, 0, 0.38),
     var(--dash-glow-emerald);
-  backdrop-filter: blur(22px) saturate(1.15);
-  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.12);
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
   transition:
     background 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -777,14 +779,14 @@ input {
 
 .portfolio-wealth-dash .wealth-chart-card {
   border-radius: 1.125rem;
-  background: linear-gradient(168deg, rgba(0, 0, 0, 0.4), rgba(6, 78, 59, 0.11));
-  border: 1px solid rgba(52, 211, 153, 0.11);
+  background: linear-gradient(168deg, rgba(0, 0, 0, 0.26), rgba(8, 88, 68, 0.2));
+  border: 1px solid rgba(79, 255, 209, 0.16);
   box-shadow:
     var(--dash-ring-inset),
-    0 14px 42px -18px rgba(0, 0, 0, 0.38),
-    0 0 56px -22px rgba(52, 211, 153, 0.1);
-  backdrop-filter: blur(16px) saturate(1.1);
-  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    0 14px 42px -18px rgba(0, 0, 0, 0.34),
+    0 0 56px -22px rgba(52, 211, 153, 0.12);
+  backdrop-filter: blur(12px) saturate(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
   transition:
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.32s ease,
@@ -793,7 +795,7 @@ input {
 
 .portfolio-wealth-dash .wealth-chart-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(52, 211, 153, 0.24);
+  border-color: rgba(79, 255, 209, 0.28);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.055) inset,
     0 20px 52px -22px rgba(0, 0, 0, 0.48),
@@ -828,20 +830,20 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
 }
 
 .portfolio-wealth-dash .wealth-overview-shell {
-  border: 1px solid rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(79, 255, 209, 0.18);
   border-radius: clamp(1.25rem, 2vw, 1.65rem);
   box-shadow:
     var(--dash-ring-inset),
-    0 26px 68px -30px rgba(0, 0, 0, 0.52),
+    0 26px 68px -30px rgba(0, 0, 0, 0.46),
     0 0 96px -26px rgba(52, 211, 153, 0.13);
-  backdrop-filter: blur(24px) saturate(1.12);
-  -webkit-backdrop-filter: blur(24px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
 }
 
 .portfolio-wealth-dash .wealth-overview-chart-shell {
   border-radius: 1.125rem;
-  background: linear-gradient(158deg, rgba(0, 0, 0, 0.44), rgba(6, 78, 59, 0.12));
-  border: 1px solid rgba(52, 211, 153, 0.1);
+  background: linear-gradient(158deg, rgba(0, 0, 0, 0.28), rgba(8, 88, 68, 0.18));
+  border: 1px solid rgba(79, 255, 209, 0.15);
   box-shadow:
     var(--dash-ring-inset),
     0 10px 32px -14px rgba(0, 0, 0, 0.36),
@@ -914,10 +916,10 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
 
 .portfolio-wealth-dash .wealth-row-card {
   border-radius: 1.125rem;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(52, 211, 153, 0.11);
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.028));
+  border: 1px solid rgba(79, 255, 209, 0.16);
+  backdrop-filter: blur(12px) saturate(1.06);
+  -webkit-backdrop-filter: blur(12px) saturate(1.06);
   box-shadow:
     var(--dash-ring-inset),
     0 12px 36px -16px rgba(0, 0, 0, 0.38),
@@ -940,10 +942,10 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
 
 .portfolio-wealth-dash .wealth-metric-tile {
   border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
-  border: 1px solid rgba(52, 211, 153, 0.1);
-  backdrop-filter: blur(16px) saturate(1.08);
-  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(79, 255, 209, 0.15);
+  backdrop-filter: blur(12px) saturate(1.06);
+  -webkit-backdrop-filter: blur(12px) saturate(1.06);
   box-shadow:
     var(--dash-ring-inset),
     0 8px 28px -12px rgba(0, 0, 0, 0.35);
@@ -965,8 +967,8 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
 
 .portfolio-wealth-dash .wealth-kpi-hero {
   border-radius: 1.15rem;
-  backdrop-filter: blur(20px) saturate(1.12);
-  -webkit-backdrop-filter: blur(20px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
   box-shadow:
     var(--dash-ring-inset),
     0 18px 46px -18px rgba(0, 0, 0, 0.4),
