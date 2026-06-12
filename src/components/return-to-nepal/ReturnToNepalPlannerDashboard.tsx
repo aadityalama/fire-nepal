@@ -397,7 +397,7 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
           </div>
           <div className={`mt-4 rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-slate-50/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.07] to-white/[0.02]"}`}>
-            <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-500" : "text-[rgba(255,255,255,0.72)]"}`}>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>
               Village vs Kathmandu (same lifestyle)
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -432,7 +432,7 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
             <p className={`text-sm font-black ${light ? "text-emerald-950" : "fn-txt-primary"}`}>Passive after return ({state.targetReturnYear} money, inflated)</p>
-            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-950" : "fn-txt-primary"}`}>{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
+            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-950" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
           </div>
         </section>
 
@@ -540,7 +540,7 @@ export function ReturnToNepalPlannerDashboard() {
               ) : (
                 <p
                   className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
-                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 fn-txt-secondary"
                   }`}
                 >
                   <span className={`font-black ${light ? "text-teal-800" : "fn-txt-muted"}`}>Manual mode</span>
@@ -616,7 +616,7 @@ export function ReturnToNepalPlannerDashboard() {
               ) : (
                 <p
                   className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
-                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
+                    light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 fn-txt-secondary"
                   }`}
                 >
                   <span className={`font-black ${light ? "text-teal-800" : "fn-txt-muted"}`}>Manual mode</span>
@@ -667,7 +667,7 @@ export function ReturnToNepalPlannerDashboard() {
                       done
                         ? light
                           ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900"
-                          : "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                          : "border-emerald-400/40 bg-emerald-500/15 fn-txt-kpi"
                         : light
                           ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
                           : "border-white/[0.12] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.3)]"
@@ -731,7 +731,7 @@ export function ReturnToNepalPlannerDashboard() {
                     done
                       ? light
                         ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900"
-                        : "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                        : "border-emerald-400/40 bg-emerald-500/15 fn-txt-kpi"
                       : light
                         ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
                         : "border-white/[0.12] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.28)]"
@@ -769,7 +769,7 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
             <p className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>Implied monthly from yield model</p>
-            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-800" : "text-emerald-100"}`}>{formatNprInteger(snapshot.businessPassiveMonthlyHintNpr)}</p>
+            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-800" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.businessPassiveMonthlyHintNpr)}</p>
             <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-muted"}`}>{snapshot.aiSecondary}</p>
           </div>
         </section>
@@ -805,7 +805,7 @@ export function ReturnToNepalPlannerDashboard() {
           <SectionTitle icon={Heart} title="Coach, legal prep & milestones" subtitle="Motivation layer plus lightweight tax/banking sliders — confirm with a CA." />
           <div className="rounded-2xl border border-teal-400/20 bg-gradient-to-br from-teal-500/15 to-emerald-600/10 p-4 sm:p-5">
             <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>Assistant</p>
-            <p className={`mt-2 text-lg font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{snapshot.aiHeadline}</p>
+            <p className={`mt-2 text-lg font-black ${light ? "text-slate-900" : "fn-txt-primary"}`}>{snapshot.aiHeadline}</p>
             <p className={`mt-2 text-sm font-semibold ${light ? "text-teal-900/90" : "fn-txt-secondary"}`}>{snapshot.aiSecondary}</p>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -830,8 +830,8 @@ export function ReturnToNepalPlannerDashboard() {
               }}
             >
               <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[rgba(255,255,255,0.85)]">Dream build</p>
-                <p className="text-3xl font-extrabold text-white [text-shadow:0_0_32px_rgba(255,255,255,0.18)]">{state.houseProgressPct}%</p>
+                <p className={`text-xs font-bold uppercase tracking-[0.2em] fn-txt-muted`}>Dream build</p>
+                <p className="text-3xl font-extrabold fn-txt-kpi [text-shadow:0_0_32px_rgba(255,255,255,0.18)]">{state.houseProgressPct}%</p>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] p-4">

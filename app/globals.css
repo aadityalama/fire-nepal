@@ -1042,7 +1042,27 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-health-bar-track {
 
 .portfolio-wealth-dash .wealth-input::placeholder,
 .portfolio-wealth-dash .wealth-input-text::placeholder {
-  color: rgb(100 116 139);
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Native selects on wealth shells — closed field + option list contrast */
+.portfolio-wealth-dash select {
+  color: var(--text-primary);
+}
+
+.portfolio-wealth-dash select option {
+  background-color: rgb(7 17 26);
+  color: var(--text-primary);
+}
+
+html[data-fire-theme="light"] .portfolio-wealth-dash select option {
+  background-color: rgb(255 255 255);
+  color: rgb(15 23 42);
+}
+
+.portfolio-wealth-dash .fn-input-placeholder::placeholder {
+  color: var(--text-muted);
   opacity: 1;
 }
 
@@ -1218,7 +1238,7 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input-text {
 
 html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input::placeholder,
 html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-input-text::placeholder {
-  color: rgb(100 116 139) !important;
+  color: var(--text-muted) !important;
   opacity: 1;
 }
 

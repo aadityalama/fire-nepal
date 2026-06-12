@@ -292,7 +292,7 @@ function navLinkClasses(active: boolean, light: boolean) {
   }
   return light
     ? `${base} border-transparent bg-white/55 text-slate-800 font-semibold backdrop-blur-sm hover:border-emerald-200/70 hover:bg-emerald-50/90 hover:text-black`
-    : `${base} border-transparent bg-transparent text-[#A7B4C4] font-semibold hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-white`;
+    : `${base} border-transparent bg-transparent fn-txt-muted font-semibold hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-white`;
 }
 
 export function WealthDashboardShell({

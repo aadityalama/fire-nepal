@@ -43,8 +43,10 @@ export function SavingsQuickActionsStrip() {
             }`}
           >
             <span
-              className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/12 ring-1 ring-emerald-500/15 transition group-hover:bg-emerald-600 group-hover:text-white ${
-                light ? "text-emerald-700" : "text-emerald-200 ring-emerald-400/20 group-hover:bg-emerald-500 group-hover:text-emerald-950"
+              className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/12 ring-1 transition ${
+                light
+                  ? "text-emerald-700 ring-emerald-500/15 group-hover:bg-emerald-600 group-hover:text-white"
+                  : "fn-accent ring-emerald-400/25 group-hover:bg-emerald-500 group-hover:text-white"
               }`}
             >
               <Icon size={18} strokeWidth={2.25} />

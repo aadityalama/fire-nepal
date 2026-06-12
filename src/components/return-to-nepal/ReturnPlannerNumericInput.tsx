@@ -47,7 +47,7 @@ export function ReturnPlannerNumericInput({
     () =>
       light
         ? "min-h-[44px] w-full rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-sm font-bold tabular-nums text-slate-900 caret-teal-600 outline-none transition-[border-color,box-shadow,background-color] duration-150 selection:bg-teal-500/20 selection:text-slate-900 placeholder:text-slate-400/80 focus:border-teal-400/80 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.18)] focus:ring-0 sm:px-4 sm:text-[15px]"
-        : "min-h-[44px] w-full rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm font-bold tabular-nums fn-txt-primary caret-teal-300 outline-none transition-[border-color,box-shadow,background-color] duration-150 selection:bg-teal-400/25 selection:text-white placeholder:text-slate-400 focus:border-teal-400/45 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.12)] focus:ring-0 sm:px-4 sm:text-[15px]",
+        : "min-h-[44px] w-full rounded-xl border border-white/10 bg-white/[0.06] px-3.5 py-2.5 text-sm font-bold tabular-nums fn-txt-primary caret-teal-300 outline-none transition-[border-color,box-shadow,background-color] duration-150 selection:bg-teal-400/25 selection:text-white fn-input-placeholder focus:border-teal-400/45 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.12)] focus:ring-0 sm:px-4 sm:text-[15px]",
     [light],
   );
 

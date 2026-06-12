@@ -58,7 +58,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
 
   const monthly = useMemo(() => MONTHLY_SAVINGS_SERIES.map((m) => ({ ...m })), []);
 
-  const tickColor = light ? "#64748b" : "#a1a1aa";
+  const tickColor = light ? "#64748b" : "#cbd5e1";
   const gridColor = light ? "rgba(15, 23, 42, 0.08)" : "rgba(255,255,255, 0.06)";
   const tooltipBg = light ? "rgba(255,255,255,0.96)" : "rgba(3, 8, 6, 0.94)";
   const tooltipBorder = light ? "rgba(16, 185, 129, 0.25)" : "rgba(52, 211, 153, 0.2)";

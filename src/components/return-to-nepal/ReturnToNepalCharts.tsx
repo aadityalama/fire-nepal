@@ -61,7 +61,7 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
     [snapshot.monthlyNepalLivingFutureNpr, snapshot.passiveMonthlyFutureNpr],
   );
 
-  const tickColor = light ? "#64748b" : "rgba(255,255,255,0.72)";
+  const tickColor = light ? "#64748b" : "#cbd5e1";
   const gridColor = light ? "rgba(15, 23, 42, 0.08)" : "rgba(255,255,255,0.09)";
   const tooltipBg = light ? "rgba(255,255,255,0.96)" : "rgba(7, 18, 26, 0.94)";
   const tooltipBorder = light ? "rgba(45, 212, 191, 0.28)" : "rgba(79, 255, 209, 0.28)";

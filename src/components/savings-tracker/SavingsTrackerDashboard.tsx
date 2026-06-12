@@ -71,7 +71,7 @@ export function SavingsTrackerDashboard() {
         </Link>
         <div
           className={`flex items-center gap-2 text-[11px] font-bold sm:text-xs ${
-            light ? "text-emerald-800/80" : "text-emerald-200/70"
+            light ? "text-emerald-800/80" : "fn-txt-muted"
           }`}
         >
           <TrendingUp size={14} className={light ? "text-emerald-600" : "text-lime-300"} />
@@ -83,7 +83,7 @@ export function SavingsTrackerDashboard() {
         <DashboardSectionHeader
           accent="emerald"
           eyebrow={
-            <span className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-800" : "text-emerald-200/90"}`}>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-800" : "fn-accent"}`}>
               <Flame size={12} className={`${light ? "text-emerald-600" : "text-emerald-300"}`} />
               Premium tracker
             </span>
@@ -114,7 +114,7 @@ export function SavingsTrackerDashboard() {
                 </p>
               </div>
 
-              <h2 className={`mt-3 max-w-xl text-2xl font-black tracking-[-0.04em] ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-3xl lg:text-[2rem] lg:leading-[1.12]`}>
+              <h2 className={`mt-3 max-w-xl text-2xl font-black tracking-[-0.04em] ${light ? "text-slate-900" : "fn-txt-primary"} sm:text-3xl lg:text-[2rem] lg:leading-[1.12]`}>
                 Total savings
               </h2>
               <p className={`mt-2 max-w-lg text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
@@ -124,7 +124,7 @@ export function SavingsTrackerDashboard() {
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "fn-txt-muted"}`}>Balance</p>
-                  <p className={`mt-1 text-2xl font-black tracking-tight ${light ? "text-emerald-800" : "text-emerald-100"} sm:text-3xl`}>
+                  <p className={`mt-1 text-2xl font-black tracking-tight ${light ? "text-emerald-800" : "fn-txt-kpi"} sm:text-3xl`}>
                     <SavingsStatCounter value={totalNpr} format={formatNprInteger} />
                   </p>
                   <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>
@@ -141,7 +141,7 @@ export function SavingsTrackerDashboard() {
                 <div>
                   <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "fn-txt-muted"}`}>Growth vs last month</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-lg font-black ${light ? "text-emerald-800" : "text-emerald-200"}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-lg font-black ${light ? "text-emerald-800" : "fn-txt-kpi"}`}>
                       <ArrowUpRight size={18} strokeWidth={2.5} />
                       {formatPct(SAVINGS_DASH_META.growthPctVsLastMonth)}
                     </span>
@@ -218,7 +218,7 @@ export function SavingsTrackerDashboard() {
 
         <section aria-labelledby="savings-charts-heading">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-            <h2 id="savings-charts-heading" className={`text-base font-black ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-lg`}>
+            <h2 id="savings-charts-heading" className={`text-base font-black ${light ? "text-slate-900" : "fn-txt-primary"} sm:text-lg`}>
               Market-grade charts
             </h2>
             <p className={`text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Animated load · responsive canvas</p>

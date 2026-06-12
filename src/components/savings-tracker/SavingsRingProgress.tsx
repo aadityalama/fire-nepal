@@ -63,7 +63,7 @@ export function SavingsRingProgress({
           <div>
             <p className={`text-2xl font-black leading-none sm:text-[1.65rem] ${resolvedValueClass}`}>{Math.round(clamped)}%</p>
             {sublabel ? (
-              <p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${light ? "text-emerald-600/85" : "text-emerald-200/60"}`}>
+              <p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${light ? "text-emerald-600/85" : "fn-txt-muted"}`}>
                 {sublabel}
               </p>
             ) : null}

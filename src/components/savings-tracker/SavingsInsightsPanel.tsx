@@ -22,7 +22,7 @@ export function SavingsInsightsPanel() {
       <div className="relative mb-4 flex items-center gap-2">
         <span
           className={`grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/15 ring-1 ${
-            light ? "text-emerald-700 ring-emerald-500/20" : "text-emerald-200 ring-emerald-400/25"
+            light ? "text-emerald-700 ring-emerald-500/20" : "fn-accent ring-emerald-400/25"
           }`}
         >
           <Sparkles size={18} strokeWidth={2.25} />
@@ -54,7 +54,7 @@ export function SavingsInsightsPanel() {
                   : "border-white/[0.06] bg-white/[0.04] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] motion-safe:hover:border-emerald-400/25 motion-safe:hover:shadow-[0_16px_44px_-20px_rgba(0,0,0,0.45)]"
               }`}
             >
-              <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-emerald-700" : "text-emerald-300/90"}`}>{item.title}</p>
+              <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-emerald-700" : "fn-accent"}`}>{item.title}</p>
               <p className={`mt-1.5 text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{item.body}</p>
             </li>
           ))

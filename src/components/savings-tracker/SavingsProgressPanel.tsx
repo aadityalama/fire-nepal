@@ -20,7 +20,7 @@ function Meter({
     <div className="flex min-h-0 flex-1 flex-col justify-center">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>{label}</p>
-        <p className={`text-sm font-black ${light ? "text-emerald-800" : "text-emerald-200"}`}>{w.toFixed(1)}%</p>
+        <p className={`text-sm font-black ${light ? "text-emerald-800" : "fn-txt-kpi"}`}>{w.toFixed(1)}%</p>
       </div>
       <div
         className={`wealth-health-bar-track h-2.5 overflow-hidden rounded-full ${

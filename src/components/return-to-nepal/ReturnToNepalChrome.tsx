@@ -133,7 +133,7 @@ export function ReturnToNepalChrome({
           <div className="grid gap-3 sm:grid-cols-3">
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-teal-200/80 bg-teal-50/70 text-teal-950" : "border-[rgba(79,255,209,0.22)] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
+                light ? "border-teal-200/80 bg-teal-50/70 text-teal-950" : "border-[rgba(79,255,209,0.22)] bg-gradient-to-br from-white/[0.08] to-white/[0.03] fn-txt-secondary"
               }`}
             >
               <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-800/80" : "fn-txt-muted"}`}>
@@ -145,7 +145,7 @@ export function ReturnToNepalChrome({
             </div>
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-emerald-200/80 bg-emerald-50/60 text-emerald-950" : "border-emerald-400/22 bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
+                light ? "border-emerald-200/80 bg-emerald-50/60 text-emerald-950" : "border-emerald-400/22 bg-gradient-to-br from-white/[0.08] to-white/[0.03] fn-txt-secondary"
               }`}
             >
               <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-emerald-900/80" : "fn-txt-muted"}`}>Nepal COL (model)</span>
@@ -155,7 +155,7 @@ export function ReturnToNepalChrome({
             </div>
             <div
               className={`rounded-xl border px-3 py-2.5 text-xs font-semibold ${
-                light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
+                light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03] fn-txt-secondary"
               }`}
             >
               <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-600" : "fn-txt-muted"}`}>Emergency runway</span>
