@@ -830,8 +830,12 @@ export function ReturnToNepalPlannerDashboard() {
               }}
             >
               <div className="absolute inset-0 flex flex-col justify-end p-4">
-                <p className={`text-xs font-bold uppercase tracking-[0.2em] fn-txt-muted`}>Dream build</p>
-                <p className="text-3xl font-extrabold fn-txt-kpi [text-shadow:0_0_32px_rgba(255,255,255,0.18)]">{state.houseProgressPct}%</p>
+                <p className={`text-xs font-bold uppercase tracking-[0.2em] ${light ? "text-white/85" : "fn-txt-muted"}`}>Dream build</p>
+                <p
+                  className={`text-3xl font-extrabold [text-shadow:0_0_32px_rgba(255,255,255,0.18)] ${light ? "text-white" : "fn-txt-kpi"}`}
+                >
+                  {state.houseProgressPct}%
+                </p>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] p-4">
