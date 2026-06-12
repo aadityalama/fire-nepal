@@ -48,13 +48,13 @@ export function DashboardSectionHeader({
     ? "bg-[radial-gradient(ellipse_85%_55%_at_50%_-20%,rgba(16,185,129,0.12),transparent_55%)]"
     : "bg-[radial-gradient(ellipse_85%_55%_at_50%_-20%,rgba(52,211,153,0.08),transparent_55%)]";
 
-  const eyebrowCls = light ? "text-black" : "text-gray-100";
+  const eyebrowCls = light ? "text-black" : "fn-txt-muted";
 
   const titleCls = light
     ? "max-w-4xl text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-black sm:text-3xl md:text-[2.15rem] md:leading-[1.08]"
-    : "max-w-4xl text-[1.45rem] font-extrabold leading-[1.12] tracking-tight text-white sm:text-3xl md:text-[2.15rem] md:leading-[1.08]";
+    : "max-w-4xl text-[1.45rem] font-extrabold leading-[1.12] tracking-tight fn-txt-primary sm:text-3xl md:text-[2.15rem] md:leading-[1.08]";
 
-  const subtitleCls = light ? "text-slate-800 font-semibold" : "text-gray-100 font-semibold";
+  const subtitleCls = light ? "text-slate-800 font-semibold" : "fn-txt-secondary font-semibold";
 
   return (
     <header className="wealth-dash-section-header relative mb-0 sm:mb-0">

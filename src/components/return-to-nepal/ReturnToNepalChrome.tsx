@@ -61,10 +61,16 @@ export function ReturnToNepalChrome({
         <div className="flex flex-wrap items-center gap-2">
           <div
             className={`flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-[11px] ${
-              light ? "text-emerald-800/75" : "text-[rgba(255,255,255,0.72)]"
+              light ? "text-emerald-800/75" : "fn-txt-muted"
             }`}
           >
-            <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/30 bg-teal-500/12 px-2 py-1 text-teal-800 dark:border-[rgba(79,255,209,0.28)] dark:bg-white/[0.06] dark:text-[#4FFFD1]">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+                light
+                  ? "border-teal-500/30 bg-teal-500/12 text-teal-800"
+                  : "border-white/[0.14] bg-white/[0.08] fn-txt-secondary"
+              }`}
+            >
               <Plane size={12} className="opacity-80" />
               Return OS
             </span>
@@ -95,9 +101,13 @@ export function ReturnToNepalChrome({
         />
         <div className="relative flex flex-col gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">{title}</h1>
+            <h1 className={`text-[clamp(1.375rem,4.5vw+0.35rem,1.875rem)] font-black tracking-[-0.03em] sm:text-3xl ${light ? "text-slate-900" : "fn-txt-primary"}`}>
+              {title}
+            </h1>
             {subtitle ? (
-              <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{subtitle}</p>
+              <p className={`mt-1.5 max-w-3xl text-[15px] font-semibold leading-relaxed sm:text-sm ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
+                {subtitle}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -110,7 +120,7 @@ export function ReturnToNepalChrome({
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 sm:text-xs ${
                     light
                       ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-300/80 hover:bg-teal-50/80"
-                      : "border-white/[0.14] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.35)] hover:bg-white/[0.1] hover:text-white"
+                      : "border-white/[0.14] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.35)] hover:bg-white/[0.1] hover:text-white"
                   }`}
                 >
                   <Icon size={14} className="opacity-80" />
@@ -126,10 +136,10 @@ export function ReturnToNepalChrome({
                 light ? "border-teal-200/80 bg-teal-50/70 text-teal-950" : "border-[rgba(79,255,209,0.22)] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800/80 dark:text-[#4FFFD1]">
+              <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-800/80" : "fn-txt-muted"}`}>
                 Retirement readiness
               </span>
-              <span className="text-base font-extrabold text-teal-950 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+              <span className={`text-[clamp(1.05rem,3.8vw+0.2rem,1.125rem)] font-black tabular-nums ${light ? "text-teal-950" : "fn-txt-kpi"}`}>
                 {snapshot.retirementReadinessPct.toFixed(0)}%
               </span>
             </div>
@@ -138,8 +148,8 @@ export function ReturnToNepalChrome({
                 light ? "border-emerald-200/80 bg-emerald-50/60 text-emerald-950" : "border-emerald-400/22 bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-900/80 dark:text-[#4FFFD1]">Nepal COL (model)</span>
-              <span className="text-base font-extrabold text-emerald-950 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+              <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-emerald-900/80" : "fn-txt-muted"}`}>Nepal COL (model)</span>
+              <span className={`text-[clamp(1.05rem,3.8vw+0.2rem,1.125rem)] font-black tabular-nums ${light ? "text-emerald-950" : "fn-txt-kpi"}`}>
                 {formatNprInteger(snapshot.monthlyNepalLivingNpr)} / mo
               </span>
             </div>
@@ -148,8 +158,8 @@ export function ReturnToNepalChrome({
                 light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03] text-white"
               }`}
             >
-              <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600 dark:text-[#4FFFD1]">Emergency runway</span>
-              <span className="text-base font-extrabold text-slate-900 dark:text-white [text-shadow:0_0_20px_rgba(255,255,255,0.08)]">
+              <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-600" : "fn-txt-muted"}`}>Emergency runway</span>
+              <span className={`text-[clamp(1.05rem,3.8vw+0.2rem,1.125rem)] font-black tabular-nums ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
                 {snapshot.emergencyReserveMonths.toFixed(1)} mo
               </span>
             </div>
@@ -168,7 +178,7 @@ export function ReturnToNepalChrome({
             className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 sm:px-3.5 sm:text-xs ${
               light
                 ? "border-slate-200/80 bg-white/80 text-slate-700 hover:border-teal-200"
-                : "border-white/[0.14] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.28)] hover:text-white"
+                : "border-white/[0.14] bg-white/[0.08] fn-txt-secondary hover:border-[rgba(79,255,209,0.28)] hover:text-white"
             }`}
           >
             {item.label}

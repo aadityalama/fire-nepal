@@ -32,10 +32,10 @@ function AnalyticsTile({
       }`}
     >
       <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/75">{label}</p>
-        <p className="mt-2 text-xl font-black tracking-tight text-slate-900 dark:text-white sm:text-2xl">{value}</p>
+        <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>{label}</p>
+        <p className={`mt-2 text-xl font-black tracking-tight sm:text-2xl ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{value}</p>
       </div>
-      <p className="text-xs font-semibold leading-relaxed text-slate-500 dark:text-zinc-400">{hint}</p>
+      <p className={`text-xs font-semibold leading-relaxed ${light ? "text-slate-500" : "fn-txt-muted"}`}>{hint}</p>
     </div>
   );
 }
@@ -83,8 +83,8 @@ export function SavingsTrackerDashboard() {
         <DashboardSectionHeader
           accent="emerald"
           eyebrow={
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-800 dark:text-emerald-200/90">
-              <Flame size={12} className="text-emerald-600 dark:text-emerald-300" />
+            <span className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-800" : "text-emerald-200/90"}`}>
+              <Flame size={12} className={`${light ? "text-emerald-600" : "text-emerald-300"}`} />
               Premium tracker
             </span>
           }
@@ -109,44 +109,44 @@ export function SavingsTrackerDashboard() {
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
+                <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>
                   Overview
                 </p>
               </div>
 
-              <h2 className="mt-3 max-w-xl text-2xl font-black tracking-[-0.04em] text-slate-900 dark:text-white sm:text-3xl lg:text-[2rem] lg:leading-[1.12]">
+              <h2 className={`mt-3 max-w-xl text-2xl font-black tracking-[-0.04em] ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-3xl lg:text-[2rem] lg:leading-[1.12]`}>
                 Total savings
               </h2>
-              <p className="mt-2 max-w-lg text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+              <p className={`mt-2 max-w-lg text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
                 All figures in NPR with Indian-style grouping (thousand, lakh, crore).
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-500">Balance</p>
-                  <p className="mt-1 text-2xl font-black tracking-tight text-emerald-800 dark:text-emerald-100 sm:text-3xl">
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "fn-txt-muted"}`}>Balance</p>
+                  <p className={`mt-1 text-2xl font-black tracking-tight ${light ? "text-emerald-800" : "text-emerald-100"} sm:text-3xl`}>
                     <SavingsStatCounter value={totalNpr} format={formatNprInteger} />
                   </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">
+                  <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>
                     This month · {formatNprInteger(monthlyNpr)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-500">Monthly savings</p>
-                  <p className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "fn-txt-muted"}`}>Monthly savings</p>
+                  <p className={`mt-1 text-2xl font-black tracking-tight ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-3xl`}>
                     <SavingsStatCounter value={monthlyNpr} format={formatNprInteger} durationMs={880} />
                   </p>
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Recurring + one-offs</p>
+                  <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Recurring + one-offs</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-500">Growth vs last month</p>
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "fn-txt-muted"}`}>Growth vs last month</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-lg font-black text-emerald-800 dark:text-emerald-200">
+                    <span className={`inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-lg font-black ${light ? "text-emerald-800" : "text-emerald-200"}`}>
                       <ArrowUpRight size={18} strokeWidth={2.5} />
                       {formatPct(SAVINGS_DASH_META.growthPctVsLastMonth)}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Vs prior month (when you have history)</p>
+                  <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Vs prior month (when you have history)</p>
                 </div>
               </div>
             </div>
@@ -158,10 +158,10 @@ export function SavingsTrackerDashboard() {
                   : "border-emerald-500/15 bg-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
               }`}
             >
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700/90 dark:text-emerald-300/80">FIRE target</p>
-              <p className="mt-2 text-sm font-bold text-slate-600 dark:text-zinc-300">Corpus target</p>
-              <p className="mt-1 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(SAVINGS_DASH_META.fireTargetNpr)}</p>
-              <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-zinc-500">Glide {SAVINGS_DASH_META.fireTargetProgressPct}%</p>
+              <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>FIRE target</p>
+              <p className={`mt-2 text-sm font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>Corpus target</p>
+              <p className={`mt-1 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(SAVINGS_DASH_META.fireTargetNpr)}</p>
+              <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Glide {SAVINGS_DASH_META.fireTargetProgressPct}%</p>
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-lime-400 motion-safe:transition-[width] motion-safe:duration-1000 motion-safe:ease-out"
@@ -186,7 +186,7 @@ export function SavingsTrackerDashboard() {
             Savings analytics
           </h2>
           <div className="mb-3 flex items-end justify-between gap-3">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">Smart analytics</p>
+            <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>Smart analytics</p>
           </div>
           <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <AnalyticsTile
@@ -218,10 +218,10 @@ export function SavingsTrackerDashboard() {
 
         <section aria-labelledby="savings-charts-heading">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-            <h2 id="savings-charts-heading" className="text-base font-black text-slate-900 dark:text-white sm:text-lg">
+            <h2 id="savings-charts-heading" className={`text-base font-black ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-lg`}>
               Market-grade charts
             </h2>
-            <p className="text-xs font-semibold text-slate-500 dark:text-zinc-500">Animated load · responsive canvas</p>
+            <p className={`text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Animated load · responsive canvas</p>
           </div>
           <SavingsChartsBlock chartsReady={chartsReady} />
         </section>

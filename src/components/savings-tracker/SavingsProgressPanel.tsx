@@ -19,8 +19,8 @@ function Meter({
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-center">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-400">{label}</p>
-        <p className="text-sm font-black text-emerald-800 dark:text-emerald-200">{w.toFixed(1)}%</p>
+        <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>{label}</p>
+        <p className={`text-sm font-black ${light ? "text-emerald-800" : "text-emerald-200"}`}>{w.toFixed(1)}%</p>
       </div>
       <div
         className={`wealth-health-bar-track h-2.5 overflow-hidden rounded-full ${
@@ -49,12 +49,12 @@ export function SavingsProgressPanel() {
       />
       <div className="relative mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
+          <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>
             Progress
           </p>
-          <h2 className="mt-1 text-lg font-black tracking-tight text-slate-900 dark:text-white sm:text-xl">Rhythm & targets</h2>
+          <h2 className={`mt-1 text-lg font-black tracking-tight sm:text-xl ${light ? "text-slate-900" : "fn-txt-primary"}`}>Rhythm & targets</h2>
         </div>
-        <p className="max-w-[14rem] text-right text-xs font-semibold leading-relaxed text-slate-500 dark:text-zinc-400">
+        <p className={`max-w-[14rem] text-right text-xs font-semibold leading-relaxed ${light ? "text-slate-500" : "fn-txt-muted"}`}>
           FIRE glide · monthly bars · goal & rhythm
         </p>
       </div>
@@ -71,7 +71,7 @@ export function SavingsProgressPanel() {
         </div>
 
         <div className="min-w-0">
-          <p className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Last 12 months</p>
+          <p className={`mb-3 text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>Last 12 months</p>
           <div className="flex h-36 items-end gap-1.5 sm:gap-2">
             {MONTHLY_SAVINGS_SERIES.map((m) => {
               const h = (m.savingsNpr / max) * 100;
@@ -82,7 +82,7 @@ export function SavingsProgressPanel() {
                     style={{ height: `${Math.max(12, h)}%` }}
                     title={formatNprInteger(m.savingsNpr)}
                   />
-                  <span className="mt-2 text-[9px] font-black uppercase tracking-wide text-slate-400 dark:text-zinc-500 sm:text-[10px]">
+                  <span className={`mt-2 text-[9px] font-black uppercase tracking-wide sm:text-[10px] ${light ? "text-slate-400" : "fn-txt-muted"}`}>
                     {m.label}
                   </span>
                 </div>

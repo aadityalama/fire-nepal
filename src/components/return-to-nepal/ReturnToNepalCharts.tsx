@@ -85,10 +85,10 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/80" : ""}`}>
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">
+        <p className={`mb-1 text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>
           Korea corpus → NPR
         </p>
-        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+        <p className={`mb-3 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
           Modelled path with contributions + modest portfolio return.
         </p>
         <div className="h-[220px] w-full sm:h-[240px]">
@@ -110,6 +110,7 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
                   borderRadius: 14,
                   fontSize: 12,
                   fontWeight: 700,
+                  color: light ? "#0f172a" : "#e2e8f0",
                 }}
                 formatter={(value: number) => [formatNprInteger(value), "Corpus"]}
               />
@@ -120,10 +121,10 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
       </div>
 
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/80" : ""}`}>
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-800 dark:text-[#4FFFD1]">
+        <p className={`mb-1 text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-emerald-800" : "fn-txt-muted"}`}>
           Nepal expense vs passive
         </p>
-        <p className="mb-3 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+        <p className={`mb-3 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
           Inflated to your target return year for apples-to-apples intuition.
         </p>
         <div className="h-[220px] w-full sm:h-[240px]">
@@ -139,10 +140,11 @@ export function ReturnToNepalCharts({ snapshot, chartsReady }: Props) {
                   borderRadius: 14,
                   fontSize: 12,
                   fontWeight: 700,
+                  color: light ? "#0f172a" : "#e2e8f0",
                 }}
                 formatter={(value: number) => [formatNprInteger(value), "NPR / mo"]}
               />
-              <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800, color: light ? "#334155" : "rgba(255,255,255,0.85)" }} />
+              <Legend wrapperStyle={{ fontSize: 11, fontWeight: 800, color: light ? "#334155" : "#e2e8f0" }} />
               <Bar dataKey="v" name="Monthly" fill={light ? "#0d9488" : "#34d399"} radius={[10, 10, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

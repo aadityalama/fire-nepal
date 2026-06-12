@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* App theme is `html[data-fire-theme="dark"|"light"]` (see FireThemeContext). Without this, `dark:`
+   utilities follow system prefers-color-scheme only — e.g. slate-900 headings on dark glass on iPhone. */
+@custom-variant dark (&:where(html[data-fire-theme="dark"] &));
+
 :root {
   --background: #f7fbf8;
   --foreground: #062b22;
@@ -476,10 +480,12 @@ input {
 .portfolio-wealth-dash {
   color-scheme: dark;
   /* Readable on glass: WCAG-friendly hierarchy (dark shell) */
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.85);
-  --text-muted: rgba(255, 255, 255, 0.72);
-  --text-label: #4fffd1;
+  --text-primary: #f8fafc;
+  --text-secondary: #e2e8f0;
+  --text-muted: #cbd5e1;
+  --text-label: #cbd5e1;
+  /** Hero KPI numerals (dark glass) */
+  --text-kpi: #ffffff;
   --text-on-accent: #022c22;
   --border-color: rgba(52, 211, 153, 0.22);
   --accent-color: #34d399;
@@ -514,6 +520,10 @@ input {
 }
 .portfolio-wealth-dash .fn-txt-label {
   color: var(--text-label);
+  transition: color 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.portfolio-wealth-dash .fn-txt-kpi {
+  color: var(--text-kpi);
   transition: color 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .portfolio-wealth-dash .fn-border {
@@ -761,15 +771,20 @@ input {
 
 .portfolio-wealth-dash .wealth-glass {
   border-radius: clamp(1.15rem, 1.4vw, 1.65rem);
-  /* Lighter veil + less blur: readability-first glassmorphism */
-  background: linear-gradient(152deg, rgba(12, 96, 78, 0.34), rgba(4, 48, 38, 0.52) 48%, rgba(0, 0, 0, 0.2));
-  border: 1px solid rgba(79, 255, 209, 0.2);
+  /* Brighter card floor so WCAG text (slate-100/200) reads at a glance; minimal dark wash */
+  background: linear-gradient(
+    152deg,
+    rgba(18, 110, 88, 0.42),
+    rgba(10, 72, 58, 0.38) 45%,
+    rgba(6, 28, 36, 0.28) 100%
+  );
+  border: 1px solid rgba(148, 244, 220, 0.28);
   box-shadow:
     var(--dash-ring-inset),
-    0 18px 48px -20px rgba(0, 0, 0, 0.38),
+    0 18px 48px -20px rgba(0, 0, 0, 0.32),
     var(--dash-glow-emerald);
-  backdrop-filter: blur(14px) saturate(1.12);
-  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
   transition:
     background 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.45s cubic-bezier(0.22, 1, 0.36, 1),
@@ -779,14 +794,14 @@ input {
 
 .portfolio-wealth-dash .wealth-chart-card {
   border-radius: 1.125rem;
-  background: linear-gradient(168deg, rgba(0, 0, 0, 0.26), rgba(8, 88, 68, 0.2));
-  border: 1px solid rgba(79, 255, 209, 0.16);
+  background: linear-gradient(168deg, rgba(8, 42, 36, 0.45), rgba(12, 96, 78, 0.28));
+  border: 1px solid rgba(148, 244, 220, 0.22);
   box-shadow:
     var(--dash-ring-inset),
-    0 14px 42px -18px rgba(0, 0, 0, 0.34),
+    0 14px 42px -18px rgba(0, 0, 0, 0.28),
     0 0 56px -22px rgba(52, 211, 153, 0.12);
-  backdrop-filter: blur(12px) saturate(1.08);
-  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(10px) saturate(1.06);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
   transition:
     transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.32s ease,
@@ -1122,6 +1137,7 @@ html[data-fire-theme="light"] .portfolio-wealth-dash {
   --text-secondary: #1e293b;
   --text-muted: #64748b;
   --text-label: #166534;
+  --text-kpi: #0f172a;
   --text-on-accent: #ecfdf5;
   --border-color: rgba(21, 128, 61, 0.26);
   --accent-color: #059669;

@@ -25,10 +25,10 @@ export function SavingsQuickActionsStrip() {
     >
       <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">Quick actions</p>
-          <h2 className="text-base font-black text-slate-900 dark:text-white sm:text-lg">Operate in seconds</h2>
+          <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>Quick actions</p>
+          <h2 className={`text-base font-black sm:text-lg ${light ? "text-slate-900" : "fn-txt-primary"}`}>Operate in seconds</h2>
         </div>
-        <p className="text-xs font-semibold text-slate-500 dark:text-zinc-500">Local-first · no clutter</p>
+        <p className={`text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Local-first · no clutter</p>
       </div>
       <div className="grid auto-rows-fr gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {ACTIONS.map(({ id, label, icon: Icon, hint }) => (
@@ -42,11 +42,15 @@ export function SavingsQuickActionsStrip() {
                 : "border-white/[0.06] bg-white/[0.03] motion-safe:hover:-translate-y-0.5 motion-safe:hover:border-emerald-400/25 motion-safe:hover:bg-white/[0.06] motion-safe:hover:shadow-[0_16px_40px_-18px_rgba(0,0,0,0.5)]"
             }`}
           >
-            <span className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-700 ring-1 ring-emerald-500/15 transition group-hover:bg-emerald-600 group-hover:text-white dark:text-emerald-200 dark:ring-emerald-400/20 dark:group-hover:bg-emerald-500 dark:group-hover:text-emerald-950">
+            <span
+              className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/12 ring-1 ring-emerald-500/15 transition group-hover:bg-emerald-600 group-hover:text-white ${
+                light ? "text-emerald-700" : "text-emerald-200 ring-emerald-400/20 group-hover:bg-emerald-500 group-hover:text-emerald-950"
+              }`}
+            >
               <Icon size={18} strokeWidth={2.25} />
             </span>
-            <span className="text-sm font-black text-slate-900 dark:text-white">{label}</span>
-            <span className="mt-0.5 text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{hint}</span>
+            <span className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-primary"}`}>{label}</span>
+            <span className={`mt-0.5 text-[11px] font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>{hint}</span>
           </button>
         ))}
       </div>

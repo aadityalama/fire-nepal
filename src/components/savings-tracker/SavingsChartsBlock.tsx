@@ -83,10 +83,10 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/70 shadow-sm" : ""}`}>
-        <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
+        <p className={`mb-1 text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>
           Monthly trend
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Savings (NPR)</p>
+        <p className={`mb-3 text-sm font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>Savings (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={monthly} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
@@ -106,6 +106,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   borderRadius: 14,
                   fontSize: 12,
                   fontWeight: 700,
+                  color: light ? "#0f172a" : "#e2e8f0",
                 }}
                 formatter={(value: number) => [formatNprInteger(value), "Saved"]}
               />
@@ -125,10 +126,10 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
       </div>
 
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/70 shadow-sm" : ""}`}>
-        <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
+        <p className={`mb-1 text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>
           Yearly growth
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Cumulative corpus (NPR)</p>
+        <p className={`mb-3 text-sm font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>Cumulative corpus (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={[...YEARLY_GROWTH]} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
@@ -148,6 +149,7 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   borderRadius: 14,
                   fontSize: 12,
                   fontWeight: 700,
+                  color: light ? "#0f172a" : "#e2e8f0",
                 }}
                 formatter={(value: number) => [formatNprInteger(value), "Total"]}
               />
@@ -165,10 +167,10 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
       </div>
 
       <div className={`wealth-chart-card p-3 sm:p-4 ${light ? "border-slate-200/70 shadow-sm" : ""}`}>
-        <p className="mb-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">
+        <p className={`mb-1 text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>
           FIRE glide path
         </p>
-        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-zinc-400">Actual vs projected (NPR)</p>
+        <p className={`mb-3 text-sm font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>Actual vs projected (NPR)</p>
         <div className="h-[200px] w-full min-w-0 sm:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={FIRE_PROGRESS_SERIES} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
@@ -182,12 +184,13 @@ export function SavingsChartsBlock({ chartsReady }: SavingsChartsBlockProps) {
                   borderRadius: 14,
                   fontSize: 12,
                   fontWeight: 700,
+                  color: light ? "#0f172a" : "#e2e8f0",
                 }}
                 formatter={(value: number) => formatNprInteger(value)}
               />
               <Legend
                 wrapperStyle={{ fontSize: 11, fontWeight: 800, paddingTop: 4 }}
-                formatter={(v) => <span className={light ? "text-slate-700" : "text-zinc-300"}>{v}</span>}
+                formatter={(v) => <span className={light ? "text-slate-700" : "fn-txt-secondary"}>{v}</span>}
               />
               <Line
                 type="monotone"

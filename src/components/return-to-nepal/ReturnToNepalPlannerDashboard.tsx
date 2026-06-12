@@ -45,11 +45,13 @@ function daysToYearEnd(year: number): number {
 }
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">{label}</span>
+      <span className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>{label}</span>
       {children}
-      {hint ? <span className="text-[11px] font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.72)]">{hint}</span> : null}
+      {hint ? <span className={`text-[11px] font-semibold ${light ? "text-slate-600" : "fn-txt-muted"}`}>{hint}</span> : null}
     </label>
   );
 }
@@ -71,11 +73,11 @@ function AutoCalculateToggleGroup({
         ? "bg-teal-600 text-white shadow-sm ring-1 ring-teal-500/40"
         : light
           ? "text-slate-600 hover:bg-slate-100/90"
-          : "text-[rgba(255,255,255,0.85)] hover:bg-white/[0.08]"
+          : "fn-txt-secondary hover:bg-white/[0.08]"
     }`;
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <span id={labelledById} className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1]">
+      <span id={labelledById} className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>
         Auto calculate
       </span>
       <div
@@ -104,12 +106,16 @@ function SummaryCard({ label, value, hint, light }: { label: string; value: stri
       }`}
     >
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-teal-800 dark:text-[#4FFFD1] sm:text-[11px]">{label}</p>
-        <p className="mt-1.5 text-[clamp(1.05rem,3.8vw,1.2rem)] font-extrabold tracking-tight text-slate-900 dark:text-white [text-shadow:0_0_28px_rgba(255,255,255,0.12)] sm:text-xl">
+        <p className={`text-[10px] font-bold uppercase tracking-[0.14em] sm:text-[11px] ${light ? "text-teal-800" : "fn-txt-muted"}`}>{label}</p>
+        <p
+          className={`mt-1.5 text-[clamp(1.05rem,3.8vw,1.2rem)] font-black tracking-tight sm:text-xl ${
+            light ? "text-slate-900" : "fn-txt-kpi"
+          }`}
+        >
           {value}
         </p>
       </div>
-      <p className="text-[11px] font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.72)] sm:text-xs">{hint}</p>
+      <p className={`text-[11px] font-semibold leading-relaxed sm:text-xs ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{hint}</p>
     </div>
   );
 }
@@ -123,15 +129,23 @@ function SectionTitle({
   title: string;
   subtitle?: string;
 }) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
   return (
     <div className="mb-4 flex flex-col gap-1 sm:mb-5">
       <div className="flex items-center gap-2">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200">
+        <span
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 ${
+            light ? "text-teal-700" : "text-teal-200"
+          }`}
+        >
           <Icon size={18} />
         </span>
-        <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white sm:text-xl">{title}</h2>
+        <h2 className={`text-lg font-black tracking-tight sm:text-xl ${light ? "text-slate-900" : "fn-txt-primary"}`}>{title}</h2>
       </div>
-      {subtitle ? <p className="max-w-3xl text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{subtitle}</p> : null}
+      {subtitle ? (
+        <p className={`max-w-3xl text-sm font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{subtitle}</p>
+      ) : null}
     </div>
   );
 }
@@ -186,8 +200,9 @@ export function ReturnToNepalPlannerDashboard() {
         ? "Good direction — finish settlement checklist items."
         : "Early stage — add fees, healthcare, and checklist detail.";
 
-  const inputClass =
-    "rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-bold text-slate-900 dark:border-white/[0.14] dark:bg-white/[0.08] dark:text-white";
+  const inputClass = light
+    ? "rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none transition-[border-color,box-shadow] caret-teal-600 focus:border-teal-400/80 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.18)] focus:ring-0"
+    : "rounded-xl border border-white/[0.14] bg-white/[0.08] px-3 py-2 text-sm font-bold fn-txt-primary outline-none transition-[border-color,box-shadow] caret-teal-300 focus:border-teal-400/45 focus:shadow-[0_0_0_3px_rgba(45,212,191,0.12)] focus:ring-0";
 
   return (
     <WealthDashboardShell
@@ -218,13 +233,13 @@ export function ReturnToNepalPlannerDashboard() {
               <div
                 className={`grid h-[72%] w-[72%] place-items-center rounded-full ${light ? "bg-white" : "bg-[#041a14]"}`}
               >
-                <span className="text-center text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+                <span className={`text-center text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-2xl`}>
                   {snapshot.retirementReadinessPct.toFixed(0)}
-                  <span className="block text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-[#4FFFD1]">%</span>
+                  <span className={`block text-[10px] font-bold uppercase tracking-widest ${light ? "text-teal-700" : "fn-txt-muted"}`}>%</span>
                 </span>
               </div>
             </div>
-            <p className="max-w-xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+            <p className={`max-w-xl text-[15px] font-semibold leading-relaxed ${light ? "text-slate-600 sm:text-sm" : "fn-txt-secondary sm:text-sm"}`}>
               {snapshot.aiHeadline} {snapshot.freedomMilestone}
             </p>
           </div>
@@ -270,26 +285,26 @@ export function ReturnToNepalPlannerDashboard() {
                 : "border-[rgba(79,255,209,0.2)] bg-gradient-to-br from-white/[0.1] via-[rgba(6,78,59,0.32)] to-[rgba(2,18,16,0.5)]"
             }`}
           >
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700 dark:text-[#4FFFD1]">Guidance read</p>
-            <p className="mt-2 text-base font-black text-slate-900 dark:text-white sm:text-lg">{snapshot.aiSecondary}</p>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${light ? "text-teal-700" : "fn-txt-muted"}`}>Guidance read</p>
+            <p className={`mt-2 text-base font-black ${light ? "text-slate-900" : "fn-txt-kpi"} sm:text-lg`}>{snapshot.aiSecondary}</p>
           </div>
 
           <ReturnToNepalCharts snapshot={snapshot} chartsReady={chartsReady} />
 
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-[#4FFFD1]">Return countdown</p>
-              <p className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{countdownDays.toLocaleString()}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">days to Dec 31, {state.targetReturnYear}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-teal-700" : "fn-txt-muted"}`}>Return countdown</p>
+              <p className={`mt-2 text-3xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{countdownDays.toLocaleString()}</p>
+              <p className={`mt-1 text-sm font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>days to Dec 31, {state.targetReturnYear}</p>
             </div>
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-800 dark:text-[#4FFFD1]">Stress radar</p>
-              <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{snapshot.stressScore.toFixed(0)}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Gap + runway composite (lower is calmer)</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-cyan-800" : "fn-txt-muted"}`}>Stress radar</p>
+              <p className={`mt-2 text-2xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{snapshot.stressScore.toFixed(0)}</p>
+              <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Gap + runway composite (lower is calmer)</p>
             </div>
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/90" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-[#4FFFD1]">Emotional pulse</p>
-              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{snapshot.emotionalLine}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.14em] ${light ? "text-emerald-700" : "fn-txt-muted"}`}>Emotional pulse</p>
+              <p className={`mt-2 text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{snapshot.emotionalLine}</p>
             </div>
           </div>
         </section>
@@ -302,19 +317,19 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <div className="mb-6 space-y-5">
             <div>
-              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+              <div className={`mb-1 flex justify-between text-xs font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
                 <span>Korea implied spend / mo (NPR)</span>
                 <span>{formatNprInteger(snapshot.koreaImpliedMonthlySpendNpr)}</span>
               </div>
               <div className={`h-3 overflow-hidden rounded-full ${light ? "bg-slate-200" : "bg-white/10"}`}>
                 <div className="h-full rounded-full bg-gradient-to-r from-teal-600 to-emerald-500" style={{ width: `${koreaBarPct}%` }} />
               </div>
-              <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">
+              <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "fn-txt-muted"}`}>
                 From {formatKrwInteger(state.monthlySalaryKrw)} salary − {formatKrwInteger(state.monthlySavingsKrw)} savings
               </p>
             </div>
             <div>
-              <div className="mb-1 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+              <div className={`mb-1 flex justify-between text-xs font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
                 <span>Nepal living model / mo (NPR)</span>
                 <span>{formatNprInteger(snapshot.monthlyNepalLivingNpr)}</span>
               </div>
@@ -372,13 +387,13 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4 dark:bg-emerald-500/[0.08]">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800 dark:text-[#4FFFD1]">Monthly (today)</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingNpr)}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-emerald-800" : "fn-txt-muted"}`}>Monthly (today)</p>
+              <p className={`mt-2 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.monthlyNepalLivingNpr)}</p>
             </div>
             <div className="rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4 dark:bg-teal-500/[0.08]">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">At return ({state.targetReturnYear})</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">×{snapshot.inflationFactorAtReturn.toFixed(2)} factor</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>At return ({state.targetReturnYear})</p>
+              <p className={`mt-2 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
+              <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>×{snapshot.inflationFactorAtReturn.toFixed(2)} factor</p>
             </div>
           </div>
           <div className={`mt-4 rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-slate-50/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.07] to-white/[0.02]"}`}>
@@ -387,12 +402,12 @@ export function ReturnToNepalPlannerDashboard() {
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Village</p>
-                <p className="text-lg font-black text-slate-900 dark:text-white">{formatNprInteger(villageCol)}</p>
+                <p className={`text-xs font-bold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Village</p>
+                <p className={`text-lg font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(villageCol)}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.72)]">Kathmandu</p>
-                <p className="text-lg font-black text-slate-900 dark:text-white">{formatNprInteger(ktmCol)}</p>
+                <p className={`text-xs font-bold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Kathmandu</p>
+                <p className={`text-lg font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(ktmCol)}</p>
               </div>
             </div>
           </div>
@@ -416,8 +431,8 @@ export function ReturnToNepalPlannerDashboard() {
             ))}
           </div>
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
-            <p className="text-sm font-black text-emerald-950 dark:text-white">Passive after return ({state.targetReturnYear} money, inflated)</p>
-            <p className="mt-2 text-2xl font-black text-emerald-950 dark:text-white">{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
+            <p className={`text-sm font-black ${light ? "text-emerald-950" : "fn-txt-primary"}`}>Passive after return ({state.targetReturnYear} money, inflated)</p>
+            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-950" : "fn-txt-primary"}`}>{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
           </div>
         </section>
 
@@ -432,7 +447,7 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5">
-            <div className="mb-2 flex justify-between text-xs font-bold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+            <div className={`mb-2 flex justify-between text-xs font-bold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
               <span>Runway vs target</span>
               <span>
                 {snapshot.emergencyReserveMonths.toFixed(1)} / {state.emergencyMonthsTarget} mo
@@ -444,7 +459,7 @@ export function ReturnToNepalPlannerDashboard() {
                 style={{ width: `${runwayProgressPct}%` }}
               />
             </div>
-            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">{emergencyHint}</p>
+            <p className={`mt-2 text-sm font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{emergencyHint}</p>
           </div>
         </section>
 
@@ -470,8 +485,8 @@ export function ReturnToNepalPlannerDashboard() {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Severance (KRW)</p>
-                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+                  <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>Severance (KRW)</p>
+                  <p className={`mt-1 text-xs font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
                     Model uses salary × total Korea years (worked + planned).
                   </p>
                 </div>
@@ -493,10 +508,10 @@ export function ReturnToNepalPlannerDashboard() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Override amount (KRW)</span>
+                <span className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>Override amount (KRW)</span>
                 {state.severanceAutoCalculate !== false ? (
                   <div
-                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]`}
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold ${light ? "text-slate-500" : "fn-txt-muted"}`}
                     aria-readonly="true"
                   >
                     Manual entry off — estimate below is used
@@ -507,7 +522,7 @@ export function ReturnToNepalPlannerDashboard() {
               </div>
               {state.severanceAutoCalculate !== false ? (
                 <>
-                  <p className="text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                  <p className={`text-sm font-black tabular-nums ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
                     Estimated severance: {formatKrwInteger(autoSeveranceKrw)}
                   </p>
                   <p
@@ -517,7 +532,7 @@ export function ReturnToNepalPlannerDashboard() {
                         : "border-amber-400/25 bg-amber-500/10 text-amber-100/95"
                     }`}
                   >
-                    <span className="font-black uppercase tracking-wide text-amber-800 dark:text-amber-200/90">Auto On</span>
+                    <span className={`font-black uppercase tracking-wide ${light ? "text-amber-800" : "text-amber-200/90"}`}>Auto On</span>
                     {" — "}The planner uses the estimate above.{" "}
                     <span className="font-bold">Older behaviour: typing 0 in the box meant “use the model.”</span> Use this toggle for that now; the override row is not used while Auto is On.
                   </p>
@@ -528,7 +543,7 @@ export function ReturnToNepalPlannerDashboard() {
                     light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
                   }`}
                 >
-                  <span className="font-black text-teal-800 dark:text-[#4FFFD1]">Manual mode</span>
+                  <span className={`font-black ${light ? "text-teal-800" : "fn-txt-muted"}`}>Manual mode</span>
                   {" — "}Enter your lump sum in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
                   <span className="font-bold">no severance payout</span> (different from Auto On, which uses the estimate).
                 </p>
@@ -541,8 +556,8 @@ export function ReturnToNepalPlannerDashboard() {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">National pension maturity (KRW)</p>
-                  <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+                  <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>National pension maturity (KRW)</p>
+                  <p className={`mt-1 text-xs font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
                     Rough maturity from contributions + growth (illustrative).
                   </p>
                 </div>
@@ -564,10 +579,10 @@ export function ReturnToNepalPlannerDashboard() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-[#4FFFD1]">Override amount (KRW)</span>
+                <span className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>Override amount (KRW)</span>
                 {state.nationalPensionAutoCalculate !== false ? (
                   <div
-                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]`}
+                    className={`${inputClass} flex min-h-[44px] items-center text-sm font-bold ${light ? "text-slate-500" : "fn-txt-muted"}`}
                     aria-readonly="true"
                   >
                     Manual entry off — estimate below is used
@@ -582,7 +597,7 @@ export function ReturnToNepalPlannerDashboard() {
               </div>
               {state.nationalPensionAutoCalculate !== false ? (
                 <>
-                  <p className="text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                  <p className={`text-sm font-black tabular-nums ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
                     Estimated national pension: {formatKrwInteger(autoNationalPensionKrw)}
                   </p>
                   <p
@@ -592,7 +607,7 @@ export function ReturnToNepalPlannerDashboard() {
                         : "border-amber-400/25 bg-amber-500/10 text-amber-100/95"
                     }`}
                   >
-                    <span className="font-black uppercase tracking-wide text-amber-800 dark:text-amber-200/90">Auto On</span>
+                    <span className={`font-black uppercase tracking-wide ${light ? "text-amber-800" : "text-amber-200/90"}`}>Auto On</span>
                     {" — "}Same as severance: the estimate above is what counts.{" "}
                     <span className="font-bold">0 in the box used to mean “use the model”</span>
                     {" — "}use Auto On for that, or Auto Off to enter your own KRW.
@@ -604,7 +619,7 @@ export function ReturnToNepalPlannerDashboard() {
                     light ? "border-slate-200/90 bg-white/80 text-slate-700" : "border-white/[0.14] bg-black/35 text-[rgba(255,255,255,0.85)]"
                   }`}
                 >
-                  <span className="font-black text-teal-800 dark:text-[#4FFFD1]">Manual mode</span>
+                  <span className={`font-black ${light ? "text-teal-800" : "fn-txt-muted"}`}>Manual mode</span>
                   {" — "}Enter maturity in KRW. Use <span className="font-bold">0</span> if you are modelling{" "}
                   <span className="font-bold">no national-pension lump sum</span> at return.
                 </p>
@@ -612,10 +627,10 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
           </div>
           <div className="mt-5 rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4 dark:bg-teal-500/[0.08]">
-            <p className="text-sm font-black text-slate-900 dark:text-white">
+            <p className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
               Target return year {state.targetReturnYear} · You are {snapshot.returnGoalProgressPct.toFixed(0)}% closer to funded house + relocation.
             </p>
-            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+            <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
               Projected Korea-side corpus (NPR): {formatNprInteger(snapshot.koreaSavingsAfterPlannedYearsNpr)} · Severance (model){" "}
               {formatNprInteger(snapshot.projectedSeveranceNpr)} · National pension (rough) {formatNprInteger(snapshot.projectedNationalPensionNpr)}
             </p>
@@ -639,7 +654,7 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700 dark:text-[#4FFFD1]">Settlement checklist</p>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-700" : "fn-txt-muted"}`}>Settlement checklist</p>
             <div className="mt-2 flex flex-col gap-2">
               {SETTLEMENT_CHECKLIST_ITEMS.map((row) => {
                 const done = state.settlementChecklist.includes(row.id);
@@ -650,23 +665,25 @@ export function ReturnToNepalPlannerDashboard() {
                     onClick={() => toggleSettlement(row.id)}
                     className={`flex min-h-[48px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm font-bold transition sm:px-4 ${
                       done
-                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100"
+                        ? light
+                          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900"
+                          : "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
                         : light
                           ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
-                          : "border-white/[0.12] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.3)]"
+                          : "border-white/[0.12] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.3)]"
                     }`}
                   >
                     <span>{row.label}</span>
-                    <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-teal-600 dark:text-[#4FFFD1]">{done ? "Done" : "Todo"}</span>
+                    <span className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${light ? "text-teal-600" : "fn-txt-muted"}`}>{done ? "Done" : "Todo"}</span>
                   </button>
                 );
               })}
             </div>
           </div>
           <div className="mt-5 rounded-2xl border border-teal-500/20 bg-teal-500/[0.06] p-4 ring-1 ring-white/[0.04] dark:bg-teal-500/[0.1]">
-            <p className="text-sm font-black text-slate-900 dark:text-white">Family readiness score</p>
-            <p className="mt-2 text-3xl font-extrabold text-teal-700 dark:text-white [text-shadow:0_0_28px_rgba(255,255,255,0.12)]">{snapshot.familyRelocationScore.toFixed(0)}%</p>
-            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">Includes checklist completion vs stress index {snapshot.stressScore.toFixed(0)}.</p>
+            <p className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>Family readiness score</p>
+            <p className={`mt-2 text-3xl font-extrabold ${light ? "text-teal-700" : "fn-txt-kpi"}`}>{snapshot.familyRelocationScore.toFixed(0)}%</p>
+            <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>Includes checklist completion vs stress index {snapshot.stressScore.toFixed(0)}.</p>
           </div>
         </section>
 
@@ -711,7 +728,13 @@ export function ReturnToNepalPlannerDashboard() {
                   type="button"
                   onClick={() => togglePhase(ph.id)}
                   className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition ${
-                    done ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-100" : "border-white/[0.12] bg-white/[0.06] text-[rgba(255,255,255,0.85)] hover:border-[rgba(79,255,209,0.28)]"
+                    done
+                      ? light
+                        ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-900"
+                        : "border-emerald-400/40 bg-emerald-500/15 text-emerald-100"
+                      : light
+                        ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
+                        : "border-white/[0.12] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.28)]"
                   }`}
                 >
                   {ph.label}
@@ -720,15 +743,15 @@ export function ReturnToNepalPlannerDashboard() {
             })}
           </div>
           <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] p-4 dark:bg-amber-500/10">
-            <p className="text-sm font-black text-amber-950 dark:text-amber-100">Overrun signal: {overrun.toUpperCase()}</p>
-            <p className="mt-1 text-xs font-semibold text-amber-950/80 dark:text-amber-50/80">
+            <p className={`text-sm font-black ${light ? "text-amber-950" : "text-amber-100"}`}>Overrun signal: {overrun.toUpperCase()}</p>
+            <p className={`mt-1 text-xs font-semibold ${light ? "text-amber-950/80" : "text-amber-50/80"}`}>
               Phased {(phaseRatio * 100).toFixed(0)}% · Progress bar {state.houseProgressPct}%
             </p>
           </div>
           <div className="mt-4 rounded-2xl border border-teal-500/15 bg-teal-500/[0.06] p-4">
-            <p className="text-xs font-bold text-slate-500 dark:text-[rgba(255,255,255,0.85)]">Total build budget</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.houseTotalBudgetNpr)}</p>
-            <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+            <p className={`text-xs font-bold ${light ? "text-slate-500" : "fn-txt-muted"}`}>Total build budget</p>
+            <p className={`text-2xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.houseTotalBudgetNpr)}</p>
+            <p className={`mt-2 text-sm font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
               EMI (model): {formatNprInteger(Math.round(snapshot.houseLoanEmiNpr))} / mo
             </p>
           </div>
@@ -745,9 +768,9 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4 dark:bg-emerald-500/10">
-            <p className="text-sm font-black text-slate-900 dark:text-white">Implied monthly from yield model</p>
-            <p className="mt-2 text-2xl font-black text-emerald-800 dark:text-emerald-100">{formatNprInteger(snapshot.businessPassiveMonthlyHintNpr)}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.72)]">{snapshot.aiSecondary}</p>
+            <p className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>Implied monthly from yield model</p>
+            <p className={`mt-2 text-2xl font-black ${light ? "text-emerald-800" : "text-emerald-100"}`}>{formatNprInteger(snapshot.businessPassiveMonthlyHintNpr)}</p>
+            <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-muted"}`}>{snapshot.aiSecondary}</p>
           </div>
         </section>
 
@@ -755,24 +778,24 @@ export function ReturnToNepalPlannerDashboard() {
           <SectionTitle icon={LineChart} title="Retirement gap analysis" subtitle="Future need vs passive stack; sustainability if drawing on principal." />
           <div className="grid gap-4 sm:grid-cols-3">
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Future need / mo</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>Future need / mo</p>
+              <p className={`mt-2 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.monthlyNepalLivingFutureNpr)}</p>
             </div>
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Passive / mo (inflated)</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>Passive / mo (inflated)</p>
+              <p className={`mt-2 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{formatNprInteger(snapshot.passiveMonthlyFutureNpr)}</p>
             </div>
             <div className={`rounded-2xl border p-4 ${light ? "border-slate-200/90 bg-white/80" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03]"}`}>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-[#4FFFD1]">Sustainability yrs</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{snapshot.sustainabilityYears.toFixed(1)}</p>
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-slate-500" : "fn-txt-muted"}`}>Sustainability yrs</p>
+              <p className={`mt-2 text-xl font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{snapshot.sustainabilityYears.toFixed(1)}</p>
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-teal-500/20 bg-teal-500/[0.07] p-4">
-            <p className="text-sm font-black text-slate-900 dark:text-white">Monthly surplus / deficit</p>
-            <p className="mt-2 text-2xl font-extrabold text-teal-800 dark:text-white [text-shadow:0_0_24px_rgba(255,255,255,0.1)]">
+            <p className={`text-sm font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>Monthly surplus / deficit</p>
+            <p className={`mt-2 text-2xl font-extrabold ${light ? "text-teal-800" : "fn-txt-kpi"}`}>
               {snapshot.monthlyDeficitNpr > 0 ? `−${formatNprInteger(snapshot.monthlyDeficitNpr)}` : `+${formatNprInteger(snapshot.monthlySurplusNpr)}`}
             </p>
-            <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-[rgba(255,255,255,0.85)]">
+            <p className={`mt-2 text-xs font-semibold ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
               Extra corpus needed (4.25% SWR heuristic): {formatNprInteger(snapshot.requiredExtraCorpusNpr)}
             </p>
           </div>
@@ -781,9 +804,9 @@ export function ReturnToNepalPlannerDashboard() {
         <section id="rtn-coach" className={sg("mt-2 mb-2")}>
           <SectionTitle icon={Heart} title="Coach, legal prep & milestones" subtitle="Motivation layer plus lightweight tax/banking sliders — confirm with a CA." />
           <div className="rounded-2xl border border-teal-400/20 bg-gradient-to-br from-teal-500/15 to-emerald-600/10 p-4 sm:p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-800 dark:text-[#4FFFD1]">Assistant</p>
-            <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{snapshot.aiHeadline}</p>
-            <p className="mt-2 text-sm font-semibold text-teal-900/90 dark:text-[rgba(255,255,255,0.85)]">{snapshot.aiSecondary}</p>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>Assistant</p>
+            <p className={`mt-2 text-lg font-black ${light ? "text-slate-900" : "fn-txt-kpi"}`}>{snapshot.aiHeadline}</p>
+            <p className={`mt-2 text-sm font-semibold ${light ? "text-teal-900/90" : "fn-txt-secondary"}`}>{snapshot.aiSecondary}</p>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Tax readiness %">
@@ -812,13 +835,13 @@ export function ReturnToNepalPlannerDashboard() {
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.08] p-4">
-              <p className="text-sm font-black text-emerald-950 dark:text-emerald-50">Milestones</p>
-              <ul className="mt-2 space-y-2 text-sm font-semibold text-emerald-900 dark:text-[rgba(255,255,255,0.85)]">
+              <p className={`text-sm font-black ${light ? "text-emerald-950" : "fn-txt-primary"}`}>Milestones</p>
+              <ul className={`mt-2 space-y-2 text-sm font-semibold ${light ? "text-emerald-900" : "fn-txt-secondary"}`}>
                 <li>• Runway {snapshot.emergencyReserveMonths.toFixed(1)} mo</li>
                 <li>• Return goal {snapshot.returnGoalProgressPct.toFixed(0)}%</li>
                 <li>• Readiness {snapshot.retirementReadinessPct.toFixed(0)}%</li>
               </ul>
-              <p className="mt-3 text-xs font-semibold text-emerald-900/85 dark:text-[rgba(255,255,255,0.72)]">{snapshot.emotionalLine}</p>
+              <p className={`mt-3 text-xs font-semibold ${light ? "text-emerald-900/85" : "fn-txt-muted"}`}>{snapshot.emotionalLine}</p>
             </div>
           </div>
         </section>

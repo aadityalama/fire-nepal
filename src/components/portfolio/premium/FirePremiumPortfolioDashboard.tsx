@@ -13,6 +13,7 @@ import { KpiMetricCard } from "@/components/portfolio/premium/KpiMetricCard";
 import { NetWorthGrowthChart } from "@/components/portfolio/premium/NetWorthGrowthChart";
 import { formatNpr, nprToUsdLabel } from "@/data/fire-premium-dashboard";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 
@@ -39,6 +40,8 @@ function fiCountdownLabel(monthsToFi: number | null | undefined): string {
 
 export function FirePremiumPortfolioDashboard() {
   const { user } = useProductAuth();
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
   const { totals, passiveMonthly, state, hydrated, coachSnapshot, usdPerNpr, fireScore } = useWealthPortfolio();
   const { summary } = useUnifiedFireSummary();
 
@@ -158,11 +161,11 @@ export function FirePremiumPortfolioDashboard() {
             ] as const
           ).map((row) => (
             <div key={row.name} className="min-w-0 border-b border-white/[0.08] pb-1.5 last:border-b-0 last:pb-0 sm:border-b-0 sm:pb-0">
-              <p className="text-[10px] font-bold uppercase leading-snug tracking-[0.14em] text-[#4FFFD1]">{row.name}</p>
-              <p className="mt-1 text-[clamp(0.875rem,2.8vw,0.95rem)] font-extrabold leading-tight tabular-nums tracking-tight text-white [text-shadow:0_0_20px_rgba(255,255,255,0.1)]">
+              <p className={`text-[10px] font-bold uppercase leading-snug tracking-[0.14em] ${light ? "text-teal-800" : "fn-txt-muted"}`}>{row.name}</p>
+              <p className={`mt-1 text-[clamp(0.875rem,2.8vw,0.95rem)] font-extrabold leading-tight tabular-nums tracking-tight ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
                 {row.primary}
               </p>
-              <p className="text-[10px] font-semibold leading-snug text-[rgba(255,255,255,0.72)]">{row.sub}</p>
+              <p className={`text-[10px] font-semibold leading-snug ${light ? "text-slate-600" : "fn-txt-muted"}`}>{row.sub}</p>
             </div>
           ))}
         </div>

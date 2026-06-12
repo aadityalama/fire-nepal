@@ -20,12 +20,16 @@ export function SavingsInsightsPanel() {
       <div aria-hidden className="pointer-events-none absolute -bottom-16 right-0 h-36 w-36 rounded-full bg-emerald-400/10 blur-3xl" />
 
       <div className="relative mb-4 flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-400/25">
+        <span
+          className={`grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/15 ring-1 ${
+            light ? "text-emerald-700 ring-emerald-500/20" : "text-emerald-200 ring-emerald-400/25"
+          }`}
+        >
           <Sparkles size={18} strokeWidth={2.25} />
         </span>
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700/90 dark:text-emerald-300/80">AI insights</p>
-          <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white sm:text-lg">Signals you can act on</h2>
+          <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/90" : "fn-txt-muted"}`}>AI insights</p>
+          <h2 className={`text-base font-black tracking-tight sm:text-lg ${light ? "text-slate-900" : "fn-txt-primary"}`}>Signals you can act on</h2>
         </div>
       </div>
 
@@ -36,7 +40,7 @@ export function SavingsInsightsPanel() {
               light ? "border-emerald-200/80 bg-white/80" : "border-white/[0.08] bg-white/[0.04]"
             }`}
           >
-            <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+            <p className={`text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>
               Insights appear when your savings rhythm and goals have enough history. Start by logging monthly deposits.
             </p>
           </li>
@@ -50,8 +54,8 @@ export function SavingsInsightsPanel() {
                   : "border-white/[0.06] bg-white/[0.04] shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] motion-safe:hover:border-emerald-400/25 motion-safe:hover:shadow-[0_16px_44px_-20px_rgba(0,0,0,0.45)]"
               }`}
             >
-              <p className="text-[11px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300/90">{item.title}</p>
-              <p className="mt-1.5 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-300">{item.body}</p>
+              <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-emerald-700" : "text-emerald-300/90"}`}>{item.title}</p>
+              <p className={`mt-1.5 text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "fn-txt-secondary"}`}>{item.body}</p>
             </li>
           ))
         )}

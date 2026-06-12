@@ -53,7 +53,7 @@ export function FireThemeProvider({ children }: { children: ReactNode }) {
     return mode;
   }, [mode, systemDark]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mounted || typeof document === "undefined") return;
     document.documentElement.setAttribute("data-fire-theme", resolvedTheme);
     document.documentElement.style.colorScheme = resolvedTheme;

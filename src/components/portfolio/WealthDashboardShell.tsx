@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
+import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
 const ASSETS_HUB_HREF = "/portfolio/assets" as const;
@@ -302,7 +303,8 @@ export function WealthDashboardShell({
   wideAside,
 }: WealthDashboardShellProps) {
   const pathname = usePathname();
-  const light = false;
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const close = useCallback(() => setDrawerOpen(false), []);
