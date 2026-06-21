@@ -14,12 +14,33 @@ export type TransactionType = BizTransactionRow["transaction_type"];
 export type AccountType = BizTransactionRow["account_type"];
 
 export type FireBizDashboardSummary = {
-  totalSales: number;
-  totalPurchases: number;
   receivables: number;
   payables: number;
+  monthlySales: number;
+  monthlyPurchases: number;
+  monthlyExpenses: number;
   cashBalance: number;
+  totalSales: number;
+  totalPurchases: number;
   inventoryValue: number;
+};
+
+export type FireBizAnalytics = {
+  salesTrend: { month: string; sales: number; purchases: number }[];
+  expenseBreakdown: { name: string; value: number }[];
+  profitOverview: { month: string; profit: number; sales: number; expenses: number }[];
+  inventoryValue: number;
+  topCustomers: { name: string; balance: number }[];
+  outstandingReceivables: { name: string; amount: number; dueLabel: string }[];
+};
+
+export type FireBizFireIntegration = {
+  businessNetWorth: number;
+  monthlyBusinessProfit: number;
+  businessContributionPct: number;
+  businessWealthGrowthPct: number;
+  fireCorpusTarget: number;
+  prevMonthSales: number;
 };
 
 export type FireBizLocale = "en" | "ne";
@@ -41,3 +62,5 @@ export type FireBizNavItem = {
   labelKey: FireBizNavKey;
   icon: string;
 };
+
+export type FireBizMobileNavKey = "home" | "transactions" | "parties" | "inventory" | "more";

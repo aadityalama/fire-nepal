@@ -1,21 +1,25 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   Banknote,
   BarChart3,
+  FileText,
   Package,
-  Plus,
   Receipt,
   ShoppingBag,
   ShoppingCart,
+  TrendingDown,
   TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { FireBizDashboardAnalytics } from "@/components/fire-biz/FireBizDashboardAnalytics";
+import { FireBizFireIntegrationPanel } from "@/components/fire-biz/FireBizFireIntegrationPanel";
 import {
   FireBizEmptyState,
   FireBizGlassCard,
@@ -23,12 +27,24 @@ import {
   FireBizSummaryCard,
 } from "@/components/fire-biz/FireBizUiPrimitives";
 import { useFireBiz, useFireBizCopy } from "@/contexts/FireBizContext";
+import { useFireTheme } from "@/contexts/FireThemeContext";
+import { computeFireBizAnalytics, computeFireBizFireIntegration } from "@/lib/fire-biz/analytics";
 import { formatBizNpr } from "@/lib/fire-biz/i18n";
 
 export function FireBizDashboard() {
   const copy = useFireBizCopy();
-  const { summary, loading, sales, purchases, transactions } = useFireBiz();
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  const { summary, loading, sales, purchases, transactions, customers } = useFireBiz();
   const d = copy.dashboard;
+  const loadingVal = "…";
+
+  const analytics = useMemo(
+    () => computeFireBizAnalytics(sales, purchases, transactions, customers, summary),
+    [sales, purchases, transactions, customers, summary],
+  );
+
+  const fireIntegration = useMemo(() => computeFireBizFireIntegration(summary), [summary]);
 
   const recentItems = [
     ...sales.slice(0, 3).map((s) => ({
@@ -57,35 +73,34 @@ export function FireBizDashboard() {
     .slice(0, 6);
 
   return (
-    <div className="space-y-6">
-      <DashboardSectionHeader
-        eyebrow={copy.moduleName}
-        title={d.title}
-        subtitle={d.subtitle}
-        accent="emerald"
-      />
+    <div className="space-y-6 pb-4">
+      <DashboardSectionHeader eyebrow={copy.moduleName} title={d.title} subtitle={d.subtitle} accent="emerald" />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <FireBizSummaryCard label={d.totalSales} value={loading ? "…" : formatBizNpr(summary.totalSales)} icon={TrendingUp} accent="emerald" />
-        <FireBizSummaryCard label={d.totalPurchases} value={loading ? "…" : formatBizNpr(summary.totalPurchases)} icon={ShoppingBag} accent="teal" />
-        <FireBizSummaryCard label={d.receivables} value={loading ? "…" : formatBizNpr(summary.receivables)} icon={ArrowDownLeft} accent="amber" />
-        <FireBizSummaryCard label={d.payables} value={loading ? "…" : formatBizNpr(summary.payables)} icon={ArrowUpRight} accent="rose" />
-        <FireBizSummaryCard label={d.cashBalance} value={loading ? "…" : formatBizNpr(summary.cashBalance)} icon={Wallet} accent="emerald" />
-        <FireBizSummaryCard label={d.inventoryValue} value={loading ? "…" : formatBizNpr(summary.inventoryValue)} icon={Package} accent="teal" />
+        <FireBizSummaryCard label={d.receivable} value={loading ? loadingVal : formatBizNpr(summary.receivables)} icon={ArrowDownLeft} accent="amber" size="kpi" />
+        <FireBizSummaryCard label={d.payable} value={loading ? loadingVal : formatBizNpr(summary.payables)} icon={ArrowUpRight} accent="rose" size="kpi" />
+        <FireBizSummaryCard label={d.monthlySales} value={loading ? loadingVal : formatBizNpr(summary.monthlySales)} icon={TrendingUp} accent="emerald" size="kpi" />
+        <FireBizSummaryCard label={d.monthlyPurchases} value={loading ? loadingVal : formatBizNpr(summary.monthlyPurchases)} icon={ShoppingBag} accent="teal" size="kpi" />
+        <FireBizSummaryCard label={d.monthlyExpenses} value={loading ? loadingVal : formatBizNpr(summary.monthlyExpenses)} icon={TrendingDown} accent="rose" size="kpi" />
+        <FireBizSummaryCard label={d.cashBankBalance} value={loading ? loadingVal : formatBizNpr(summary.cashBalance)} icon={Wallet} accent="emerald" size="kpi" />
       </div>
 
-      <FireBizGlassCard title={d.quickActions} icon={Plus}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <FireBizQuickAction label={d.newSale} href="/fire-biz/sales" icon={ShoppingCart} />
-          <FireBizQuickAction label={d.newPurchase} href="/fire-biz/purchases" icon={ShoppingBag} />
+      <FireBizGlassCard title={d.quickActions} icon={Banknote}>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <FireBizQuickAction label={d.addCustomer} href="/fire-biz/customers" icon={Users} />
+          <FireBizQuickAction label={d.createInvoice} href="/fire-biz/sales" icon={FileText} />
           <FireBizQuickAction label={d.receivePayment} href="/fire-biz/cash-bank" icon={Banknote} />
           <FireBizQuickAction label={d.makePayment} href="/fire-biz/cash-bank" icon={Receipt} />
-          <FireBizQuickAction label={d.addExpense} href="/fire-biz/cash-bank" icon={Wallet} />
+          <FireBizQuickAction label={d.purchaseEntry} href="/fire-biz/purchases" icon={ShoppingCart} />
           <FireBizQuickAction label={d.inventoryEntry} href="/fire-biz/inventory" icon={Package} />
+          <FireBizQuickAction label={d.addExpense} href="/fire-biz/cash-bank" icon={Wallet} />
           <FireBizQuickAction label={d.reports} href="/fire-biz/reports" icon={BarChart3} />
         </div>
       </FireBizGlassCard>
+
+      <FireBizDashboardAnalytics analytics={analytics} loading={loading} />
+
+      <FireBizFireIntegrationPanel data={fireIntegration} loading={loading} />
 
       <FireBizGlassCard title={d.recentActivity} icon={Receipt}>
         {recentItems.length === 0 ? (
@@ -95,13 +110,17 @@ export function FireBizDashboard() {
             {recentItems.map((item) => (
               <li
                 key={`${item.type}-${item.id}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/10 bg-black/20 px-3 py-2.5"
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+                  light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
+                }`}
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-emerald-50">{item.label}</p>
-                  <p className="text-[11px] font-semibold text-emerald-200/60">{item.date}</p>
+                  <p className={`truncate text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{item.label}</p>
+                  <p className={`text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/60"}`}>{item.date}</p>
                 </div>
-                <p className="shrink-0 text-sm font-black tabular-nums text-lime-300">{formatBizNpr(Number(item.amount))}</p>
+                <p className={`shrink-0 text-sm font-black tabular-nums ${light ? "text-emerald-700" : "text-lime-300"}`}>
+                  {formatBizNpr(Number(item.amount))}
+                </p>
               </li>
             ))}
           </ul>

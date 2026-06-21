@@ -19,7 +19,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
-import { FireNepalMainBottomNav } from "@/components/navigation/FireNepalMainBottomNav";
+import { FireBizMobileBottomNav } from "@/components/fire-biz/FireBizMobileBottomNav";
 import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireBizCopy } from "@/contexts/FireBizContext";
@@ -152,7 +152,7 @@ export function FireBizModuleShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 px-4 py-5 pb-28 sm:px-6 lg:pb-8">{children}</main>
       </div>
 
-      <FireNepalMainBottomNav />
+      <FireBizMobileBottomNav />
     </div>
   );
 }

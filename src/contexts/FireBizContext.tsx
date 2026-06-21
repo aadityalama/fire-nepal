@@ -49,11 +49,14 @@ type FireBizContextValue = {
 };
 
 const EMPTY_SUMMARY: FireBizDashboardSummary = {
-  totalSales: 0,
-  totalPurchases: 0,
   receivables: 0,
   payables: 0,
+  monthlySales: 0,
+  monthlyPurchases: 0,
+  monthlyExpenses: 0,
   cashBalance: 0,
+  totalSales: 0,
+  totalPurchases: 0,
   inventoryValue: 0,
 };
 

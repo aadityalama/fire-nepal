@@ -56,6 +56,7 @@ type SummaryCardProps = {
   value: string;
   icon: LucideIcon;
   accent?: "emerald" | "teal" | "amber" | "rose";
+  size?: "default" | "compact" | "kpi";
 };
 
 const ACCENT: Record<NonNullable<SummaryCardProps["accent"]>, { light: string; dark: string }> = {
@@ -65,32 +66,44 @@ const ACCENT: Record<NonNullable<SummaryCardProps["accent"]>, { light: string; d
   rose: { light: "from-rose-500/15 to-pink-400/10 border-rose-300/50", dark: "from-rose-500/20 to-pink-400/10 border-rose-400/25" },
 };
 
-export function FireBizSummaryCard({ label, value, icon: Icon, accent = "emerald" }: SummaryCardProps) {
+export function FireBizSummaryCard({ label, value, icon: Icon, accent = "emerald", size = "default" }: SummaryCardProps) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const colors = ACCENT[accent];
+  const kpi = size === "kpi";
+  const compact = size === "compact";
 
   return (
     <div
-      className={`rounded-2xl border bg-gradient-to-br p-4 backdrop-blur-xl transition hover:scale-[1.01] ${
+      className={`rounded-2xl border bg-gradient-to-br backdrop-blur-xl transition duration-300 hover:scale-[1.01] animate-fade-up ${
         light ? colors.light : colors.dark
-      } ${light ? "bg-white/80" : "bg-black/20"}`}
+      } ${light ? "bg-white/80" : "bg-black/20"} ${
+        kpi ? "p-5 sm:p-6 min-h-[108px]" : compact ? "p-3.5" : "p-4"
+      }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-slate-600" : "text-emerald-200/70"}`}>
+          <p
+            className={`font-black uppercase tracking-[0.14em] ${light ? "text-slate-600" : "text-emerald-200/70"} ${
+              kpi ? "text-[11px]" : "text-[10px]"
+            }`}
+          >
             {label}
           </p>
-          <p className={`mt-1.5 truncate text-lg font-black tabular-nums sm:text-xl ${light ? "text-slate-900" : "text-white"}`}>
+          <p
+            className={`mt-1.5 truncate font-black tabular-nums ${light ? "text-slate-900" : "text-white"} ${
+              kpi ? "text-2xl sm:text-3xl" : compact ? "text-base" : "text-lg sm:text-xl"
+            }`}
+          >
             {value}
           </p>
         </div>
         <div
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+          className={`grid shrink-0 place-items-center rounded-xl ${
             light ? "bg-emerald-100 text-emerald-700" : "bg-emerald-500/20 text-emerald-200"
-          }`}
+          } ${kpi ? "h-11 w-11" : "h-9 w-9"}`}
         >
-          <Icon size={18} />
+          <Icon size={kpi ? 22 : 18} />
         </div>
       </div>
     </div>
@@ -110,14 +123,53 @@ export function FireBizQuickAction({ label, href, icon: Icon }: QuickActionProps
   return (
     <Link
       href={href}
-      className={`flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center transition active:scale-[0.98] ${
+      className={`flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3.5 text-center transition duration-300 active:scale-[0.98] animate-fade-up ${
         light
-          ? "border-emerald-200/70 bg-white/90 text-slate-800 hover:border-emerald-400/50 hover:bg-emerald-50/80"
+          ? "border-emerald-200/70 bg-white/90 text-slate-800 hover:border-emerald-400/50 hover:bg-emerald-50/80 shadow-sm"
           : "border-emerald-400/15 bg-white/[0.04] text-emerald-100 hover:border-emerald-400/30 hover:bg-emerald-500/10"
       }`}
     >
-      <Icon size={20} className={light ? "text-emerald-600" : "text-emerald-300"} />
-      <span className="text-[10px] font-black leading-tight">{label}</span>
+      <Icon size={22} className={light ? "text-emerald-600" : "text-emerald-300"} strokeWidth={2.1} />
+      <span className="text-[10px] font-black leading-tight sm:text-[11px]">{label}</span>
+    </Link>
+  );
+}
+
+type HubTileProps = {
+  label: string;
+  description?: string;
+  href: string;
+  icon: LucideIcon;
+};
+
+export function FireBizHubTile({ label, description, href, icon: Icon }: HubTileProps) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+
+  return (
+    <Link
+      href={href}
+      className={`flex min-h-[88px] items-center gap-3 rounded-2xl border px-4 py-3 transition duration-300 active:scale-[0.98] ${
+        light
+          ? "border-emerald-200/70 bg-white/90 hover:border-emerald-400/40 hover:bg-emerald-50/70"
+          : "border-emerald-400/15 bg-white/[0.04] hover:border-emerald-400/30 hover:bg-emerald-500/10"
+      }`}
+    >
+      <span
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
+          light ? "bg-emerald-100 text-emerald-700" : "bg-emerald-500/20 text-lime-300"
+        }`}
+      >
+        <Icon size={20} />
+      </span>
+      <span className="min-w-0 text-left">
+        <span className={`block text-sm font-black ${light ? "text-slate-900" : "text-white"}`}>{label}</span>
+        {description ? (
+          <span className={`mt-0.5 block text-[11px] font-semibold leading-snug ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
+            {description}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 }
