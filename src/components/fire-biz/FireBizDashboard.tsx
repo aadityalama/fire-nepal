@@ -93,7 +93,7 @@ export function FireBizDashboard() {
           <FireBizQuickAction label={d.makePayment} href="/fire-biz/cash-bank" icon={Receipt} />
           <FireBizQuickAction label={d.purchaseEntry} href="/fire-biz/purchases" icon={ShoppingCart} />
           <FireBizQuickAction label={d.inventoryEntry} href="/fire-biz/inventory" icon={Package} />
-          <FireBizQuickAction label={d.addExpense} href="/fire-biz/cash-bank" icon={Wallet} />
+          <FireBizQuickAction label={d.addExpense} href="/fire-biz/expenses" icon={Wallet} />
           <FireBizQuickAction label={d.reports} href="/fire-biz/reports" icon={BarChart3} />
         </div>
       </FireBizGlassCard>

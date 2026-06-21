@@ -32,6 +32,7 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
     "next": "latest",
+    "qrcode": "^1.5.4",
     "react": "latest",
     "react-chartjs-2": "latest",
     "react-dom": "latest",
@@ -45,10 +46,12 @@
     "@eslint/eslintrc": "latest",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "playwright": "^1.61.0",
     "tailwindcss": "latest",
     "typescript": "latest"
   }

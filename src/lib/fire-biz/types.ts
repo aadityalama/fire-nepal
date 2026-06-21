@@ -8,7 +8,11 @@ export type PurchaseRow = Database["public"]["Tables"]["purchases"]["Row"];
 export type InventoryItemRow = Database["public"]["Tables"]["inventory_items"]["Row"];
 export type BizTransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 export type CreditReminderRow = Database["public"]["Tables"]["credit_reminders"]["Row"];
+export type ExpenseCategoryRow = Database["public"]["Tables"]["expense_categories"]["Row"];
+export type PurchaseOrderRow = Database["public"]["Tables"]["purchase_orders"]["Row"];
 
+export type PaymentMethod = "cash" | "bank" | "esewa" | "khalti" | "other";
+export type PurchaseOrderStatus = "draft" | "sent" | "partial" | "received" | "cancelled";
 export type PaymentStatus = "paid" | "partial" | "unpaid";
 export type TransactionType = BizTransactionRow["transaction_type"];
 export type AccountType = BizTransactionRow["account_type"];
@@ -49,9 +53,11 @@ export type FireBizNavKey =
   | "dashboard"
   | "sales"
   | "purchases"
+  | "purchaseOrders"
   | "customers"
   | "suppliers"
   | "inventory"
+  | "expenses"
   | "cashBank"
   | "creditReminders"
   | "reports"

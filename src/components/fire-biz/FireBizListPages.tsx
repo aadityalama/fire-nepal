@@ -1,6 +1,7 @@
 "use client";
 
 import { ShoppingCart } from "lucide-react";
+import Link from "next/link";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { FireBizEmptyState, FireBizGlassCard, FireBizPageActions, FireBizPrimaryButton } from "@/components/fire-biz/FireBizUiPrimitives";
 import { useFireBiz, useFireBizCopy } from "@/contexts/FireBizContext";
@@ -28,9 +29,14 @@ export function FireBizSalesPage() {
               <li key={sale.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/10 bg-black/20 px-3 py-2.5">
                 <div>
                   <p className="text-sm font-bold">{sale.invoice_number ?? "Invoice"}</p>
-                  <p className="text-[11px] text-emerald-200/60">{sale.sale_date} · {sale.payment_status}</p>
+                  <p className="text-[11px] text-emerald-200/60">{sale.sale_date} · {sale.payment_status} · {sale.payment_method ?? "cash"}</p>
                 </div>
-                <p className="text-sm font-black tabular-nums text-lime-300">{formatBizNpr(Number(sale.total_amount))}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm font-black tabular-nums text-lime-300">{formatBizNpr(Number(sale.total_amount))}</p>
+                  <Link href={`/fire-biz/sales/${sale.id}`} className="text-xs font-bold text-emerald-400 hover:underline">
+                    {s.viewInvoice}
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -98,7 +104,12 @@ export function FireBizCustomersPage() {
                   <p className="text-sm font-bold">{row.name}</p>
                   <p className="text-[11px] text-emerald-200/60">{row.phone ?? row.email ?? "—"}</p>
                 </div>
-                <p className="text-sm font-black tabular-nums text-lime-300">{formatBizNpr(Number(row.balance))}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-sm font-black tabular-nums text-lime-300">{formatBizNpr(Number(row.balance))}</p>
+                  <Link href={`/fire-biz/customers/${row.id}/statement`} className="text-xs font-bold text-emerald-400 hover:underline">
+                    {c.viewStatement}
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

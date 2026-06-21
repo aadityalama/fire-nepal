@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import {
   Area,
@@ -19,6 +20,7 @@ import { FireBizEmptyState, FireBizGlassCard } from "@/components/fire-biz/FireB
 import { useFireBiz, useFireBizCopy } from "@/contexts/FireBizContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { computeFireBizAnalytics } from "@/lib/fire-biz/analytics";
+import { computeProfitLoss, defaultProfitLossRange } from "@/lib/fire-biz/profit-loss";
 import { formatBizNpr } from "@/lib/fire-biz/i18n";
 import { BarChart3 } from "lucide-react";
 
@@ -39,12 +41,24 @@ export function FireBizReportsPage() {
   const tooltipBg = light ? "rgba(255,255,255,0.96)" : "rgba(3, 8, 6, 0.94)";
   const tooltipBorder = light ? "rgba(16, 185, 129, 0.25)" : "rgba(52, 211, 153, 0.2)";
 
-  const profit = summary.totalSales - summary.totalPurchases;
+  const profit = useMemo(() => {
+    const range = defaultProfitLossRange();
+    return computeProfitLoss(sales, purchases, transactions, range.from, range.to).netProfit;
+  }, [sales, purchases, transactions]);
   const hasData = sales.length > 0 || purchases.length > 0 || transactions.length > 0;
 
   return (
     <div className="space-y-6">
       <DashboardSectionHeader eyebrow={copy.moduleName} title={r.title} subtitle={r.subtitle} accent="teal" />
+
+      <div className="flex flex-wrap gap-2">
+        <Link href="/fire-biz/reports/profit-loss" className="inline-flex min-h-[44px] items-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20">
+          {r.profitLossLink}
+        </Link>
+        <Link href="/fire-biz/reports/vat" className="inline-flex min-h-[44px] items-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-bold text-emerald-300 hover:bg-emerald-500/20">
+          {r.vatReportLink}
+        </Link>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className={`rounded-2xl border p-4 ${light ? "border-emerald-200/70 bg-white/90" : "border-emerald-400/15 bg-emerald-950/35"}`}>

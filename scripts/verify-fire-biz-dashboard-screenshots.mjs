@@ -40,7 +40,9 @@ await desktop.waitForTimeout(2000);
 await desktop.screenshot({ path: join(outDir, "fire-biz-dashboard-desktop.png"), fullPage: true });
 await mobile.screenshot({ path: join(outDir, "fire-biz-dashboard-mobile.png"), fullPage: true });
 
-await mobile.goto(`${baseUrl}/fire-biz/transactions`, { waitUntil: "networkidle", timeout: 60000 });
+await mobile.goto(`${baseUrl}/fire-biz/transactions`, { waitUntil: "domcontentloaded", timeout: 120000 });
+await mobile.getByText(/Transactions/i).first().waitFor({ timeout: 120000 });
+await mobile.waitForTimeout(1500);
 await mobile.screenshot({ path: join(outDir, "fire-biz-mobile-transactions.png"), fullPage: false });
 
 await browser.close();

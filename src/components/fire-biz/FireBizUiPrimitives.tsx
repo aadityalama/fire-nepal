@@ -190,17 +190,54 @@ export function FireBizPageActions({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap gap-2">{children}</div>;
 }
 
-export function FireBizPrimaryButton({ children, onClick, type = "button" }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit" }) {
+export function FireBizPrimaryButton({
+  children,
+  onClick,
+  type = "button",
+  disabled,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  disabled?: boolean;
+}) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   return (
     <button
       type={type}
       onClick={onClick}
-      className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
+      disabled={disabled}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-50 ${
         light
           ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg shadow-emerald-500/20"
           : "bg-gradient-to-r from-emerald-500/90 to-lime-400/90 text-emerald-950 shadow-lg shadow-emerald-500/20"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function FireBizSecondaryButton({
+  children,
+  onClick,
+  type = "button",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+}) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+        light
+          ? "border-emerald-300/70 bg-white text-emerald-800 hover:bg-emerald-50"
+          : "border-emerald-400/25 bg-white/[0.04] text-emerald-100 hover:bg-emerald-500/10"
       }`}
     >
       {children}

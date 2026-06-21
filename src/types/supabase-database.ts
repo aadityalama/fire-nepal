@@ -656,6 +656,12 @@ export type Database = {
           fiscal_year_start_month: number;
           currency: string;
           payload: Json;
+          default_vat_rate: number;
+          vat_registered: boolean;
+          esewa_merchant_id: string | null;
+          khalti_merchant_id: string | null;
+          esewa_qr_url: string | null;
+          khalti_qr_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -671,6 +677,12 @@ export type Database = {
           fiscal_year_start_month?: number;
           currency?: string;
           payload?: Json;
+          default_vat_rate?: number;
+          vat_registered?: boolean;
+          esewa_merchant_id?: string | null;
+          khalti_merchant_id?: string | null;
+          esewa_qr_url?: string | null;
+          khalti_qr_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -684,6 +696,12 @@ export type Database = {
           fiscal_year_start_month?: number;
           currency?: string;
           payload?: Json;
+          default_vat_rate?: number;
+          vat_registered?: boolean;
+          esewa_merchant_id?: string | null;
+          khalti_merchant_id?: string | null;
+          esewa_qr_url?: string | null;
+          khalti_qr_url?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -786,6 +804,9 @@ export type Database = {
           total_amount: number;
           amount_paid: number;
           payment_status: "paid" | "partial" | "unpaid";
+          payment_method: "cash" | "bank" | "esewa" | "khalti" | "other";
+          vat_rate: number;
+          is_tax_invoice: boolean;
           line_items: Json;
           notes: string | null;
           created_at: string;
@@ -804,6 +825,9 @@ export type Database = {
           total_amount?: number;
           amount_paid?: number;
           payment_status?: "paid" | "partial" | "unpaid";
+          payment_method?: "cash" | "bank" | "esewa" | "khalti" | "other";
+          vat_rate?: number;
+          is_tax_invoice?: boolean;
           line_items?: Json;
           notes?: string | null;
           created_at?: string;
@@ -820,6 +844,9 @@ export type Database = {
           total_amount?: number;
           amount_paid?: number;
           payment_status?: "paid" | "partial" | "unpaid";
+          payment_method?: "cash" | "bank" | "esewa" | "khalti" | "other";
+          vat_rate?: number;
+          is_tax_invoice?: boolean;
           line_items?: Json;
           notes?: string | null;
           updated_at?: string;
@@ -941,6 +968,7 @@ export type Database = {
           reference_id: string | null;
           party_name: string | null;
           transaction_date: string;
+          expense_category_id: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;
@@ -957,6 +985,7 @@ export type Database = {
           reference_id?: string | null;
           party_name?: string | null;
           transaction_date?: string;
+          expense_category_id?: string | null;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -971,6 +1000,7 @@ export type Database = {
           reference_id?: string | null;
           party_name?: string | null;
           transaction_date?: string;
+          expense_category_id?: string | null;
           notes?: string | null;
           updated_at?: string;
         };
@@ -1016,6 +1046,87 @@ export type Database = {
           due_date?: string;
           reminder_type?: "receivable" | "payable";
           is_resolved?: boolean;
+          notes?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      expense_categories: {
+        Row: {
+          id: string;
+          user_id: string;
+          business_profile_id: string | null;
+          name: string;
+          color: string | null;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          business_profile_id?: string | null;
+          name: string;
+          color?: string | null;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          business_profile_id?: string | null;
+          name?: string;
+          color?: string | null;
+          is_default?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      purchase_orders: {
+        Row: {
+          id: string;
+          user_id: string;
+          business_profile_id: string | null;
+          supplier_id: string | null;
+          po_number: string | null;
+          order_date: string;
+          expected_date: string | null;
+          status: "draft" | "sent" | "partial" | "received" | "cancelled";
+          subtotal: number;
+          tax_amount: number;
+          total_amount: number;
+          line_items: Json;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          business_profile_id?: string | null;
+          supplier_id?: string | null;
+          po_number?: string | null;
+          order_date?: string;
+          expected_date?: string | null;
+          status?: "draft" | "sent" | "partial" | "received" | "cancelled";
+          subtotal?: number;
+          tax_amount?: number;
+          total_amount?: number;
+          line_items?: Json;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          business_profile_id?: string | null;
+          supplier_id?: string | null;
+          po_number?: string | null;
+          order_date?: string;
+          expected_date?: string | null;
+          status?: "draft" | "sent" | "partial" | "received" | "cancelled";
+          subtotal?: number;
+          tax_amount?: number;
+          total_amount?: number;
+          line_items?: Json;
           notes?: string | null;
           updated_at?: string;
         };
