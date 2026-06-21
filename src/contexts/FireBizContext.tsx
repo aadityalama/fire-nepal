@@ -121,7 +121,11 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
     try {
       const client = getSupabaseBrowserClient();
       const uid = user.id;
-      await ensureDefaultExpenseCategories(client, uid);
+      try {
+        await ensureDefaultExpenseCategories(client, uid);
+      } catch {
+        // expense_categories table may not exist until migration is applied
+      }
       const [
         summaryData,
         profileData,
@@ -135,17 +139,17 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
         categoriesData,
         ordersData,
       ] = await Promise.all([
-        loadFireBizDashboardSummary(client, uid),
-        loadBusinessProfile(client, uid),
-        loadCustomers(client, uid),
-        loadSuppliers(client, uid),
-        loadSales(client, uid),
-        loadPurchases(client, uid),
-        loadInventoryItems(client, uid),
-        loadBizTransactions(client, uid),
-        loadCreditReminders(client, uid),
-        loadExpenseCategories(client, uid),
-        loadPurchaseOrders(client, uid),
+        loadFireBizDashboardSummary(client, uid).catch(() => EMPTY_SUMMARY),
+        loadBusinessProfile(client, uid).catch(() => null),
+        loadCustomers(client, uid).catch(() => []),
+        loadSuppliers(client, uid).catch(() => []),
+        loadSales(client, uid).catch(() => []),
+        loadPurchases(client, uid).catch(() => []),
+        loadInventoryItems(client, uid).catch(() => []),
+        loadBizTransactions(client, uid).catch(() => []),
+        loadCreditReminders(client, uid).catch(() => []),
+        loadExpenseCategories(client, uid).catch(() => []),
+        loadPurchaseOrders(client, uid).catch(() => []),
       ]);
       setSummary(summaryData);
       setProfile(profileData);

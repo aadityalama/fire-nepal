@@ -14,6 +14,8 @@
     "verify:membership-storage": "node scripts/verify-membership-payment-storage.mjs",
     "verify:supabase-auth-env": "node scripts/verify-supabase-auth-env.mjs",
     "verify:supabase-login-routes": "node scripts/verify-supabase-login-routes.mjs",
+    "db:apply:fire-biz": "node scripts/apply-fire-biz-production-migration.mjs",
+    "verify:fire-biz-production": "node scripts/verify-fire-biz-production-migration.mjs",
     "db:push:remote": "env SUPABASE_CLI_DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
     "db:push-verify:production": "node scripts/push-verify-production-schema.mjs",
     "db:apply-verify:membership": "node scripts/apply-and-verify-supabase-membership.mjs",
