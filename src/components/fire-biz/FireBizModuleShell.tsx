@@ -19,7 +19,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { FireBizMobileBottomNav } from "@/components/fire-biz/FireBizMobileBottomNav";
 import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
@@ -68,6 +68,23 @@ export function FireBizModuleShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const close = useCallback(() => setDrawerOpen(false), []);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => {
+      if (mq.matches) {
+        document.body.style.overflow = "";
+        return;
+      }
+      document.body.style.overflow = drawerOpen ? "hidden" : "";
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      document.body.style.overflow = "";
+    };
+  }, [drawerOpen]);
+
   return (
     <div
       className={`fire-biz-root relative min-h-screen max-w-[100vw] overflow-x-clip transition-[background-color,color] duration-300 ${
@@ -77,9 +94,10 @@ export function FireBizModuleShell({ children }: { children: ReactNode }) {
       <div
         className={
           light
-            ? "pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.09),transparent_55%)]"
-            : "pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.14),transparent_55%)]"
+            ? "pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.09),transparent_55%)]"
+            : "pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(16,185,129,0.14),transparent_55%)]"
         }
+        aria-hidden
       />
 
       <header
@@ -120,20 +138,28 @@ export function FireBizModuleShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="relative mx-auto flex max-w-[1600px] min-h-[calc(100dvh-4rem)]">
-        {drawerOpen ? (
-          <button
-            type="button"
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            aria-label="Close menu overlay"
-            onClick={close}
-          />
-        ) : null}
+      <div className="relative z-10 mx-auto flex max-w-[1600px] min-h-[calc(100dvh-4rem)]">
+        <button
+          type="button"
+          className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] transition-opacity duration-300 lg:hidden ${
+            drawerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+          }`}
+          aria-label="Close menu overlay"
+          aria-hidden={!drawerOpen}
+          tabIndex={drawerOpen ? 0 : -1}
+          onClick={close}
+        />
 
         <aside
+          id="fire-biz-drawer"
+          aria-hidden={!drawerOpen}
           className={`fixed inset-y-0 left-0 z-50 flex w-[min(90vw,280px)] flex-col border-r backdrop-blur-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
             light ? "border-emerald-200/60 bg-white/95" : "border-emerald-400/10 bg-[#04140f]/95"
-          } ${drawerOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
+          } ${
+            drawerOpen
+              ? "translate-x-0 pointer-events-auto"
+              : "-translate-x-full pointer-events-none lg:pointer-events-auto lg:translate-x-0"
+          }`}
         >
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
             {FIRE_BIZ_NAV.map((item) => {
@@ -153,7 +179,7 @@ export function FireBizModuleShell({ children }: { children: ReactNode }) {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-5 pb-28 sm:px-6 lg:pb-8">{children}</main>
+        <main className="relative z-10 min-w-0 flex-1 px-4 py-5 pb-28 sm:px-6 lg:pb-8">{children}</main>
       </div>
 
       <FireBizMobileBottomNav />

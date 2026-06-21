@@ -55,7 +55,7 @@ export function FireBizMobileBottomNav() {
 
   return (
     <nav
-      className={`fixed bottom-0 left-0 right-0 z-50 border-t px-1 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-xl lg:hidden ${
+      className={`fixed bottom-0 left-0 right-0 z-[60] border-t px-1 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-xl lg:hidden ${
         light ? "border-emerald-200/70 bg-white/95" : "border-emerald-400/15 bg-[#04140f]/95"
       }`}
       aria-label="FIRE Biz navigation"
