@@ -53,10 +53,13 @@ try {
 }
 
 const byName = (n) => keys.find((k) => k.name === n)?.api_key;
-const anon = byName("anon");
-const service = byName("service_role");
+const anon = byName("publishable") ?? byName("anon");
+const service = byName("secret") ?? byName("service_role");
 if (!anon || !service) {
-  console.error("Unexpected api-keys payload; expected anon + service_role:", JSON.stringify(keys, null, 2).slice(0, 500));
+  console.error(
+    "Unexpected api-keys payload; expected publishable/anon + secret/service_role:",
+    JSON.stringify(keys, null, 2).slice(0, 500),
+  );
   process.exit(1);
 }
 

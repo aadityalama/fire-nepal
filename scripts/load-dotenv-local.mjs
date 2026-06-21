@@ -27,7 +27,8 @@ export function loadDotEnvLocal() {
     }
     const cur = process.env[key];
     const curEmpty = cur === undefined || cur === null || String(cur).trim() === "";
-    if (!(key in process.env) || curEmpty) process.env[key] = val;
+    // Prefer `.env.local` over inherited shell exports (avoids stale keys after local edits).
+    if (val || !(key in process.env) || curEmpty) process.env[key] = val;
   }
   return { path: envLocal, loaded: true };
 }
