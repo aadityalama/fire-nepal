@@ -39,14 +39,20 @@ export function FireNepalMainBottomNav({ locale = "en" }: FireNepalMainBottomNav
               key={item.href}
               href={item.href}
               title={labels[item.labelKey]}
+              aria-label={
+                item.labelKey === "fireBiz"
+                  ? `${labels.fireBiz} — ${FIRE_BIZ_I18N[locale].moduleTagline}`
+                  : labels[item.labelKey]
+              }
+              data-testid={`main-nav-${item.labelKey}`}
               className={`flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1 text-center transition ${
                 active
                   ? light
-                    ? "text-emerald-700"
-                    : "text-lime-300"
+                    ? "bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-500/10"
+                    : "bg-emerald-500/10 text-lime-300 shadow-sm shadow-emerald-500/10"
                   : light
-                    ? "text-slate-500 hover:text-emerald-600"
-                    : "text-zinc-500 hover:text-emerald-200"
+                    ? "text-slate-500 hover:bg-emerald-50/80 hover:text-emerald-600"
+                    : "text-zinc-500 hover:bg-white/[0.04] hover:text-emerald-200"
               }`}
             >
               <item.icon size={18} strokeWidth={active ? 2.4 : 2} className="shrink-0" />

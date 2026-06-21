@@ -1,16 +1,25 @@
 "use client";
 
-import { Activity, ArrowRight, Banknote, LineChart, Receipt, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowRight, Banknote, LayoutGrid, LineChart, Receipt, Sparkles, Target } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
 
 export function HubHomePanel() {
   const onboarding = useMemo(() => loadProductOnboarding(), []);
   const { isAdmin } = useProductAuth();
+  const fireBiz = FIRE_BIZ_I18N.en.hubPromo;
 
   const cards = [
+    {
+      href: "/fire-biz",
+      title: fireBiz.title,
+      body: fireBiz.description,
+      icon: LayoutGrid,
+      accent: "from-emerald-500/30 to-lime-300/15",
+    },
     {
       href: "/portfolio",
       title: "Wealth dashboard",
@@ -47,8 +56,8 @@ export function HubHomePanel() {
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-200/55">Command center</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome to your hub</h1>
         <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-emerald-100/65">
-          Everything here stays local-first. Portfolio v2, cashflow, OCR, simulation, coach, and STEP 5C intelligence remain
-          exactly as you left them — this shell only unifies navigation.
+          Everything here stays local-first. Portfolio v2, cashflow, OCR, simulation, FIRE Biz, coach, and STEP 5C intelligence
+          remain exactly as you left them — this shell only unifies navigation.
         </p>
       </div>
 
@@ -118,6 +127,7 @@ export function HubHomePanel() {
           <Link
             key={c.href}
             href={c.href}
+            data-testid={c.href === "/fire-biz" ? "hub-fire-biz-card" : undefined}
             className="group relative block min-w-0 max-w-full overflow-hidden rounded-2xl border border-emerald-400/15 bg-gradient-to-br p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition duration-500 hover:border-emerald-300/35 hover:shadow-[0_24px_70px_rgba(16,185,129,0.12)]"
           >
             <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${c.accent} opacity-90`} />

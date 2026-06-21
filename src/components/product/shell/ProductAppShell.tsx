@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  ArrowRight,
   Bell,
   Briefcase,
   Flame,
@@ -56,6 +57,8 @@ export function MorePagePanel() {
   const light = resolvedTheme === "light";
   const { isAdmin } = useProductAuth();
   const labels = FIRE_BIZ_I18N.en.mainNav;
+  const fireBiz = FIRE_BIZ_I18N.en.hubPromo;
+  const fireBizMore = FIRE_BIZ_I18N.en.morePromo;
 
   const links = isAdmin
     ? [...MORE_LINKS, { href: "/admin", label: "Admin", icon: Activity }]
@@ -71,9 +74,55 @@ export function MorePagePanel() {
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400/80">FIRE Nepal</p>
         <h1 className={`mt-2 text-2xl font-black ${light ? "text-slate-900" : "text-white"}`}>{labels.more}</h1>
         <p className={`mt-2 text-sm font-semibold ${light ? "text-slate-600" : "text-emerald-200/70"}`}>
-          Account, family modules, reminders, and settings.
+          Account, family modules, reminders, FIRE Biz, and settings.
         </p>
       </header>
+
+      <Link
+        href="/fire-biz"
+        data-testid="more-fire-biz-promo"
+        className={`group relative block overflow-hidden rounded-2xl border p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] transition duration-500 hover:border-emerald-300/35 hover:shadow-[0_24px_70px_rgba(16,185,129,0.12)] ${
+          light
+            ? "border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-lime-50/80"
+            : "border-emerald-400/20 bg-gradient-to-br from-emerald-500/15 to-lime-400/5"
+        }`}
+      >
+        <div
+          className={`pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/20 to-lime-400/10 opacity-90 ${
+            light ? "opacity-60" : ""
+          }`}
+        />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span
+              className={`mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-xl border shadow-lg ${
+                light
+                  ? "border-emerald-200 bg-white text-emerald-700 shadow-emerald-500/10"
+                  : "border-emerald-400/25 bg-black/30 text-lime-200 shadow-emerald-500/20"
+              }`}
+            >
+              <LayoutGrid size={22} />
+            </span>
+            <div>
+              <p className={`text-sm font-black ${light ? "text-slate-900" : "text-white"}`}>{fireBiz.title}</p>
+              <p className={`mt-1 text-xs font-medium leading-relaxed ${light ? "text-slate-600" : "text-emerald-100/75"}`}>
+                {fireBizMore.description}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 self-start rounded-xl border px-4 py-2.5 text-xs font-black transition group-hover:translate-x-0.5 sm:self-center ${
+              light
+                ? "border-emerald-300/60 bg-emerald-600 text-white hover:bg-emerald-700"
+                : "border-emerald-300/30 bg-emerald-500/15 text-lime-100 hover:bg-emerald-500/25"
+            }`}
+          >
+            Open business desk
+            <ArrowRight size={16} />
+          </span>
+        </div>
+      </Link>
+
       <div className="grid gap-2 sm:grid-cols-2">
         {links.map((item) => (
           <Link

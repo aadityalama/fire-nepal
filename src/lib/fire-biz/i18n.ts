@@ -23,6 +23,13 @@ export const FIRE_BIZ_I18N = {
       fireBiz: "FIRE Biz",
       more: "More",
     },
+    hubPromo: {
+      title: "FIRE Biz",
+      description: "Sales, purchases, inventory, customers, and credit reminders for your shop.",
+    },
+    morePromo: {
+      description: "Karobar-style business desk — sales, stock, receivables, and reports.",
+    },
     dashboard: {
       title: "Business Dashboard",
       subtitle: "Track sales, purchases, receivables, and inventory at a glance.",
@@ -134,6 +141,13 @@ export const FIRE_BIZ_I18N = {
       portfolio: "पोर्टफोलियो",
       fireBiz: "FIRE Biz",
       more: "थप",
+    },
+    hubPromo: {
+      title: "FIRE Biz",
+      description: "बिक्री, खरिद, स्टक, ग्राहक र उधार सम्झना — तपाईंको पसलका लागि।",
+    },
+    morePromo: {
+      description: "Karobar-शैली व्यवसाय डेस्क — बिक्री, स्टक, प्राप्य र प्रतिवेदन।",
     },
     dashboard: {
       title: "व्यवसाय ड्यासबोर्ड",

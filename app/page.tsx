@@ -17,6 +17,7 @@ import {
   Home,
   Landmark,
   LayoutDashboard,
+  LayoutGrid,
   LineChart,
   PiggyBank,
   Plane,
@@ -38,6 +39,7 @@ import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSect
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 
 const tools: Array<[string, string, string, LucideIcon]> = [
+  ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],
   ["Baby Plan Estimator", "Family goals after Korea", "/baby-plan-estimator", Home],
   ["Remittance Calculator", "Compare fees and timing", "/remittance-calculator", CreditCard],
@@ -52,6 +54,7 @@ const tools: Array<[string, string, string, LucideIcon]> = [
 ];
 
 const fireTools: Array<[string, string, string, LucideIcon]> = [
+  ["FIRE Biz", "Business desk — sales, purchases, stock, and receivables", "/fire-biz", LayoutGrid],
   ["FIRE Summary", "Unified net worth, runway & FIRE %", "/fire-summary", LayoutDashboard],
   ["Cashflow Dashboard", "Income, burn, emergency fund & FIRE speed", "/cashflow-dashboard", Banknote],
   ["Expense Tracker", "Track roommate & daily expenses", "/expense-dashboard", ReceiptText],
