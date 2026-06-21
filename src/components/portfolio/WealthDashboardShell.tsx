@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
+import { FireNepalMainBottomNav } from "@/components/navigation/FireNepalMainBottomNav";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
@@ -507,10 +508,11 @@ export function WealthDashboardShell({
           </div>
         </aside>
 
-        <div className="relative mx-auto min-h-0 w-full max-w-[1680px] min-w-0 flex-1 self-start px-4 py-3 sm:px-6 sm:py-3 lg:px-8 lg:py-3 xl:px-8 xl:py-3 2xl:px-8 2xl:py-3">
+        <div className="relative mx-auto min-h-0 w-full max-w-[1680px] min-w-0 flex-1 self-start px-4 py-3 pb-28 sm:px-6 sm:py-3 lg:px-8 lg:py-3 xl:px-8 xl:py-3 xl:pb-3 2xl:px-8 2xl:py-3">
           {children}
         </div>
       </div>
+      <FireNepalMainBottomNav />
     </main>
   );
 }

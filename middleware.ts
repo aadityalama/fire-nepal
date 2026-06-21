@@ -96,6 +96,10 @@ export const config = {
     "/child-records-vault/:path*",
     "/admin",
     "/admin/:path*",
+    "/fire-biz",
+    "/fire-biz/:path*",
+    "/more",
+    "/more/:path*",
     "/auth/callback",
   ],
 };
