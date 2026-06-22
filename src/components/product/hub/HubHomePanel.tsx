@@ -33,6 +33,13 @@ type LauncherItem = {
   testId?: string;
 };
 
+type ToolLauncherItem = {
+  href: string;
+  title: string;
+  icon: LucideIcon;
+  accent: string;
+};
+
 const PRIMARY_APPS: LauncherItem[] = [
   {
     href: "/fire-biz",
@@ -65,46 +72,40 @@ const PRIMARY_APPS: LauncherItem[] = [
   },
 ];
 
-const POPULAR_TOOLS: LauncherItem[] = [
+const POPULAR_TOOLS: ToolLauncherItem[] = [
   {
     href: "/sip-calculator",
-    title: "SIP Calculator",
-    body: "Monthly investing growth",
+    title: "SIP",
     icon: BarChart3,
     accent: "from-emerald-500/20 to-lime-400/10",
   },
   {
     href: "/swp-calculator",
-    title: "SWP Calculator",
-    body: "Safe withdrawal & drawdown",
+    title: "SWP",
     icon: LineChart,
     accent: "from-teal-500/20 to-cyan-400/10",
   },
   {
     href: "/expense-dashboard",
-    title: "Expense Tracker",
-    body: "Roommate & daily expenses",
+    title: "Expense",
     icon: ReceiptText,
     accent: "from-amber-500/15 to-emerald-500/10",
   },
   {
     href: "/emergency-fund",
-    title: "Emergency Fund",
-    body: "Safety fund progress",
+    title: "Emergency",
     icon: ShieldCheck,
     accent: "from-sky-500/15 to-emerald-500/10",
   },
   {
     href: "/return-to-nepal",
-    title: "Return Planner",
-    body: "Nepal return target planning",
+    title: "Return",
     icon: Plane,
     accent: "from-violet-500/15 to-teal-400/10",
   },
   {
     href: "/korea-pension-dashboard",
     title: "Korea Pension",
-    body: "Payslip OCR, pension & severance",
     icon: Building2,
     accent: "from-indigo-500/15 to-emerald-500/10",
   },
@@ -146,35 +147,31 @@ function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boole
   );
 }
 
-function ToolLauncherRow({ item, light }: { item: LauncherItem; light: boolean }) {
+function CompactToolCard({ item, light }: { item: ToolLauncherItem; light: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`group relative flex min-h-[64px] touch-manipulation items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 transition duration-200 active:scale-[0.99] sm:min-h-[72px] sm:px-5 ${
+      className={`group relative flex h-[108px] touch-manipulation flex-col items-center justify-center gap-2.5 overflow-hidden rounded-2xl border px-3 py-3 transition duration-200 active:scale-[0.98] sm:h-[112px] ${
         light
-          ? "border-emerald-200/70 bg-white/90 hover:border-emerald-400/40 hover:bg-emerald-50/60"
-          : "border-emerald-400/12 bg-white/[0.04] hover:border-emerald-400/25 hover:bg-emerald-500/10"
+          ? "border-emerald-200/80 bg-white/95 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.12)] hover:border-emerald-400/50"
+          : "border-emerald-400/15 bg-emerald-950/35 shadow-[0_20px_60px_rgba(0,0,0,0.35)] hover:border-emerald-300/35"
       }`}
     >
-      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-r ${item.accent} opacity-80`} aria-hidden />
+      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${item.accent} opacity-90`} aria-hidden />
       <span
-        className={`relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-          light ? "bg-emerald-100 text-emerald-700" : "bg-emerald-500/20 text-lime-300"
+        className={`relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${
+          light ? "border-emerald-200/80 bg-emerald-50 text-emerald-700" : "border-white/10 bg-black/30 text-lime-200"
         }`}
       >
         <item.icon size={20} strokeWidth={2.1} />
       </span>
-      <span className="relative z-10 min-w-0 flex-1 text-left">
-        <span className={`block text-sm font-black ${light ? "text-slate-900" : "text-white"}`}>{item.title}</span>
-        <span className={`mt-0.5 block truncate text-xs font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
-          {item.body}
-        </span>
-      </span>
-      <ChevronRight
-        size={18}
-        className={`relative z-10 shrink-0 opacity-50 ${light ? "text-emerald-700" : "text-emerald-200"}`}
-        aria-hidden
-      />
+      <h3
+        className={`relative z-10 max-w-full truncate px-1 text-center text-xs font-black leading-tight sm:text-sm ${
+          light ? "text-slate-900" : "text-white"
+        }`}
+      >
+        {item.title}
+      </h3>
     </Link>
   );
 }
@@ -276,9 +273,9 @@ export function HubHomePanel() {
         <h2 id="hub-popular-tools" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
           Popular tools
         </h2>
-        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4">
           {POPULAR_TOOLS.map((item) => (
-            <ToolLauncherRow key={item.href} item={item} light={light} />
+            <CompactToolCard key={item.href} item={item} light={light} />
           ))}
         </div>
       </section>
