@@ -110,6 +110,64 @@ export function FireBizSummaryCard({ label, value, icon: Icon, accent = "emerald
   );
 }
 
+type FireBizKpiGridCardProps = {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  accent?: "emerald" | "teal" | "amber" | "rose";
+  href?: string;
+};
+
+export function FireBizKpiGridCard({ label, value, icon: Icon, accent = "emerald", href }: FireBizKpiGridCardProps) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  const colors = ACCENT[accent];
+
+  const card = (
+    <div
+      className={`relative flex h-[118px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border bg-gradient-to-br p-3.5 backdrop-blur-xl transition duration-200 sm:h-[124px] sm:p-4 ${
+        light ? colors.light : colors.dark
+      } ${light ? "bg-white/85 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.1)]" : "bg-black/25 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]"} ${
+        href ? "active:scale-[0.98] hover:scale-[1.01]" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p
+          className={`min-w-0 flex-1 text-[9px] font-black uppercase leading-tight tracking-[0.1em] sm:text-[10px] ${
+            light ? "text-slate-600" : "text-emerald-200/70"
+          }`}
+        >
+          {label}
+        </p>
+        <div
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1 sm:h-9 sm:w-9 sm:rounded-xl ${
+            light ? "bg-emerald-50 text-emerald-700 ring-emerald-200/80" : "bg-emerald-500/15 text-emerald-200 ring-white/10"
+          }`}
+          aria-hidden
+        >
+          <Icon size={17} strokeWidth={2.25} />
+        </div>
+      </div>
+      <p
+        className={`truncate font-black tabular-nums leading-none ${light ? "text-slate-900" : "text-white"} text-lg sm:text-xl`}
+        aria-hidden={href ? true : undefined}
+      >
+        {value}
+      </p>
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400" aria-label={`${label}: ${value}`}>
+        {card}
+      </Link>
+    );
+  }
+
+  return card;
+}
+
 type QuickActionProps = {
   label: string;
   href: string;

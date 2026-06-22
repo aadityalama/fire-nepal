@@ -23,8 +23,8 @@ import { FireBizFireIntegrationPanel } from "@/components/fire-biz/FireBizFireIn
 import {
   FireBizEmptyState,
   FireBizGlassCard,
+  FireBizKpiGridCard,
   FireBizQuickAction,
-  FireBizSummaryCard,
 } from "@/components/fire-biz/FireBizUiPrimitives";
 import { useFireBiz, useFireBizCopy } from "@/contexts/FireBizContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
@@ -72,18 +72,31 @@ export function FireBizDashboard() {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 6);
 
+  const kpiCards = [
+    { label: d.receivable, value: loading ? loadingVal : formatBizNpr(summary.receivables), icon: ArrowDownLeft, accent: "amber" as const, href: "/fire-biz/customers" },
+    { label: d.payable, value: loading ? loadingVal : formatBizNpr(summary.payables), icon: ArrowUpRight, accent: "rose" as const, href: "/fire-biz/suppliers" },
+    { label: d.monthlySales, value: loading ? loadingVal : formatBizNpr(summary.monthlySales), icon: TrendingUp, accent: "emerald" as const, href: "/fire-biz/sales" },
+    { label: d.monthlyPurchases, value: loading ? loadingVal : formatBizNpr(summary.monthlyPurchases), icon: ShoppingBag, accent: "teal" as const, href: "/fire-biz/purchases" },
+    { label: d.monthlyExpenses, value: loading ? loadingVal : formatBizNpr(summary.monthlyExpenses), icon: TrendingDown, accent: "rose" as const, href: "/fire-biz/expenses" },
+    { label: d.cashBankBalance, value: loading ? loadingVal : formatBizNpr(summary.cashBalance), icon: Wallet, accent: "emerald" as const, href: "/fire-biz/cash-bank" },
+  ];
+
   return (
-    <div className="space-y-6 pb-4">
+    <div className="space-y-5 pb-4">
       <DashboardSectionHeader eyebrow={copy.moduleName} title={d.title} subtitle={d.subtitle} accent="emerald" />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <FireBizSummaryCard label={d.receivable} value={loading ? loadingVal : formatBizNpr(summary.receivables)} icon={ArrowDownLeft} accent="amber" size="kpi" />
-        <FireBizSummaryCard label={d.payable} value={loading ? loadingVal : formatBizNpr(summary.payables)} icon={ArrowUpRight} accent="rose" size="kpi" />
-        <FireBizSummaryCard label={d.monthlySales} value={loading ? loadingVal : formatBizNpr(summary.monthlySales)} icon={TrendingUp} accent="emerald" size="kpi" />
-        <FireBizSummaryCard label={d.monthlyPurchases} value={loading ? loadingVal : formatBizNpr(summary.monthlyPurchases)} icon={ShoppingBag} accent="teal" size="kpi" />
-        <FireBizSummaryCard label={d.monthlyExpenses} value={loading ? loadingVal : formatBizNpr(summary.monthlyExpenses)} icon={TrendingDown} accent="rose" size="kpi" />
-        <FireBizSummaryCard label={d.cashBankBalance} value={loading ? loadingVal : formatBizNpr(summary.cashBalance)} icon={Wallet} accent="emerald" size="kpi" />
-      </div>
+      <section aria-label="Business KPIs" className="grid grid-cols-2 gap-3">
+        {kpiCards.map((kpi) => (
+          <FireBizKpiGridCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            icon={kpi.icon}
+            accent={kpi.accent}
+            href={kpi.href}
+          />
+        ))}
+      </section>
 
       <FireBizGlassCard title={d.quickActions} icon={Banknote}>
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
