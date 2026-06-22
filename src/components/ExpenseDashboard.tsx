@@ -22,6 +22,7 @@ import {
   History,
   Home,
   MessageCircle,
+  MoreHorizontal,
   Pencil,
   Phone,
   PieChart,
@@ -432,6 +433,7 @@ export function ExpenseDashboard() {
   const [settlementOverrides, setSettlementOverrides] = useState<Record<string, Record<string, number>>>({});
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
+  const [heroMoreOpen, setHeroMoreOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
 
@@ -522,7 +524,6 @@ export function ExpenseDashboard() {
     }));
   }, [rawTransfers, settlementOverrides, selectedMonthKey]);
   const settlementPending = transfers.reduce((sum, transfer) => sum + transfer.amount, 0);
-  const settledPercent = transfers.length === 0 ? 100 : Math.max(12, 100 - transfers.length * 18);
 
   useEffect(() => {
     if (prevTransferCount.current > 0 && transfers.length === 0 && monthExpenses.length > 0) {
@@ -898,51 +899,66 @@ export function ExpenseDashboard() {
           </div>
         </div>
 
-        <section className="dark-glass-card relative overflow-hidden rounded-[2rem] p-6 text-white md:p-10">
-          <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-emerald-400/20 blur-3xl" />
-          <div className="relative grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-black text-emerald-100">
-                <Calculator size={18} /> खर्च हिसाब खाता
-              </div>
-              <h1 className="font-nepali text-4xl font-black leading-[1.08] tracking-[-0.04em] sm:text-5xl md:text-6xl">
-                रुममेट खर्च, हिसाब र सेटलमेन्ट एउटै ठाउँमा।
+        <section className="dark-glass-card relative overflow-hidden rounded-2xl p-4 text-white sm:p-5">
+          <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-3xl" aria-hidden />
+          <div className="relative flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="font-nepali text-xl font-black leading-tight tracking-tight sm:text-2xl">
+                रुममेट खर्च र सेटलमेन्ट
               </h1>
-              <p className="mt-4 max-w-2xl text-[1.05rem] leading-relaxed text-emerald-50/85 sm:text-lg sm:leading-relaxed">
-                Premium roommate finance system for Nepalis abroad to split mart expenses, rent,
-                electricity, internet, rice/gas, and remittance costs with clear लिनु / दिनु tracking.
+              <p className="mt-1.5 max-w-xl text-xs leading-snug text-emerald-50/85 sm:text-sm">
+                Split mart, rent, utilities & remittance with clear लिनु / दिनु tracking.
               </p>
-              <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
-                <button
-                  onClick={openAddExpenseModal}
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-black text-white shadow-xl shadow-emerald-950/20 transition hover:-translate-y-1 hover:bg-emerald-400"
-                >
-                  <Plus size={17} /> Add Expense
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-1 hover:bg-white/15"
-                >
-                  <Download size={17} /> Download monthly PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleShareSummary()}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:-translate-y-1 hover:bg-white/15"
-                >
-                  <Share2 size={17} /> Share summary
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openAddExpenseModal}
+                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-950/20 transition active:scale-[0.98] hover:bg-emerald-400"
+              >
+                <Plus size={16} /> Add Expense
+              </button>
             </div>
-            <div className="glass-card rounded-[1.7rem] p-6 text-emerald-950">
-              <p className="text-sm font-black text-slate-500">Total group expense</p>
-              <DualCurrencyAmount amountNpr={totalExpense} krwPerNpr={krwPerNpr} currency={currency} size="lg" />
-              <div className="mt-5 h-3 rounded-full bg-emerald-100">
-                <div className="h-3 rounded-full bg-emerald-700" style={{ width: `${settledPercent}%` }} />
-              </div>
-              <p className="mt-3 text-sm font-bold text-slate-600">
-                Group average: {fmt(equalSplitAmount)} · Your attributed share uses each expense&apos;s split rules
-              </p>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setHeroMoreOpen((open) => !open)}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+                aria-label="More actions"
+                aria-expanded={heroMoreOpen}
+              >
+                <MoreHorizontal size={18} />
+              </button>
+              {heroMoreOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default"
+                    aria-label="Close menu"
+                    onClick={() => setHeroMoreOpen(false)}
+                  />
+                  <div className="absolute right-0 top-11 z-50 min-w-[200px] overflow-hidden rounded-xl border border-white/15 bg-emerald-950/95 py-1 shadow-xl backdrop-blur-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeroMoreOpen(false);
+                        window.print();
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                    >
+                      <Download size={16} /> Download monthly PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeroMoreOpen(false);
+                        void handleShareSummary();
+                      }}
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                    >
+                      <Share2 size={16} /> Share summary
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </section>
@@ -981,56 +997,48 @@ export function ExpenseDashboard() {
 
         {activeTab === "Dashboard" && (
           <>
-            <section className="mt-8 sm:mt-10 grid gap-5 md:grid-cols-3">
+            <section aria-label="Expense KPIs" className="mt-4 grid grid-cols-2 gap-3">
               {dashboardStats.map(({ title, subtitle, value, meta, Icon }) => (
-                <article
+                <ExpenseKpiCard
                   key={title}
-                  className="glass-card group relative overflow-hidden rounded-[1.6rem] p-6 transition duration-300 hover:-translate-y-1.5 hover:border-emerald-200 hover:shadow-[0_22px_55px_rgba(0,122,61,0.17)]"
-                >
-                  <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/10 blur-2xl transition group-hover:bg-emerald-400/20" />
-                  <div className="relative flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-nepali text-sm font-black text-emerald-800">{title}</p>
-                      <p className="mt-1 text-sm font-bold leading-snug text-slate-500">{subtitle}</p>
-                    </div>
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700 transition group-hover:bg-emerald-700 group-hover:text-white">
-                      <Icon size={22} />
-                    </div>
-                  </div>
-                  <p className="relative mt-5 text-2xl font-black tracking-tight text-emerald-950 sm:text-3xl">
-                    {value}
-                  </p>
-                  <p className="relative mt-2 text-sm font-bold text-slate-500">{meta}</p>
-                </article>
+                  label={title}
+                  subtitle={subtitle}
+                  value={value}
+                  meta={meta}
+                  icon={Icon}
+                />
               ))}
             </section>
 
-            <section className="mt-8 sm:mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <section aria-label="Expense categories" className="mt-4 grid grid-cols-2 gap-3">
               {categoryCards.map(([title, amount, Icon]) => (
-                <article
+                <ExpenseCategoryCard
                   key={title}
-                  className="glass-card rounded-[1.5rem] p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(0,122,61,0.16)]"
-                >
-                  <Icon className="mb-4 text-emerald-700" size={24} />
-                  <p className="text-sm font-black text-slate-500">{title}</p>
-                  <DualCurrencyAmount amountNpr={amount} krwPerNpr={krwPerNpr} currency={currency} />
-                </article>
+                  title={title}
+                  amountNpr={amount}
+                  krwPerNpr={krwPerNpr}
+                  currency={currency}
+                  fmt={fmt}
+                  icon={Icon}
+                />
               ))}
             </section>
 
-            <section className="mt-8 sm:mt-10 grid gap-3 md:grid-cols-3">
-              {aiInsightsPreview.map((insight) => (
-                <article
-                  key={insight.id}
-                  className="premium-hover glass-card rounded-2xl border border-emerald-100 p-5"
-                >
-                  <p className="text-sm font-black uppercase tracking-wide text-emerald-700">{insight.title}</p>
-                  <p className="mt-2 text-sm font-bold leading-relaxed text-slate-700">{insight.message}</p>
-                </article>
-              ))}
-            </section>
+            {aiInsightsPreview.length > 0 ? (
+              <section className="mt-4 grid grid-cols-2 gap-2.5">
+                {aiInsightsPreview.map((insight) => (
+                  <article
+                    key={insight.id}
+                    className="glass-card rounded-xl border border-emerald-100 p-3"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{insight.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs font-bold leading-snug text-slate-600">{insight.message}</p>
+                  </article>
+                ))}
+              </section>
+            ) : null}
 
-            <section className="mt-8 sm:mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <section className="mt-4 grid gap-4 lg:grid-cols-2">
               <GroupMembers
                 balances={balances}
                 fmt={fmt}
@@ -1042,6 +1050,7 @@ export function ExpenseDashboard() {
                 addMember={addMember}
                 onOpenProfile={setSelectedMember}
                 removeMember={removeMember}
+                compact
               />
               <SettlementPanel
                 balances={balances}
@@ -1055,28 +1064,29 @@ export function ExpenseDashboard() {
                 monthOverrideMap={settlementOverrides[selectedMonthKey] ?? {}}
                 onSaveTransfer={saveTransferOverride}
                 onResetTransfer={resetTransferOverride}
+                compact
               />
             </section>
 
-            <section className="mt-8 sm:mt-10 glass-card rounded-[1.7rem] p-6 sm:p-7">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <section className="mt-4 glass-card rounded-2xl p-4 sm:p-5">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-nepali text-sm font-black uppercase tracking-[0.14em] text-emerald-700">
+                  <p className="font-nepali text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
                     गतिविधि समयरेखा
                   </p>
-                  <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Transaction timeline</h2>
+                  <h2 className="text-lg font-black leading-snug tracking-tight text-emerald-950">Transaction timeline</h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveTab("History")}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-black text-emerald-800 transition hover:bg-emerald-50"
+                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-50"
                 >
                   <History size={14} /> View full history
                 </button>
               </div>
               <ExpenseTimeline
                 activities={activities.filter((activity) => activity.monthKey === selectedMonthKey)}
-                limit={6}
+                limit={4}
               />
             </section>
           </>
@@ -1676,6 +1686,72 @@ export function ExpenseDashboard() {
   );
 }
 
+function ExpenseKpiCard({
+  label,
+  subtitle,
+  value,
+  meta,
+  icon: Icon,
+}: {
+  label: string;
+  subtitle: string;
+  value: string;
+  meta: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <article className="glass-card group relative flex h-[118px] flex-col justify-between overflow-hidden rounded-2xl border border-emerald-100/80 p-3.5 transition duration-200 active:scale-[0.98] sm:h-[124px]">
+      <div className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-emerald-400/10 blur-xl" aria-hidden />
+      <div className="relative flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[9px] font-black uppercase tracking-[0.08em] text-emerald-800 sm:text-[10px]">{label}</p>
+          <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{subtitle}</p>
+        </div>
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+          <Icon size={16} strokeWidth={2.25} />
+        </div>
+      </div>
+      <div className="relative min-w-0">
+        <p className="truncate text-lg font-black tabular-nums tracking-tight text-emerald-950 sm:text-xl">{value}</p>
+        <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{meta}</p>
+      </div>
+    </article>
+  );
+}
+
+function ExpenseCategoryCard({
+  title,
+  amountNpr,
+  krwPerNpr,
+  currency,
+  fmt,
+  icon: Icon,
+}: {
+  title: string;
+  amountNpr: number;
+  krwPerNpr: number;
+  currency: Currency;
+  fmt: (amount: number, cur?: Currency) => string;
+  icon: LucideIcon;
+}) {
+  return (
+    <article className="glass-card flex h-[118px] flex-col justify-between rounded-2xl border border-emerald-100/80 p-3.5 transition duration-200 active:scale-[0.98] sm:h-[124px]">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 text-[10px] font-black leading-tight text-slate-600 sm:text-xs">{title}</p>
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+          <Icon size={16} strokeWidth={2.25} />
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-base font-black tabular-nums text-emerald-800 sm:text-lg">{fmt(amountNpr)}</p>
+        <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">
+          {currency === "KRW" ? fmt(amountNpr, "NPR") : `₩ ${Math.round(nprToKrw(amountNpr, krwPerNpr)).toLocaleString()}`}
+        </p>
+      </div>
+    </article>
+  );
+}
+
 function GroupMembers({
   balances,
   fmt,
@@ -1687,6 +1763,7 @@ function GroupMembers({
   addMember,
   onOpenProfile,
   removeMember,
+  compact = false,
 }: {
   balances: Record<string, number>;
   fmt: (amount: number, cur?: Currency) => string;
@@ -1698,17 +1775,24 @@ function GroupMembers({
   addMember: () => void;
   onOpenProfile: (name: string) => void;
   removeMember: (name: string) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="glass-card rounded-[1.7rem] p-6 sm:p-7">
-      <div className="mb-5 flex items-center gap-3">
-        <UsersRound className="text-emerald-700" />
-        <div>
-          <h2 className="font-nepali text-2xl font-black leading-snug tracking-tight sm:text-3xl">Group Members</h2>
-          <p className="text-sm font-bold leading-snug text-slate-500">Tap a card to view roommate profile</p>
+    <div className={`glass-card rounded-2xl ${compact ? "p-4" : "rounded-[1.7rem] p-6 sm:p-7"}`}>
+      <div className={`flex items-center gap-2 ${compact ? "mb-3" : "mb-5 gap-3"}`}>
+        <UsersRound className="shrink-0 text-emerald-700" size={compact ? 18 : 24} />
+        <div className="min-w-0">
+          <h2 className={`font-black leading-snug tracking-tight text-emerald-950 ${compact ? "text-base" : "font-nepali text-2xl sm:text-3xl"}`}>
+            Group Members
+          </h2>
+          {!compact ? (
+            <p className="text-sm font-bold leading-snug text-slate-500">Tap a card to view roommate profile</p>
+          ) : (
+            <p className="text-[11px] font-bold text-slate-500">Tap to view profile</p>
+          )}
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-2 ${compact ? "grid-cols-1" : "gap-3 sm:grid-cols-2"}`}>
         {members.map((member) => (
           <div
             key={member}
@@ -1718,27 +1802,39 @@ function GroupMembers({
             }}
             role="button"
             tabIndex={0}
-            className="group cursor-pointer rounded-2xl border border-white/70 bg-white/75 p-5 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:bg-white hover:shadow-[0_16px_38px_rgba(0,122,61,0.14)]"
+            className={`group cursor-pointer rounded-xl border border-white/70 bg-white/75 shadow-sm backdrop-blur transition active:scale-[0.99] hover:border-emerald-200 hover:bg-white ${
+              compact ? "flex items-center gap-3 p-2.5" : "rounded-2xl p-5 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(0,122,61,0.14)]"
+            }`}
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-700 to-lime-500 text-sm font-black text-white shadow-lg shadow-emerald-950/15">
+            <div className={`flex shrink-0 items-center gap-2 ${compact ? "" : "mb-4 w-full items-start justify-between gap-3"}`}>
+              <div className="flex min-w-0 items-center gap-2">
+                <div
+                  className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-700 to-lime-500 font-black text-white ${
+                    compact ? "h-9 w-9 text-xs" : "h-12 w-12 text-sm shadow-lg shadow-emerald-950/15"
+                  }`}
+                >
                   {profiles[member]?.avatarUrl ? (
                     <Image
                       alt={`${profiles[member]?.name ?? member} avatar`}
                       className="h-full w-full object-cover"
-                      height={48}
+                      height={compact ? 36 : 48}
                       src={profiles[member]?.avatarUrl}
                       unoptimized
-                      width={48}
+                      width={compact ? 36 : 48}
                     />
                   ) : (
                     initials(profiles[member]?.name ?? member)
                   )}
                 </div>
-                <div>
-                  <p className="font-black text-emerald-950">{profiles[member]?.name ?? member}</p>
-                  <p className="text-sm font-bold text-slate-500">{profiles[member]?.bankName ?? "Korean Bank"}</p>
+                <div className="min-w-0">
+                  <p className={`truncate font-black text-emerald-950 ${compact ? "text-sm" : ""}`}>{profiles[member]?.name ?? member}</p>
+                  <p className={`truncate font-bold text-slate-500 ${compact ? "text-[10px]" : "text-sm"}`}>
+                    {fmt(paidByMember[member] ?? 0)} paid ·{" "}
+                    <span className={(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}>
+                      {(balances[member] ?? 0) >= 0 ? "+" : "-"}
+                      {fmt(Math.abs(balances[member] ?? 0))}
+                    </span>
+                  </p>
                 </div>
               </div>
               <button
@@ -1746,39 +1842,50 @@ function GroupMembers({
                   event.stopPropagation();
                   removeMember(member);
                 }}
-                className="rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
+                className="shrink-0 rounded-full bg-red-50 p-1.5 text-red-600 transition hover:bg-red-100"
                 aria-label={`Remove ${member}`}
               >
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-xl bg-emerald-50 p-3">
-                <p className="font-bold text-slate-500">Contribution</p>
-                <p className="mt-1 font-black text-emerald-800">{fmt(paidByMember[member] ?? 0)}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3">
-                <p className="font-bold text-slate-500">Settlement</p>
-                <p className={`mt-1 font-black ${(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                  {(balances[member] ?? 0) >= 0 ? "+" : "-"}
-                  {fmt(Math.abs(balances[member] ?? 0))}
+            {!compact ? (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl bg-emerald-50 p-3">
+                    <p className="font-bold text-slate-500">Contribution</p>
+                    <p className="mt-1 font-black text-emerald-800">{fmt(paidByMember[member] ?? 0)}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="font-bold text-slate-500">Settlement</p>
+                    <p className={`mt-1 font-black ${(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                      {(balances[member] ?? 0) >= 0 ? "+" : "-"}
+                      {fmt(Math.abs(balances[member] ?? 0))}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-black text-emerald-700 opacity-0 transition group-hover:opacity-100">
+                  Open premium profile →
                 </p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs font-black text-emerald-700 opacity-0 transition group-hover:opacity-100">
-              Open premium profile →
-            </p>
+              </>
+            ) : null}
           </div>
         ))}
       </div>
-      <div className="mt-4 flex gap-2">
+      <div className={`flex gap-2 ${compact ? "mt-3" : "mt-4"}`}>
         <input
           value={newMember}
           onChange={(event) => setNewMember(event.target.value)}
-          className="min-w-0 flex-1 rounded-2xl border border-emerald-100 px-4 py-3 text-sm font-bold outline-none focus:border-emerald-600"
+          className={`min-w-0 flex-1 rounded-xl border border-emerald-100 font-bold outline-none focus:border-emerald-600 ${
+            compact ? "px-3 py-2 text-sm" : "rounded-2xl px-4 py-3 text-sm"
+          }`}
           placeholder="Add roommate"
         />
-        <button onClick={addMember} className="rounded-2xl bg-emerald-700 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-800">
+        <button
+          onClick={addMember}
+          className={`rounded-xl bg-emerald-700 font-black text-white transition hover:bg-emerald-800 ${
+            compact ? "px-4 py-2 text-sm" : "rounded-2xl px-5 py-3 text-sm"
+          }`}
+        >
           Add
         </button>
       </div>
@@ -2177,6 +2284,7 @@ function SettlementPanel({
   monthOverrideMap,
   onSaveTransfer,
   onResetTransfer,
+  compact = false,
 }: {
   balances: Record<string, number>;
   equalSplitAmount: number;
@@ -2189,55 +2297,69 @@ function SettlementPanel({
   monthOverrideMap: Record<string, number>;
   onSaveTransfer: (from: string, to: string, npr: number) => void;
   onResetTransfer: (from: string, to: string) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="glass-card rounded-[1.7rem] p-6 sm:p-7">
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className={`glass-card rounded-2xl ${compact ? "p-4" : "rounded-[1.7rem] p-6 sm:p-7"}`}>
+      <div className={compact ? "mb-3" : "mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
         <div>
-          <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Settlement: लिनु / दिनु</h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            Group average: {fmt(equalSplitAmount)} · Attributed share varies by expense split rules
+          <h2 className={`font-black leading-snug tracking-tight text-emerald-950 ${compact ? "text-base" : "text-2xl sm:text-3xl"}`}>
+            Settlement: लिनु / दिनु
+          </h2>
+          <p className={`font-bold text-slate-500 ${compact ? "mt-0.5 text-[11px]" : "mt-1 text-sm"}`}>
+            Avg {fmt(equalSplitAmount)} · {displayTransfers.length} transfer{displayTransfers.length === 1 ? "" : "s"}
           </p>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "gap-3 sm:grid-cols-2"}`}>
         {Object.entries(balances).map(([member, amount]) => {
           const isReceive = amount >= 0;
           const sign = isReceive ? "+" : "-";
-          const share = memberExpectedShare[member] ?? 0;
 
           return (
-            <div key={member} className="rounded-2xl border border-emerald-50/80 bg-white p-4 shadow-sm transition hover:shadow-md">
-              <div className="mb-3 flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-50 text-sm font-black text-emerald-800">
+            <div
+              key={member}
+              className={`rounded-xl border border-emerald-50/80 bg-white shadow-sm ${compact ? "p-2.5" : "rounded-2xl p-4 transition hover:shadow-md"}`}
+            >
+              <div className={`flex items-center gap-2 ${compact ? "mb-1.5" : "mb-3 gap-3"}`}>
+                <div
+                  className={`grid place-items-center rounded-full bg-emerald-50 font-black text-emerald-800 ${
+                    compact ? "h-7 w-7 text-[10px]" : "h-10 w-10 text-sm"
+                  }`}
+                >
                   {initials(member)}
                 </div>
-                <p className="font-black text-emerald-950">{member}</p>
+                <p className={`truncate font-black text-emerald-950 ${compact ? "text-xs" : ""}`}>{member}</p>
               </div>
-              <div className="mb-3 grid grid-cols-2 gap-2 text-sm font-bold text-slate-500">
-                <span>Paid: {fmt(paidByMember[member] ?? 0)}</span>
-                <span>Share: {fmt(share)}</span>
-              </div>
-              <p className={`text-sm font-black ${isReceive ? "text-emerald-700" : "text-red-600"}`}>
-                {isReceive ? "लिनु / receive" : "दिनु / pay"}
+              {!compact ? (
+                <div className="mb-3 grid grid-cols-2 gap-2 text-sm font-bold text-slate-500">
+                  <span>Paid: {fmt(paidByMember[member] ?? 0)}</span>
+                  <span>Share: {fmt(memberExpectedShare[member] ?? 0)}</span>
+                </div>
+              ) : null}
+              <p className={`font-black ${isReceive ? "text-emerald-700" : "text-red-600"} ${compact ? "text-[10px]" : "text-sm"}`}>
+                {isReceive ? "लिनु" : "दिनु"}
               </p>
-              <p className={`mt-1 text-2xl font-black ${isReceive ? "text-emerald-800" : "text-red-600"}`}>
+              <p
+                className={`font-black tabular-nums ${isReceive ? "text-emerald-800" : "text-red-600"} ${
+                  compact ? "text-sm" : "mt-1 text-2xl"
+                }`}
+              >
                 {sign}
                 {fmt(Math.abs(amount))}
-              </p>
-              <p className="mt-2 text-[11px] font-bold text-slate-400">
-                ≈ ₩{Math.round(nprToKrw(Math.abs(amount), krwPerNpr)).toLocaleString()}
               </p>
             </div>
           );
         })}
       </div>
-      <div className="mt-5 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-white p-4">
-        <p className="mb-1 text-sm font-black text-emerald-900">Roommate transfer amounts</p>
-        <p className="mb-4 text-sm font-bold leading-relaxed text-slate-600">
-          Edit in NPR or KRW, then Save. Reset restores the auto-calculated split.
-        </p>
-        <div className="space-y-3">
+      <div className={`rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-white ${compact ? "mt-3 p-3" : "mt-5 rounded-2xl p-4"}`}>
+        <p className={`font-black text-emerald-900 ${compact ? "text-xs" : "mb-1 text-sm"}`}>Transfers</p>
+        {!compact ? (
+          <p className="mb-4 text-sm font-bold leading-relaxed text-slate-600">
+            Edit in NPR or KRW, then Save. Reset restores the auto-calculated split.
+          </p>
+        ) : null}
+        <div className="space-y-2">
           {displayTransfers.length ? (
             rawTransfers.map((raw, index) => {
               const display = displayTransfers[index];
@@ -2260,7 +2382,7 @@ function SettlementPanel({
               );
             })
           ) : (
-            <p className="text-sm font-bold text-emerald-700">No transfers needed.</p>
+            <p className={`font-bold text-emerald-700 ${compact ? "text-xs" : "text-sm"}`}>No transfers needed.</p>
           )}
         </div>
       </div>
