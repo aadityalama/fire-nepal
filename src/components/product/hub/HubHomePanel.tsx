@@ -191,11 +191,11 @@ export function HubHomePanel() {
   const subtitleCls = light ? "text-slate-600" : "text-emerald-100/65";
 
   return (
-    <div className="mx-auto max-w-full min-w-0 space-y-6 animate-fade-up overflow-x-clip pb-2 sm:space-y-8">
+    <div className="mx-auto max-w-full min-w-0 space-y-4 animate-fade-up overflow-x-clip pb-2 sm:space-y-5">
       <div>
         <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${eyebrowCls}`}>App launcher</p>
-        <h1 className={`mt-2 text-2xl font-black tracking-tight sm:text-3xl ${titleCls}`}>Your FIRE Nepal hub</h1>
-        <p className={`mt-2 max-w-2xl text-sm font-medium leading-relaxed ${subtitleCls}`}>
+        <h1 className={`mt-1.5 text-2xl font-black tracking-tight sm:text-3xl ${titleCls}`}>Your FIRE Nepal hub</h1>
+        <p className={`mt-1.5 max-w-2xl text-sm font-medium leading-relaxed ${subtitleCls}`}>
           Open your core apps and popular tools — every card is one tap on mobile.
         </p>
       </div>
@@ -258,38 +258,13 @@ export function HubHomePanel() {
             <ArrowRight size={16} />
           </Link>
         </div>
-      ) : onboarding.generated ? (
-        <div
-          className={`rounded-2xl border p-4 sm:p-5 ${
-            light ? "border-emerald-200/70 bg-white/90" : "border-emerald-400/20 bg-emerald-500/[0.06]"
-          }`}
-        >
-          <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${eyebrowCls}`}>Profile summary</p>
-          <p className={`mt-2 text-sm font-semibold leading-relaxed ${light ? "text-slate-800" : "text-emerald-50/90"}`}>
-            {onboarding.generated.headline}
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className={`rounded-xl border px-3 py-2.5 ${light ? "border-emerald-200/70 bg-emerald-50/50" : "border-white/10 bg-black/25"}`}>
-              <p className={`text-[10px] font-black uppercase ${light ? "text-slate-500" : "text-zinc-500"}`}>Savings rate</p>
-              <p className={`mt-1 text-lg font-black ${titleCls}`}>{onboarding.generated.savingsRatePct}%</p>
-            </div>
-            <div className={`rounded-xl border px-3 py-2.5 ${light ? "border-emerald-200/70 bg-emerald-50/50" : "border-white/10 bg-black/25"}`}>
-              <p className={`text-[10px] font-black uppercase ${light ? "text-slate-500" : "text-zinc-500"}`}>FI band (desk)</p>
-              <p className={`mt-1 text-sm font-black leading-snug ${titleCls}`}>{onboarding.generated.estYearsToFiBand}</p>
-            </div>
-            <div className={`rounded-xl border px-3 py-2.5 ${light ? "border-emerald-200/70 bg-emerald-50/50" : "border-white/10 bg-black/25"}`}>
-              <p className={`text-[10px] font-black uppercase ${light ? "text-slate-500" : "text-zinc-500"}`}>Runway target</p>
-              <p className={`mt-1 text-lg font-black ${titleCls}`}>{onboarding.generated.runwayMonthsSuggested} mo</p>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       <section aria-labelledby="hub-primary-apps">
         <h2 id="hub-primary-apps" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
           Main apps
         </h2>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {PRIMARY_APPS.map((item) => (
             <PrimaryLauncherCard key={item.href} item={item} light={light} />
           ))}
@@ -301,7 +276,7 @@ export function HubHomePanel() {
         <h2 id="hub-popular-tools" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
           Popular tools
         </h2>
-        <div className="mt-3 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
           {POPULAR_TOOLS.map((item) => (
             <ToolLauncherRow key={item.href} item={item} light={light} />
           ))}
