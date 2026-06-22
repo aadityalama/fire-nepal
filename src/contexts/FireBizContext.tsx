@@ -22,8 +22,13 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import type { Database } from "@/types/supabase-database";
 import {
+  deleteBizTransaction,
+  deleteCustomer,
   deleteExpense,
+  deleteInventoryItem,
+  deletePurchase,
   deletePurchaseOrder,
+  deleteSale,
   ensureDefaultExpenseCategories,
   loadBizTransactions,
   loadBusinessProfile,
@@ -38,11 +43,21 @@ import {
   loadSuppliers,
   updatePurchaseOrderStatus,
   updateSalePayment,
+  upsertBizTransaction,
+  upsertCustomer,
   upsertExpense,
   upsertExpenseCategory,
+  upsertInventoryItem,
+  upsertPurchase,
   upsertPurchaseOrder,
+  upsertSale,
   upsertBusinessProfile,
+  type BizTransactionInput,
+  type CustomerInput,
+  type InventoryItemInput,
+  type PurchaseInput,
   type PurchaseOrderInput,
+  type SaleInput,
 } from "@/services/fire-biz-supabase";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 
@@ -80,6 +95,16 @@ type FireBizContextValue = {
   savePurchaseOrder: (input: PurchaseOrderInput) => Promise<void>;
   updatePurchaseOrderStatus: (id: string, status: PurchaseOrderStatus) => Promise<void>;
   deletePurchaseOrder: (id: string) => Promise<void>;
+  saveCustomer: (input: CustomerInput) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
+  saveSale: (input: SaleInput) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  savePurchase: (input: PurchaseInput) => Promise<void>;
+  deletePurchase: (id: string) => Promise<void>;
+  saveInventoryItem: (input: InventoryItemInput) => Promise<void>;
+  deleteInventoryItem: (id: string) => Promise<void>;
+  saveBizTransaction: (input: BizTransactionInput) => Promise<void>;
+  deleteBizTransaction: (id: string) => Promise<void>;
 };
 
 const EMPTY_SUMMARY: FireBizDashboardSummary = {
@@ -268,6 +293,134 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const handleSaveCustomer = useCallback(
+    async (input: CustomerInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertCustomer(client, user.id, input);
+      if (saved) {
+        setCustomers((prev) => [saved, ...prev.filter((c) => c.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeleteCustomer = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deleteCustomer(client, user.id, id);
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
+  const handleSaveSale = useCallback(
+    async (input: SaleInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertSale(client, user.id, input);
+      if (saved) {
+        setSales((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)]);
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeleteSale = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deleteSale(client, user.id, id);
+      setSales((prev) => prev.filter((s) => s.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
+  const handleSavePurchase = useCallback(
+    async (input: PurchaseInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertPurchase(client, user.id, input);
+      if (saved) {
+        setPurchases((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeletePurchase = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deletePurchase(client, user.id, id);
+      setPurchases((prev) => prev.filter((p) => p.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
+  const handleSaveInventoryItem = useCallback(
+    async (input: InventoryItemInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertInventoryItem(client, user.id, input);
+      if (saved) {
+        setInventory((prev) => [saved, ...prev.filter((i) => i.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeleteInventoryItem = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deleteInventoryItem(client, user.id, id);
+      setInventory((prev) => prev.filter((i) => i.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
+  const handleSaveBizTransaction = useCallback(
+    async (input: BizTransactionInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertBizTransaction(client, user.id, input);
+      if (saved) {
+        setTransactions((prev) => {
+          const idx = prev.findIndex((t) => t.id === saved.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = saved;
+            return next;
+          }
+          return [saved, ...prev];
+        });
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeleteBizTransaction = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deleteBizTransaction(client, user.id, id);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
   const value = useMemo(
     () => ({
       locale,
@@ -293,6 +446,16 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       savePurchaseOrder: handleSavePurchaseOrder,
       updatePurchaseOrderStatus: handleUpdatePurchaseOrderStatus,
       deletePurchaseOrder: handleDeletePurchaseOrder,
+      saveCustomer: handleSaveCustomer,
+      deleteCustomer: handleDeleteCustomer,
+      saveSale: handleSaveSale,
+      deleteSale: handleDeleteSale,
+      savePurchase: handleSavePurchase,
+      deletePurchase: handleDeletePurchase,
+      saveInventoryItem: handleSaveInventoryItem,
+      deleteInventoryItem: handleDeleteInventoryItem,
+      saveBizTransaction: handleSaveBizTransaction,
+      deleteBizTransaction: handleDeleteBizTransaction,
     }),
     [
       locale,
@@ -317,6 +480,16 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       handleSavePurchaseOrder,
       handleUpdatePurchaseOrderStatus,
       handleDeletePurchaseOrder,
+      handleSaveCustomer,
+      handleDeleteCustomer,
+      handleSaveSale,
+      handleDeleteSale,
+      handleSavePurchase,
+      handleDeletePurchase,
+      handleSaveInventoryItem,
+      handleDeleteInventoryItem,
+      handleSaveBizTransaction,
+      handleDeleteBizTransaction,
     ],
   );
 

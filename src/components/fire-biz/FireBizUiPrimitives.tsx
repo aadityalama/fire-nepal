@@ -277,3 +277,56 @@ export function FireBizInput({
     </label>
   );
 }
+
+export function FireBizSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  return (
+    <label className="block">
+      <span className={`mb-1 block text-xs font-bold ${light ? "text-slate-700" : "text-emerald-200/80"}`}>{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold ${
+          light ? "border-emerald-200/80 bg-white text-slate-900" : "border-emerald-400/20 bg-black/30 text-white"
+        }`}
+      >
+        {placeholder ? <option value="">{placeholder}</option> : null}
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function FireBizPrimaryLinkButton({ href, children }: { href: string; children: ReactNode }) {
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  return (
+    <Link
+      href={href}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
+        light
+          ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg shadow-emerald-500/20"
+          : "bg-gradient-to-r from-emerald-500/90 to-lime-400/90 text-emerald-950 shadow-lg shadow-emerald-500/20"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}
