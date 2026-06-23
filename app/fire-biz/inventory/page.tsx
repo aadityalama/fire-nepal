@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { FireBizInventoryPage } from "@/components/fire-biz/FireBizListPages";
+import { FireBizInventoryHubPage } from "@/components/fire-biz/FireBizMobileHubPages";
 
 export const metadata: Metadata = {
   title: "Inventory | FIRE Biz | FIRE Nepal",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <FireBizInventoryPage />;
+  return <FireBizInventoryHubPage />;
 }

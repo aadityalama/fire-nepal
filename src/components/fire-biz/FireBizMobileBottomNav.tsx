@@ -22,7 +22,8 @@ const MOBILE_NAV: {
       p.startsWith("/fire-biz/transactions") ||
       p.startsWith("/fire-biz/sales") ||
       p.startsWith("/fire-biz/purchases") ||
-      p.startsWith("/fire-biz/cash-bank"),
+      p.startsWith("/fire-biz/cash-bank") ||
+      p.startsWith("/fire-biz/expenses"),
   },
   {
     href: "/fire-biz/parties",

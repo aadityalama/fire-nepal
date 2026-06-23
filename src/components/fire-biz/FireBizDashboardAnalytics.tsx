@@ -28,9 +28,10 @@ const PIE_COLORS = ["#34d399", "#14b8a6", "#f59e0b", "#fb7185", "#818cf8", "#94a
 type Props = {
   analytics: FireBizAnalytics;
   loading: boolean;
+  variant?: "full" | "more";
 };
 
-export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
+export function FireBizDashboardAnalytics({ analytics, loading, variant = "full" }: Props) {
   const copy = useFireBizCopy();
   const a = copy.analytics;
   const dash = copy.dashboard;
@@ -46,6 +47,7 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
   const hasExpenses = analytics.expenseBreakdown.length > 0;
   const hasProfit = analytics.profitOverview.some((r) => r.profit !== 0 || r.sales > 0);
   const hasCustomers = analytics.topCustomers.length > 0;
+  const showExtended = variant === "full";
 
   if (loading) {
     return (
@@ -56,15 +58,17 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-sm font-black uppercase tracking-[0.18em] text-emerald-400/80">{dash.analytics}</h2>
+    <div className="space-y-3">
+      {showExtended ? (
+        <h2 className="text-sm font-black uppercase tracking-[0.18em] text-emerald-400/80">{dash.analytics}</h2>
+      ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className={`grid gap-3 ${showExtended ? "xl:grid-cols-2" : ""}`}>
         <FireBizGlassCard title={a.salesTrend} icon={BarChart3}>
           {!hasSalesTrend ? (
             <FireBizEmptyState message={dash.noChartData} />
           ) : (
-            <div className={`h-[240px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
+            <div className={`h-[200px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={analytics.salesTrend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <defs>
@@ -89,7 +93,7 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
           {!hasExpenses ? (
             <FireBizEmptyState message={a.noExpenses} />
           ) : (
-            <div className={`h-[240px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
+            <div className={`h-[200px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={analytics.expenseBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={2}>
@@ -108,7 +112,7 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
           {!hasProfit ? (
             <FireBizEmptyState message={dash.noChartData} />
           ) : (
-            <div className={`h-[220px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
+            <div className={`h-[180px] rounded-xl p-2 ${light ? "bg-slate-50/80" : "bg-black/25"}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analytics.profitOverview} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
@@ -121,7 +125,10 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
             </div>
           )}
         </FireBizGlassCard>
+      </div>
 
+      {showExtended ? (
+        <>
         <FireBizGlassCard title={a.inventoryValue} icon={Package}>
           <div className={`rounded-2xl border p-6 text-center ${light ? "border-emerald-200/70 bg-emerald-50/50" : "border-emerald-400/15 bg-emerald-950/40"}`}>
             <p className={`text-3xl font-black tabular-nums ${light ? "text-emerald-800" : "text-lime-300"}`}>
@@ -132,7 +139,6 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
             </p>
           </div>
         </FireBizGlassCard>
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <FireBizGlassCard title={a.topCustomers} icon={Users}>
@@ -178,6 +184,8 @@ export function FireBizDashboardAnalytics({ analytics, loading }: Props) {
           )}
         </FireBizGlassCard>
       </div>
+        </>
+      ) : null}
     </div>
   );
 }

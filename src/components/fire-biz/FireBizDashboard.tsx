@@ -4,10 +4,7 @@ import { useMemo } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  Banknote,
-  BarChart3,
   FileText,
-  Package,
   Receipt,
   ShoppingBag,
   ShoppingCart,
@@ -16,10 +13,10 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import Link from "next/link";
-import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
-import { FireBizDashboardAnalytics } from "@/components/fire-biz/FireBizDashboardAnalytics";
-import { FireBizFireIntegrationPanel } from "@/components/fire-biz/FireBizFireIntegrationPanel";
+import {
+  FireBizCompactHeader,
+  FireBizMobileScreen,
+} from "@/components/fire-biz/FireBizMobileScreens";
 import {
   FireBizEmptyState,
   FireBizGlassCard,
@@ -28,64 +25,60 @@ import {
 } from "@/components/fire-biz/FireBizUiPrimitives";
 import { useFireBiz, useFireBizCopy } from "@/contexts/FireBizContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { computeFireBizAnalytics, computeFireBizFireIntegration } from "@/lib/fire-biz/analytics";
 import { formatBizNpr } from "@/lib/fire-biz/i18n";
 
 export function FireBizDashboard() {
   const copy = useFireBizCopy();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const { summary, loading, sales, purchases, transactions, customers } = useFireBiz();
+  const { summary, loading, sales, purchases, transactions } = useFireBiz();
   const d = copy.dashboard;
   const loadingVal = "…";
 
-  const analytics = useMemo(
-    () => computeFireBizAnalytics(sales, purchases, transactions, customers, summary),
-    [sales, purchases, transactions, customers, summary],
+  const recentItems = useMemo(
+    () =>
+      [
+        ...sales.slice(0, 3).map((s) => ({
+          id: s.id,
+          label: s.invoice_number ?? "Sale",
+          amount: s.total_amount,
+          date: s.sale_date,
+          type: "sale" as const,
+        })),
+        ...purchases.slice(0, 3).map((p) => ({
+          id: p.id,
+          label: p.bill_number ?? "Purchase",
+          amount: p.total_amount,
+          date: p.purchase_date,
+          type: "purchase" as const,
+        })),
+        ...transactions.slice(0, 3).map((t) => ({
+          id: t.id,
+          label: t.party_name ?? t.transaction_type,
+          amount: t.amount,
+          date: t.transaction_date,
+          type: "transaction" as const,
+        })),
+      ]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 5),
+    [sales, purchases, transactions],
   );
 
-  const fireIntegration = useMemo(() => computeFireBizFireIntegration(summary), [summary]);
-
-  const recentItems = [
-    ...sales.slice(0, 3).map((s) => ({
-      id: s.id,
-      label: s.invoice_number ?? "Sale",
-      amount: s.total_amount,
-      date: s.sale_date,
-      type: "sale" as const,
-    })),
-    ...purchases.slice(0, 3).map((p) => ({
-      id: p.id,
-      label: p.bill_number ?? "Purchase",
-      amount: p.total_amount,
-      date: p.purchase_date,
-      type: "purchase" as const,
-    })),
-    ...transactions.slice(0, 3).map((t) => ({
-      id: t.id,
-      label: t.party_name ?? t.transaction_type,
-      amount: t.amount,
-      date: t.transaction_date,
-      type: "transaction" as const,
-    })),
-  ]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 6);
-
   const kpiCards = [
-    { label: d.receivable, value: loading ? loadingVal : formatBizNpr(summary.receivables), icon: ArrowDownLeft, accent: "amber" as const, href: "/fire-biz/customers" },
-    { label: d.payable, value: loading ? loadingVal : formatBizNpr(summary.payables), icon: ArrowUpRight, accent: "rose" as const, href: "/fire-biz/suppliers" },
-    { label: d.monthlySales, value: loading ? loadingVal : formatBizNpr(summary.monthlySales), icon: TrendingUp, accent: "emerald" as const, href: "/fire-biz/sales" },
-    { label: d.monthlyPurchases, value: loading ? loadingVal : formatBizNpr(summary.monthlyPurchases), icon: ShoppingBag, accent: "teal" as const, href: "/fire-biz/purchases" },
-    { label: d.monthlyExpenses, value: loading ? loadingVal : formatBizNpr(summary.monthlyExpenses), icon: TrendingDown, accent: "rose" as const, href: "/fire-biz/expenses" },
-    { label: d.cashBankBalance, value: loading ? loadingVal : formatBizNpr(summary.cashBalance), icon: Wallet, accent: "emerald" as const, href: "/fire-biz/cash-bank" },
+    { label: d.receivable, value: loading ? loadingVal : formatBizNpr(summary.receivables), icon: ArrowDownLeft, accent: "amber" as const, href: "/fire-biz/parties" },
+    { label: d.payable, value: loading ? loadingVal : formatBizNpr(summary.payables), icon: ArrowUpRight, accent: "rose" as const, href: "/fire-biz/parties" },
+    { label: d.sales, value: loading ? loadingVal : formatBizNpr(summary.monthlySales), icon: TrendingUp, accent: "emerald" as const, href: "/fire-biz/transactions" },
+    { label: d.purchase, value: loading ? loadingVal : formatBizNpr(summary.monthlyPurchases), icon: ShoppingBag, accent: "teal" as const, href: "/fire-biz/transactions" },
+    { label: d.expense, value: loading ? loadingVal : formatBizNpr(summary.monthlyExpenses), icon: TrendingDown, accent: "rose" as const, href: "/fire-biz/transactions" },
+    { label: d.cashBank, value: loading ? loadingVal : formatBizNpr(summary.cashBalance), icon: Wallet, accent: "emerald" as const, href: "/fire-biz/cash-bank" },
   ];
 
   return (
-    <div className="space-y-5 pb-4">
-      <DashboardSectionHeader eyebrow={copy.moduleName} title={d.title} subtitle={d.subtitle} accent="emerald" />
+    <FireBizMobileScreen>
+      <FireBizCompactHeader eyebrow={copy.moduleName} title={d.title} subtitle={d.subtitle} />
 
-      <section aria-label="Business KPIs" className="grid grid-cols-2 gap-3">
+      <section aria-label="Business KPIs" className="grid grid-cols-2 gap-2.5">
         {kpiCards.map((kpi) => (
           <FireBizKpiGridCard
             key={kpi.label}
@@ -98,32 +91,24 @@ export function FireBizDashboard() {
         ))}
       </section>
 
-      <FireBizGlassCard title={d.quickActions} icon={Banknote}>
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <FireBizQuickAction label={d.addCustomer} href="/fire-biz/customers" icon={Users} />
-          <FireBizQuickAction label={d.createInvoice} href="/fire-biz/sales" icon={FileText} />
-          <FireBizQuickAction label={d.receivePayment} href="/fire-biz/cash-bank" icon={Banknote} />
-          <FireBizQuickAction label={d.makePayment} href="/fire-biz/cash-bank" icon={Receipt} />
-          <FireBizQuickAction label={d.purchaseEntry} href="/fire-biz/purchases" icon={ShoppingCart} />
-          <FireBizQuickAction label={d.inventoryEntry} href="/fire-biz/inventory" icon={Package} />
-          <FireBizQuickAction label={d.addExpense} href="/fire-biz/expenses" icon={Wallet} />
-          <FireBizQuickAction label={d.reports} href="/fire-biz/reports" icon={BarChart3} />
+      <FireBizGlassCard title={d.quickActions} icon={Wallet} className="!p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <FireBizQuickAction label={d.addSale} href="/fire-biz/sales/new" icon={ShoppingCart} compact />
+          <FireBizQuickAction label={d.addPurchase} href="/fire-biz/purchases/new" icon={ShoppingBag} compact />
+          <FireBizQuickAction label={d.addCustomer} href="/fire-biz/customers/new" icon={Users} compact />
+          <FireBizQuickAction label={d.addExpense} href="/fire-biz/expenses" icon={Receipt} compact />
         </div>
       </FireBizGlassCard>
 
-      <FireBizDashboardAnalytics analytics={analytics} loading={loading} />
-
-      <FireBizFireIntegrationPanel data={fireIntegration} loading={loading} />
-
-      <FireBizGlassCard title={d.recentActivity} icon={Receipt}>
+      <FireBizGlassCard title={d.recentActivity} icon={FileText}>
         {recentItems.length === 0 ? (
           <FireBizEmptyState message={d.noActivity} />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             {recentItems.map((item) => (
               <li
                 key={`${item.type}-${item.id}`}
-                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
                   light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
                 }`}
               >
@@ -139,12 +124,6 @@ export function FireBizDashboard() {
           </ul>
         )}
       </FireBizGlassCard>
-
-      <p className="text-center text-[11px] font-semibold text-emerald-200/50">
-        <Link href="/fire-biz/settings" className="underline-offset-2 hover:underline">
-          {copy.settings.title}
-        </Link>
-      </p>
-    </div>
+    </FireBizMobileScreen>
   );
 }

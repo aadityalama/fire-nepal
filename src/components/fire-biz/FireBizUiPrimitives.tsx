@@ -125,7 +125,7 @@ export function FireBizKpiGridCard({ label, value, icon: Icon, accent = "emerald
 
   const card = (
     <div
-      className={`relative flex h-[118px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border bg-gradient-to-br p-3.5 backdrop-blur-xl transition duration-200 sm:h-[124px] sm:p-4 ${
+      className={`relative flex h-[104px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border bg-gradient-to-br p-3 backdrop-blur-xl transition duration-200 sm:h-[108px] sm:p-3.5 ${
         light ? colors.light : colors.dark
       } ${light ? "bg-white/85 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.1)]" : "bg-black/25 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]"} ${
         href ? "active:scale-[0.98] hover:scale-[1.01]" : ""
@@ -172,16 +172,19 @@ type QuickActionProps = {
   label: string;
   href: string;
   icon: LucideIcon;
+  compact?: boolean;
 };
 
-export function FireBizQuickAction({ label, href, icon: Icon }: QuickActionProps) {
+export function FireBizQuickAction({ label, href, icon: Icon, compact = false }: QuickActionProps) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
 
   return (
     <Link
       href={href}
-      className={`flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border px-2 py-3.5 text-center transition duration-300 active:scale-[0.98] animate-fade-up ${
+      className={`flex flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-center transition duration-300 active:scale-[0.98] animate-fade-up ${
+        compact ? "min-h-[76px]" : "min-h-[88px] gap-2 py-3.5"
+      } ${
         light
           ? "border-emerald-200/70 bg-white/90 text-slate-800 hover:border-emerald-400/50 hover:bg-emerald-50/80 shadow-sm"
           : "border-emerald-400/15 bg-white/[0.04] text-emerald-100 hover:border-emerald-400/30 hover:bg-emerald-500/10"
