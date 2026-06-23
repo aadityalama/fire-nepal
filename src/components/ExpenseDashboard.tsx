@@ -11,16 +11,20 @@ import {
 } from "chart.js";
 import type { TooltipItem } from "chart.js";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowRightLeft,
   BarChart3,
   Building2,
   Calculator,
   CalendarDays,
+  Camera,
   CheckCircle2,
   Copy,
   Download,
   History,
-  Home,
+  LayoutDashboard,
   MessageCircle,
   MoreHorizontal,
   Pencil,
@@ -29,14 +33,12 @@ import {
   Plus,
   Crown,
   ReceiptText,
-  Send,
   Share2,
-  ShoppingBasket,
   Sparkles,
   Trash2,
   UsersRound,
+  Wallet,
   X,
-  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
@@ -44,13 +46,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, Pie } from "react-chartjs-2";
 import { toast } from "sonner";
-import { CurrencyConverterBar } from "@/components/CurrencyConverterBar";
-import { DualCurrencyAmount } from "@/components/DualCurrencyAmount";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseHistoryPanel } from "@/components/ExpenseHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
 import { ExpenseReceiptUpload } from "@/components/ExpenseReceiptUpload";
-import { ExpenseTimeline } from "@/components/ExpenseTimeline";
 import { sanitizeDecimalTyping } from "@/components/NumericMoneyInput";
 import { RoommateShareSummaryModal } from "@/components/RoommateShareSummaryModal";
 import { SettlementCelebration } from "@/components/SettlementCelebration";
@@ -60,11 +59,11 @@ import {
   nprToKrw,
   parseExpenseAmountInput,
 } from "@/lib/exchange-rate";
-import { generateAiInsights } from "@/lib/expense-ai-insights";
 import { monthlyComparisonData, normalizeCategory } from "@/lib/expense-analytics";
 import {
   FALLBACK_KRW_PER_NPR,
   fallbackExchangeRate,
+  fetchLiveExchangeRate,
   type ExchangeRateSnapshot,
 } from "@/lib/exchange-rate";
 import {
@@ -87,7 +86,9 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 type Currency = "NPR" | "KRW" | "USD";
-type Tab = "Dashboard" | "Expenses" | "Settlement" | "Analytics" | "AI Insights" | "History";
+type Tab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics" | "AI Insights" | "History";
+
+type BottomTab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics";
 
 type ExpenseForm = {
   title: string;
@@ -113,7 +114,24 @@ type RoommateProfile = {
 };
 
 const categories = ["Food/Mart", "Rent", "Electricity", "Internet", "Remittance", "Other"];
-const tabs: Tab[] = ["Dashboard", "Expenses", "Settlement", "Analytics", "AI Insights", "History"];
+const bottomTabs: Array<{ id: BottomTab; label: string; icon: LucideIcon }> = [
+  { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "Members", label: "Members", icon: UsersRound },
+  { id: "Expenses", label: "Expenses", icon: ReceiptText },
+  { id: "Settlement", label: "Settlement", icon: Calculator },
+  { id: "Analytics", label: "Analytics", icon: BarChart3 },
+];
+
+function formatRelativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.max(0, Math.floor(diffMs / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 function getCurrencyMeta(krwPerNpr: number) {
   return {
@@ -434,6 +452,7 @@ export function ExpenseDashboard() {
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
   const [heroMoreOpen, setHeroMoreOpen] = useState(false);
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
 
@@ -453,6 +472,10 @@ export function ExpenseDashboard() {
       }
     }
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    void fetchLiveExchangeRate().then(setExchangeRate);
   }, []);
 
   useEffect(() => {
@@ -524,6 +547,19 @@ export function ExpenseDashboard() {
     }));
   }, [rawTransfers, settlementOverrides, selectedMonthKey]);
   const settlementPending = transfers.reduce((sum, transfer) => sum + transfer.amount, 0);
+  const receivableTotal = useMemo(
+    () => Object.values(balances).reduce((sum, balance) => sum + Math.max(0, balance), 0),
+    [balances],
+  );
+  const payableTotal = useMemo(
+    () => Object.values(balances).reduce((sum, balance) => sum + Math.max(0, -balance), 0),
+    [balances],
+  );
+  const isSettled = transfers.length === 0 && monthExpenses.length > 0;
+  const recentExpenses = useMemo(
+    () => [...monthExpenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 4),
+    [monthExpenses],
+  );
 
   useEffect(() => {
     if (prevTransferCount.current > 0 && transfers.length === 0 && monthExpenses.length > 0) {
@@ -532,10 +568,6 @@ export function ExpenseDashboard() {
     prevTransferCount.current = transfers.length;
   }, [transfers.length, monthExpenses.length]);
 
-  const aiInsightsPreview = useMemo(
-    () => generateAiInsights(expenses, members, selectedMonthKey, currency).slice(0, 3),
-    [expenses, members, selectedMonthKey, currency],
-  );
   const contributorTotals = members.map((member) => ({
     name: member,
     total: paidByMember[member] ?? 0,
@@ -581,34 +613,38 @@ export function ExpenseDashboard() {
     value: string;
     meta: string;
     Icon: LucideIcon;
+    accent?: "default" | "receivable" | "payable";
   }> = [
     {
-      title: "Total Group Expense",
+      title: "Total Group Expenses",
       subtitle: "महिनाभरको जम्मा खर्च",
       value: fmt(totalExpense),
-      meta: `Group avg: ${fmt(equalSplitAmount)} · Split-aware balances`,
+      meta: `Avg ${fmt(equalSplitAmount)} per person`,
       Icon: ReceiptText,
     },
     {
-      title: "कसले बढी pay गर्यो",
-      subtitle: "Highest contributor this month",
+      title: "Highest Contributor",
+      subtitle: "कसले बढी pay गर्यो",
       value: highestContributor.name,
       meta: fmt(highestContributor.total),
       Icon: Crown,
     },
     {
-      title: "Settlement Pending",
-      subtitle: "लिनु / दिनु बाँकी",
-      value: fmt(settlementPending),
-      meta: `${transfers.length} transfer${transfers.length === 1 ? "" : "s"} needed`,
-      Icon: Calculator,
+      title: "Receivable",
+      subtitle: "लिनु पर्ने",
+      value: fmt(receivableTotal),
+      meta: "Amount people owe you",
+      Icon: ArrowDown,
+      accent: "receivable",
     },
-  ];
-  const categoryCards: Array<[string, number, LucideIcon]> = [
-    ["Food/Mart", categoryTotals[categories.indexOf("Food/Mart")], ShoppingBasket],
-    ["Room rent", categoryTotals[categories.indexOf("Rent")], Home],
-    ["Electricity + Internet", categoryTotals[categories.indexOf("Electricity")] + categoryTotals[categories.indexOf("Internet")], Zap],
-    ["Remittance", categoryTotals[categories.indexOf("Remittance")], Send],
+    {
+      title: "Payable",
+      subtitle: "दिनु पर्ने",
+      value: fmt(payableTotal),
+      meta: "Amount you owe others",
+      Icon: ArrowUp,
+      accent: "payable",
+    },
   ];
 
   function addMember() {
@@ -875,21 +911,21 @@ export function ExpenseDashboard() {
   const selectedProfile = selectedMember ? profiles[selectedMember] ?? createProfile(selectedMember) : null;
 
   return (
-    <main className="min-h-screen bg-[#f4fbf6] px-4 pb-28 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
+    <main className="min-h-screen bg-[#f4fbf6] px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-4 text-emerald-950 sm:px-5 sm:pt-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-sm font-black text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50"
+            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-100 bg-white/90 px-3 py-1.5 text-xs font-black text-emerald-800 shadow-sm transition hover:bg-emerald-50 sm:text-sm"
           >
-            <ArrowLeft size={16} /> Back to FIRE Nepal
+            <ArrowLeft size={14} /> Back
           </Link>
-          <div className="flex gap-2 overflow-x-auto rounded-full border border-emerald-100 bg-white p-1 shadow-sm">
+          <div className="flex shrink-0 gap-1 rounded-full border border-emerald-100 bg-white/90 p-0.5 shadow-sm">
             {(["NPR", "KRW", "USD"] as Currency[]).map((item) => (
               <button
                 key={item}
                 onClick={() => setCurrency(item)}
-                className={`rounded-full px-4 py-2.5 text-sm font-black transition ${
+                className={`rounded-full px-2.5 py-1.5 text-[11px] font-black transition sm:px-3 sm:text-xs ${
                   currency === item ? "bg-emerald-700 text-white" : "text-emerald-800 hover:bg-emerald-50"
                 }`}
               >
@@ -899,94 +935,121 @@ export function ExpenseDashboard() {
           </div>
         </div>
 
-        <section className="dark-glass-card relative overflow-hidden rounded-2xl p-4 text-white sm:p-5">
-          <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-3xl" aria-hidden />
-          <div className="relative flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="font-nepali text-xl font-black leading-tight tracking-tight sm:text-2xl">
-                रुममेट खर्च र सेटलमेन्ट
-              </h1>
-              <p className="mt-1.5 max-w-xl text-xs leading-snug text-emerald-50/85 sm:text-sm">
-                Split mart, rent, utilities & remittance with clear लिनु / दिनु tracking.
-              </p>
-              <button
-                type="button"
-                onClick={openAddExpenseModal}
-                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-950/20 transition active:scale-[0.98] hover:bg-emerald-400"
-              >
-                <Plus size={16} /> Add Expense
-              </button>
-            </div>
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setHeroMoreOpen((open) => !open)}
-                className="grid h-10 w-10 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
-                aria-label="More actions"
-                aria-expanded={heroMoreOpen}
-              >
-                <MoreHorizontal size={18} />
-              </button>
-              {heroMoreOpen ? (
-                <>
+        {activeTab === "Dashboard" && (
+          <section className="dark-glass-card relative mb-3 overflow-hidden rounded-2xl p-4 text-white shadow-xl shadow-emerald-950/15">
+            <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-emerald-400/25 blur-3xl" aria-hidden />
+            <div className="relative">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/80">Roommate Expenses</p>
+                  <h1 className="font-nepali mt-0.5 text-xl font-black leading-tight tracking-tight sm:text-2xl">
+                    रुममेट खर्च र सेटलमेन्ट
+                  </h1>
+                </div>
+                <div className="relative shrink-0">
                   <button
                     type="button"
-                    className="fixed inset-0 z-40 cursor-default"
-                    aria-label="Close menu"
-                    onClick={() => setHeroMoreOpen(false)}
-                  />
-                  <div className="absolute right-0 top-11 z-50 min-w-[200px] overflow-hidden rounded-xl border border-white/15 bg-emerald-950/95 py-1 shadow-xl backdrop-blur-xl">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeroMoreOpen(false);
-                        window.print();
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                    >
-                      <Download size={16} /> Download monthly PDF
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeroMoreOpen(false);
-                        void handleShareSummary();
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                    >
-                      <Share2 size={16} /> Share summary
-                    </button>
-                  </div>
-                </>
-              ) : null}
+                    onClick={() => setHeroMoreOpen((open) => !open)}
+                    className="grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
+                    aria-label="More actions"
+                    aria-expanded={heroMoreOpen}
+                  >
+                    <MoreHorizontal size={17} />
+                  </button>
+                  {heroMoreOpen ? (
+                    <>
+                      <button
+                        type="button"
+                        className="fixed inset-0 z-40 cursor-default"
+                        aria-label="Close menu"
+                        onClick={() => setHeroMoreOpen(false)}
+                      />
+                      <div className="absolute right-0 top-10 z-50 min-w-[200px] overflow-hidden rounded-xl border border-white/15 bg-emerald-950/95 py-1 shadow-xl backdrop-blur-xl">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHeroMoreOpen(false);
+                            window.print();
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                        >
+                          <Download size={16} /> Download monthly PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHeroMoreOpen(false);
+                            void handleShareSummary();
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                        >
+                          <Share2 size={16} /> Share summary
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHeroMoreOpen(false);
+                            setActiveTab("AI Insights");
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                        >
+                          <Sparkles size={16} /> AI Insights
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHeroMoreOpen(false);
+                            setActiveTab("History");
+                          }}
+                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
+                        >
+                          <History size={16} /> Full history
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-100/70">Total Balance</p>
+                  <p className="text-2xl font-black tabular-nums tracking-tight sm:text-3xl">{fmt(totalExpense)}</p>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                    isSettled
+                      ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-300/30"
+                      : "bg-amber-500/20 text-amber-50 ring-1 ring-amber-300/30"
+                  }`}
+                >
+                  <CheckCircle2 size={13} />
+                  {isSettled ? "All settled" : `${transfers.length} pending`}
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold backdrop-blur-sm">
+                  <span className="tabular-nums text-emerald-50">
+                    ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)}
+                  </span>
+                  <span className="text-emerald-100/60">·</span>
+                  <span className="text-emerald-100/80">Updated {formatRelativeTime(exchangeRate.updatedAt)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={openAddExpenseModal}
+                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-black text-white shadow-lg shadow-emerald-950/25 transition active:scale-[0.98] hover:bg-emerald-400"
+                >
+                  <Plus size={14} /> Add Expense
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <div className="mt-5">
-          <CurrencyConverterBar rate={exchangeRate} onRateUpdate={setExchangeRate} />
-        </div>
-
-        <div className="sticky top-3 z-30 mt-5 overflow-x-auto rounded-[1.4rem] border border-emerald-100 bg-white/85 p-2 shadow-lg shadow-emerald-950/5 backdrop-blur">
-          <div className="flex min-w-max gap-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black transition ${
-                  activeTab === tab ? "bg-emerald-700 text-white shadow-lg shadow-emerald-900/15" : "text-emerald-800 hover:bg-emerald-50"
-                }`}
-              >
-                {tab === "History" ? <History size={15} /> : null}
-                {tab === "AI Insights" ? <Sparkles size={15} /> : null}
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {activeTab !== "History" && activeTab !== "AI Insights" && (
-          <div className="mt-4">
+        {activeTab !== "History" && activeTab !== "AI Insights" && activeTab !== "Dashboard" && (
+          <div className="mb-3">
             <ExpenseMonthPicker
               monthKeys={monthKeys}
               selectedMonthKey={selectedMonthKey}
@@ -997,8 +1060,27 @@ export function ExpenseDashboard() {
 
         {activeTab === "Dashboard" && (
           <>
-            <section aria-label="Expense KPIs" className="mt-4 grid grid-cols-2 gap-3">
-              {dashboardStats.map(({ title, subtitle, value, meta, Icon }) => (
+            <CompactGroupMembersRow
+              balances={balances}
+              members={members}
+              newMember={newMember}
+              profiles={profiles}
+              setNewMember={setNewMember}
+              addMember={addMember}
+              onOpenProfile={setSelectedMember}
+              onViewAll={() => setActiveTab("Members")}
+            />
+
+            <div className="mb-3">
+              <ExpenseMonthPicker
+                monthKeys={monthKeys}
+                selectedMonthKey={selectedMonthKey}
+                onChange={setSelectedMonthKey}
+              />
+            </div>
+
+            <section aria-label="Expense KPIs" className="mb-3 grid grid-cols-2 gap-2">
+              {dashboardStats.map(({ title, subtitle, value, meta, Icon, accent }) => (
                 <ExpenseKpiCard
                   key={title}
                   label={title}
@@ -1006,94 +1088,77 @@ export function ExpenseDashboard() {
                   value={value}
                   meta={meta}
                   icon={Icon}
+                  accent={accent}
                 />
               ))}
             </section>
 
-            <section aria-label="Expense categories" className="mt-4 grid grid-cols-2 gap-3">
-              {categoryCards.map(([title, amount, Icon]) => (
-                <ExpenseCategoryCard
-                  key={title}
-                  title={title}
-                  amountNpr={amount}
-                  krwPerNpr={krwPerNpr}
-                  currency={currency}
-                  fmt={fmt}
-                  icon={Icon}
-                />
-              ))}
-            </section>
-
-            {aiInsightsPreview.length > 0 ? (
-              <section className="mt-4 grid grid-cols-2 gap-2.5">
-                {aiInsightsPreview.map((insight) => (
-                  <article
-                    key={insight.id}
-                    className="glass-card rounded-xl border border-emerald-100 p-3"
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">{insight.title}</p>
-                    <p className="mt-1 line-clamp-2 text-xs font-bold leading-snug text-slate-600">{insight.message}</p>
-                  </article>
-                ))}
-              </section>
-            ) : null}
-
-            <section className="mt-4 grid gap-4 lg:grid-cols-2">
-              <GroupMembers
-                balances={balances}
-                fmt={fmt}
-                members={members}
-                newMember={newMember}
-                paidByMember={paidByMember}
-                profiles={profiles}
-                setNewMember={setNewMember}
-                addMember={addMember}
-                onOpenProfile={setSelectedMember}
-                removeMember={removeMember}
-                compact
-              />
-              <SettlementPanel
-                balances={balances}
-                equalSplitAmount={equalSplitAmount}
-                memberExpectedShare={memberExpectedShare}
-                paidByMember={paidByMember}
-                rawTransfers={rawTransfers}
-                displayTransfers={transfers}
-                fmt={fmt}
-                krwPerNpr={krwPerNpr}
-                monthOverrideMap={settlementOverrides[selectedMonthKey] ?? {}}
-                onSaveTransfer={saveTransferOverride}
-                onResetTransfer={resetTransferOverride}
-                compact
-              />
-            </section>
-
-            <section className="mt-4 glass-card rounded-2xl p-4 sm:p-5">
-              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <section className="mb-3 glass-card rounded-2xl p-3.5 sm:p-4">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
                 <div>
-                  <p className="font-nepali text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
-                    गतिविधि समयरेखा
-                  </p>
-                  <h2 className="text-lg font-black leading-snug tracking-tight text-emerald-950">Transaction timeline</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">Recent</p>
+                  <h2 className="text-sm font-black text-emerald-950">Transactions</h2>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("History")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-50"
+                  onClick={() => setActiveTab("Expenses")}
+                  className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
                 >
-                  <History size={14} /> View full history
+                  View all →
                 </button>
               </div>
-              <ExpenseTimeline
-                activities={activities.filter((activity) => activity.monthKey === selectedMonthKey)}
-                limit={4}
-              />
+              {recentExpenses.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-3 py-4 text-center text-xs font-bold text-slate-500">
+                  No expenses this month yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {recentExpenses.map((expense) => (
+                    <div
+                      key={expense.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-emerald-50 bg-white/80 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-emerald-950">{expense.title}</p>
+                        <p className="truncate text-[10px] font-bold text-slate-500">
+                          {expense.category} · {expense.payer}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-sm font-black tabular-nums text-emerald-800">{fmt(expense.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
+
+            <SettlementSummaryCompact
+              transfers={transfers}
+              fmt={fmt}
+              settlementPending={settlementPending}
+              onViewAll={() => setActiveTab("Settlement")}
+            />
           </>
         )}
 
+        {activeTab === "Members" && (
+          <section className="mb-3">
+            <GroupMembers
+              balances={balances}
+              fmt={fmt}
+              members={members}
+              newMember={newMember}
+              paidByMember={paidByMember}
+              profiles={profiles}
+              setNewMember={setNewMember}
+              addMember={addMember}
+              onOpenProfile={setSelectedMember}
+              removeMember={removeMember}
+            />
+          </section>
+        )}
+
         {activeTab === "Expenses" && (
-          <section className="mt-8 sm:mt-10 glass-card rounded-[1.7rem] p-5 sm:p-7">
+          <section className="mb-3 glass-card rounded-2xl p-4 sm:p-5">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Expense Ledger</h2>
               <button
@@ -1168,7 +1233,7 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Settlement" && (
-          <section className="mt-8 sm:mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="mb-3 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <SettlementPanel
               balances={balances}
               equalSplitAmount={equalSplitAmount}
@@ -1214,7 +1279,7 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Analytics" && (
-          <section className="mt-8 sm:mt-10 grid gap-6 lg:grid-cols-2">
+          <section className="mb-3 grid gap-4 lg:grid-cols-2">
             <div className="glass-card rounded-[1.7rem] p-6">
               <div className="mb-5 flex items-center gap-2">
                 <BarChart3 className="text-emerald-700" />
@@ -1260,12 +1325,26 @@ export function ExpenseDashboard() {
 
       <SettlementCelebration show={showCelebration} onComplete={() => setShowCelebration(false)} />
 
-      <button
-        onClick={openAddExpenseModal}
-        className="fixed bottom-4 left-4 right-4 z-40 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-black text-white shadow-2xl shadow-emerald-950/25 transition hover:-translate-y-1 hover:bg-emerald-800 sm:hidden"
-      >
-        <Plus size={18} /> Add Expense
-      </button>
+      <ExpenseFabSpeedDial
+        open={speedDialOpen}
+        onToggle={() => setSpeedDialOpen((v) => !v)}
+        onClose={() => setSpeedDialOpen(false)}
+        onAddExpense={openAddExpenseModal}
+        onAddIncome={openAddExpenseModal}
+        onAddTransfer={() => {
+          setSpeedDialOpen(false);
+          setActiveTab("Settlement");
+        }}
+        onScanReceipt={openAddExpenseModal}
+      />
+
+      <ExpenseBottomNav
+        activeTab={activeTab}
+        onChange={(tab) => {
+          setActiveTab(tab);
+          setSpeedDialOpen(false);
+        }}
+      />
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex min-h-0 items-end justify-center bg-emerald-950/45 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
@@ -1692,63 +1771,329 @@ function ExpenseKpiCard({
   value,
   meta,
   icon: Icon,
+  accent = "default",
 }: {
   label: string;
   subtitle: string;
   value: string;
   meta: string;
   icon: LucideIcon;
+  accent?: "default" | "receivable" | "payable";
 }) {
+  const accentStyles = {
+    default: {
+      card: "border-emerald-100/80",
+      icon: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+      value: "text-emerald-950",
+    },
+    receivable: {
+      card: "border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white",
+      icon: "bg-emerald-100 text-emerald-700 ring-emerald-200",
+      value: "text-emerald-800",
+    },
+    payable: {
+      card: "border-orange-200/90 bg-gradient-to-br from-orange-50/80 to-white",
+      icon: "bg-orange-100 text-orange-600 ring-orange-200",
+      value: "text-orange-700",
+    },
+  }[accent];
+
   return (
-    <article className="glass-card group relative flex h-[118px] flex-col justify-between overflow-hidden rounded-2xl border border-emerald-100/80 p-3.5 transition duration-200 active:scale-[0.98] sm:h-[124px]">
-      <div className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-emerald-400/10 blur-xl" aria-hidden />
-      <div className="relative flex items-start justify-between gap-2">
+    <article
+      className={`glass-card group relative flex min-h-[96px] flex-col justify-between overflow-hidden rounded-xl border p-3 transition duration-200 active:scale-[0.98] sm:min-h-[100px] ${accentStyles.card}`}
+    >
+      <div className="relative flex items-start justify-between gap-1.5">
         <div className="min-w-0">
-          <p className="truncate text-[9px] font-black uppercase tracking-[0.08em] text-emerald-800 sm:text-[10px]">{label}</p>
+          <p className="truncate text-[9px] font-black uppercase tracking-[0.06em] text-emerald-800 sm:text-[10px]">{label}</p>
           <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{subtitle}</p>
         </div>
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-          <Icon size={16} strokeWidth={2.25} />
+        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ring-1 sm:h-8 sm:w-8 ${accentStyles.icon}`}>
+          <Icon size={15} strokeWidth={2.25} />
         </div>
       </div>
       <div className="relative min-w-0">
-        <p className="truncate text-lg font-black tabular-nums tracking-tight text-emerald-950 sm:text-xl">{value}</p>
-        <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{meta}</p>
+        <p className={`truncate text-base font-black tabular-nums tracking-tight sm:text-lg ${accentStyles.value}`}>{value}</p>
+        <p className="mt-0.5 truncate text-[9px] font-bold text-slate-500 sm:text-[10px]">{meta}</p>
       </div>
     </article>
   );
 }
 
-function ExpenseCategoryCard({
-  title,
-  amountNpr,
-  krwPerNpr,
-  currency,
-  fmt,
-  icon: Icon,
+function CompactGroupMembersRow({
+  balances,
+  members,
+  newMember,
+  profiles,
+  setNewMember,
+  addMember,
+  onOpenProfile,
+  onViewAll,
 }: {
-  title: string;
-  amountNpr: number;
-  krwPerNpr: number;
-  currency: Currency;
+  balances: Record<string, number>;
+  members: string[];
+  newMember: string;
+  profiles: Record<string, RoommateProfile>;
+  setNewMember: (value: string) => void;
+  addMember: () => void;
+  onOpenProfile: (name: string) => void;
+  onViewAll: () => void;
+}) {
+  const preview = members.slice(0, 5);
+
+  return (
+    <section className="mb-3 glass-card rounded-2xl p-3.5">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <UsersRound className="text-emerald-700" size={16} />
+          <h2 className="text-sm font-black text-emerald-950">Group Members</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
+        >
+          View all →
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {preview.map((member, index) => {
+          const balance = balances[member] ?? 0;
+          const settled = Math.abs(balance) < 1;
+          return (
+            <button
+              key={member}
+              type="button"
+              onClick={() => onOpenProfile(member)}
+              className="flex shrink-0 flex-col items-center gap-1"
+              style={{ marginLeft: index > 0 ? "-6px" : 0 }}
+            >
+              <div className="relative">
+                <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-emerald-700 to-lime-500 text-xs font-black text-white shadow-md">
+                  {profiles[member]?.avatarUrl ? (
+                    <Image
+                      alt={`${member} avatar`}
+                      className="h-full w-full object-cover"
+                      height={44}
+                      src={profiles[member]?.avatarUrl ?? ""}
+                      unoptimized
+                      width={44}
+                    />
+                  ) : (
+                    initials(profiles[member]?.name ?? member)
+                  )}
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
+                    settled ? "bg-emerald-500" : balance > 0 ? "bg-emerald-400" : "bg-orange-500"
+                  }`}
+                />
+              </div>
+              <span className="max-w-[52px] truncate text-[9px] font-bold text-slate-600">{member.split(" ")[0]}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-emerald-200 bg-emerald-50 text-emerald-700"
+          aria-label="Add member"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+
+      <div className="mt-2.5 flex gap-2">
+        <input
+          value={newMember}
+          onChange={(event) => setNewMember(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") addMember();
+          }}
+          className="min-w-0 flex-1 rounded-xl border border-emerald-100 px-3 py-2 text-xs font-bold outline-none focus:border-emerald-600"
+          placeholder="Add roommate"
+        />
+        <button
+          type="button"
+          onClick={addMember}
+          className="shrink-0 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-800"
+        >
+          Add
+        </button>
+      </div>
+
+      <p className="mt-2 text-[10px] font-bold text-slate-500">
+        {members.length} member{members.length === 1 ? "" : "s"} · Tap avatar for profile
+        {members.some((m) => Math.abs(balances[m] ?? 0) >= 1) ? " · Some balances pending" : " · All settled"}
+      </p>
+    </section>
+  );
+}
+
+function SettlementSummaryCompact({
+  transfers,
+  fmt,
+  settlementPending,
+  onViewAll,
+}: {
+  transfers: Array<{ from: string; to: string; amount: number }>;
   fmt: (amount: number, cur?: Currency) => string;
-  icon: LucideIcon;
+  settlementPending: number;
+  onViewAll: () => void;
 }) {
   return (
-    <article className="glass-card flex h-[118px] flex-col justify-between rounded-2xl border border-emerald-100/80 p-3.5 transition duration-200 active:scale-[0.98] sm:h-[124px]">
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-[10px] font-black leading-tight text-slate-600 sm:text-xs">{title}</p>
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
-          <Icon size={16} strokeWidth={2.25} />
+    <section className="mb-3 glass-card rounded-2xl p-3.5">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">Settlement</p>
+          <h2 className="text-sm font-black text-emerald-950">लिनु / दिनु Summary</h2>
         </div>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
+        >
+          View all →
+        </button>
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-base font-black tabular-nums text-emerald-800 sm:text-lg">{fmt(amountNpr)}</p>
-        <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">
-          {currency === "KRW" ? fmt(amountNpr, "NPR") : `₩ ${Math.round(nprToKrw(amountNpr, krwPerNpr)).toLocaleString()}`}
-        </p>
+
+      {transfers.length === 0 ? (
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5">
+          <CheckCircle2 className="shrink-0 text-emerald-700" size={16} />
+          <p className="text-xs font-bold text-emerald-800">All settled for this month.</p>
+        </div>
+      ) : (
+        <>
+          <p className="mb-2 text-xs font-bold text-slate-600">
+            {fmt(settlementPending)} pending across {transfers.length} transfer{transfers.length === 1 ? "" : "s"}
+          </p>
+          <div className="space-y-1.5">
+            {transfers.slice(0, 3).map((transfer) => (
+              <div
+                key={`${transfer.from}-${transfer.to}`}
+                className="flex items-center justify-between gap-2 rounded-xl border border-emerald-50 bg-white/80 px-3 py-2"
+              >
+                <p className="min-w-0 truncate text-xs font-bold text-slate-700">
+                  {transfer.from} → {transfer.to}
+                </p>
+                <p className="shrink-0 text-xs font-black tabular-nums text-emerald-800">{fmt(transfer.amount)}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ExpenseFabSpeedDial({
+  open,
+  onToggle,
+  onClose,
+  onAddExpense,
+  onAddIncome,
+  onAddTransfer,
+  onScanReceipt,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onAddExpense: () => void;
+  onAddIncome: () => void;
+  onAddTransfer: () => void;
+  onScanReceipt: () => void;
+}) {
+  const actions = [
+    { label: "Add Expense", icon: ReceiptText, onClick: onAddExpense },
+    { label: "Add Income", icon: Wallet, onClick: onAddIncome },
+    { label: "Add Transfer", icon: ArrowRightLeft, onClick: onAddTransfer },
+    { label: "Scan Receipt", icon: Camera, onClick: onScanReceipt },
+  ];
+
+  return (
+    <>
+      {open ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[55] bg-emerald-950/20 backdrop-blur-[2px]"
+          aria-label="Close speed dial"
+          onClick={onClose}
+        />
+      ) : null}
+      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 z-[60] flex flex-col items-end gap-2.5">
+        {open
+          ? actions.map((action, index) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => {
+                  onClose();
+                  action.onClick();
+                }}
+                className="flex items-center gap-2 rounded-full border border-emerald-100 bg-white/95 py-2 pl-3 pr-4 text-xs font-black text-emerald-900 shadow-lg shadow-emerald-950/10 backdrop-blur-xl transition animate-in fade-in slide-in-from-bottom-2"
+                style={{ animationDelay: `${index * 40}ms` }}
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+                  <action.icon size={16} />
+                </span>
+                {action.label}
+              </button>
+            ))
+          : null}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={open ? "Close actions" : "Open actions"}
+          aria-expanded={open}
+          className={`grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-[0_12px_32px_rgba(5,150,105,0.45)] transition duration-300 hover:shadow-[0_16px_40px_rgba(5,150,105,0.5)] active:scale-95 ${
+            open ? "rotate-45" : ""
+          }`}
+        >
+          {open ? <X size={26} strokeWidth={2.5} /> : <Plus size={28} strokeWidth={2.5} />}
+        </button>
       </div>
-    </article>
+    </>
+  );
+}
+
+function ExpenseBottomNav({
+  activeTab,
+  onChange,
+}: {
+  activeTab: Tab;
+  onChange: (tab: BottomTab) => void;
+}) {
+  const resolvedActive = bottomTabs.some((t) => t.id === activeTab) ? (activeTab as BottomTab) : "Dashboard";
+
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/40 bg-white/75 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-8px_32px_rgba(0,63,47,0.08)] backdrop-blur-2xl"
+      aria-label="Expense dashboard navigation"
+    >
+      <div className="mx-auto flex max-w-lg items-center justify-between gap-1">
+        {bottomTabs.map((tab) => {
+          const active = resolvedActive === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange(tab.id)}
+              className={`relative flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1 transition duration-300 ${
+                active ? "text-white" : "text-slate-500 hover:text-emerald-700"
+              }`}
+            >
+              {active ? (
+                <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] shadow-md shadow-emerald-600/25 transition-all duration-300" />
+              ) : null}
+              <tab.icon size={17} strokeWidth={active ? 2.4 : 2} className="relative z-10 shrink-0" />
+              <span className="relative z-10 line-clamp-1 w-full text-center text-[9px] font-black uppercase tracking-tight">
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
