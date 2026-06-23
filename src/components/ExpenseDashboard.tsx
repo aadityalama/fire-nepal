@@ -43,8 +43,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bar, Pie } from "react-chartjs-2";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseHistoryPanel } from "@/components/ExpenseHistoryPanel";
@@ -131,6 +132,85 @@ function formatRelativeTime(iso: string) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+const motionEase = [0.22, 1, 0.36, 1] as const;
+
+function ExpenseBottomSheet({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  className = "",
+  showHandle = true,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  subtitle?: string;
+  children: ReactNode;
+  className?: string;
+  showHandle?: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.button
+            type="button"
+            key="expense-sheet-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[70] bg-black/35"
+            aria-label="Close"
+            onClick={onClose}
+          />
+          <motion.div
+            key="expense-sheet-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? "expense-sheet-title" : undefined}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 340 }}
+            className={`fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.35rem] bg-white shadow-[0_-12px_40px_rgba(0,0,0,0.14)] ${className}`}
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
+            {showHandle ? (
+              <div className="flex shrink-0 flex-col items-center pt-2.5">
+                <div className="h-1 w-10 rounded-full bg-slate-200" aria-hidden />
+              </div>
+            ) : null}
+            {title || subtitle ? (
+              <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 px-4 pb-3 pt-1">
+                <div className="min-w-0">
+                  {title ? (
+                    <h2 id="expense-sheet-title" className="text-base font-black text-emerald-950">
+                      {title}
+                    </h2>
+                  ) : null}
+                  {subtitle ? <p className="mt-0.5 text-xs font-semibold text-slate-500">{subtitle}</p> : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 transition active:scale-95"
+                  aria-label="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">{children}</div>
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  );
 }
 
 function getCurrencyMeta(krwPerNpr: number) {
@@ -451,7 +531,7 @@ export function ExpenseDashboard() {
   const [settlementOverrides, setSettlementOverrides] = useState<Record<string, Record<string, number>>>({});
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
-  const [heroMoreOpen, setHeroMoreOpen] = useState(false);
+  const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
@@ -546,7 +626,7 @@ export function ExpenseDashboard() {
       amount: monthOv[transferOverrideKey(t.from, t.to)] ?? t.amount,
     }));
   }, [rawTransfers, settlementOverrides, selectedMonthKey]);
-  const settlementPending = transfers.reduce((sum, transfer) => sum + transfer.amount, 0);
+  const isSettled = transfers.length === 0 && monthExpenses.length > 0;
   const receivableTotal = useMemo(
     () => Object.values(balances).reduce((sum, balance) => sum + Math.max(0, balance), 0),
     [balances],
@@ -555,9 +635,8 @@ export function ExpenseDashboard() {
     () => Object.values(balances).reduce((sum, balance) => sum + Math.max(0, -balance), 0),
     [balances],
   );
-  const isSettled = transfers.length === 0 && monthExpenses.length > 0;
   const recentExpenses = useMemo(
-    () => [...monthExpenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 4),
+    () => [...monthExpenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 2),
     [monthExpenses],
   );
 
@@ -608,41 +687,31 @@ export function ExpenseDashboard() {
     ],
   };
   const dashboardStats: Array<{
-    title: string;
-    subtitle: string;
+    label: string;
     value: string;
-    meta: string;
-    Icon: LucideIcon;
+    icon: LucideIcon;
     accent?: "default" | "receivable" | "payable";
   }> = [
     {
-      title: "Total Group Expenses",
-      subtitle: "महिनाभरको जम्मा खर्च",
+      label: "Group spend",
       value: fmt(totalExpense),
-      meta: `Avg ${fmt(equalSplitAmount)} per person`,
-      Icon: ReceiptText,
+      icon: ReceiptText,
     },
     {
-      title: "Highest Contributor",
-      subtitle: "कसले बढी pay गर्यो",
-      value: highestContributor.name,
-      meta: fmt(highestContributor.total),
-      Icon: Crown,
+      label: "Top payer",
+      value: highestContributor.total > 0 ? fmt(highestContributor.total) : "—",
+      icon: Crown,
     },
     {
-      title: "Receivable",
-      subtitle: "लिनु पर्ने",
+      label: "लिनु पर्ने",
       value: fmt(receivableTotal),
-      meta: "Amount people owe you",
-      Icon: ArrowDown,
+      icon: ArrowDown,
       accent: "receivable",
     },
     {
-      title: "Payable",
-      subtitle: "दिनु पर्ने",
+      label: "दिनु पर्ने",
       value: fmt(payableTotal),
-      meta: "Amount you owe others",
-      Icon: ArrowUp,
+      icon: ArrowUp,
       accent: "payable",
     },
   ];
@@ -911,22 +980,22 @@ export function ExpenseDashboard() {
   const selectedProfile = selectedMember ? profiles[selectedMember] ?? createProfile(selectedMember) : null;
 
   return (
-    <main className="min-h-screen bg-[#f4fbf6] px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-4 text-emerald-950 sm:px-5 sm:pt-6 lg:px-10">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-3 flex items-center justify-between gap-2">
+    <main className="min-h-screen bg-[#f6f8f7] px-3 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] pt-3 text-emerald-950 sm:px-5 lg:px-10">
+      <div className="mx-auto max-w-lg lg:max-w-7xl">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-100 bg-white/90 px-3 py-1.5 text-xs font-black text-emerald-800 shadow-sm transition hover:bg-emerald-50 sm:text-sm"
+            className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 transition active:text-emerald-800"
           >
             <ArrowLeft size={14} /> Back
           </Link>
-          <div className="flex shrink-0 gap-1 rounded-full border border-emerald-100 bg-white/90 p-0.5 shadow-sm">
+          <div className="flex gap-0.5 rounded-lg bg-white p-0.5 ring-1 ring-slate-200/80">
             {(["NPR", "KRW", "USD"] as Currency[]).map((item) => (
               <button
                 key={item}
                 onClick={() => setCurrency(item)}
-                className={`rounded-full px-2.5 py-1.5 text-[11px] font-black transition sm:px-3 sm:text-xs ${
-                  currency === item ? "bg-emerald-700 text-white" : "text-emerald-800 hover:bg-emerald-50"
+                className={`rounded-md px-2 py-1 text-[10px] font-black transition ${
+                  currency === item ? "bg-emerald-600 text-white" : "text-slate-500"
                 }`}
               >
                 {item}
@@ -936,116 +1005,111 @@ export function ExpenseDashboard() {
         </div>
 
         {activeTab === "Dashboard" && (
-          <section className="dark-glass-card relative mb-3 overflow-hidden rounded-2xl p-4 text-white shadow-xl shadow-emerald-950/15">
-            <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-emerald-400/25 blur-3xl" aria-hidden />
-            <div className="relative">
+          <motion.div
+            className="space-y-2"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: 0.05 } },
+            }}
+          >
+            <motion.section
+              variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}
+              className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#065f46] to-[#047857] p-3.5 text-white shadow-lg shadow-emerald-900/20"
+            >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/80">Roommate Expenses</p>
-                  <h1 className="font-nepali mt-0.5 text-xl font-black leading-tight tracking-tight sm:text-2xl">
-                    रुममेट खर्च र सेटलमेन्ट
-                  </h1>
-                </div>
-                <div className="relative shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setHeroMoreOpen((open) => !open)}
-                    className="grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/15"
-                    aria-label="More actions"
-                    aria-expanded={heroMoreOpen}
-                  >
-                    <MoreHorizontal size={17} />
-                  </button>
-                  {heroMoreOpen ? (
-                    <>
-                      <button
-                        type="button"
-                        className="fixed inset-0 z-40 cursor-default"
-                        aria-label="Close menu"
-                        onClick={() => setHeroMoreOpen(false)}
-                      />
-                      <div className="absolute right-0 top-10 z-50 min-w-[200px] overflow-hidden rounded-xl border border-white/15 bg-emerald-950/95 py-1 shadow-xl backdrop-blur-xl">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHeroMoreOpen(false);
-                            window.print();
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                        >
-                          <Download size={16} /> Download monthly PDF
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHeroMoreOpen(false);
-                            void handleShareSummary();
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                        >
-                          <Share2 size={16} /> Share summary
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHeroMoreOpen(false);
-                            setActiveTab("AI Insights");
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                        >
-                          <Sparkles size={16} /> AI Insights
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHeroMoreOpen(false);
-                            setActiveTab("History");
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-bold text-emerald-50 transition hover:bg-white/10"
-                        >
-                          <History size={16} /> Full history
-                        </button>
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-100/70">Total Balance</p>
-                  <p className="text-2xl font-black tabular-nums tracking-tight sm:text-3xl">{fmt(totalExpense)}</p>
-                </div>
-                <div
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black ${
-                    isSettled
-                      ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-300/30"
-                      : "bg-amber-500/20 text-amber-50 ring-1 ring-amber-300/30"
-                  }`}
-                >
-                  <CheckCircle2 size={13} />
-                  {isSettled ? "All settled" : `${transfers.length} pending`}
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-bold backdrop-blur-sm">
-                  <span className="tabular-nums text-emerald-50">
-                    ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)}
-                  </span>
-                  <span className="text-emerald-100/60">·</span>
-                  <span className="text-emerald-100/80">Updated {formatRelativeTime(exchangeRate.updatedAt)}</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/75">Roommate Expenses</p>
+                  <p className="mt-1 text-[11px] font-medium text-emerald-100/80">
+                    ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)} · {formatRelativeTime(exchangeRate.updatedAt)}
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={openAddExpenseModal}
-                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-emerald-500 px-3.5 py-2 text-xs font-black text-white shadow-lg shadow-emerald-950/25 transition active:scale-[0.98] hover:bg-emerald-400"
+                  onClick={() => setActionsSheetOpen(true)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/10 text-white transition active:bg-white/20"
+                  aria-label="More actions"
                 >
-                  <Plus size={14} /> Add Expense
+                  <MoreHorizontal size={16} />
                 </button>
               </div>
-            </div>
-          </section>
+
+              <div className="mt-2.5 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium text-emerald-100/70">Total balance</p>
+                  <p className="text-[1.75rem] font-black leading-none tabular-nums tracking-tight">{fmt(totalExpense)}</p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                    isSettled ? "bg-white/15 text-emerald-50" : "bg-amber-400/25 text-amber-50"
+                  }`}
+                >
+                  {isSettled ? "Settled" : `${transfers.length} due`}
+                </span>
+              </div>
+            </motion.section>
+
+            <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}>
+              <CompactGroupMembersRow
+                balances={balances}
+                members={members}
+                profiles={profiles}
+                onOpenProfile={setSelectedMember}
+                onViewAll={() => setActiveTab("Members")}
+              />
+            </motion.div>
+
+            <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}>
+              <ExpenseMonthPicker
+                compact
+                monthKeys={monthKeys}
+                selectedMonthKey={selectedMonthKey}
+                onChange={setSelectedMonthKey}
+              />
+            </motion.div>
+
+            <motion.section
+              aria-label="Expense KPIs"
+              variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}
+              className="grid grid-cols-2 gap-1.5"
+            >
+              {dashboardStats.map((stat) => (
+                <ExpenseKpiCard key={stat.label} {...stat} />
+              ))}
+            </motion.section>
+
+            <motion.section
+              variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}
+              className="rounded-xl border border-slate-200/80 bg-white p-2.5"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-xs font-black text-slate-500">Recent</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Expenses")}
+                  className="text-[10px] font-bold text-emerald-700"
+                >
+                  All
+                </button>
+              </div>
+              {recentExpenses.length === 0 ? (
+                <p className="py-3 text-center text-[11px] font-semibold text-slate-400">No expenses yet</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {recentExpenses.map((expense) => (
+                    <div key={expense.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-emerald-950">{expense.title}</p>
+                        <p className="truncate text-[10px] text-slate-400">{expense.payer}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-black tabular-nums text-emerald-800">{fmt(expense.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.section>
+          </motion.div>
         )}
 
         {activeTab !== "History" && activeTab !== "AI Insights" && activeTab !== "Dashboard" && (
@@ -1056,88 +1120,6 @@ export function ExpenseDashboard() {
               onChange={setSelectedMonthKey}
             />
           </div>
-        )}
-
-        {activeTab === "Dashboard" && (
-          <>
-            <CompactGroupMembersRow
-              balances={balances}
-              members={members}
-              newMember={newMember}
-              profiles={profiles}
-              setNewMember={setNewMember}
-              addMember={addMember}
-              onOpenProfile={setSelectedMember}
-              onViewAll={() => setActiveTab("Members")}
-            />
-
-            <div className="mb-3">
-              <ExpenseMonthPicker
-                monthKeys={monthKeys}
-                selectedMonthKey={selectedMonthKey}
-                onChange={setSelectedMonthKey}
-              />
-            </div>
-
-            <section aria-label="Expense KPIs" className="mb-3 grid grid-cols-2 gap-2">
-              {dashboardStats.map(({ title, subtitle, value, meta, Icon, accent }) => (
-                <ExpenseKpiCard
-                  key={title}
-                  label={title}
-                  subtitle={subtitle}
-                  value={value}
-                  meta={meta}
-                  icon={Icon}
-                  accent={accent}
-                />
-              ))}
-            </section>
-
-            <section className="mb-3 glass-card rounded-2xl p-3.5 sm:p-4">
-              <div className="mb-2.5 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">Recent</p>
-                  <h2 className="text-sm font-black text-emerald-950">Transactions</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("Expenses")}
-                  className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
-                >
-                  View all →
-                </button>
-              </div>
-              {recentExpenses.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-3 py-4 text-center text-xs font-bold text-slate-500">
-                  No expenses this month yet.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {recentExpenses.map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-emerald-50 bg-white/80 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-emerald-950">{expense.title}</p>
-                        <p className="truncate text-[10px] font-bold text-slate-500">
-                          {expense.category} · {expense.payer}
-                        </p>
-                      </div>
-                      <p className="shrink-0 text-sm font-black tabular-nums text-emerald-800">{fmt(expense.amount)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <SettlementSummaryCompact
-              transfers={transfers}
-              fmt={fmt}
-              settlementPending={settlementPending}
-              onViewAll={() => setActiveTab("Settlement")}
-            />
-          </>
         )}
 
         {activeTab === "Members" && (
@@ -1279,26 +1261,44 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Analytics" && (
-          <section className="mb-3 grid gap-4 lg:grid-cols-2">
-            <div className="glass-card rounded-[1.7rem] p-6">
-              <div className="mb-5 flex items-center gap-2">
-                <BarChart3 className="text-emerald-700" />
-                <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Monthly Expense Chart</h2>
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: motionEase }}
+            className="mb-3 space-y-3"
+          >
+            <div className="rounded-xl border border-slate-200/80 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <BarChart3 className="text-emerald-700" size={18} />
+                <h2 className="text-base font-black text-emerald-950">Monthly trend</h2>
               </div>
-              <div className="h-80">
+              <div className="h-56">
                 <Bar data={monthlyData} options={chartOptions(currency, krwPerNpr)} />
               </div>
             </div>
-            <div className="glass-card rounded-[1.7rem] p-6">
-              <div className="mb-5 flex items-center gap-2">
-                <PieChart className="text-emerald-700" />
-                <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Category Breakdown</h2>
+
+            <div className="rounded-xl border border-slate-200/80 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <PieChart className="text-emerald-700" size={18} />
+                <h2 className="text-base font-black text-emerald-950">Categories</h2>
               </div>
-              <div className="mx-auto h-80 max-w-md">
-                <Pie data={categoryData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }} />
+              <div className="mx-auto h-52 max-w-xs">
+                <Pie data={categoryData} options={categoryPieOptions()} />
               </div>
             </div>
-          </section>
+
+            <div className="rounded-xl border border-slate-200/80 bg-white p-3">
+              <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">By category</h3>
+              <div className="divide-y divide-slate-100">
+                {categories.map((category, index) => (
+                  <div key={category} className="flex items-center justify-between py-2.5">
+                    <span className="text-sm font-semibold text-emerald-950">{category}</span>
+                    <span className="text-sm font-black tabular-nums text-emerald-800">{fmt(categoryTotals[index] ?? 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.section>
         )}
 
         {activeTab === "AI Insights" && (
@@ -1346,34 +1346,40 @@ export function ExpenseDashboard() {
         }}
       />
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex min-h-0 items-end justify-center bg-emerald-950/45 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="expense-modal-title"
-            className="fintech-form-sheet flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-100/80 bg-white/95 shadow-2xl backdrop-blur-md"
-          >
-            <div className="flex shrink-0 items-start justify-between gap-2 border-b border-emerald-100/70 px-3 py-2 sm:px-4">
-              <div className="min-w-0 pr-1">
-                <h2 id="expense-modal-title" className="text-base font-black leading-tight text-emerald-950 sm:text-lg">
-                  {editingExpenseId ? "Edit Expense" : "Add Expense"}
-                </h2>
-                <p className="text-[11px] font-bold leading-snug text-slate-500 sm:text-xs">
-                  NPR base · NPR or KRW input
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeExpenseModal}
-                className="shrink-0 rounded-full bg-emerald-50 p-1.5 text-emerald-800 transition hover:bg-emerald-100 sm:p-2"
-              >
-                <X size={17} />
-              </button>
-            </div>
+      <ExpenseBottomSheet open={actionsSheetOpen} onClose={() => setActionsSheetOpen(false)} title="More">
+        <div className="space-y-1 p-2">
+          {[
+            { label: "Download PDF", icon: Download, action: () => window.print() },
+            { label: "Share summary", icon: Share2, action: () => void handleShareSummary() },
+            { label: "AI Insights", icon: Sparkles, action: () => setActiveTab("AI Insights") },
+            { label: "Full history", icon: History, action: () => setActiveTab("History") },
+          ].map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                setActionsSheetOpen(false);
+                item.action();
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold text-emerald-950 transition active:bg-slate-50"
+            >
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                <item.icon size={17} />
+              </span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </ExpenseBottomSheet>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2 sm:px-4">
-              <div className="grid gap-2 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-2">
+      <ExpenseBottomSheet
+        open={isModalOpen}
+        onClose={closeExpenseModal}
+        title={editingExpenseId ? "Edit expense" : "Add expense"}
+        subtitle="NPR base · NPR or KRW input"
+      >
+        <div className="px-3 pb-3 sm:px-4">
+          <div className="grid gap-2 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-2">
               <label className="sm:col-span-2">
                 <span className="mb-0.5 block text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                   Expense title
@@ -1678,57 +1684,55 @@ export function ExpenseDashboard() {
                   </pre>
                 </details>
               ) : null}
-              </div>
-            </div>
+          </div>
 
-            <div className="flex shrink-0 flex-col gap-2 border-t border-emerald-100/90 bg-white/95 px-3 py-2 backdrop-blur-md supports-[backdrop-filter]:bg-white/80 sm:flex-row-reverse sm:px-4 sm:py-2.5">
-              <button
-                type="button"
-                onClick={saveExpense}
-                className="flex-1 rounded-xl bg-emerald-700 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-900/10 transition hover:bg-emerald-800 sm:py-3 sm:text-sm"
-              >
-                {editingExpenseId ? "Update expense" : "Save expense"}
-              </button>
-              <button
-                type="button"
-                onClick={closeExpenseModal}
-                className="flex-1 rounded-xl border border-emerald-200 bg-white py-2.5 text-xs font-black text-emerald-800 transition hover:bg-emerald-50 sm:py-3 sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
+          <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+            <button
+              type="button"
+              onClick={closeExpenseModal}
+              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveExpense}
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white"
+            >
+              {editingExpenseId ? "Update" : "Save"}
+            </button>
           </div>
         </div>
-      )}
+      </ExpenseBottomSheet>
 
-      {expenseToDelete && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-emerald-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[1.7rem] bg-white p-6 shadow-2xl">
-            <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-600">
-              <Trash2 size={22} />
-            </div>
-            <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Delete this expense?</h2>
-            <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              This will remove <span className="text-emerald-900">{expenseToDelete.title}</span> and
-              instantly recalculate total group expense, settlement, highest contributor, and expense count.
-            </p>
-            <div className="mt-8 sm:mt-10 flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={() => setExpenseToDelete(null)}
-                className="flex-1 rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm font-black text-emerald-800 transition hover:bg-emerald-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteExpense}
-                className="flex-1 rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-red-700"
-              >
-                Delete Expense
-              </button>
-            </div>
+      <ExpenseBottomSheet
+        open={expenseToDelete !== null}
+        onClose={() => setExpenseToDelete(null)}
+        title="Delete expense?"
+      >
+        <div className="px-4 pb-2">
+          <p className="text-sm text-slate-500">
+            Remove <span className="font-bold text-emerald-900">{expenseToDelete?.title}</span> and recalculate
+            balances.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setExpenseToDelete(null)}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteExpense}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white"
+            >
+              Delete
+            </button>
           </div>
         </div>
-      )}
+      </ExpenseBottomSheet>
 
       {selectedMember && selectedProfile && (
         <ProfileModal
@@ -1767,96 +1771,53 @@ export function ExpenseDashboard() {
 
 function ExpenseKpiCard({
   label,
-  subtitle,
   value,
-  meta,
   icon: Icon,
   accent = "default",
 }: {
   label: string;
-  subtitle: string;
   value: string;
-  meta: string;
   icon: LucideIcon;
   accent?: "default" | "receivable" | "payable";
 }) {
-  const accentStyles = {
-    default: {
-      card: "border-emerald-100/80",
-      icon: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-      value: "text-emerald-950",
-    },
-    receivable: {
-      card: "border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white",
-      icon: "bg-emerald-100 text-emerald-700 ring-emerald-200",
-      value: "text-emerald-800",
-    },
-    payable: {
-      card: "border-orange-200/90 bg-gradient-to-br from-orange-50/80 to-white",
-      icon: "bg-orange-100 text-orange-600 ring-orange-200",
-      value: "text-orange-700",
-    },
+  const styles = {
+    default: { value: "text-emerald-950", icon: "text-emerald-600" },
+    receivable: { value: "text-emerald-700", icon: "text-emerald-600" },
+    payable: { value: "text-orange-600", icon: "text-orange-500" },
   }[accent];
 
   return (
-    <article
-      className={`glass-card group relative flex min-h-[96px] flex-col justify-between overflow-hidden rounded-xl border p-3 transition duration-200 active:scale-[0.98] sm:min-h-[100px] ${accentStyles.card}`}
+    <motion.article
+      whileTap={{ scale: 0.98 }}
+      className="flex min-h-[76px] flex-col justify-between rounded-xl border border-slate-200/80 bg-white p-2.5"
     >
-      <div className="relative flex items-start justify-between gap-1.5">
-        <div className="min-w-0">
-          <p className="truncate text-[9px] font-black uppercase tracking-[0.06em] text-emerald-800 sm:text-[10px]">{label}</p>
-          <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">{subtitle}</p>
-        </div>
-        <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ring-1 sm:h-8 sm:w-8 ${accentStyles.icon}`}>
-          <Icon size={15} strokeWidth={2.25} />
-        </div>
+      <div className="flex items-center justify-between gap-1">
+        <p className="truncate text-[10px] font-semibold text-slate-500">{label}</p>
+        <Icon size={14} className={`shrink-0 ${styles.icon}`} strokeWidth={2.25} />
       </div>
-      <div className="relative min-w-0">
-        <p className={`truncate text-base font-black tabular-nums tracking-tight sm:text-lg ${accentStyles.value}`}>{value}</p>
-        <p className="mt-0.5 truncate text-[9px] font-bold text-slate-500 sm:text-[10px]">{meta}</p>
-      </div>
-    </article>
+      <p className={`truncate text-xl font-black tabular-nums leading-tight tracking-tight ${styles.value}`}>{value}</p>
+    </motion.article>
   );
 }
 
 function CompactGroupMembersRow({
   balances,
   members,
-  newMember,
   profiles,
-  setNewMember,
-  addMember,
   onOpenProfile,
   onViewAll,
 }: {
   balances: Record<string, number>;
   members: string[];
-  newMember: string;
   profiles: Record<string, RoommateProfile>;
-  setNewMember: (value: string) => void;
-  addMember: () => void;
   onOpenProfile: (name: string) => void;
   onViewAll: () => void;
 }) {
-  const preview = members.slice(0, 5);
+  const preview = members.slice(0, 6);
 
   return (
-    <section className="mb-3 glass-card rounded-2xl p-3.5">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <UsersRound className="text-emerald-700" size={16} />
-          <h2 className="text-sm font-black text-emerald-950">Group Members</h2>
-        </div>
-        <button
-          type="button"
-          onClick={onViewAll}
-          className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
-        >
-          View all →
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+    <section className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-2.5 py-2">
+      <div className="flex min-w-0 items-center">
         {preview.map((member, index) => {
           const balance = balances[member] ?? 0;
           const settled = Math.abs(balance) < 1;
@@ -1865,123 +1826,44 @@ function CompactGroupMembersRow({
               key={member}
               type="button"
               onClick={() => onOpenProfile(member)}
-              className="flex shrink-0 flex-col items-center gap-1"
-              style={{ marginLeft: index > 0 ? "-6px" : 0 }}
+              className="relative shrink-0"
+              style={{ marginLeft: index > 0 ? -10 : 0, zIndex: preview.length - index }}
             >
-              <div className="relative">
-                <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-emerald-700 to-lime-500 text-xs font-black text-white shadow-md">
-                  {profiles[member]?.avatarUrl ? (
-                    <Image
-                      alt={`${member} avatar`}
-                      className="h-full w-full object-cover"
-                      height={44}
-                      src={profiles[member]?.avatarUrl ?? ""}
-                      unoptimized
-                      width={44}
-                    />
-                  ) : (
-                    initials(profiles[member]?.name ?? member)
-                  )}
-                </div>
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                    settled ? "bg-emerald-500" : balance > 0 ? "bg-emerald-400" : "bg-orange-500"
-                  }`}
-                />
+              <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-emerald-600 to-emerald-500 text-[10px] font-black text-white">
+                {profiles[member]?.avatarUrl ? (
+                  <Image
+                    alt={`${member} avatar`}
+                    className="h-full w-full object-cover"
+                    height={36}
+                    src={profiles[member]?.avatarUrl ?? ""}
+                    unoptimized
+                    width={36}
+                  />
+                ) : (
+                  initials(profiles[member]?.name ?? member)
+                )}
               </div>
-              <span className="max-w-[52px] truncate text-[9px] font-bold text-slate-600">{member.split(" ")[0]}</span>
+              <span
+                className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white ${
+                  settled ? "bg-emerald-500" : balance > 0 ? "bg-emerald-400" : "bg-orange-500"
+                }`}
+              />
             </button>
           );
         })}
         <button
           type="button"
           onClick={onViewAll}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-emerald-200 bg-emerald-50 text-emerald-700"
-          aria-label="Add member"
+          className="relative z-0 grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-dashed border-emerald-200 bg-emerald-50 text-emerald-700"
+          style={{ marginLeft: preview.length > 0 ? -10 : 0 }}
+          aria-label="Add or view members"
         >
-          <Plus size={18} />
+          <Plus size={16} />
         </button>
       </div>
-
-      <div className="mt-2.5 flex gap-2">
-        <input
-          value={newMember}
-          onChange={(event) => setNewMember(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") addMember();
-          }}
-          className="min-w-0 flex-1 rounded-xl border border-emerald-100 px-3 py-2 text-xs font-bold outline-none focus:border-emerald-600"
-          placeholder="Add roommate"
-        />
-        <button
-          type="button"
-          onClick={addMember}
-          className="shrink-0 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-800"
-        >
-          Add
-        </button>
-      </div>
-
-      <p className="mt-2 text-[10px] font-bold text-slate-500">
-        {members.length} member{members.length === 1 ? "" : "s"} · Tap avatar for profile
-        {members.some((m) => Math.abs(balances[m] ?? 0) >= 1) ? " · Some balances pending" : " · All settled"}
-      </p>
-    </section>
-  );
-}
-
-function SettlementSummaryCompact({
-  transfers,
-  fmt,
-  settlementPending,
-  onViewAll,
-}: {
-  transfers: Array<{ from: string; to: string; amount: number }>;
-  fmt: (amount: number, cur?: Currency) => string;
-  settlementPending: number;
-  onViewAll: () => void;
-}) {
-  return (
-    <section className="mb-3 glass-card rounded-2xl p-3.5">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">Settlement</p>
-          <h2 className="text-sm font-black text-emerald-950">लिनु / दिनु Summary</h2>
-        </div>
-        <button
-          type="button"
-          onClick={onViewAll}
-          className="text-[11px] font-black text-emerald-700 transition hover:text-emerald-900"
-        >
-          View all →
-        </button>
-      </div>
-
-      {transfers.length === 0 ? (
-        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5">
-          <CheckCircle2 className="shrink-0 text-emerald-700" size={16} />
-          <p className="text-xs font-bold text-emerald-800">All settled for this month.</p>
-        </div>
-      ) : (
-        <>
-          <p className="mb-2 text-xs font-bold text-slate-600">
-            {fmt(settlementPending)} pending across {transfers.length} transfer{transfers.length === 1 ? "" : "s"}
-          </p>
-          <div className="space-y-1.5">
-            {transfers.slice(0, 3).map((transfer) => (
-              <div
-                key={`${transfer.from}-${transfer.to}`}
-                className="flex items-center justify-between gap-2 rounded-xl border border-emerald-50 bg-white/80 px-3 py-2"
-              >
-                <p className="min-w-0 truncate text-xs font-bold text-slate-700">
-                  {transfer.from} → {transfer.to}
-                </p>
-                <p className="shrink-0 text-xs font-black tabular-nums text-emerald-800">{fmt(transfer.amount)}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <button type="button" onClick={onViewAll} className="shrink-0 text-[10px] font-bold text-emerald-700">
+        {members.length} · All
+      </button>
     </section>
   );
 }
@@ -2012,45 +1894,57 @@ function ExpenseFabSpeedDial({
 
   return (
     <>
-      {open ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-[55] bg-emerald-950/20 backdrop-blur-[2px]"
-          aria-label="Close speed dial"
-          onClick={onClose}
-        />
-      ) : null}
-      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 z-[60] flex flex-col items-end gap-2.5">
-        {open
-          ? actions.map((action, index) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={() => {
-                  onClose();
-                  action.onClick();
-                }}
-                className="flex items-center gap-2 rounded-full border border-emerald-100 bg-white/95 py-2 pl-3 pr-4 text-xs font-black text-emerald-900 shadow-lg shadow-emerald-950/10 backdrop-blur-xl transition animate-in fade-in slide-in-from-bottom-2"
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50 text-emerald-700">
-                  <action.icon size={16} />
-                </span>
-                {action.label}
-              </button>
-            ))
-          : null}
-        <button
+      <AnimatePresence>
+        {open ? (
+          <motion.button
+            type="button"
+            key="fab-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] bg-black/25"
+            aria-label="Close speed dial"
+            onClick={onClose}
+          />
+        ) : null}
+      </AnimatePresence>
+      <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-3 z-[60] flex flex-col items-end gap-2">
+        <AnimatePresence>
+          {open
+            ? actions.map((action, index) => (
+                <motion.button
+                  key={action.label}
+                  type="button"
+                  initial={{ opacity: 0, y: 12, scale: 0.92 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ delay: index * 0.04, duration: 0.2, ease: motionEase }}
+                  onClick={() => {
+                    onClose();
+                    action.onClick();
+                  }}
+                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-2 pr-3 text-xs font-bold text-emerald-950 shadow-md"
+                >
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+                    <action.icon size={14} />
+                  </span>
+                  {action.label}
+                </motion.button>
+              ))
+            : null}
+        </AnimatePresence>
+        <motion.button
           type="button"
           onClick={onToggle}
           aria-label={open ? "Close actions" : "Open actions"}
           aria-expanded={open}
-          className={`grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-[0_12px_32px_rgba(5,150,105,0.45)] transition duration-300 hover:shadow-[0_16px_40px_rgba(5,150,105,0.5)] active:scale-95 ${
-            open ? "rotate-45" : ""
-          }`}
+          whileTap={{ scale: 0.94 }}
+          animate={{ rotate: open ? 45 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-[#10B981] to-[#059669] text-white shadow-[0_10px_28px_rgba(5,150,105,0.4)]"
         >
           {open ? <X size={26} strokeWidth={2.5} /> : <Plus size={28} strokeWidth={2.5} />}
-        </button>
+        </motion.button>
       </div>
     </>
   );
@@ -2067,10 +1961,10 @@ function ExpenseBottomNav({
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/40 bg-white/75 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-8px_32px_rgba(0,63,47,0.08)] backdrop-blur-2xl"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200/90 bg-[#fbfbfb]/95 px-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom,0px))] pt-1.5"
       aria-label="Expense dashboard navigation"
     >
-      <div className="mx-auto flex max-w-lg items-center justify-between gap-1">
+      <div className="mx-auto flex max-w-lg items-stretch justify-between gap-0.5">
         {bottomTabs.map((tab) => {
           const active = resolvedActive === tab.id;
           return (
@@ -2078,15 +1972,25 @@ function ExpenseBottomNav({
               key={tab.id}
               type="button"
               onClick={() => onChange(tab.id)}
-              className={`relative flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1 transition duration-300 ${
-                active ? "text-white" : "text-slate-500 hover:text-emerald-700"
-              }`}
+              className="relative flex min-h-[46px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1"
             >
               {active ? (
-                <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#10B981] to-[#059669] shadow-md shadow-emerald-600/25 transition-all duration-300" />
+                <motion.span
+                  layoutId="expense-tab-pill"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#10B981] to-[#059669] shadow-sm shadow-emerald-600/20"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
               ) : null}
-              <tab.icon size={17} strokeWidth={active ? 2.4 : 2} className="relative z-10 shrink-0" />
-              <span className="relative z-10 line-clamp-1 w-full text-center text-[9px] font-black uppercase tracking-tight">
+              <tab.icon
+                size={16}
+                strokeWidth={active ? 2.4 : 2}
+                className={`relative z-10 ${active ? "text-white" : "text-slate-400"}`}
+              />
+              <span
+                className={`relative z-10 line-clamp-1 w-full text-center text-[9px] font-bold ${
+                  active ? "text-white" : "text-slate-400"
+                }`}
+              >
                 {tab.label}
               </span>
             </button>
@@ -2344,11 +2248,11 @@ function ProfileModal({
   const visibleProfile = isEditing ? draftProfile : profile;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-emerald-950/45 p-3 backdrop-blur-sm sm:place-items-center">
-      <div className="glass-card max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] p-5 shadow-2xl duration-300 animate-in sm:p-6">
-        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 to-lime-500 text-xl font-black text-white shadow-xl shadow-emerald-950/20">
+    <ExpenseBottomSheet open onClose={onClose} title={visibleProfile.name} subtitle="Member profile">
+      <div className="px-4 pb-4">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-700 to-emerald-500 text-sm font-black text-white">
               {visibleProfile.avatarUrl ? (
                 <Image
                   alt={`${visibleProfile.name} avatar`}
@@ -2362,41 +2266,31 @@ function ProfileModal({
                 initials(visibleProfile.name)
               )}
             </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Roommate Profile</p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-emerald-950">{visibleProfile.name}</h2>
-              <p className="text-sm font-bold text-slate-500">
-                {isEditing ? "Edit Korean fintech profile details" : "Korea roommate finance identity"}
-              </p>
-            </div>
           </div>
           <div className="flex items-center gap-2">
             {isEditing ? (
               <>
                 <button
                   onClick={cancelEdit}
-                  className="rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-50"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={saveProfile}
-                  className="rounded-full bg-emerald-700 px-4 py-2 text-xs font-black text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:bg-emerald-800"
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white"
                 >
-                  Save Changes
+                  Save
                 </button>
               </>
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2 text-xs font-black text-emerald-800 transition hover:-translate-y-0.5 hover:bg-emerald-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-emerald-800"
               >
-                <Pencil size={14} /> Edit Profile
+                <Pencil size={13} /> Edit
               </button>
             )}
-            <button onClick={onClose} className="rounded-full bg-emerald-50 p-2 text-emerald-800 transition hover:bg-emerald-100">
-              <X size={18} />
-            </button>
           </div>
         </div>
 
@@ -2613,7 +2507,7 @@ function ProfileModal({
           </section>
         </div>
       </div>
-    </div>
+    </ExpenseBottomSheet>
   );
 }
 
@@ -2733,6 +2627,19 @@ function SettlementPanel({
       </div>
     </div>
   );
+}
+
+function categoryPieOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "bottom" as const,
+        labels: { boxWidth: 10, font: { size: 10 } },
+      },
+    },
+  };
 }
 
 function chartOptions(currency: Currency, krwPerNpr: number) {

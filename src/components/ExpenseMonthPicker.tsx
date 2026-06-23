@@ -7,9 +7,10 @@ type ExpenseMonthPickerProps = {
   monthKeys: string[];
   selectedMonthKey: string;
   onChange: (monthKey: string) => void;
+  compact?: boolean;
 };
 
-export function ExpenseMonthPicker({ monthKeys, selectedMonthKey, onChange }: ExpenseMonthPickerProps) {
+export function ExpenseMonthPicker({ monthKeys, selectedMonthKey, onChange, compact = false }: ExpenseMonthPickerProps) {
   const index = monthKeys.indexOf(selectedMonthKey);
   const canGoNewer = index > 0;
   const canGoOlder = index < monthKeys.length - 1;
@@ -17,6 +18,34 @@ export function ExpenseMonthPicker({ monthKeys, selectedMonthKey, onChange }: Ex
   function shift(direction: "newer" | "older") {
     if (direction === "newer" && canGoNewer) onChange(monthKeys[index - 1]);
     if (direction === "older" && canGoOlder) onChange(monthKeys[index + 1]);
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-2.5 py-2">
+        <button
+          type="button"
+          onClick={() => shift("newer")}
+          disabled={!canGoNewer}
+          className="grid h-8 w-8 place-items-center rounded-lg text-emerald-800 transition active:bg-emerald-50 disabled:opacity-30"
+          aria-label="Newer month"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="min-w-0 flex-1 text-center">
+          <p className="truncate text-sm font-black text-emerald-950">{formatMonthLabel(selectedMonthKey)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => shift("older")}
+          disabled={!canGoOlder}
+          className="grid h-8 w-8 place-items-center rounded-lg text-emerald-800 transition active:bg-emerald-50 disabled:opacity-30"
+          aria-label="Older month"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    );
   }
 
   return (
