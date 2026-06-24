@@ -4,10 +4,10 @@ import {
   highestSpenderForMonth,
   normalizeCategory,
 } from "@/lib/expense-analytics";
-import type { Expense } from "@/lib/expense-utils";
+import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
 import { expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
 import { formatMonthLabel, listMonthKeys } from "@/lib/expense-storage";
-import type { Currency } from "@/lib/expense-utils";
+import { memberDisplayName } from "@/lib/expense-members";
 
 export type InsightTone = "positive" | "warning" | "neutral" | "info";
 
@@ -35,6 +35,7 @@ export function generateAiInsights(
   members: string[],
   selectedMonthKey: string,
   currency: Currency,
+  profiles: Record<string, RoommateProfile>,
 ): AiInsight[] {
   const insights: AiInsight[] = [];
   const monthKeys = listMonthKeys(expenses);
@@ -116,7 +117,7 @@ export function generateAiInsights(
     insights.push({
       id: "top-contributor",
       title: "Contribution leaderboard",
-      message: `${top.name} contributed ${share}% of all expenses this month — highest group contribution.`,
+      message: `${memberDisplayName(top.id, profiles)} contributed ${share}% of all expenses this month — highest group contribution.`,
       tone: share > 45 ? "info" : "neutral",
       metric: formatMoney(top.total, currency),
     });
@@ -178,14 +179,20 @@ export function generateAiInsights(
   return insights;
 }
 
-export function contributionLeaderboard(expenses: Expense[], members: string[], monthKey: string) {
+export function contributionLeaderboard(
+  expenses: Expense[],
+  members: string[],
+  monthKey: string,
+  profiles: Record<string, RoommateProfile>,
+) {
   const monthExpenses = expenses.filter((expense) => expenseMonthKey(expense.date) === monthKey);
   const { paidByMember, totalExpense } = getSettlement(members, monthExpenses);
   return members
-    .map((name) => ({
-      name,
-      total: paidByMember[name] ?? 0,
-      share: totalExpense > 0 ? Math.round(((paidByMember[name] ?? 0) / totalExpense) * 100) : 0,
+    .map((id) => ({
+      id,
+      name: memberDisplayName(id, profiles),
+      total: paidByMember[id] ?? 0,
+      share: totalExpense > 0 ? Math.round(((paidByMember[id] ?? 0) / totalExpense) * 100) : 0,
     }))
     .sort((a, b) => b.total - a.total);
 }

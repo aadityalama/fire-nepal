@@ -36,13 +36,14 @@ import {
   getSettlement,
   initials,
 } from "@/lib/expense-utils";
+import { memberDisplayName, resolveExpensePayerName } from "@/lib/expense-members";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 type DraftRow = {
   date: string;
   title: string;
-  payer: string;
+  payerId: string;
   amount: string;
   category: string;
 };
@@ -73,7 +74,7 @@ export function RoommateExpenseLite({
   const [draft, setDraft] = useState<DraftRow>(() => ({
     date: today,
     title: "",
-    payer: members[0] ?? "",
+    payerId: members[0] ?? "",
     amount: "",
     category: categories[0] ?? "Other",
   }));
@@ -92,13 +93,13 @@ export function RoommateExpenseLite({
   }, [draft.amount, currency]);
 
   const liveSettlement = useMemo(() => {
-    if (!draftAmountNpr || !draft.payer) return settlement;
+    if (!draftAmountNpr || !draft.payerId) return settlement;
 
     const preview: Expense = {
       id: -1,
       title: draft.title.trim() || "Draft",
       amount: draftAmountNpr,
-      payer: draft.payer,
+      payerId: draft.payerId,
       category: draft.category,
       splitEqually: true,
       date: draft.date,
@@ -172,7 +173,7 @@ export function RoommateExpenseLite({
   const perPersonSplit = (amount: number) => amount / Math.max(members.length, 1);
 
   const addDraftExpense = () => {
-    if (!draft.title.trim() || draftAmountNpr <= 0 || !draft.payer) return;
+    if (!draft.title.trim() || draftAmountNpr <= 0 || !draft.payerId) return;
 
     setExpenses((current) => [
       ...current,
@@ -180,7 +181,7 @@ export function RoommateExpenseLite({
         id: Date.now(),
         title: draft.title.trim(),
         amount: draftAmountNpr,
-        payer: draft.payer,
+        payerId: draft.payerId,
         category: draft.category,
         splitEqually: true,
         date: draft.date,
@@ -189,7 +190,7 @@ export function RoommateExpenseLite({
     setDraft({
       date: today,
       title: "",
-      payer: members[0] ?? "",
+      payerId: members[0] ?? "",
       amount: "",
       category: categories[0] ?? "Other",
     });
@@ -233,7 +234,7 @@ export function RoommateExpenseLite({
     const rows = monthExpenses.map((expense) => [
       expense.date,
       expense.title,
-      expense.payer,
+      resolveExpensePayerName(expense, profiles),
       expense.category,
       expense.amount,
       perPersonSplit(expense.amount),
@@ -277,7 +278,7 @@ export function RoommateExpenseLite({
       ${monthExpenses
         .map(
           (expense) =>
-            `<tr><td>${expense.date}</td><td>${expense.title}</td><td>${expense.payer}</td><td>${formatMoney(expense.amount, currency)}</td></tr>`,
+            `<tr><td>${expense.date}</td><td>${expense.title}</td><td>${resolveExpensePayerName(expense, profiles)}</td><td>${formatMoney(expense.amount, currency)}</td></tr>`,
         )
         .join("")}
       </table>
@@ -398,6 +399,7 @@ export function RoommateExpenseLite({
           draft={draft}
           draftAmountNpr={draftAmountNpr}
           members={members}
+          profiles={profiles}
           monthExpenses={monthExpenses}
           perPersonSplit={perPersonSplit}
           setDraft={setDraft}
@@ -437,10 +439,10 @@ export function RoommateExpenseLite({
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => onOpenProfile(expense.payer)}
+                        onClick={() => onOpenProfile(expense.payerId)}
                         className="font-bold text-emerald-700 underline-offset-2 hover:underline"
                       >
-                        {expense.payer}
+                        {resolveExpensePayerName(expense, profiles)}
                       </button>
                     </td>
                     <td className="px-4 py-3 font-black tabular-nums text-emerald-900">
@@ -492,13 +494,13 @@ export function RoommateExpenseLite({
                 </td>
                 <td className="px-3 py-3">
                   <select
-                    value={draft.payer}
-                    onChange={(event) => setDraft((current) => ({ ...current, payer: event.target.value }))}
+                    value={draft.payerId}
+                    onChange={(event) => setDraft((current) => ({ ...current, payerId: event.target.value }))}
                     className="relite-cell w-full"
                   >
-                    {members.map((member) => (
-                      <option key={member} value={member}>
-                        {member}
+                    {members.map((memberId) => (
+                      <option key={memberId} value={memberId}>
+                        {memberDisplayName(memberId, profiles)}
                       </option>
                     ))}
                   </select>
@@ -711,6 +713,7 @@ function MobileExpenseList({
   monthExpenses,
   currency,
   members,
+  profiles,
   draft,
   draftAmountNpr,
   setDraft,
@@ -723,6 +726,7 @@ function MobileExpenseList({
   monthExpenses: Expense[];
   currency: Currency;
   members: string[];
+  profiles: Record<string, RoommateProfile>;
   draft: DraftRow;
   draftAmountNpr: number;
   setDraft: React.Dispatch<React.SetStateAction<DraftRow>>;
@@ -748,7 +752,7 @@ function MobileExpenseList({
               <div>
                 <p className="font-black text-emerald-950">{expense.title}</p>
                 <p className="mt-1 text-xs font-bold text-slate-500">
-                  {expense.date} · {expense.payer}
+                  {expense.date} · {resolveExpensePayerName(expense, profiles)}
                 </p>
               </div>
               <p className="text-right text-lg font-black tabular-nums text-emerald-800">
@@ -800,8 +804,8 @@ function MobileExpenseList({
               className="relite-cell"
             />
             <select
-              value={draft.payer}
-              onChange={(event) => setDraft((current) => ({ ...current, payer: event.target.value }))}
+              value={draft.payerId}
+              onChange={(event) => setDraft((current) => ({ ...current, payerId: event.target.value }))}
               className="relite-cell"
             >
               {members.map((member) => (

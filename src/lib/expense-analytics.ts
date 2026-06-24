@@ -64,9 +64,9 @@ export function monthlyComparisonData(
 export function highestSpenderForMonth(expenses: Expense[], members: string[]) {
   const { paidByMember } = getSettlement(members, expenses);
   const ranked = members
-    .map((name) => ({ name, total: paidByMember[name] ?? 0 }))
+    .map((id) => ({ id, total: paidByMember[id] ?? 0 }))
     .sort((a, b) => b.total - a.total);
-  return ranked[0] ?? { name: "N/A", total: 0 };
+  return ranked[0] ?? { id: "N/A", total: 0 };
 }
 
 export type MonthlyStatement = {
@@ -82,7 +82,7 @@ export type MonthlyStatement = {
   balances: Record<string, number>;
   transfers: Array<{ from: string; to: string; amount: number }>;
   settlementStatus: "Settled" | "Pending";
-  highestSpender: { name: string; total: number };
+  highestSpender: { id: string; total: number };
   categoryTotals: ReturnType<typeof categoryTotalsForMonth>;
 };
 
@@ -122,6 +122,6 @@ export function formatStatementSummary(statement: MonthlyStatement, currency: Cu
     `FIRE Nepal — ${statement.monthLabel} Statement`,
     `Total: ${formatMoney(statement.totalExpense, currency)}`,
     `Status: ${statement.settlementStatus}`,
-    `Highest spender: ${statement.highestSpender.name} (${formatMoney(statement.highestSpender.total, currency)})`,
+    `Highest spender: ${statement.highestSpender.id} (${formatMoney(statement.highestSpender.total, currency)})`,
   ].join("\n");
 }

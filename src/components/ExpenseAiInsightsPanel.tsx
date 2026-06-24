@@ -21,7 +21,7 @@ import {
 } from "@/lib/expense-ai-insights";
 import { categoryTotalsForMonth } from "@/lib/expense-analytics";
 import type { ExchangeRateSnapshot } from "@/lib/exchange-rate";
-import type { Currency, Expense } from "@/lib/expense-utils";
+import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
 import { filterExpensesByMonth } from "@/lib/expense-storage";
 import { currencyMeta, formatMoney } from "@/lib/expense-utils";
 
@@ -42,6 +42,7 @@ const toneIcon: Record<InsightTone, typeof Sparkles> = {
 type ExpenseAiInsightsPanelProps = {
   expenses: Expense[];
   members: string[];
+  profiles: Record<string, RoommateProfile>;
   selectedMonthKey: string;
   currency: Currency;
   krwPerNpr: number;
@@ -73,6 +74,7 @@ function InsightCard({ insight }: { insight: AiInsight }) {
 export function ExpenseAiInsightsPanel({
   expenses,
   members,
+  profiles,
   selectedMonthKey,
   currency,
   krwPerNpr,
@@ -82,12 +84,12 @@ export function ExpenseAiInsightsPanel({
     [expenses, selectedMonthKey],
   );
   const insights = useMemo(
-    () => generateAiInsights(expenses, members, selectedMonthKey, currency),
-    [expenses, members, selectedMonthKey, currency],
+    () => generateAiInsights(expenses, members, selectedMonthKey, currency, profiles),
+    [expenses, members, selectedMonthKey, currency, profiles],
   );
   const leaderboard = useMemo(
-    () => contributionLeaderboard(expenses, members, selectedMonthKey),
-    [expenses, members, selectedMonthKey],
+    () => contributionLeaderboard(expenses, members, selectedMonthKey, profiles),
+    [expenses, members, selectedMonthKey, profiles],
   );
   const categories = categoryTotalsForMonth(monthExpenses);
   const total = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -139,7 +141,7 @@ export function ExpenseAiInsightsPanel({
           </div>
           <div className="space-y-3">
             {leaderboard.map((entry, index) => (
-              <div key={entry.name} className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-emerald-50">
+              <div key={entry.id} className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-emerald-50">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-black text-emerald-950">
                     #{index + 1} {entry.name}

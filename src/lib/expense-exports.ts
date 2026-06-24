@@ -2,6 +2,9 @@ import type { Currency } from "@/lib/expense-utils";
 import { formatMoney } from "@/lib/expense-utils";
 import type { MonthlyStatement } from "@/lib/expense-analytics";
 import { normalizeCategory } from "@/lib/expense-analytics";
+import { resolveExpensePayerName } from "@/lib/expense-members";
+import type { RoommateProfile } from "@/lib/expense-utils";
+import { memberDisplayName } from "@/lib/expense-members";
 
 function escapeCsv(value: string | number) {
   const text = String(value);
@@ -9,14 +12,18 @@ function escapeCsv(value: string | number) {
   return text;
 }
 
-export function exportStatementExcel(statement: MonthlyStatement, currency: Currency) {
+export function exportStatementExcel(
+  statement: MonthlyStatement,
+  currency: Currency,
+  profiles: Record<string, RoommateProfile>,
+) {
   const rows: string[][] = [
     ["FIRE Nepal Monthly Statement"],
     ["Month", statement.monthLabel],
     ["Settlement Status", statement.settlementStatus],
     ["Total Expenses", formatMoney(statement.totalExpense, currency)],
     ["Group average share", formatMoney(statement.equalSplitAmount, currency)],
-    ["Highest Spender", statement.highestSpender.name],
+    ["Highest Spender", memberDisplayName(statement.highestSpender.id, profiles)],
     [],
     ["Date", "Title", "Category", "Payer", "Amount (NPR base)", "Split"],
   ];
@@ -26,7 +33,7 @@ export function exportStatementExcel(statement: MonthlyStatement, currency: Curr
       expense.date,
       expense.title,
       normalizeCategory(expense.category),
-      expense.payer,
+      resolveExpensePayerName(expense, profiles),
       String(expense.amount),
       (() => {
         const n =
@@ -38,12 +45,12 @@ export function exportStatementExcel(statement: MonthlyStatement, currency: Curr
 
   rows.push([]);
   rows.push(["Member", "Paid", "Balance", "Attributed share"]);
-  Object.keys(statement.paidByMember).forEach((member) => {
+  Object.keys(statement.paidByMember).forEach((memberId) => {
     rows.push([
-      member,
-      formatMoney(statement.paidByMember[member] ?? 0, currency),
-      formatMoney(statement.balances[member] ?? 0, currency),
-      formatMoney(statement.memberExpectedShare[member] ?? 0, currency),
+      memberDisplayName(memberId, profiles),
+      formatMoney(statement.paidByMember[memberId] ?? 0, currency),
+      formatMoney(statement.balances[memberId] ?? 0, currency),
+      formatMoney(statement.memberExpectedShare[memberId] ?? 0, currency),
     ]);
   });
 
@@ -70,7 +77,11 @@ export function exportStatementExcel(statement: MonthlyStatement, currency: Curr
   URL.revokeObjectURL(url);
 }
 
-export function exportStatementPdf(statement: MonthlyStatement, currency: Currency) {
+export function exportStatementPdf(
+  statement: MonthlyStatement,
+  currency: Currency,
+  profiles: Record<string, RoommateProfile>,
+) {
   const categoryRows = statement.categoryTotals
     .map(
       ({ category, total }) =>
@@ -85,7 +96,7 @@ export function exportStatementPdf(statement: MonthlyStatement, currency: Curren
         <td>${expense.date}</td>
         <td>${expense.title}</td>
         <td>${normalizeCategory(expense.category)}</td>
-        <td>${expense.payer}</td>
+        <td>${resolveExpensePayerName(expense, profiles)}</td>
         <td style="text-align:right">${formatMoney(expense.amount, currency)}</td>
       </tr>`,
     )
@@ -93,12 +104,12 @@ export function exportStatementPdf(statement: MonthlyStatement, currency: Curren
 
   const memberRows = Object.keys(statement.paidByMember)
     .map(
-      (member) => `
+      (memberId) => `
       <tr>
-        <td>${member}</td>
-        <td style="text-align:right">${formatMoney(statement.paidByMember[member] ?? 0, currency)}</td>
-        <td style="text-align:right">${formatMoney(statement.balances[member] ?? 0, currency)}</td>
-        <td style="text-align:right">${formatMoney(statement.memberExpectedShare[member] ?? 0, currency)}</td>
+        <td>${memberDisplayName(memberId, profiles)}</td>
+        <td style="text-align:right">${formatMoney(statement.paidByMember[memberId] ?? 0, currency)}</td>
+        <td style="text-align:right">${formatMoney(statement.balances[memberId] ?? 0, currency)}</td>
+        <td style="text-align:right">${formatMoney(statement.memberExpectedShare[memberId] ?? 0, currency)}</td>
       </tr>`,
     )
     .join("");
@@ -138,7 +149,7 @@ export function exportStatementPdf(statement: MonthlyStatement, currency: Curren
   <div class="grid">
     <div class="card">Total Expense<strong>${formatMoney(statement.totalExpense, currency)}</strong></div>
     <div class="card">Settlement<strong>${statement.settlementStatus}</strong></div>
-    <div class="card">Top Spender<strong>${statement.highestSpender.name}</strong></div>
+    <div class="card">Top Spender<strong>${memberDisplayName(statement.highestSpender.id, profiles)}</strong></div>
   </div>
   <h2>Expense Ledger</h2>
   <table>

@@ -4,15 +4,15 @@ export type Expense = {
   id: number;
   title: string;
   amount: number;
-  payer: string;
+  payerId: string;
   category: string;
   splitEqually: boolean;
   date: string;
   notes?: string;
   receiptImage?: string;
-  /** Members who share this expense; omit or empty = entire group */
+  /** Member ids who share this expense; omit or empty = entire group */
   splitAmong?: string[];
-  /** When splitEqually is false, weights by member (0–100+); normalized on settlement */
+  /** When splitEqually is false, weights by member id (0–100+); normalized on settlement */
   splitPercentages?: Record<string, number>;
 };
 
@@ -115,7 +115,7 @@ export function getSettlement(members: string[], expenses: Expense[]) {
     members.map((member) => [
       member,
       expenses
-        .filter((expense) => expense.payer === member)
+        .filter((expense) => expense.payerId === member)
         .reduce((sum, expense) => sum + expense.amount, 0),
     ]),
   );

@@ -10,6 +10,7 @@ export type RoommateShareSettlementLine = { from: string; to: string; amountNpr:
 export function buildRoommateExpenseSummaryText(input: {
   monthKey: string;
   members: string[];
+  memberLabels: Record<string, string>;
   memberExpectedShare: Record<string, number>;
   totalExpenseNpr: number;
   equalSplitNpr: number;
@@ -18,7 +19,7 @@ export function buildRoommateExpenseSummaryText(input: {
 }): string {
   const month = monthKeyToLongLabel(input.monthKey);
   const memberLines = input.members
-    .map((name) => `- ${name}: ${input.formatAmount(input.memberExpectedShare[name] ?? 0)}`)
+    .map((memberId) => `- ${input.memberLabels[memberId] ?? memberId}: ${input.formatAmount(input.memberExpectedShare[memberId] ?? 0)}`)
     .join("\n");
 
   const settlementBlock =

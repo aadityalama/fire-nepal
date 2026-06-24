@@ -32,7 +32,8 @@ import {
   normalizeCategory,
 } from "@/lib/expense-analytics";
 import { exportStatementExcel, exportStatementPdf } from "@/lib/expense-exports";
-import type { Currency, Expense } from "@/lib/expense-utils";
+import { memberDisplayName, resolveExpensePayerName } from "@/lib/expense-members";
+import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
 import { currencyMeta, formatMoney, formatSignedMoney } from "@/lib/expense-utils";
 import { formatMonthLabel, listMonthKeys } from "@/lib/expense-storage";
 import type { TimelineActivity } from "@/lib/expense-storage";
@@ -51,6 +52,7 @@ ChartJS.register(
 type ExpenseHistoryPanelProps = {
   expenses: Expense[];
   members: string[];
+  profiles: Record<string, RoommateProfile>;
   currency: Currency;
   activities: TimelineActivity[];
   krwPerNpr: number;
@@ -85,6 +87,7 @@ function chartOptions(currency: Currency) {
 export function ExpenseHistoryPanel({
   expenses,
   members,
+  profiles,
   currency,
   activities,
   krwPerNpr,
@@ -116,10 +119,12 @@ export function ExpenseHistoryPanel({
       if (!query) return true;
       return (
         activity.message.toLowerCase().includes(query) ||
-        (activity.member?.toLowerCase().includes(query) ?? false)
+        (activity.memberId
+          ? memberDisplayName(activity.memberId, profiles).toLowerCase().includes(query)
+          : false)
       );
     });
-  }, [activities, filterMonth, filterCategory, searchQuery]);
+  }, [activities, filterMonth, filterCategory, searchQuery, profiles]);
 
   const comparison = monthlyComparisonData(expenses, currency, 8, krwPerNpr);
   const overviewMonthKey = filterMonth === "all" ? monthKeys[0] : filterMonth;
@@ -263,7 +268,9 @@ export function ExpenseHistoryPanel({
         </div>
         <div className="glass-card rounded-[1.4rem] p-5">
           <p className="text-xs font-black uppercase text-slate-500">Highest spender</p>
-          <p className="mt-2 text-2xl font-black text-emerald-800">{overviewStatement.highestSpender.name}</p>
+          <p className="mt-2 text-2xl font-black text-emerald-800">
+            {memberDisplayName(overviewStatement.highestSpender.id, profiles)}
+          </p>
           <p className="text-sm font-bold text-slate-500">
             {formatMoney(overviewStatement.highestSpender.total, currency)}
           </p>
@@ -294,20 +301,21 @@ export function ExpenseHistoryPanel({
                 </p>
                 <h4 className="text-xl font-black text-emerald-950">{statement.monthLabel}</h4>
                 <p className="text-sm font-bold text-slate-500">
-                  {statement.expenses.length} transactions · Top: {statement.highestSpender.name}
+                  {statement.expenses.length} transactions · Top:{" "}
+                  {memberDisplayName(statement.highestSpender.id, profiles)}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => exportStatementPdf(statement, currency)}
+                  onClick={() => exportStatementPdf(statement, currency, profiles)}
                   className="inline-flex items-center gap-2 rounded-2xl bg-emerald-700 px-4 py-2.5 text-xs font-black text-white transition hover:-translate-y-0.5 hover:bg-emerald-800"
                 >
                   <Download size={14} /> PDF
                 </button>
                 <button
                   type="button"
-                  onClick={() => exportStatementExcel(statement, currency)}
+                  onClick={() => exportStatementExcel(statement, currency, profiles)}
                   className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-800 transition hover:-translate-y-0.5 hover:bg-emerald-50"
                 >
                   <FileSpreadsheet size={14} /> Excel
@@ -334,7 +342,7 @@ export function ExpenseHistoryPanel({
                           <td>{expense.date}</td>
                           <td className="font-bold text-emerald-950">{expense.title}</td>
                           <td>{normalizeCategory(expense.category)}</td>
-                          <td>{expense.payer}</td>
+                          <td>{resolveExpensePayerName(expense, profiles)}</td>
                           <td className="text-right">
                             <DualCurrencyAmount
                               amountNpr={expense.amount}
@@ -369,29 +377,31 @@ export function ExpenseHistoryPanel({
                 <div className="rounded-2xl bg-white p-4 shadow-sm">
                   <p className="mb-3 text-xs font-black uppercase text-slate-500">Per-person contribution</p>
                   <div className="space-y-2">
-                    {members.map((member) => (
+                    {members.map((memberId) => (
                       <div
-                        key={member}
+                        key={memberId}
                         className="rounded-xl bg-emerald-50/70 px-3 py-3 sm:grid sm:grid-cols-[1fr_auto_auto_auto] sm:items-center sm:gap-3"
                       >
-                        <span className="block font-bold text-emerald-950">{member}</span>
+                        <span className="block font-bold text-emerald-950">
+                          {memberDisplayName(memberId, profiles)}
+                        </span>
                         <div className="mt-2 grid grid-cols-3 gap-2 text-center sm:mt-0 sm:contents sm:text-left">
                           <div className="rounded-lg bg-white/60 px-2 py-1.5 sm:bg-transparent sm:p-0">
                             <p className="text-[10px] font-black uppercase text-slate-500">Paid</p>
                             <p className="text-sm font-black text-emerald-800">
-                              {formatMoney(statement.paidByMember[member] ?? 0, currency)}
+                              {formatMoney(statement.paidByMember[memberId] ?? 0, currency)}
                             </p>
                           </div>
                           <div className="rounded-lg bg-white/60 px-2 py-1.5 sm:bg-transparent sm:p-0">
                             <p className="text-[10px] font-black uppercase text-slate-500">Share</p>
                             <p className="text-sm font-bold text-slate-700">
-                              {formatMoney(statement.memberExpectedShare[member] ?? 0, currency)}
+                              {formatMoney(statement.memberExpectedShare[memberId] ?? 0, currency)}
                             </p>
                           </div>
                           <div className="rounded-lg bg-white/60 px-2 py-1.5 sm:bg-transparent sm:p-0">
                             <p className="text-[10px] font-black uppercase text-slate-500">Balance</p>
                             <p className="text-sm font-bold text-slate-600">
-                              {formatSignedMoney(statement.balances[member] ?? 0, currency)}
+                              {formatSignedMoney(statement.balances[memberId] ?? 0, currency)}
                             </p>
                           </div>
                         </div>
@@ -405,7 +415,8 @@ export function ExpenseHistoryPanel({
                     <ul className="space-y-2 text-sm font-bold text-slate-700">
                       {statement.transfers.map((transfer) => (
                         <li key={`${transfer.from}-${transfer.to}`}>
-                          {transfer.from} → {transfer.to}: {formatMoney(transfer.amount, currency)}
+                          {memberDisplayName(transfer.from, profiles)} → {memberDisplayName(transfer.to, profiles)}:{" "}
+                          {formatMoney(transfer.amount, currency)}
                         </li>
                       ))}
                     </ul>
@@ -421,7 +432,7 @@ export function ExpenseHistoryPanel({
 
       <section className="glass-card rounded-[1.7rem] p-5 sm:p-6">
         <h3 className="mb-5 text-xl font-black text-emerald-950">Transaction timeline</h3>
-        <ExpenseTimeline activities={filteredActivities} />
+        <ExpenseTimeline activities={filteredActivities} profiles={profiles} />
       </section>
     </div>
   );

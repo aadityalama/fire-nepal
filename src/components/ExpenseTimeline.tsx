@@ -10,6 +10,30 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { TimelineActivity } from "@/lib/expense-storage";
+import { memberDisplayName } from "@/lib/expense-members";
+import type { RoommateProfile } from "@/lib/expense-utils";
+
+export function buildActivityMessage(
+  activity: TimelineActivity,
+  profiles: Record<string, RoommateProfile>,
+): string {
+  if (!activity.memberId) return activity.message;
+  const name = memberDisplayName(activity.memberId, profiles);
+  switch (activity.type) {
+    case "expense_added":
+      return `${name} added ${activity.title ?? "an expense"}`;
+    case "expense_edited":
+      return activity.amount != null
+        ? `${name} updated amount for ${activity.title ?? "an expense"}`
+        : `${name} updated ${activity.title ?? "an expense"}`;
+    case "expense_deleted":
+      return `${name} removed ${activity.title ?? "an expense"}`;
+    case "member_added":
+      return `${name} joined the expense group`;
+    default:
+      return activity.message;
+  }
+}
 
 const iconByType: Record<TimelineActivity["type"], LucideIcon> = {
   expense_added: Plus,
@@ -29,12 +53,14 @@ const toneByType: Record<TimelineActivity["type"], string> = {
 
 type ExpenseTimelineProps = {
   activities: TimelineActivity[];
+  profiles: Record<string, RoommateProfile>;
   limit?: number;
   emptyMessage?: string;
 };
 
 export function ExpenseTimeline({
   activities,
+  profiles,
   limit,
   emptyMessage = "No activity yet. Add an expense to start your timeline.",
 }: ExpenseTimelineProps) {
@@ -74,7 +100,7 @@ export function ExpenseTimeline({
             </div>
             <div className="glass-card rounded-2xl border border-white/60 p-4 transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,122,61,0.12)]">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <p className="font-black text-emerald-950">{activity.message}</p>
+                <p className="font-black text-emerald-950">{buildActivityMessage(activity, profiles)}</p>
                 <time className="text-xs font-bold text-slate-500">{time}</time>
               </div>
               {activity.category && (

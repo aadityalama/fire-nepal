@@ -77,6 +77,12 @@ import {
 } from "@/lib/expense-storage";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
 import {
+  generateMemberId,
+  memberDisplayName,
+  memberNameMap,
+  resolveExpensePayerName,
+} from "@/lib/expense-members";
+import {
   currentMonthKey,
   expenseAttributedShares,
   expenseMonthKey,
@@ -95,7 +101,7 @@ type ExpenseForm = {
   title: string;
   amount: string;
   amountInputCurrency: "NPR" | "KRW";
-  payer: string;
+  payerId: string;
   category: string;
   splitEqually: boolean;
   date: string;
@@ -221,12 +227,12 @@ function getCurrencyMeta(krwPerNpr: number) {
   };
 }
 
-function emptyExpenseForm(payer = "", memberList: string[] = []): ExpenseForm {
+function emptyExpenseForm(payerId = "", memberList: string[] = []): ExpenseForm {
   return {
     title: "",
     amount: "",
     amountInputCurrency: "NPR",
-    payer,
+    payerId,
     category: categories[0],
     splitEqually: true,
     date: new Date().toISOString().slice(0, 10),
@@ -388,6 +394,8 @@ function ExpenseInlineAmountEditor({
 function SettlementTransferRowEditor({
   from,
   to,
+  fromLabel,
+  toLabel,
   amountNpr,
   baseAmountNpr,
   hasOverride,
@@ -398,6 +406,8 @@ function SettlementTransferRowEditor({
 }: {
   from: string;
   to: string;
+  fromLabel: string;
+  toLabel: string;
   amountNpr: number;
   baseAmountNpr: number;
   hasOverride: boolean;
@@ -439,7 +449,7 @@ function SettlementTransferRowEditor({
     <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-black text-emerald-950">
-          {from} <span className="text-emerald-400">→</span> {to}
+          {fromLabel} <span className="text-emerald-400">→</span> {toLabel}
         </p>
         {hasOverride ? (
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
@@ -474,7 +484,7 @@ function SettlementTransferRowEditor({
             onChange={(event) => setAmountStr(sanitizeDecimalTyping(event.target.value))}
             className="w-full rounded-xl border border-emerald-100 px-3 py-2.5 text-sm font-black text-emerald-950 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
             placeholder="Enter amount"
-            aria-label={`Transfer amount ${from} to ${to}`}
+            aria-label={`Transfer amount ${fromLabel} to ${toLabel}`}
           />
         </div>
         <div className="flex shrink-0 gap-2">
@@ -565,7 +575,7 @@ export function ExpenseDashboard() {
       return;
     }
     saveDashboardState({
-      version: 2,
+      version: 3,
       expenses,
       members,
       profiles,
@@ -574,6 +584,16 @@ export function ExpenseDashboard() {
       settlementTransferOverrides: settlementOverrides,
     });
   }, [hydrated, expenses, members, profiles, activities, exchangeRate, settlementOverrides]);
+
+  useEffect(() => {
+    if (!members.length) return;
+    setForm((current) => {
+      const payerId = members.includes(current.payerId) ? current.payerId : members[0];
+      const splitAmong = resolveSplitAmong(current.splitAmong, members);
+      if (payerId === current.payerId && splitAmong.length === current.splitAmong.length) return current;
+      return { ...current, payerId, splitAmong };
+    });
+  }, [members, profiles]);
 
   const monthKeys = useMemo(() => listMonthKeys(expenses), [expenses]);
   const monthExpenses = useMemo(
@@ -598,7 +618,7 @@ export function ExpenseDashboard() {
         id: 0,
         title: "",
         amount,
-        payer: form.payer,
+        payerId: form.payerId,
         category: form.category,
         splitEqually: form.splitEqually,
         date: form.date,
@@ -647,9 +667,10 @@ export function ExpenseDashboard() {
     prevTransferCount.current = transfers.length;
   }, [transfers.length, monthExpenses.length]);
 
-  const contributorTotals = members.map((member) => ({
-    name: member,
-    total: paidByMember[member] ?? 0,
+  const contributorTotals = members.map((memberId) => ({
+    id: memberId,
+    name: memberDisplayName(memberId, profiles),
+    total: paidByMember[memberId] ?? 0,
   }));
   const highestContributor = contributorTotals.reduce(
     (highest, contributor) => (contributor.total > highest.total ? contributor : highest),
@@ -718,34 +739,43 @@ export function ExpenseDashboard() {
 
   function addMember() {
     const name = newMember.trim();
-    if (!name || members.includes(name)) return;
-    setMembers((current) => [...current, name]);
+    if (!name) return;
+    if (members.some((memberId) => memberDisplayName(memberId, profiles).toLowerCase() === name.toLowerCase())) {
+      return;
+    }
+    const memberId = generateMemberId();
+    setMembers((current) => [...current, memberId]);
     setProfiles((current) => ({
       ...current,
-      [name]: current[name] ?? createProfile(name),
+      [memberId]: current[memberId] ?? createProfile(name),
     }));
     appendActivity({
       type: "member_added",
       monthKey: selectedMonthKey,
-      member: name,
+      memberId,
       message: `${name} joined the expense group`,
     });
     setNewMember("");
   }
 
-  function removeMember(name: string) {
+  function removeMember(memberId: string) {
     if (members.length <= 2) return;
-    const remaining = members.filter((member) => member !== name);
-    setMembers((current) => current.filter((member) => member !== name));
+    const remaining = members.filter((member) => member !== memberId);
+    setMembers((current) => current.filter((member) => member !== memberId));
+    setProfiles((current) => {
+      const next = { ...current };
+      delete next[memberId];
+      return next;
+    });
     setExpenses((current) =>
       current
-        .filter((expense) => expense.payer !== name)
+        .filter((expense) => expense.payerId !== memberId)
         .map((expense) => {
-          if (!expense.splitAmong?.includes(name)) return expense;
-          const nextAmong = expense.splitAmong.filter((m) => m !== name);
+          if (!expense.splitAmong?.includes(memberId)) return expense;
+          const nextAmong = expense.splitAmong.filter((m) => m !== memberId);
           const nextPct =
             expense.splitPercentages &&
-            Object.fromEntries(Object.entries(expense.splitPercentages).filter(([k]) => k !== name));
+            Object.fromEntries(Object.entries(expense.splitPercentages).filter(([k]) => k !== memberId));
           return {
             ...expense,
             splitAmong: nextAmong.length > 0 ? nextAmong : undefined,
@@ -753,13 +783,13 @@ export function ExpenseDashboard() {
           };
         }),
     );
-    setSelectedMember((current) => (current === name ? null : current));
+    setSelectedMember((current) => (current === memberId ? null : current));
     setForm((current) => {
-      const payerNext = current.payer === name ? remaining[0] ?? current.payer : current.payer;
-      const filteredAmong = current.splitAmong.filter((m) => m !== name);
+      const payerNext = current.payerId === memberId ? remaining[0] ?? current.payerId : current.payerId;
+      const filteredAmong = current.splitAmong.filter((m) => m !== memberId);
       const splitAmongNext =
         filteredAmong.length > 0 ? filteredAmong : remaining.length > 0 ? remaining : current.splitAmong;
-      return { ...current, payer: payerNext, splitAmong: splitAmongNext };
+      return { ...current, payerId: payerNext, splitAmong: splitAmongNext };
     });
   }
 
@@ -792,7 +822,7 @@ export function ExpenseDashboard() {
       title: expense.title,
       amount: formatExpenseAmountForInput(expense.amount, defaultInputCur, krwPerNpr),
       amountInputCurrency: defaultInputCur,
-      payer: expense.payer,
+      payerId: expense.payerId,
       category: expense.category,
       splitEqually: expense.splitEqually ?? true,
       date: expense.date,
@@ -822,11 +852,11 @@ export function ExpenseDashboard() {
       appendActivity({
         type: "expense_edited",
         monthKey: expenseMonthKey(snapshot.date),
-        member: snapshot.payer,
+        memberId: snapshot.payerId,
         title: snapshot.title,
         amount: amountNpr,
         category: normalizeCategory(snapshot.category),
-        message: `${snapshot.payer} updated amount for ${snapshot.title}`,
+        message: `${memberDisplayName(snapshot.payerId, profiles)} updated amount for ${snapshot.title}`,
       });
     }
   }
@@ -856,7 +886,7 @@ export function ExpenseDashboard() {
 
   function saveExpense() {
     const amount = parseExpenseAmountInput(form.amount, form.amountInputCurrency, krwPerNpr);
-    if (!form.title.trim() || amount === null || !form.payer) return;
+    if (!form.title.trim() || amount === null || !form.payerId) return;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
     if (splitAmong.length === 0) return;
     const splitPercentages = resolveSplitPercentages(form.splitEqually, splitAmong, form.splitPercentStr);
@@ -864,7 +894,7 @@ export function ExpenseDashboard() {
       id: editingExpenseId ?? Date.now(),
       title: form.title.trim(),
       amount,
-      payer: form.payer,
+      payerId: form.payerId,
       category: form.category,
       splitEqually: form.splitEqually,
       date: form.date,
@@ -886,22 +916,22 @@ export function ExpenseDashboard() {
       appendActivity({
         type: "expense_edited",
         monthKey,
-        member: nextExpense.payer,
+        memberId: nextExpense.payerId,
         title: nextExpense.title,
         amount: nextExpense.amount,
         category: normalizeCategory(nextExpense.category),
-        message: `${nextExpense.payer} updated ${nextExpense.title}`,
+        message: `${memberDisplayName(nextExpense.payerId, profiles)} updated ${nextExpense.title}`,
       });
     } else {
       setExpenses((current) => [nextExpense, ...current]);
       appendActivity({
         type: "expense_added",
         monthKey,
-        member: nextExpense.payer,
+        memberId: nextExpense.payerId,
         title: nextExpense.title,
         amount: nextExpense.amount,
         category: normalizeCategory(nextExpense.category),
-        message: `${nextExpense.payer} added ${nextExpense.title}`,
+        message: `${memberDisplayName(nextExpense.payerId, profiles)} added ${nextExpense.title}`,
       });
     }
 
@@ -918,10 +948,10 @@ export function ExpenseDashboard() {
     appendActivity({
       type: "expense_deleted",
       monthKey: expenseMonthKey(expenseToDelete.date),
-      member: expenseToDelete.payer,
+      memberId: expenseToDelete.payerId,
       title: expenseToDelete.title,
       category: normalizeCategory(expenseToDelete.category),
-      message: `${expenseToDelete.payer} removed ${expenseToDelete.title}`,
+      message: `${memberDisplayName(expenseToDelete.payerId, profiles)} removed ${expenseToDelete.title}`,
     });
     setExpenseToDelete(null);
   }
@@ -938,15 +968,21 @@ export function ExpenseDashboard() {
     return buildRoommateExpenseSummaryText({
       monthKey: selectedMonthKey,
       members,
+      memberLabels: memberNameMap(members, profiles),
       memberExpectedShare,
       totalExpenseNpr: totalExpense,
       equalSplitNpr: equalSplitAmount,
-      transfers: transfers.map((t) => ({ from: t.from, to: t.to, amountNpr: t.amount })),
+      transfers: transfers.map((t) => ({
+        from: memberDisplayName(t.from, profiles),
+        to: memberDisplayName(t.to, profiles),
+        amountNpr: t.amount,
+      })),
       formatAmount: (n) => formatMoney(n, currency, krwPerNpr),
     });
   }, [
     selectedMonthKey,
     members,
+    profiles,
     memberExpectedShare,
     totalExpense,
     equalSplitAmount,
@@ -1101,7 +1137,9 @@ export function ExpenseDashboard() {
                     <div key={expense.id} className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-emerald-950">{expense.title}</p>
-                        <p className="truncate text-[10px] text-slate-400">{expense.payer}</p>
+                        <p className="truncate text-[10px] text-slate-400">
+                          {resolveExpensePayerName(expense, profiles)}
+                        </p>
                       </div>
                       <p className="shrink-0 text-sm font-black tabular-nums text-emerald-800">{fmt(expense.amount)}</p>
                     </div>
@@ -1173,7 +1211,7 @@ export function ExpenseDashboard() {
                     <div className="min-w-0">
                       <p className="font-black text-emerald-950">{expense.title}</p>
                       <p className="mt-1 text-sm font-bold text-slate-500">
-                        {expense.category} · Paid by {expense.payer} · {expense.date}
+                        {expense.category} · Paid by {resolveExpensePayerName(expense, profiles)} · {expense.date}
                       </p>
                       <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
                         {(() => {
@@ -1225,6 +1263,7 @@ export function ExpenseDashboard() {
               displayTransfers={transfers}
               fmt={fmt}
               krwPerNpr={krwPerNpr}
+              profiles={profiles}
               monthOverrideMap={settlementOverrides[selectedMonthKey] ?? {}}
               onSaveTransfer={saveTransferOverride}
               onResetTransfer={resetTransferOverride}
@@ -1241,7 +1280,8 @@ export function ExpenseDashboard() {
                     <div key={`${transfer.from}-${transfer.to}`} className="flex items-center gap-3 rounded-2xl bg-white p-4">
                       <CheckCircle2 className="shrink-0 text-emerald-700" size={19} />
                       <p className="font-bold text-slate-700">
-                        {transfer.from} pays {transfer.to} {fmt(transfer.amount)}
+                        {memberDisplayName(transfer.from, profiles)} pays {memberDisplayName(transfer.to, profiles)}{" "}
+                        {fmt(transfer.amount)}
                       </p>
                     </div>
                   ))
@@ -1305,6 +1345,7 @@ export function ExpenseDashboard() {
           <ExpenseAiInsightsPanel
             expenses={expenses}
             members={members}
+            profiles={profiles}
             selectedMonthKey={selectedMonthKey}
             currency={currency}
             krwPerNpr={krwPerNpr}
@@ -1316,6 +1357,7 @@ export function ExpenseDashboard() {
           <ExpenseHistoryPanel
             expenses={expenses}
             members={members}
+            profiles={profiles}
             currency={currency}
             activities={activities}
             krwPerNpr={krwPerNpr}
@@ -1460,12 +1502,14 @@ export function ExpenseDashboard() {
                   Payer
                 </span>
                 <select
-                  value={form.payer}
-                  onChange={(event) => setForm((current) => ({ ...current, payer: event.target.value }))}
+                  value={form.payerId}
+                  onChange={(event) => setForm((current) => ({ ...current, payerId: event.target.value }))}
                   className="w-full rounded-xl border border-emerald-100 bg-white px-2.5 py-2 text-sm font-bold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 >
-                  {members.map((member) => (
-                    <option key={member}>{member}</option>
+                  {members.map((memberId) => (
+                    <option key={memberId} value={memberId}>
+                      {memberDisplayName(memberId, profiles)}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -1520,21 +1564,21 @@ export function ExpenseDashboard() {
 
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Selected</p>
                   <div className="mb-2 flex min-h-[32px] flex-wrap gap-1.5">
-                    {resolveSplitAmong(form.splitAmong, members).map((m) => (
+                    {resolveSplitAmong(form.splitAmong, members).map((memberId) => (
                       <span
-                        key={m}
+                        key={memberId}
                         className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-black text-emerald-900 shadow-sm sm:px-2.5 sm:text-xs"
                       >
-                        {m}
+                        {memberDisplayName(memberId, profiles)}
                         <button
                           type="button"
-                          aria-label={`Remove ${m} from split`}
+                          aria-label={`Remove ${memberDisplayName(memberId, profiles)} from split`}
                           disabled={resolveSplitAmong(form.splitAmong, members).length <= 1}
                           onClick={() => {
                             setForm((c) => {
                               const cur = resolveSplitAmong(c.splitAmong, members);
                               if (cur.length <= 1) return c;
-                              return { ...c, splitAmong: cur.filter((x) => x !== m) };
+                              return { ...c, splitAmong: cur.filter((x) => x !== memberId) };
                             });
                           }}
                           className="grid h-4 w-4 place-items-center rounded-full bg-emerald-100 text-emerald-800 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 sm:h-5 sm:w-5"
@@ -1546,12 +1590,13 @@ export function ExpenseDashboard() {
                   </div>
 
                   <div className="mb-2 max-h-[min(200px,32vh)] space-y-1 overflow-y-auto overscroll-y-contain rounded-lg border border-white/80 bg-white/80 p-1.5 shadow-inner sm:max-h-[min(220px,28vh)]">
-                    {members.map((member) => {
+                    {members.map((memberId) => {
                       const activeSplit = resolveSplitAmong(form.splitAmong, members);
-                      const checked = activeSplit.includes(member);
+                      const checked = activeSplit.includes(memberId);
+                      const displayName = memberDisplayName(memberId, profiles);
                       return (
                         <label
-                          key={member}
+                          key={memberId}
                           className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
                             checked ? "bg-emerald-50 ring-1 ring-emerald-200/80" : "hover:bg-slate-50"
                           }`}
@@ -1562,19 +1607,19 @@ export function ExpenseDashboard() {
                             onChange={() => {
                               setForm((c) => {
                                 const cur = resolveSplitAmong(c.splitAmong, members);
-                                if (cur.includes(member)) {
+                                if (cur.includes(memberId)) {
                                   if (cur.length <= 1) return c;
-                                  return { ...c, splitAmong: cur.filter((x) => x !== member) };
+                                  return { ...c, splitAmong: cur.filter((x) => x !== memberId) };
                                 }
-                                return { ...c, splitAmong: [...cur, member] };
+                                return { ...c, splitAmong: [...cur, memberId] };
                               });
                             }}
                             className="h-3.5 w-3.5 shrink-0 rounded border-emerald-300 text-emerald-700 focus:ring-emerald-600 sm:h-4 sm:w-4"
                           />
                           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-100 to-white text-[10px] font-black text-emerald-900 ring-1 ring-emerald-100 sm:h-8 sm:w-8 sm:text-[11px]">
-                            {initials(member)}
+                            {initials(displayName)}
                           </span>
-                          <span className="min-w-0 flex-1 text-xs font-bold text-emerald-950 sm:text-sm">{member}</span>
+                          <span className="min-w-0 flex-1 text-xs font-bold text-emerald-950 sm:text-sm">{displayName}</span>
                         </label>
                       );
                     })}
@@ -1617,20 +1662,22 @@ export function ExpenseDashboard() {
                         </p>
                       </div>
                       <div className="grid gap-1.5 sm:grid-cols-2">
-                        {resolveSplitAmong(form.splitAmong, members).map((m) => (
-                          <label key={m} className="flex flex-col gap-0.5 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5">
-                            <span className="text-[9px] font-black uppercase text-slate-500">{m}</span>
+                        {resolveSplitAmong(form.splitAmong, members).map((memberId) => (
+                          <label key={memberId} className="flex flex-col gap-0.5 rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-1.5">
+                            <span className="text-[9px] font-black uppercase text-slate-500">
+                              {memberDisplayName(memberId, profiles)}
+                            </span>
                             <input
                               type="text"
                               inputMode="decimal"
                               placeholder="%"
-                              value={form.splitPercentStr[m] ?? ""}
+                              value={form.splitPercentStr[memberId] ?? ""}
                               onChange={(e) =>
                                 setForm((c) => ({
                                   ...c,
                                   splitPercentStr: {
                                     ...c.splitPercentStr,
-                                    [m]: sanitizeDecimalTyping(e.target.value),
+                                    [memberId]: sanitizeDecimalTyping(e.target.value),
                                   },
                                 }))
                               }
@@ -1650,15 +1697,17 @@ export function ExpenseDashboard() {
                       <div className="grid gap-1 sm:grid-cols-2">
                         {(() => {
                           const active = resolveSplitAmong(form.splitAmong, members);
-                          return members.map((m) => {
-                            const v = splitPreviewShares[m] ?? 0;
-                            if (v <= 0 && !active.includes(m)) return null;
+                          return members.map((memberId) => {
+                            const v = splitPreviewShares[memberId] ?? 0;
+                            if (v <= 0 && !active.includes(memberId)) return null;
                             return (
                               <div
-                                key={m}
+                                key={memberId}
                                 className="flex items-center justify-between rounded-md bg-white/90 px-2 py-1 text-[10px] font-bold text-slate-600 ring-1 ring-emerald-100/60 sm:text-xs"
                               >
-                                <span className="font-black text-emerald-950">{m}</span>
+                                <span className="font-black text-emerald-950">
+                                  {memberDisplayName(memberId, profiles)}
+                                </span>
                                 <span className="tabular-nums text-emerald-800">{fmt(v)}</span>
                               </div>
                             );
@@ -1737,10 +1786,11 @@ export function ExpenseDashboard() {
       {selectedMember && selectedProfile && (
         <ProfileModal
           balance={balances[selectedMember] ?? 0}
-          expenses={expenses.filter((expense) => expense.payer === selectedMember)}
+          expenses={expenses.filter((expense) => expense.payerId === selectedMember)}
           fmt={fmt}
           krwPerNpr={krwPerNpr}
-          memberName={selectedMember}
+          memberId={selectedMember}
+          profiles={profiles}
           onClose={() => setSelectedMember(null)}
           onSave={(updatedProfile) =>
             setProfiles((current) => ({
@@ -2184,7 +2234,8 @@ function ProfileModal({
   expenses,
   fmt,
   krwPerNpr,
-  memberName,
+  memberId,
+  profiles,
   onClose,
   onSave,
   onSaveExpenseAmount,
@@ -2196,7 +2247,8 @@ function ProfileModal({
   expenses: Expense[];
   fmt: (amount: number, cur?: Currency) => string;
   krwPerNpr: number;
-  memberName: string;
+  memberId: string;
+  profiles: Record<string, RoommateProfile>;
   onClose: () => void;
   onSave: (profile: RoommateProfile) => void;
   onSaveExpenseAmount: (id: number, amountNpr: number) => void;
@@ -2208,7 +2260,7 @@ function ProfileModal({
   const [draftProfile, setDraftProfile] = useState(profile);
   const isReceive = balance >= 0;
   const relatedTransfers = transfers.filter(
-    (transfer) => transfer.from === memberName || transfer.to === memberName,
+    (transfer) => transfer.from === memberId || transfer.to === memberId,
   );
 
   function copyAccount() {
@@ -2246,6 +2298,10 @@ function ProfileModal({
   }
 
   const visibleProfile = isEditing ? draftProfile : profile;
+
+  useEffect(() => {
+    if (!isEditing) setDraftProfile(profile);
+  }, [profile, isEditing]);
 
   return (
     <ExpenseBottomSheet open onClose={onClose} title={visibleProfile.name} subtitle="Member profile">
@@ -2483,7 +2539,8 @@ function ProfileModal({
                 {relatedTransfers.length ? (
                   relatedTransfers.map((transfer) => (
                     <p key={`${transfer.from}-${transfer.to}`} className="rounded-2xl bg-emerald-50 p-3 text-sm font-bold text-slate-700">
-                      {transfer.from} → {transfer.to}: {fmt(transfer.amount)}
+                      {memberDisplayName(transfer.from, profiles)} → {memberDisplayName(transfer.to, profiles)}:{" "}
+                      {fmt(transfer.amount)}
                     </p>
                   ))
                 ) : (
@@ -2520,6 +2577,7 @@ function SettlementPanel({
   displayTransfers,
   fmt,
   krwPerNpr,
+  profiles,
   monthOverrideMap,
   onSaveTransfer,
   onResetTransfer,
@@ -2533,6 +2591,7 @@ function SettlementPanel({
   displayTransfers: Array<{ from: string; to: string; amount: number }>;
   fmt: (amount: number, cur?: Currency) => string;
   krwPerNpr: number;
+  profiles: Record<string, RoommateProfile>;
   monthOverrideMap: Record<string, number>;
   onSaveTransfer: (from: string, to: string, npr: number) => void;
   onResetTransfer: (from: string, to: string) => void;
@@ -2551,13 +2610,14 @@ function SettlementPanel({
         </div>
       </div>
       <div className={`grid gap-2 ${compact ? "grid-cols-2" : "gap-3 sm:grid-cols-2"}`}>
-        {Object.entries(balances).map(([member, amount]) => {
+        {Object.entries(balances).map(([memberId, amount]) => {
           const isReceive = amount >= 0;
           const sign = isReceive ? "+" : "-";
+          const displayName = memberDisplayName(memberId, profiles);
 
           return (
             <div
-              key={member}
+              key={memberId}
               className={`rounded-xl border border-emerald-50/80 bg-white shadow-sm ${compact ? "p-2.5" : "rounded-2xl p-4 transition hover:shadow-md"}`}
             >
               <div className={`flex items-center gap-2 ${compact ? "mb-1.5" : "mb-3 gap-3"}`}>
@@ -2566,14 +2626,14 @@ function SettlementPanel({
                     compact ? "h-7 w-7 text-[10px]" : "h-10 w-10 text-sm"
                   }`}
                 >
-                  {initials(member)}
+                  {initials(displayName)}
                 </div>
-                <p className={`truncate font-black text-emerald-950 ${compact ? "text-xs" : ""}`}>{member}</p>
+                <p className={`truncate font-black text-emerald-950 ${compact ? "text-xs" : ""}`}>{displayName}</p>
               </div>
               {!compact ? (
                 <div className="mb-3 grid grid-cols-2 gap-2 text-sm font-bold text-slate-500">
-                  <span>Paid: {fmt(paidByMember[member] ?? 0)}</span>
-                  <span>Share: {fmt(memberExpectedShare[member] ?? 0)}</span>
+                  <span>Paid: {fmt(paidByMember[memberId] ?? 0)}</span>
+                  <span>Share: {fmt(memberExpectedShare[memberId] ?? 0)}</span>
                 </div>
               ) : null}
               <p className={`font-black ${isReceive ? "text-emerald-700" : "text-red-600"} ${compact ? "text-[10px]" : "text-sm"}`}>
@@ -2610,6 +2670,8 @@ function SettlementPanel({
                   key={key}
                   from={raw.from}
                   to={raw.to}
+                  fromLabel={memberDisplayName(raw.from, profiles)}
+                  toLabel={memberDisplayName(raw.to, profiles)}
                   amountNpr={display.amount}
                   baseAmountNpr={raw.amount}
                   hasOverride={hasOverride}
