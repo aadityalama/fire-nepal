@@ -1958,56 +1958,64 @@ function CompactGroupMembersRow({
   onOpenProfile: (name: string) => void;
   onViewAll: () => void;
 }) {
-  const preview = members.slice(0, 6);
-
   return (
-    <section className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-2.5 py-2">
-      <div className="flex min-w-0 items-center">
-        {preview.map((member, index) => {
-          const balance = balances[member] ?? 0;
+    <section className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 sm:gap-3">
+      <div
+        className="flex min-h-[3rem] min-w-0 flex-1 touch-pan-x items-center gap-2.5 overflow-x-auto overscroll-x-contain py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory sm:gap-3 md:flex-wrap md:overflow-x-visible md:snap-none [&::-webkit-scrollbar]:hidden"
+        aria-label="Group members"
+      >
+        {members.map((memberId) => {
+          const balance = balances[memberId] ?? 0;
           const settled = Math.abs(balance) < 1;
+          const displayName = profiles[memberId]?.name ?? memberId;
           return (
             <button
-              key={member}
+              key={memberId}
               type="button"
-              onClick={() => onOpenProfile(member)}
-              className="relative shrink-0"
-              style={{ marginLeft: index > 0 ? -10 : 0, zIndex: preview.length - index }}
+              onClick={() => onOpenProfile(memberId)}
+              className="group relative shrink-0 snap-start"
+              aria-label={`${displayName} profile`}
             >
-              <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-emerald-600 to-emerald-500 text-[10px] font-black text-white">
-                {profiles[member]?.avatarUrl ? (
+              <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-full border-[2.5px] border-white bg-gradient-to-br from-emerald-700 via-emerald-600 to-lime-500 text-xs font-black text-white shadow-md shadow-emerald-900/15 ring-1 ring-slate-200/90 transition group-active:scale-95 sm:h-12 sm:w-12 sm:text-sm">
+                {profiles[memberId]?.avatarUrl ? (
                   <Image
-                    alt={`${member} avatar`}
+                    alt={`${displayName} avatar`}
                     className="h-full w-full object-cover"
-                    height={36}
-                    src={profiles[member]?.avatarUrl ?? ""}
+                    height={48}
+                    src={profiles[memberId]?.avatarUrl ?? ""}
                     unoptimized
-                    width={36}
+                    width={48}
                   />
                 ) : (
-                  initials(profiles[member]?.name ?? member)
+                  initials(displayName)
                 )}
               </div>
               <span
-                className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white ${
+                className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white shadow-sm ${
                   settled ? "bg-emerald-500" : balance > 0 ? "bg-emerald-400" : "bg-orange-500"
                 }`}
+                aria-hidden
               />
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={onViewAll}
-          className="relative z-0 grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-dashed border-emerald-200 bg-emerald-50 text-emerald-700"
-          style={{ marginLeft: preview.length > 0 ? -10 : 0 }}
-          aria-label="Add or view members"
-        >
-          <Plus size={16} />
-        </button>
       </div>
-      <button type="button" onClick={onViewAll} className="shrink-0 text-[10px] font-bold text-emerald-700">
-        {members.length} · All
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-emerald-300/90 bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-900/5 ring-1 ring-white transition active:scale-95 hover:border-emerald-400 hover:bg-emerald-100/80 sm:h-12 sm:w-12"
+        aria-label="Add or view members"
+      >
+        <Plus size={18} strokeWidth={2.5} />
+      </button>
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="shrink-0 text-right leading-tight transition active:opacity-70"
+        aria-label={`View all ${members.length} members`}
+      >
+        <p className="text-sm font-black tabular-nums text-emerald-950">{members.length}</p>
+        <p className="text-[10px] font-bold text-slate-500">Members</p>
       </button>
     </section>
   );
