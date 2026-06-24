@@ -1,5 +1,5 @@
 import type { Expense, RoommateProfile } from "@/lib/expense-utils";
-import { currentMonthKey, expenseMonthKey } from "@/lib/expense-utils";
+import { currentMonthKey, expenseMonthKey, type Currency } from "@/lib/expense-utils";
 import type { ExchangeRateSnapshot } from "@/lib/exchange-rate";
 import {
   migrateExpenseToMemberIds,
@@ -35,6 +35,8 @@ export type DashboardPersistedState = {
   profiles: Record<string, RoommateProfile>;
   activities: TimelineActivity[];
   exchangeRate?: ExchangeRateSnapshot;
+  /** Global display / entry currency preference */
+  displayCurrency?: Currency;
   /** monthKey → `${from}|${to}` → amount NPR */
   settlementTransferOverrides?: Record<string, Record<string, number>>;
 };
@@ -84,6 +86,7 @@ type NameBasedPersistedState = {
   profiles: Record<string, RoommateProfile>;
   activities: Array<TimelineActivity & { member?: string }>;
   exchangeRate?: ExchangeRateSnapshot;
+  displayCurrency?: Currency;
   settlementTransferOverrides?: Record<string, Record<string, number>>;
 };
 
@@ -106,6 +109,7 @@ function migrateNameBasedStateToV3(state: NameBasedPersistedState): DashboardPer
     profiles,
     activities,
     exchangeRate: state.exchangeRate,
+    displayCurrency: state.displayCurrency,
     settlementTransferOverrides: state.settlementTransferOverrides,
   };
 }

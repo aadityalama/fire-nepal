@@ -85,6 +85,7 @@ import {
 import {
   currentMonthKey,
   expenseAttributedShares,
+  expenseEntryCurrency,
   expenseMonthKey,
   getSettlement,
   type Expense,
@@ -100,7 +101,6 @@ type BottomTab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytic
 type ExpenseForm = {
   title: string;
   amount: string;
-  amountInputCurrency: "NPR" | "KRW";
   payerId: string;
   category: string;
   splitEqually: boolean;
@@ -231,7 +231,6 @@ function emptyExpenseForm(payerId = "", memberList: string[] = []): ExpenseForm 
   return {
     title: "",
     amount: "",
-    amountInputCurrency: "NPR",
     payerId,
     category: categories[0],
     splitEqually: true,
@@ -545,9 +544,20 @@ export function ExpenseDashboard() {
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
+  const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
 
   const krwPerNpr = exchangeRate.krwPerNpr;
   const fmt = (amount: number, cur: Currency = currency) => formatMoney(amount, cur, krwPerNpr);
+
+  const editingExpense = useMemo(
+    () => (editingExpenseId ? expenses.find((expense) => expense.id === editingExpenseId) : undefined),
+    [editingExpenseId, expenses],
+  );
+
+  const formEntryCurrency = useMemo((): "NPR" | "KRW" => {
+    if (editingExpense) return editingExpense.amountCurrency ?? "NPR";
+    return expenseEntryCurrency(currency);
+  }, [editingExpense, currency]);
 
   useEffect(() => {
     const stored = loadDashboardState();
@@ -560,6 +570,7 @@ export function ExpenseDashboard() {
       if (stored.settlementTransferOverrides) {
         setSettlementOverrides(stored.settlementTransferOverrides);
       }
+      if (stored.displayCurrency) setCurrency(stored.displayCurrency);
     }
     setHydrated(true);
   }, []);
@@ -581,9 +592,10 @@ export function ExpenseDashboard() {
       profiles,
       activities,
       exchangeRate,
+      displayCurrency: currency,
       settlementTransferOverrides: settlementOverrides,
     });
-  }, [hydrated, expenses, members, profiles, activities, exchangeRate, settlementOverrides]);
+  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides]);
 
   useEffect(() => {
     if (!members.length) return;
@@ -594,6 +606,25 @@ export function ExpenseDashboard() {
       return { ...current, payerId, splitAmong };
     });
   }, [members, profiles]);
+
+  useEffect(() => {
+    if (!isModalOpen || editingExpenseId !== null) return;
+    const nextCur = expenseEntryCurrency(currency);
+    const prevCur = prevFormEntryCurrency.current;
+    if (nextCur === prevCur) return;
+    setForm((current) => {
+      const n = Number(String(current.amount).replace(/,/g, ""));
+      if (!Number.isFinite(n) || n <= 0) return current;
+      const amount =
+        prevCur === "NPR" && nextCur === "KRW"
+          ? String(Math.round(nprToKrw(n, krwPerNpr)))
+          : prevCur === "KRW" && nextCur === "NPR"
+            ? String(Math.round(krwToNpr(n, krwPerNpr) * 100) / 100)
+            : current.amount;
+      return { ...current, amount };
+    });
+    prevFormEntryCurrency.current = nextCur;
+  }, [currency, isModalOpen, editingExpenseId, krwPerNpr]);
 
   const monthKeys = useMemo(() => listMonthKeys(expenses), [expenses]);
   const monthExpenses = useMemo(
@@ -609,7 +640,7 @@ export function ExpenseDashboard() {
     useMemo(() => getSettlement(members, monthExpenses), [members, monthExpenses]);
 
   const splitPreviewShares = useMemo(() => {
-    const amount = parseExpenseAmountInput(form.amount, form.amountInputCurrency, krwPerNpr);
+    const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
     if (amount === null || amount <= 0) return null;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
     const splitPercentages = resolveSplitPercentages(form.splitEqually, splitAmong, form.splitPercentStr);
@@ -627,7 +658,7 @@ export function ExpenseDashboard() {
       },
       members,
     );
-  }, [form, members, krwPerNpr]);
+  }, [form, members, krwPerNpr, formEntryCurrency]);
 
   const customPercentSum = useMemo(() => {
     if (form.splitEqually) return null;
@@ -797,16 +828,14 @@ export function ExpenseDashboard() {
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
-    setForm({
-      ...emptyExpenseForm(members[0], members),
-      amountInputCurrency: currency === "KRW" ? "KRW" : "NPR",
-    });
+    prevFormEntryCurrency.current = expenseEntryCurrency(currency);
+    setForm(emptyExpenseForm(members[0], members));
     setIsModalOpen(true);
   }
 
   function openEditExpenseModal(expense: Expense) {
     setEditingExpenseId(expense.id);
-    const defaultInputCur: "NPR" | "KRW" = currency === "KRW" ? "KRW" : "NPR";
+    const entryCur = expense.amountCurrency ?? "NPR";
     const baseAmong =
       expense.splitAmong && expense.splitAmong.length > 0
         ? expense.splitAmong.filter((m) => members.includes(m))
@@ -820,8 +849,7 @@ export function ExpenseDashboard() {
     );
     setForm({
       title: expense.title,
-      amount: formatExpenseAmountForInput(expense.amount, defaultInputCur, krwPerNpr),
-      amountInputCurrency: defaultInputCur,
+      amount: formatExpenseAmountForInput(expense.amount, entryCur, krwPerNpr),
       payerId: expense.payerId,
       category: expense.category,
       splitEqually: expense.splitEqually ?? true,
@@ -885,7 +913,7 @@ export function ExpenseDashboard() {
   );
 
   function saveExpense() {
-    const amount = parseExpenseAmountInput(form.amount, form.amountInputCurrency, krwPerNpr);
+    const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
     if (!form.title.trim() || amount === null || !form.payerId) return;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
     if (splitAmong.length === 0) return;
@@ -901,6 +929,7 @@ export function ExpenseDashboard() {
       receiptImage: receiptPreview,
       splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
       splitPercentages: form.splitEqually ? undefined : splitPercentages,
+      amountCurrency: formEntryCurrency,
     };
 
     const monthKey = expenseMonthKey(nextExpense.date);
@@ -1418,7 +1447,7 @@ export function ExpenseDashboard() {
         open={isModalOpen}
         onClose={closeExpenseModal}
         title={editingExpenseId ? "Edit expense" : "Add expense"}
-        subtitle="NPR base · NPR or KRW input"
+        subtitle={editingExpenseId ? "Edit expense details" : "Quick entry · uses dashboard currency"}
       >
         <div className="px-3 pb-3 sm:px-4">
           <div className="grid gap-2 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-2">
@@ -1435,45 +1464,13 @@ export function ExpenseDashboard() {
               </label>
 
               <div className="sm:col-span-2 rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/80 to-white p-2.5 shadow-inner sm:p-3">
-                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-emerald-800 sm:text-xs">
-                  Amount
-                </span>
-                <div className="mb-2 flex rounded-lg bg-white/90 p-0.5 shadow-sm ring-1 ring-emerald-100/80">
-                  {(["NPR", "KRW"] as const).map((cur) => (
-                    <button
-                      key={cur}
-                      type="button"
-                      onClick={() => {
-                        const n = Number(String(form.amount).replace(/,/g, ""));
-                        if (Number.isFinite(n) && n > 0) {
-                          if (form.amountInputCurrency === "NPR" && cur === "KRW") {
-                            setForm((c) => ({
-                              ...c,
-                              amountInputCurrency: "KRW",
-                              amount: String(Math.round(nprToKrw(n, krwPerNpr))),
-                            }));
-                            return;
-                          }
-                          if (form.amountInputCurrency === "KRW" && cur === "NPR") {
-                            setForm((c) => ({
-                              ...c,
-                              amountInputCurrency: "NPR",
-                              amount: String(Math.round(krwToNpr(n, krwPerNpr) * 100) / 100),
-                            }));
-                            return;
-                          }
-                        }
-                        setForm((c) => ({ ...c, amountInputCurrency: cur }));
-                      }}
-                      className={`flex-1 rounded-md py-1.5 text-[11px] font-black transition sm:py-2 sm:text-xs ${
-                        form.amountInputCurrency === cur
-                          ? "bg-emerald-700 text-white shadow-sm"
-                          : "text-emerald-800 hover:bg-emerald-50"
-                      }`}
-                    >
-                      {cur === "NPR" ? "रु NPR" : "₩ KRW"}
-                    </button>
-                  ))}
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wide text-emerald-800 sm:text-xs">
+                    Amount
+                  </span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-emerald-800 ring-1 ring-emerald-100 sm:text-xs">
+                    Currency: {formEntryCurrency}
+                  </span>
                 </div>
                 <input
                   type="text"
@@ -1483,16 +1480,22 @@ export function ExpenseDashboard() {
                     setForm((current) => ({ ...current, amount: sanitizeDecimalTyping(event.target.value) }))
                   }
                   className="w-full rounded-xl border border-emerald-100 bg-white px-3 py-2 text-base font-black text-emerald-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 sm:text-lg"
-                  placeholder="Enter amount"
-                  aria-label="Expense amount"
+                  placeholder={formEntryCurrency === "KRW" ? "Enter amount in ₩" : "Enter amount in रु"}
+                  aria-label={`Expense amount in ${formEntryCurrency}`}
                 />
                 {(() => {
-                  const preview = parseExpenseAmountInput(form.amount, form.amountInputCurrency, krwPerNpr);
+                  const preview = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
                   if (preview === null || !form.amount) return null;
                   return (
                     <p className="mt-1.5 text-center text-[10px] font-bold leading-snug text-emerald-800 sm:text-left sm:text-xs">
-                      ≈ {fmt(preview, "NPR")} NPR · ₩{Math.round(nprToKrw(preview, krwPerNpr)).toLocaleString()} ·{" "}
-                      {fmt(preview, currency)}
+                      {formEntryCurrency === "KRW" ? (
+                        <>≈ {fmt(preview, "NPR")} NPR</>
+                      ) : (
+                        <>≈ ₩{Math.round(nprToKrw(preview, krwPerNpr)).toLocaleString()}</>
+                      )}
+                      {currency !== formEntryCurrency ? (
+                        <span className="ml-2">· {fmt(preview, currency)}</span>
+                      ) : null}
                     </p>
                   );
                 })()}

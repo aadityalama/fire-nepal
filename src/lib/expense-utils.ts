@@ -10,6 +10,8 @@ export type Expense = {
   date: string;
   notes?: string;
   receiptImage?: string;
+  /** Currency used when this expense amount was entered (NPR base is always stored in `amount`) */
+  amountCurrency?: "NPR" | "KRW";
   /** Member ids who share this expense; omit or empty = entire group */
   splitAmong?: string[];
   /** When splitEqually is false, weights by member id (0–100+); normalized on settlement */
@@ -60,6 +62,10 @@ export function formatSignedMoney(amount: number, currency: Currency) {
   if (amount > 1) return `+${symbol}${value}`;
   if (amount < -1) return `-${symbol}${value}`;
   return `${symbol}${value}`;
+}
+
+export function expenseEntryCurrency(displayCurrency: Currency): "NPR" | "KRW" {
+  return displayCurrency === "KRW" ? "KRW" : "NPR";
 }
 
 export function expenseMonthKey(date: string) {
