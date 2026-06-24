@@ -79,7 +79,13 @@ import {
   type TimelineActivity,
 } from "@/lib/expense-storage";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
-import { buildSettlementShareData, downloadSettlementSharePdf, downloadSettlementSharePng } from "@/lib/settlement-share";
+import {
+  buildSettlementShareData,
+  downloadSettlementSharePdf,
+  downloadSettlementSharePng,
+  isSettlementReportUserRole,
+  type SettlementReportUserRole,
+} from "@/lib/settlement-share";
 import {
   generateMemberId,
   memberDisplayName,
@@ -596,11 +602,35 @@ export function ExpenseDashboard() {
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
   const [settlementShareOpen, setSettlementShareOpen] = useState(false);
+  const [shareGeneratedAt, setShareGeneratedAt] = useState<Date | null>(null);
+  const [exportUserRole, setExportUserRole] = useState<SettlementReportUserRole>("MEMBER");
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = localStorage.getItem("fire-nepal-expense-export-role");
+        if (isSettlementReportUserRole(stored)) {
+          if (!cancelled) setExportUserRole(stored);
+          return;
+        }
+        const res = await fetch("/api/auth/admin-status", { credentials: "include" });
+        if (!res.ok) return;
+        const json = (await res.json()) as { isAdmin?: boolean };
+        if (!cancelled && json.isAdmin) setExportUserRole("ADMIN");
+      } catch {
+        /* MEMBER fallback */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const krwPerNpr = exchangeRate.krwPerNpr;
   const fmt = (amount: number, cur: Currency = currency) => formatMoney(amount, cur, krwPerNpr);
@@ -1049,25 +1079,24 @@ export function ExpenseDashboard() {
     });
   }
 
-  const settlementShareData = useMemo(
-    () =>
-      buildSettlementShareData({
-        monthKey: selectedMonthKey,
-        members,
-        memberLabels: memberNameMap(members, profiles),
-        memberAvatars: Object.fromEntries(members.map((id) => [id, profiles[id]?.avatarUrl])),
-        balances,
-        paidByMember,
-        memberExpectedShare,
-        totalExpenseNpr: totalExpense,
-        transfers,
-        transferLabels: transfers.map((t) => ({
-          fromName: memberDisplayName(t.from, profiles),
-          toName: memberDisplayName(t.to, profiles),
-        })),
-        currency,
-        krwPerNpr,
-      }),
+  const settlementShareInput = useMemo(
+    () => ({
+      monthKey: selectedMonthKey,
+      members,
+      memberLabels: memberNameMap(members, profiles),
+      memberAvatars: Object.fromEntries(members.map((id) => [id, profiles[id]?.avatarUrl])),
+      balances,
+      paidByMember,
+      memberExpectedShare,
+      totalExpenseNpr: totalExpense,
+      transfers,
+      transferLabels: transfers.map((t) => ({
+        fromName: memberDisplayName(t.from, profiles),
+        toName: memberDisplayName(t.to, profiles),
+      })),
+      currency,
+      krwPerNpr,
+    }),
     [
       selectedMonthKey,
       members,
@@ -1082,33 +1111,54 @@ export function ExpenseDashboard() {
     ],
   );
 
+  const settlementShareData = useMemo(
+    () =>
+      buildSettlementShareData({
+        ...settlementShareInput,
+        userRole: exportUserRole,
+        generatedAt: shareGeneratedAt ?? new Date(),
+      }),
+    [settlementShareInput, exportUserRole, shareGeneratedAt],
+  );
+
+  const freshSettlementShareData = useCallback(
+    () =>
+      buildSettlementShareData({
+        ...settlementShareInput,
+        userRole: exportUserRole,
+        generatedAt: new Date(),
+      }),
+    [settlementShareInput, exportUserRole],
+  );
+
   const openSettlementShare = useCallback(() => {
+    setShareGeneratedAt(new Date());
     setSettlementShareOpen(true);
   }, []);
 
   const downloadSettlementPng = useCallback(async () => {
     try {
       await downloadSettlementSharePng(
-        settlementShareData,
+        freshSettlementShareData(),
         `roommate-settlement-${selectedMonthKey}.png`,
       );
       toast.success("Settlement image saved");
     } catch {
       toast.error("Could not export PNG");
     }
-  }, [settlementShareData, selectedMonthKey]);
+  }, [freshSettlementShareData, selectedMonthKey]);
 
   const downloadSettlementPdf = useCallback(async () => {
     try {
       await downloadSettlementSharePdf(
-        settlementShareData,
+        freshSettlementShareData(),
         `roommate-settlement-${selectedMonthKey}.pdf`,
       );
       toast.success("Settlement PDF saved");
     } catch {
       toast.error("Could not export PDF");
     }
-  }, [settlementShareData, selectedMonthKey]);
+  }, [freshSettlementShareData, selectedMonthKey]);
 
   const buildShareSummaryText = useCallback(() => {
     return buildRoommateExpenseSummaryText({

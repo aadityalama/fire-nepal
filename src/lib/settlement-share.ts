@@ -22,6 +22,8 @@ export type SettlementShareTransferLine = {
   amountLabel: string;
 };
 
+export type SettlementReportUserRole = "ADMIN" | "ACCOUNTANT" | "OWNER" | "MANAGER" | "MEMBER";
+
 export type SettlementShareData = {
   monthKey: string;
   monthLabel: string;
@@ -32,7 +34,12 @@ export type SettlementShareData = {
   receivesTotalLabel: string;
   paysTotalLabel: string;
   totalMembers: number;
+  totalTransfers: number;
+  userRole: SettlementReportUserRole;
+  generatedOnLabel: string;
+  generatedAtLabel: string;
   siteUrl: string;
+  footerUrl: string;
 };
 
 const FIRE_NEPAL_SITE = "https://firenepal.com";
@@ -42,6 +49,67 @@ export const SETTLEMENT_COLOR_RECEIVES = "#059669";
 export const SETTLEMENT_COLOR_PAYS = "#DC2626";
 export const SETTLEMENT_COLOR_NEUTRAL = "#1e293b";
 export const SETTLEMENT_COLOR_MUTED = "#64748b";
+
+const REPORT_ROLE_VALUES: SettlementReportUserRole[] = [
+  "ADMIN",
+  "ACCOUNTANT",
+  "OWNER",
+  "MANAGER",
+  "MEMBER",
+];
+
+export const REPORT_ROLE_BADGE_STYLES: Record<
+  SettlementReportUserRole,
+  { bg: string; text: string; border: string }
+> = {
+  ADMIN: { bg: "#d1fae5", text: "#047857", border: "#6ee7b7" },
+  ACCOUNTANT: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
+  OWNER: { bg: "#fef3c7", text: "#b45309", border: "#fcd34d" },
+  MANAGER: { bg: "#ede9fe", text: "#6d28d9", border: "#c4b5fd" },
+  MEMBER: { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
+};
+
+export function isSettlementReportUserRole(value: string | null | undefined): value is SettlementReportUserRole {
+  return Boolean(value && REPORT_ROLE_VALUES.includes(value as SettlementReportUserRole));
+}
+
+export function resolveSettlementReportUserRole(
+  value: string | null | undefined,
+): SettlementReportUserRole {
+  return isSettlementReportUserRole(value) ? value : "MEMBER";
+}
+
+export function formatSettlementGeneratedTimestamp(date = new Date()) {
+  const generatedOnLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+
+  const generatedAtLabel = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+
+  return { generatedOnLabel, generatedAtLabel };
+}
+
+export function settlementReportRoleBadgeClass(role: SettlementReportUserRole) {
+  switch (role) {
+    case "ADMIN":
+      return "bg-emerald-100 text-emerald-800 ring-emerald-200";
+    case "ACCOUNTANT":
+      return "bg-blue-100 text-blue-800 ring-blue-200";
+    case "OWNER":
+      return "bg-amber-100 text-amber-800 ring-amber-200";
+    case "MANAGER":
+      return "bg-violet-100 text-violet-800 ring-violet-200";
+    default:
+      return "bg-slate-100 text-slate-600 ring-slate-200";
+  }
+}
 
 export function memberRoleIcon(role: SettlementShareMemberLine["role"]) {
   if (role === "receives") return "↑";
@@ -101,8 +169,12 @@ export function buildSettlementShareData(input: {
   currency: Currency;
   krwPerNpr?: number;
   siteUrl?: string;
+  userRole?: SettlementReportUserRole | string | null;
+  generatedAt?: Date;
 }): SettlementShareData {
   const krwPerNpr = input.krwPerNpr ?? FALLBACK_KRW_PER_NPR;
+  const generatedAt = input.generatedAt ?? new Date();
+  const { generatedOnLabel, generatedAtLabel } = formatSettlementGeneratedTimestamp(generatedAt);
 
   const memberLines: SettlementShareMemberLine[] = input.members.map((memberId) => {
     const balanceNpr = input.balances[memberId] ?? 0;
@@ -158,7 +230,12 @@ export function buildSettlementShareData(input: {
     receivesTotalLabel: fmtSignedBalance(receivesTotalNpr, input.currency, krwPerNpr),
     paysTotalLabel: fmtAmount(paysTotalNpr, input.currency, krwPerNpr),
     totalMembers: input.members.length,
+    totalTransfers: transfers.length,
+    userRole: resolveSettlementReportUserRole(input.userRole),
+    generatedOnLabel,
+    generatedAtLabel,
     siteUrl: input.siteUrl ?? defaultSettlementSiteUrl(),
+    footerUrl: FIRE_NEPAL_SITE,
   };
 }
 
@@ -185,11 +262,18 @@ export function buildSettlementShareCardText(data: SettlementShareData): string 
 
   return [
     "🏠 Roommate Settlement Summary",
+    `Role: ${data.userRole}`,
+    "",
+    "Settlement Period:",
     data.monthLabel,
+    "",
+    "Generated On:",
+    data.generatedOnLabel,
+    data.generatedAtLabel,
     "",
     DIVIDER,
     "",
-    "MEMBER SUMMARY",
+    "MEMBER SETTLEMENT BREAKDOWN",
     "",
     memberBlock,
     "",
@@ -201,19 +285,14 @@ export function buildSettlementShareCardText(data: SettlementShareData): string 
     "",
     DIVIDER,
     "",
-    "RECEIVES TOTAL",
-    data.receivesTotalLabel,
+    "REPORT SUMMARY",
     "",
-    "PAYS TOTAL",
-    data.paysTotalLabel,
+    `Total Group Expense: ${data.totalGroupExpenseLabel}`,
+    `Total Members: ${data.totalMembers}`,
+    `Total Transfers: ${data.totalTransfers}`,
     "",
-    "TOTAL GROUP EXPENSE",
-    data.totalGroupExpenseLabel,
-    "",
-    "TOTAL MEMBERS",
-    String(data.totalMembers),
-    "",
-    "GENERATED BY FIRE NEPAL",
+    "Generated by FIRE Nepal",
+    data.footerUrl,
   ].join("\n");
 }
 
@@ -240,9 +319,12 @@ export function buildSettlementShareSocialMessage(data: SettlementShareData): st
 
   return [
     "🏠 Roommate Settlement Summary",
-    data.monthLabel,
+    `[${data.userRole}]`,
     "",
-    "MEMBER SUMMARY",
+    `Settlement Period: ${data.monthLabel}`,
+    `Generated: ${data.generatedOnLabel} · ${data.generatedAtLabel}`,
+    "",
+    "MEMBER SETTLEMENT BREAKDOWN",
     "",
     memberBlock,
     "",
@@ -250,13 +332,12 @@ export function buildSettlementShareSocialMessage(data: SettlementShareData): st
     "",
     transferBlock,
     "",
-    `↑ Receives total: ${data.receivesTotalLabel}`,
-    `↓ Pays total: ${data.paysTotalLabel}`,
     `Total group expense: ${data.totalGroupExpenseLabel}`,
     `Members: ${data.totalMembers}`,
+    `Transfers: ${data.totalTransfers}`,
     "",
     "Generated with FIRE Nepal",
-    data.siteUrl || FIRE_NEPAL_SITE,
+    data.footerUrl,
   ].join("\n");
 }
 
@@ -385,6 +466,57 @@ function drawTransferNames(
   ctx.fillText(toName, x + fromW + arrowW, y);
 }
 
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+) {
+  const r = Math.min(radius, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawRoleBadge(
+  ctx: CanvasRenderingContext2D,
+  role: SettlementReportUserRole,
+  rightX: number,
+  centerY: number,
+) {
+  const style = REPORT_ROLE_BADGE_STYLES[role];
+  ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
+  const textW = ctx.measureText(role).width;
+  const padX = 10;
+  const badgeW = textW + padX * 2;
+  const badgeH = 22;
+  const x = rightX - badgeW;
+  const y = centerY - badgeH / 2;
+
+  ctx.fillStyle = style.bg;
+  ctx.strokeStyle = style.border;
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, x, y, badgeW, badgeH, 11);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = style.text;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(role, x + badgeW / 2, centerY);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 function drawSettlementCard(
   ctx: CanvasRenderingContext2D,
   data: SettlementShareData,
@@ -432,19 +564,35 @@ function drawSettlementCard(
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#065f46";
-  ctx.font = "800 22px ui-sans-serif, system-ui, -apple-system, sans-serif";
+  ctx.font = "800 20px ui-sans-serif, system-ui, -apple-system, sans-serif";
   ctx.fillText("🏠 Roommate Settlement Summary", innerX, y);
-  y += 30;
+  drawRoleBadge(ctx, data.userRole, contentRight, y - 2);
+  y += 26;
 
-  ctx.font = "700 18px ui-sans-serif, system-ui, sans-serif";
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#64748b";
+  ctx.fillText("SETTLEMENT PERIOD", innerX, y);
+  y += 16;
+  ctx.font = "700 17px ui-sans-serif, system-ui, sans-serif";
   ctx.fillStyle = "#064e3b";
   ctx.fillText(data.monthLabel, innerX, y);
   y += 22;
 
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#64748b";
+  ctx.fillText("GENERATED ON", innerX, y);
+  y += 16;
+  ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#334155";
+  ctx.fillText(data.generatedOnLabel, innerX, y);
+  y += 16;
+  ctx.fillText(data.generatedAtLabel, innerX, y);
+  y += 20;
+
   drawDivider(ctx, innerX, y, innerW);
   y += 18;
 
-  drawSectionTitle(ctx, innerX, y, "MEMBER SUMMARY");
+  drawSectionTitle(ctx, innerX, y, "MEMBER SETTLEMENT BREAKDOWN");
   y += 22;
 
   for (const member of data.members) {
@@ -500,53 +648,58 @@ function drawSettlementCard(
   drawDivider(ctx, innerX, y, innerW);
   y += 18;
 
+  drawSectionTitle(ctx, innerX, y, "REPORT SUMMARY");
+  y += 22;
+
   drawLabelAmountRow(
     ctx,
-    "RECEIVES TOTAL",
-    data.receivesTotalLabel,
-    innerX,
-    y,
-    innerW,
-    SETTLEMENT_COLOR_RECEIVES,
-    12,
-  );
-  y += 22;
-  drawLabelAmountRow(ctx, "PAYS TOTAL", data.paysTotalLabel, innerX, y, innerW, SETTLEMENT_COLOR_PAYS, 12);
-  y += 22;
-  drawLabelAmountRow(ctx, "TOTAL GROUP EXPENSE", data.totalGroupExpenseLabel, innerX, y, innerW, "#064e3b", 12);
-  y += 22;
-  drawLabelAmountRow(
-    ctx,
-    "TOTAL MEMBERS",
-    String(data.totalMembers),
+    "Total Group Expense",
+    data.totalGroupExpenseLabel,
     innerX,
     y,
     innerW,
     "#064e3b",
     12,
   );
-  y += 28;
+  y += 22;
+  drawLabelAmountRow(ctx, "Total Members", String(data.totalMembers), innerX, y, innerW, "#064e3b", 12);
+  y += 22;
+  drawLabelAmountRow(
+    ctx,
+    "Total Transfers",
+    String(data.totalTransfers),
+    innerX,
+    y,
+    innerW,
+    "#064e3b",
+    12,
+  );
+  y += 30;
 
   ctx.textAlign = "center";
   ctx.font = "700 10px ui-sans-serif, system-ui, sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText("GENERATED BY FIRE NEPAL", cardX + cardW / 2, cardY + cardH - pad + 4);
+  ctx.fillText("Generated by FIRE Nepal", cardX + cardW / 2, cardY + cardH - pad - 6);
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#64748b";
+  ctx.fillText(data.footerUrl, cardX + cardW / 2, cardY + cardH - pad + 8);
 }
 
 function settlementCardHeight(data: SettlementShareData): number {
   const pad = 36;
-  const headerH = 78;
+  const headerH = 148;
   const dividerBlock = 18;
   const memberHeader = 22;
   const memberRowH = 88;
   const transferHeader = 22;
   const transferRowH = data.transfers.length === 0 ? 24 : data.transfers.length * 40;
-  const footerH = 122;
+  const footerH = 88;
+  const summaryH = 88;
   const dividers = dividerBlock * 3;
-  const sections = memberHeader + transferHeader;
+  const sections = memberHeader + transferHeader + summaryH;
 
   return Math.min(
-    2400,
+    2600,
     48 + pad * 2 + headerH + dividers + sections + data.members.length * memberRowH + transferRowH + footerH,
   );
 }
