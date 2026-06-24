@@ -81,17 +81,45 @@ function IconLine({ className }: { className?: string }) {
   );
 }
 
+function SettlementReportHeader({ data }: { data: SettlementShareData }) {
+  if (!data.hasGroupBranding) {
+    return (
+      <p className="text-base font-black text-emerald-900">🏠 Roommate Settlement Summary</p>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-3">
+      {data.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={data.logoUrl}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded-xl border border-emerald-100 object-cover shadow-sm"
+        />
+      ) : null}
+      <div className="min-w-0">
+        {data.companyName ? (
+          <p className="truncate text-base font-black text-emerald-950 sm:text-lg">{data.companyName}</p>
+        ) : null}
+        {data.roomNumber ? (
+          <p className="truncate text-sm font-bold text-emerald-700">Room {data.roomNumber}</p>
+        ) : null}
+        {data.reportSubtitle ? (
+          <p className="mt-1 text-xs font-semibold text-slate-500">{data.reportSubtitle}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
   return (
     <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] to-[#047857] p-3 shadow-lg shadow-emerald-950/25">
       <div className="rounded-xl bg-white p-4 shadow-inner">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base font-black text-emerald-900">
-              {data.reportHeader === "Roommate Settlement Summary"
-                ? "🏠 Roommate Settlement Summary"
-                : data.reportHeader}
-            </p>
+          <div className="min-w-0 flex-1">
+            <SettlementReportHeader data={data} />
             <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Settlement Period</p>
             <p className="text-lg font-black text-emerald-950">{data.monthLabel}</p>
           </div>

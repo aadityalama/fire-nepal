@@ -51,6 +51,7 @@ import { Bar, Pie } from "react-chartjs-2";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
+import { GroupProfileCard } from "@/components/GroupProfileCard";
 import { ExpenseHistoryPanel } from "@/components/ExpenseHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
 import { ExpenseReceiptUpload } from "@/components/ExpenseReceiptUpload";
@@ -81,6 +82,7 @@ import {
   saveDashboardState,
   type TimelineActivity,
 } from "@/lib/expense-storage";
+import { emptyGroupProfile, type GroupProfile } from "@/lib/group-profile";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
 import {
   buildSettlementShareData,
@@ -314,6 +316,10 @@ function formatMoney(amount: number, currency: Currency, krwPerNpr = FALLBACK_KR
 function transferOverrideKey(from: string, to: string) {
   return `${from}|${to}`;
 }
+
+
+
+
 
 function expenseSplitSummary(expense: Expense, members: string[]) {
   const memberCount =
@@ -691,11 +697,9 @@ export function ExpenseDashboard() {
   const [shareModalKey, setShareModalKey] = useState(0);
   const [settlementShareOpen, setSettlementShareOpen] = useState(false);
   const [shareGeneratedAt, setShareGeneratedAt] = useState<Date | null>(null);
-  const [companyName, setCompanyName] = useState("");
-  const [roomNumber, setRoomNumber] = useState("");
+  const [groupProfile, setGroupProfile] = useState<GroupProfile>(emptyGroupProfile);
+  const [groupProfileSaving, setGroupProfileSaving] = useState(false);
   const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
-  const [settingsDraft, setSettingsDraft] = useState({ companyName: "", roomNumber: "" });
-  const [settingsSaving, setSettingsSaving] = useState(false);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
@@ -703,39 +707,29 @@ export function ExpenseDashboard() {
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
 
   const openExpenseSettings = useCallback(() => {
-    setSettingsDraft({ companyName, roomNumber });
     setSettingsSheetOpen(true);
-  }, [companyName, roomNumber]);
+  }, []);
 
-  const saveExpenseSettings = useCallback(async () => {
-    const nextCompany = settingsDraft.companyName.trim();
-    const nextRoom = settingsDraft.roomNumber.trim();
-    setSettingsSaving(true);
+  const saveGroupProfile = useCallback(async (next: GroupProfile) => {
+    setGroupProfileSaving(true);
     try {
-      setCompanyName(nextCompany);
-      setRoomNumber(nextRoom);
+      setGroupProfile(next);
 
       if (user?.id && isSupabaseConfigured()) {
         const client = getSupabaseBrowserClient();
-        const saved = await saveExpenseWorkspaceSettings(client, user.id, {
-          companyName: nextCompany,
-          roomNumber: nextRoom,
-        });
-        setCompanyName(saved.companyName);
-        setRoomNumber(saved.roomNumber);
-        setSettingsDraft(saved);
-        toast.success("Expense settings saved to your workspace");
+        const saved = await saveExpenseWorkspaceSettings(client, user.id, next);
+        setGroupProfile(saved);
+        toast.success("Group profile saved to your workspace");
       } else {
-        toast.success("Expense settings saved on this device");
+        toast.success("Group profile saved on this device");
       }
-
-      setSettingsSheetOpen(false);
     } catch {
-      toast.error("Could not save expense settings");
+      toast.error("Could not save group profile");
+      throw new Error("save failed");
     } finally {
-      setSettingsSaving(false);
+      setGroupProfileSaving(false);
     }
-  }, [settingsDraft.companyName, settingsDraft.roomNumber, user?.id]);
+  }, [user?.id]);
 
   const krwPerNpr = exchangeRate.krwPerNpr;
   const fmt = (amount: number, cur: Currency = currency) => formatMoney(amount, cur, krwPerNpr);
@@ -778,8 +772,15 @@ export function ExpenseDashboard() {
         setSettlementOverrides(stored.settlementTransferOverrides);
       }
       if (stored.displayCurrency) setCurrency(stored.displayCurrency);
-      if (stored.companyName) setCompanyName(stored.companyName);
-      if (stored.roomNumber) setRoomNumber(stored.roomNumber);
+      if (stored.companyName || stored.roomNumber || stored.companyType || stored.description || stored.logoUrl) {
+        setGroupProfile({
+          companyName: stored.companyName ?? "",
+          roomNumber: stored.roomNumber ?? "",
+          companyType: stored.companyType ?? "",
+          description: stored.description ?? "",
+          logoUrl: stored.logoUrl ?? "",
+        });
+      }
     }
     setHydrated(true);
   }, []);
@@ -792,9 +793,14 @@ export function ExpenseDashboard() {
         const client = getSupabaseBrowserClient();
         const remote = await loadExpenseWorkspaceSettings(client, user.id);
         if (cancelled) return;
-        if (remote.companyName || remote.roomNumber) {
-          setCompanyName(remote.companyName);
-          setRoomNumber(remote.roomNumber);
+        if (
+          remote.companyName ||
+          remote.roomNumber ||
+          remote.companyType ||
+          remote.description ||
+          remote.logoUrl
+        ) {
+          setGroupProfile(remote);
         }
       } catch {
         /* local fallback remains */
@@ -824,10 +830,13 @@ export function ExpenseDashboard() {
       exchangeRate,
       displayCurrency: currency,
       settlementTransferOverrides: settlementOverrides,
-      companyName,
-      roomNumber,
+      companyName: groupProfile.companyName,
+      roomNumber: groupProfile.roomNumber,
+      companyType: groupProfile.companyType,
+      description: groupProfile.description,
+      logoUrl: groupProfile.logoUrl,
     });
-  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, companyName, roomNumber]);
+  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, groupProfile]);
 
   useEffect(() => {
     if (!members.length) return;
@@ -1307,22 +1316,28 @@ export function ExpenseDashboard() {
     () =>
       buildSettlementShareData({
         ...settlementShareInput,
-        companyName,
-        roomNumber,
+        companyName: groupProfile.companyName,
+        roomNumber: groupProfile.roomNumber,
+        companyType: groupProfile.companyType,
+        description: groupProfile.description,
+        logoUrl: groupProfile.logoUrl,
         generatedAt: shareGeneratedAt ?? new Date(),
       }),
-    [settlementShareInput, companyName, roomNumber, shareGeneratedAt],
+    [settlementShareInput, groupProfile, shareGeneratedAt],
   );
 
   const freshSettlementShareData = useCallback(
     () =>
       buildSettlementShareData({
         ...settlementShareInput,
-        companyName,
-        roomNumber,
+        companyName: groupProfile.companyName,
+        roomNumber: groupProfile.roomNumber,
+        companyType: groupProfile.companyType,
+        description: groupProfile.description,
+        logoUrl: groupProfile.logoUrl,
         generatedAt: new Date(),
       }),
-    [settlementShareInput, companyName, roomNumber],
+    [settlementShareInput, groupProfile],
   );
 
   const openSettlementShare = useCallback(() => {
@@ -1572,7 +1587,13 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Members" && (
-          <section className="mb-3">
+          <section className="mb-3 space-y-3">
+            <GroupProfileCard
+              memberCount={members.length}
+              onSave={saveGroupProfile}
+              profile={groupProfile}
+              saving={groupProfileSaving}
+            />
             <GroupMembers
               balances={balances}
               fmt={fmt}
@@ -1764,53 +1785,25 @@ export function ExpenseDashboard() {
 
       <ExpenseBottomSheet
         open={settingsSheetOpen}
-        onClose={() => !settingsSaving && setSettingsSheetOpen(false)}
+        onClose={() => setSettingsSheetOpen(false)}
         title="Expense settings"
-        subtitle="Company and room details auto-fill settlement reports"
+        subtitle="Currency and display preferences"
       >
         <div className="space-y-3 px-3 pb-4">
-          <label className="block">
-            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
-              Company name
-            </span>
-            <input
-              value={settingsDraft.companyName}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({ ...current, companyName: event.target.value }))
-              }
-              className="w-full rounded-xl border border-emerald-100 px-3 py-2.5 text-sm font-bold outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              placeholder="KP Electric"
-              autoComplete="organization"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
-              Room number
-            </span>
-            <input
-              value={settingsDraft.roomNumber}
-              onChange={(event) =>
-                setSettingsDraft((current) => ({ ...current, roomNumber: event.target.value }))
-              }
-              className="w-full rounded-xl border border-emerald-100 px-3 py-2.5 text-sm font-bold outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-              placeholder="305"
-              inputMode="text"
-              autoComplete="off"
-            />
-          </label>
-          <p className="text-[11px] font-semibold leading-5 text-slate-500">
-            These values appear on settlement PNG, PDF, and share cards — for example{" "}
-            <span className="font-black text-emerald-800">KP Electric • Room 305</span> with a{" "}
-            <span className="font-black text-emerald-800">ROOM 305</span> badge.
+          <p className="text-sm font-semibold leading-relaxed text-slate-600">
+            Group profile (company name, room, logo) is managed on the{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsSheetOpen(false);
+                setActiveTab("Members");
+              }}
+              className="font-black text-emerald-700 underline-offset-2 hover:underline"
+            >
+              Members
+            </button>{" "}
+            tab.
           </p>
-          <button
-            type="button"
-            disabled={settingsSaving}
-            onClick={() => void saveExpenseSettings()}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-black text-white transition active:bg-emerald-800 disabled:opacity-60"
-          >
-            {settingsSaving ? "Saving…" : "Save settings"}
-          </button>
         </div>
       </ExpenseBottomSheet>
 
@@ -2493,21 +2486,16 @@ function GroupMembers({
   compact?: boolean;
 }) {
   return (
-    <div className={`glass-card rounded-2xl ${compact ? "p-4" : "rounded-[1.7rem] p-6 sm:p-7"}`}>
-      <div className={`flex items-center gap-2 ${compact ? "mb-3" : "mb-5 gap-3"}`}>
-        <UsersRound className="shrink-0 text-emerald-700" size={compact ? 18 : 24} />
-        <div className="min-w-0">
-          <h2 className={`font-black leading-snug tracking-tight text-emerald-950 ${compact ? "text-base" : "font-nepali text-2xl sm:text-3xl"}`}>
-            Group Members
-          </h2>
-          {!compact ? (
-            <p className="text-sm font-bold leading-snug text-slate-500">Tap a card to view roommate profile</p>
-          ) : (
-            <p className="text-[11px] font-bold text-slate-500">Tap to view profile</p>
-          )}
-        </div>
+    <div className={`rounded-2xl border border-slate-200/80 bg-white/80 p-3 backdrop-blur sm:p-4 ${compact ? "" : ""}`}>
+      <div className={`mb-3 flex items-center justify-between gap-2 ${compact ? "mb-2" : ""}`}>
+        <h2 className={`font-black text-emerald-950 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>
+          Members
+        </h2>
+        {!compact ? (
+          <p className="text-[11px] font-bold text-slate-500">Tap a card to view profile</p>
+        ) : null}
       </div>
-      <div className={`grid gap-2 ${compact ? "grid-cols-1" : "gap-3 sm:grid-cols-2"}`}>
+      <div className={`grid gap-2 ${compact ? "grid-cols-1" : "gap-2.5 sm:grid-cols-2"}`}>
         {members.map((member) => (
           <div
             key={member}

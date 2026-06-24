@@ -1,6 +1,7 @@
 import type { Currency } from "@/lib/expense-utils";
 import { initials } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
+import { hasGroupProfile, type GroupProfile } from "@/lib/group-profile";
 import { monthKeyToLongLabel } from "@/lib/roommate-expense-share";
 
 export type SettlementShareMemberLine = {
@@ -25,6 +26,9 @@ export type SettlementShareTransferLine = {
 export type SettlementLocationInput = {
   companyName?: string | null;
   roomNumber?: string | null;
+  companyType?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
 };
 
 export type SettlementShareData = {
@@ -40,7 +44,12 @@ export type SettlementShareData = {
   totalTransfers: number;
   companyName: string;
   roomNumber: string;
+  companyType: string;
+  description: string;
+  logoUrl: string;
+  hasGroupBranding: boolean;
   reportHeader: string;
+  reportSubtitle: string | null;
   roomBadgeLabel: string | null;
   generatedOnLabel: string;
   generatedAtLabel: string;
@@ -62,13 +71,42 @@ export function normalizeSettlementSetting(value?: string | null): string {
   return value?.trim() ?? "";
 }
 
+const DEFAULT_SETTLEMENT_TITLE = "Roommate Settlement Summary";
+
 export function buildSettlementReportHeader(location: SettlementLocationInput): string {
-  const company = normalizeSettlementSetting(location.companyName);
-  const room = normalizeSettlementSetting(location.roomNumber);
-  if (company && room) return `${company} • Room ${room}`;
-  if (company) return company;
-  if (room) return `Room ${room}`;
-  return "Roommate Settlement Summary";
+  const profile: GroupProfile = {
+    companyName: normalizeSettlementSetting(location.companyName),
+    roomNumber: normalizeSettlementSetting(location.roomNumber),
+    companyType: normalizeSettlementSetting(location.companyType),
+    description: normalizeSettlementSetting(location.description),
+    logoUrl: normalizeSettlementSetting(location.logoUrl),
+  };
+  if (!hasGroupProfile(profile)) return DEFAULT_SETTLEMENT_TITLE;
+  const company = profile.companyName;
+  const room = profile.roomNumber ? `Room ${profile.roomNumber}` : "";
+  if (company && room) return `${company}\n${room}`;
+  return company || room || DEFAULT_SETTLEMENT_TITLE;
+}
+
+export function buildSettlementReportSubtitle(location: SettlementLocationInput): string | null {
+  const profile: GroupProfile = {
+    companyName: normalizeSettlementSetting(location.companyName),
+    roomNumber: normalizeSettlementSetting(location.roomNumber),
+    companyType: normalizeSettlementSetting(location.companyType),
+    description: normalizeSettlementSetting(location.description),
+    logoUrl: normalizeSettlementSetting(location.logoUrl),
+  };
+  return hasGroupProfile(profile) ? DEFAULT_SETTLEMENT_TITLE : null;
+}
+
+export function buildSettlementHeaderDisplayText(data: SettlementShareData): string {
+  if (!data.hasGroupBranding) return `🏠 ${DEFAULT_SETTLEMENT_TITLE}`;
+  const lines: string[] = [];
+  if (data.companyName) lines.push(data.companyName);
+  if (data.roomNumber) lines.push(`Room ${data.roomNumber}`);
+  lines.push("");
+  lines.push(DEFAULT_SETTLEMENT_TITLE);
+  return lines.join("\n");
 }
 
 export function buildSettlementRoomBadgeLabel(location: SettlementLocationInput): string | null {
@@ -158,6 +196,9 @@ export function buildSettlementShareData(input: {
   siteUrl?: string;
   companyName?: string | null;
   roomNumber?: string | null;
+  companyType?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
   generatedAt?: Date;
 }): SettlementShareData {
   const krwPerNpr = input.krwPerNpr ?? FALLBACK_KRW_PER_NPR;
@@ -165,8 +206,19 @@ export function buildSettlementShareData(input: {
   const { generatedOnLabel, generatedAtLabel } = formatSettlementGeneratedTimestamp(generatedAt);
   const companyName = normalizeSettlementSetting(input.companyName);
   const roomNumber = normalizeSettlementSetting(input.roomNumber);
-  const location = { companyName, roomNumber };
+  const companyType = normalizeSettlementSetting(input.companyType);
+  const description = normalizeSettlementSetting(input.description);
+  const logoUrl = normalizeSettlementSetting(input.logoUrl);
+  const location = { companyName, roomNumber, companyType, description, logoUrl };
+  const hasGroupBranding = hasGroupProfile({
+    companyName,
+    roomNumber,
+    companyType,
+    description,
+    logoUrl,
+  });
   const reportHeader = buildSettlementReportHeader(location);
+  const reportSubtitle = buildSettlementReportSubtitle(location);
   const roomBadgeLabel = buildSettlementRoomBadgeLabel(location);
 
   const memberLines: SettlementShareMemberLine[] = input.members.map((memberId) => {
@@ -226,7 +278,12 @@ export function buildSettlementShareData(input: {
     totalTransfers: transfers.length,
     companyName,
     roomNumber,
+    companyType,
+    description,
+    logoUrl,
+    hasGroupBranding,
     reportHeader,
+    reportSubtitle,
     roomBadgeLabel,
     generatedOnLabel,
     generatedAtLabel,
@@ -257,7 +314,7 @@ export function buildSettlementShareCardText(data: SettlementShareData): string 
       : "All settled — no transfers needed";
 
   return [
-    data.reportHeader === "Roommate Settlement Summary" ? "🏠 Roommate Settlement Summary" : data.reportHeader,
+    buildSettlementHeaderDisplayText(data),
     "",
     "Settlement Period:",
     data.monthLabel,
@@ -313,7 +370,7 @@ export function buildSettlementShareSocialMessage(data: SettlementShareData): st
       : "All settled — no transfers needed";
 
   return [
-    data.reportHeader === "Roommate Settlement Summary" ? "🏠 Roommate Settlement Summary" : data.reportHeader,
+    buildSettlementHeaderDisplayText(data),
     data.roomBadgeLabel ? `[${data.roomBadgeLabel}]` : "",
     "",
     `Settlement Period: ${data.monthLabel}`,
@@ -360,6 +417,89 @@ async function preloadMemberAvatars(members: SettlementShareMemberLine[]) {
     }),
   );
   return map;
+}
+
+async function preloadGroupLogo(logoUrl: string): Promise<HTMLImageElement | null> {
+  if (!logoUrl) return null;
+  return loadImageSafe(logoUrl);
+}
+
+function drawGroupLogo(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  logo: HTMLImageElement | null,
+) {
+  const r = 12;
+  ctx.save();
+  drawRoundedRect(ctx, x, y, size, size, r);
+  ctx.clip();
+  if (logo) {
+    ctx.drawImage(logo, x, y, size, size);
+  } else {
+    ctx.fillStyle = "#ecfdf5";
+    ctx.fillRect(x, y, size, size);
+  }
+  ctx.restore();
+  ctx.strokeStyle = "#a7f3d0";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, x, y, size, size, r);
+  ctx.stroke();
+}
+
+function drawSettlementBrandingHeader(
+  ctx: CanvasRenderingContext2D,
+  data: SettlementShareData,
+  innerX: number,
+  y: number,
+  contentRight: number,
+  logo: HTMLImageElement | null,
+): number {
+  const logoSize = 44;
+  const textX = logo ? innerX + logoSize + 12 : innerX;
+  let cursorY = y;
+
+  if (logo) {
+    drawGroupLogo(ctx, innerX, y - 4, logoSize, logo);
+    cursorY = y + 2;
+  }
+
+  if (!data.hasGroupBranding) {
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#065f46";
+    ctx.font = "800 20px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(`🏠 ${DEFAULT_SETTLEMENT_TITLE}`, innerX, cursorY);
+    if (data.roomBadgeLabel) {
+      drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, cursorY - 2);
+    }
+    return cursorY + 26;
+  }
+
+  ctx.textAlign = "left";
+  if (data.companyName) {
+    ctx.fillStyle = "#064e3b";
+    ctx.font = "800 20px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(data.companyName, textX, cursorY);
+    cursorY += 24;
+  }
+  if (data.roomNumber) {
+    ctx.fillStyle = "#047857";
+    ctx.font = "700 15px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(`Room ${data.roomNumber}`, textX, cursorY);
+    cursorY += 22;
+  }
+  if (data.reportSubtitle) {
+    cursorY += 4;
+    ctx.fillStyle = "#64748b";
+    ctx.font = "600 13px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(data.reportSubtitle, textX, cursorY);
+    cursorY += 20;
+  }
+  if (data.roomBadgeLabel) {
+    drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, y + 8);
+  }
+  return cursorY + 6;
 }
 
 function drawDivider(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
@@ -518,6 +658,7 @@ function drawSettlementCard(
   width: number,
   height: number,
   avatarImages: Map<string, HTMLImageElement>,
+  logoImage: HTMLImageElement | null,
 ) {
   const pad = 36;
   const avatarSize = 36;
@@ -557,18 +698,7 @@ function drawSettlementCard(
   let y = cardY + pad + 6;
   const contentRight = innerX + innerW;
 
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#065f46";
-  const headerTitle =
-    data.reportHeader === "Roommate Settlement Summary"
-      ? "🏠 Roommate Settlement Summary"
-      : data.reportHeader;
-  ctx.font = "800 20px ui-sans-serif, system-ui, -apple-system, sans-serif";
-  ctx.fillText(headerTitle, innerX, y);
-  if (data.roomBadgeLabel) {
-    drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, y - 2);
-  }
-  y += 26;
+  y = drawSettlementBrandingHeader(ctx, data, innerX, y, contentRight, logoImage);
 
   ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
   ctx.fillStyle = "#64748b";
@@ -688,7 +818,14 @@ function drawSettlementCard(
 
 function settlementCardHeight(data: SettlementShareData): number {
   const pad = 36;
-  const headerH = 148;
+  let headerH = 148;
+  if (data.hasGroupBranding) {
+    headerH = 108;
+    if (data.companyName) headerH += 24;
+    if (data.roomNumber) headerH += 22;
+    if (data.reportSubtitle) headerH += 24;
+    if (data.logoUrl) headerH = Math.max(headerH, 120);
+  }
   const dividerBlock = 18;
   const memberHeader = 22;
   const memberRowH = 88;
@@ -719,7 +856,8 @@ async function createSettlementCardCanvas(data: SettlementShareData) {
   ctx.scale(dpr, dpr);
 
   const avatarImages = await preloadMemberAvatars(data.members);
-  drawSettlementCard(ctx, data, width, height, avatarImages);
+  const logoImage = await preloadGroupLogo(data.logoUrl);
+  drawSettlementCard(ctx, data, width, height, avatarImages, logoImage);
   return canvas;
 }
 

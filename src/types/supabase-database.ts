@@ -35,6 +35,9 @@ export type Database = {
           name: string;
           company_name: string | null;
           room_number: string | null;
+          company_type: string | null;
+          description: string | null;
+          logo_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -44,6 +47,9 @@ export type Database = {
           name?: string;
           company_name?: string | null;
           room_number?: string | null;
+          company_type?: string | null;
+          description?: string | null;
+          logo_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -51,6 +57,9 @@ export type Database = {
           name?: string;
           company_name?: string | null;
           room_number?: string | null;
+          company_type?: string | null;
+          description?: string | null;
+          logo_url?: string | null;
           updated_at?: string;
         };
         Relationships: [];

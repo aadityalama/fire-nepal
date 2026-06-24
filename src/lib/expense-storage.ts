@@ -39,9 +39,12 @@ export type DashboardPersistedState = {
   displayCurrency?: Currency;
   /** monthKey → `${from}|${to}` → amount NPR */
   settlementTransferOverrides?: Record<string, Record<string, number>>;
-  /** Roommate settlement report header — synced to Supabase workspace when signed in */
+  /** Roommate settlement group profile — synced to Supabase workspace when signed in */
   companyName?: string;
   roomNumber?: string;
+  companyType?: string;
+  description?: string;
+  logoUrl?: string;
 };
 
 export const LEGACY_KEY = "fire-nepal-expense-dashboard-v1";
