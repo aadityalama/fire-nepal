@@ -400,7 +400,9 @@ export function lineShareUrl(text: string): string {
 function loadImageSafe(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (/^https?:\/\//i.test(url)) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = url;

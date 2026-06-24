@@ -35,11 +35,16 @@ function ExpenseBottomSheet({ open, onClose, title, subtitle, children }: Expens
 
   useEffect(() => {
     if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -71,7 +76,7 @@ function ExpenseBottomSheet({ open, onClose, title, subtitle, children }: Expens
           <button
             type="button"
             onClick={onClose}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
             aria-label="Close group profile settings"
           >
             <X size={18} />
@@ -90,8 +95,8 @@ type GroupLogoProps = {
 };
 
 function GroupLogo({ logoUrl = "", companyName, size = "md" }: GroupLogoProps) {
-  const [broken, setBroken] = useState(false);
-  const showImage = Boolean(logoUrl) && !broken;
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showImage = Boolean(logoUrl) && failedUrl !== logoUrl;
   const sizeClass =
     size === "lg" ? "h-16 w-16 rounded-2xl text-sm" : size === "sm" ? "h-10 w-10 rounded-xl text-[10px]" : "h-14 w-14 rounded-2xl text-xs";
   const iconSize = size === "lg" ? 24 : size === "sm" ? 16 : 20;
@@ -108,7 +113,7 @@ function GroupLogo({ logoUrl = "", companyName, size = "md" }: GroupLogoProps) {
           src={logoUrl}
           alt=""
           className="h-full w-full object-cover"
-          onError={() => setBroken(true)}
+          onError={() => setFailedUrl(logoUrl)}
           decoding="async"
         />
       ) : initials.length >= 2 && companyName.trim() ? (
@@ -139,10 +144,6 @@ function GroupProfileCardInner({
   const [draft, setDraft] = useState(profile);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!settingsOpen) setDraft(profile);
-  }, [profile, settingsOpen]);
 
   const branded = hasGroupProfile(profile);
   const roomLabel = groupProfileRoomLabel(profile.roomNumber);
@@ -241,15 +242,18 @@ function GroupProfileCardInner({
                 </p>
               </>
             )}
-            <span className="mt-2.5 inline-flex items-center gap-1 rounded-full bg-emerald-100/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200/80 dark:bg-emerald-900/50 dark:text-emerald-100 dark:ring-emerald-700/50">
+            <span
+              className="mt-2.5 inline-flex min-h-6 items-center gap-1 rounded-full bg-emerald-100/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-800 ring-1 ring-emerald-200/80 dark:bg-emerald-900/50 dark:text-emerald-100 dark:ring-emerald-700/50"
+              aria-label={memberLabel}
+            >
               <UsersRound size={11} aria-hidden />
-              {memberLabel}
+              <span aria-hidden>{memberLabel}</span>
             </span>
           </div>
           <button
             type="button"
             onClick={openSettings}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-emerald-100/90 bg-white/80 text-emerald-700 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 active:scale-95 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-emerald-100/90 bg-white/80 text-emerald-700 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 active:scale-95 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
             aria-label="Edit group profile"
           >
             <Pencil size={15} strokeWidth={2.25} />
@@ -287,7 +291,7 @@ function GroupProfileCardInner({
                     type="button"
                     disabled={logoUploading || saving}
                     onClick={() => logoInputRef.current?.click()}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-700"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-700"
                   >
                     <Camera size={13} />
                     {draft.logoUrl ? "Replace" : "Upload"}
@@ -297,7 +301,7 @@ function GroupProfileCardInner({
                       type="button"
                       disabled={logoUploading || saving}
                       onClick={() => setDraft((current) => ({ ...current, logoUrl: "" }))}
-                      className="inline-flex min-h-9 items-center rounded-xl px-3 py-1.5 text-[11px] font-bold text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:text-red-300 dark:hover:bg-red-950/30"
+                      className="inline-flex min-h-11 items-center rounded-xl px-3 py-2 text-[11px] font-bold text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:text-red-300 dark:hover:bg-red-950/30"
                     >
                       Remove
                     </button>

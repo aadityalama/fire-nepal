@@ -1422,7 +1422,7 @@ export function ExpenseDashboard() {
 
   return (
     <main
-      className={`min-h-screen bg-[#f6f8f7] px-3 pt-3 text-emerald-950 sm:px-5 lg:px-10 ${
+      className={`min-h-screen overflow-x-hidden bg-[#f6f8f7] px-3 pt-3 text-emerald-950 sm:px-5 lg:px-10 ${
         activeTab === "Settlement"
           ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))]"
           : activeTab === "Expenses"
@@ -2576,14 +2576,15 @@ function GroupMembers({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={(event) => {
                   event.stopPropagation();
                   removeMember(member);
                 }}
-                className="shrink-0 rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:bg-red-950/40 dark:text-red-300"
-                aria-label={`Remove ${member}`}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-50 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:bg-red-950/40 dark:text-red-300"
+                aria-label={`Remove ${profiles[member]?.name ?? member}`}
               >
-                <Trash2 size={14} />
+                <Trash2 size={16} aria-hidden />
               </button>
             </div>
             {!compact ? (

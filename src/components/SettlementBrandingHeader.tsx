@@ -26,10 +26,10 @@ function SettlementBrandingHeaderInner({
   variant = "default",
   className = "",
 }: SettlementBrandingHeaderProps) {
-  const [logoError, setLogoError] = useState(false);
-  const showLogo = Boolean(logoUrl) && !logoError;
+  const [logoErrorUrl, setLogoErrorUrl] = useState<string | null>(null);
+  const showLogo = Boolean(logoUrl) && logoErrorUrl !== logoUrl;
 
-  const onLogoError = useCallback(() => setLogoError(true), []);
+  const onLogoError = useCallback(() => setLogoErrorUrl(logoUrl), [logoUrl]);
 
   const titleClass =
     variant === "export"
@@ -57,20 +57,24 @@ function SettlementBrandingHeaderInner({
 
   if (!hasGroupBranding) {
     return (
-      <p className={`font-black text-emerald-900 ${variant === "export" ? "text-xl sm:text-2xl" : "text-base sm:text-lg"} ${className}`}>
+      <h2
+        className={`font-black text-emerald-900 dark:text-emerald-50 ${variant === "export" ? "text-xl sm:text-2xl" : "text-base sm:text-lg"} ${className}`}
+      >
         <span aria-hidden>🏠 </span>
         {DEFAULT_TITLE}
-      </p>
+      </h2>
     );
   }
 
   const initials = groupLogoInitials(companyName);
+  const logoAlt = companyName ? `${companyName} logo` : "Group logo";
 
   return (
     <div className={`flex min-w-0 items-start gap-3 ${className}`}>
       <div
-        className={`grid ${logoSize} shrink-0 place-items-center overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-900/10 ring-1 ring-white/60`}
-        aria-hidden={!showLogo}
+        className={`grid ${logoSize} shrink-0 place-items-center overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-900/10 ring-1 ring-white/60 dark:border-emerald-700/50`}
+        role="img"
+        aria-label={showLogo ? logoAlt : initials.length >= 2 ? `${initials} group mark` : "Default group icon"}
       >
         {showLogo ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -82,18 +86,26 @@ function SettlementBrandingHeaderInner({
             decoding="async"
           />
         ) : initials.length >= 2 ? (
-          <span className="text-xs font-black tracking-wide">{initials}</span>
+          <span className="text-xs font-black tracking-wide" aria-hidden>
+            {initials}
+          </span>
         ) : (
-          <Building2 size={variant === "compact" ? 16 : 20} strokeWidth={2.25} />
+          <Building2 size={variant === "compact" ? 16 : 20} strokeWidth={2.25} aria-hidden />
         )}
       </div>
       <div className="min-w-0 flex-1">
-        {companyName ? <p className={`truncate ${titleClass}`}>{companyName}</p> : null}
+        {companyName ? (
+          <h2 className={`truncate ${titleClass} dark:text-emerald-50`}>{companyName}</h2>
+        ) : null}
         {roomNumber ? (
-          <p className={`truncate ${roomClass} ${companyName ? "mt-0.5" : ""}`}>Room {roomNumber}</p>
+          <p className={`truncate ${roomClass} dark:text-emerald-300 ${companyName ? "mt-0.5" : ""}`}>
+            Room {roomNumber}
+          </p>
         ) : null}
         {(reportSubtitle ?? DEFAULT_TITLE) ? (
-          <p className={`${subtitleClass} ${companyName || roomNumber ? "mt-1.5" : ""}`}>
+          <p
+            className={`${subtitleClass} dark:text-emerald-200/65 ${companyName || roomNumber ? "mt-1.5" : ""}`}
+          >
             {reportSubtitle ?? DEFAULT_TITLE}
           </p>
         ) : null}
@@ -117,7 +129,7 @@ export function GroupProfileCardSkeleton() {
           <div className="h-4 w-2/5 rounded-lg bg-emerald-50" />
           <div className="h-3 w-4/5 rounded bg-slate-100" />
         </div>
-        <div className="h-9 w-9 shrink-0 rounded-xl bg-slate-100" />
+        <div className="h-11 w-11 shrink-0 rounded-xl bg-slate-100" />
       </div>
     </div>
   );
