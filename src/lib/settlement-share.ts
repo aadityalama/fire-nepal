@@ -431,18 +431,20 @@ function drawGroupLogo(
   size: number,
   logo: HTMLImageElement | null,
 ) {
-  const r = 12;
+  const r = 14;
   ctx.save();
   drawRoundedRect(ctx, x, y, size, size, r);
   ctx.clip();
   if (logo) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(logo, x, y, size, size);
   } else {
     ctx.fillStyle = "#ecfdf5";
     ctx.fillRect(x, y, size, size);
   }
   ctx.restore();
-  ctx.strokeStyle = "#a7f3d0";
+  ctx.strokeStyle = "#6ee7b7";
   ctx.lineWidth = 1.5;
   drawRoundedRect(ctx, x, y, size, size, r);
   ctx.stroke();
@@ -456,45 +458,45 @@ function drawSettlementBrandingHeader(
   contentRight: number,
   logo: HTMLImageElement | null,
 ): number {
-  const logoSize = 44;
-  const textX = logo ? innerX + logoSize + 12 : innerX;
+  const logoSize = 48;
+  const textX = logo ? innerX + logoSize + 14 : innerX;
   let cursorY = y;
 
   if (logo) {
-    drawGroupLogo(ctx, innerX, y - 4, logoSize, logo);
-    cursorY = y + 2;
+    drawGroupLogo(ctx, innerX, y - 2, logoSize, logo);
+    cursorY = y + 4;
   }
 
   if (!data.hasGroupBranding) {
     ctx.textAlign = "left";
     ctx.fillStyle = "#065f46";
-    ctx.font = "800 20px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(`🏠 ${DEFAULT_SETTLEMENT_TITLE}`, innerX, cursorY);
     if (data.roomBadgeLabel) {
       drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, cursorY - 2);
     }
-    return cursorY + 26;
+    return cursorY + 28;
   }
 
   ctx.textAlign = "left";
   if (data.companyName) {
-    ctx.fillStyle = "#064e3b";
-    ctx.font = "800 20px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillStyle = "#022c22";
+    ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(data.companyName, textX, cursorY);
-    cursorY += 24;
+    cursorY += 26;
   }
   if (data.roomNumber) {
     ctx.fillStyle = "#047857";
-    ctx.font = "700 15px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "700 16px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(`Room ${data.roomNumber}`, textX, cursorY);
     cursorY += 22;
   }
   if (data.reportSubtitle) {
-    cursorY += 4;
+    cursorY += 6;
     ctx.fillStyle = "#64748b";
-    ctx.font = "600 13px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(data.reportSubtitle, textX, cursorY);
-    cursorY += 20;
+    cursorY += 18;
   }
   if (data.roomBadgeLabel) {
     drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, y + 8);

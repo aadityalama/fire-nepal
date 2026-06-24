@@ -1587,8 +1587,9 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Members" && (
-          <section className="mb-3 space-y-3">
+          <section className="mb-3 min-w-0 space-y-3 overflow-x-hidden">
             <GroupProfileCard
+              loading={!hydrated}
               memberCount={members.length}
               onSave={saveGroupProfile}
               profile={groupProfile}
@@ -1597,6 +1598,7 @@ export function ExpenseDashboard() {
             <GroupMembers
               balances={balances}
               fmt={fmt}
+              loading={!hydrated}
               members={members}
               newMember={newMember}
               paidByMember={paidByMember}
@@ -2460,6 +2462,25 @@ function ExpenseBottomNav({
   );
 }
 
+function GroupMembersSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="animate-pulse space-y-2" aria-hidden>
+      {Array.from({ length: rows }).map((_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white/80 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30"
+        >
+          <div className="h-11 w-11 shrink-0 rounded-full bg-emerald-100/80 dark:bg-emerald-900/40" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-2/5 rounded bg-emerald-100/70 dark:bg-emerald-900/50" />
+            <div className="h-3 w-3/5 rounded bg-slate-100 dark:bg-emerald-900/30" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function GroupMembers({
   balances,
   fmt,
@@ -2472,6 +2493,7 @@ function GroupMembers({
   onOpenProfile,
   removeMember,
   compact = false,
+  loading = false,
 }: {
   balances: Record<string, number>;
   fmt: (amount: number, cur?: Currency) => string;
@@ -2484,18 +2506,31 @@ function GroupMembers({
   onOpenProfile: (name: string) => void;
   removeMember: (name: string) => void;
   compact?: boolean;
+  loading?: boolean;
 }) {
   return (
-    <div className={`rounded-2xl border border-slate-200/80 bg-white/80 p-3 backdrop-blur sm:p-4 ${compact ? "" : ""}`}>
-      <div className={`mb-3 flex items-center justify-between gap-2 ${compact ? "mb-2" : ""}`}>
-        <h2 className={`font-black text-emerald-950 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80 p-3 backdrop-blur dark:border-emerald-900/40 dark:bg-emerald-950/25 sm:p-4">
+      <div className={`mb-3 flex min-w-0 items-center justify-between gap-2 ${compact ? "mb-2" : ""}`}>
+        <h2 className={`font-black text-emerald-950 dark:text-emerald-50 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>
           Members
         </h2>
-        {!compact ? (
-          <p className="text-[11px] font-bold text-slate-500">Tap a card to view profile</p>
+        {!compact && !loading ? (
+          <p className="hidden text-[11px] font-bold text-slate-500 dark:text-emerald-200/60 sm:block">Tap to view profile</p>
         ) : null}
       </div>
-      <div className={`grid gap-2 ${compact ? "grid-cols-1" : "gap-2.5 sm:grid-cols-2"}`}>
+
+      {loading ? (
+        <GroupMembersSkeleton rows={compact ? 2 : 3} />
+      ) : members.length === 0 ? (
+        <div className="mb-3 rounded-xl border border-dashed border-emerald-200/90 bg-emerald-50/50 px-4 py-6 text-center dark:border-emerald-800/60 dark:bg-emerald-950/30">
+          <UsersRound className="mx-auto mb-2 text-emerald-600 dark:text-emerald-400" size={22} aria-hidden />
+          <p className="text-sm font-black text-emerald-950 dark:text-emerald-50">No roommates yet</p>
+          <p className="mt-1 text-xs font-medium text-slate-500 dark:text-emerald-200/65">
+            Add your first member below to start tracking shared expenses.
+          </p>
+        </div>
+      ) : (
+        <div className={`grid min-w-0 gap-2 ${compact ? "grid-cols-1" : "gap-2.5 sm:grid-cols-2"}`}>
         {members.map((member) => (
           <div
             key={member}
@@ -2505,8 +2540,8 @@ function GroupMembers({
             }}
             role="button"
             tabIndex={0}
-            className={`group cursor-pointer rounded-xl border border-white/70 bg-white/75 shadow-sm backdrop-blur transition active:scale-[0.99] hover:border-emerald-200 hover:bg-white ${
-              compact ? "flex items-center gap-3 p-2.5" : "rounded-2xl p-5 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(0,122,61,0.14)]"
+            className={`group min-w-0 cursor-pointer rounded-xl border border-white/70 bg-white/75 shadow-sm backdrop-blur transition active:scale-[0.99] hover:border-emerald-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:hover:border-emerald-700 ${
+              compact ? "flex items-center gap-3 p-2.5" : "rounded-2xl p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,122,61,0.12)]"
             }`}
           >
             <div className={`flex shrink-0 items-center gap-2 ${compact ? "" : "mb-4 w-full items-start justify-between gap-3"}`}>
@@ -2530,8 +2565,8 @@ function GroupMembers({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className={`truncate font-black text-emerald-950 ${compact ? "text-sm" : ""}`}>{profiles[member]?.name ?? member}</p>
-                  <p className={`truncate font-bold text-slate-500 ${compact ? "text-[10px]" : "text-sm"}`}>
+                  <p className={`truncate font-black text-emerald-950 dark:text-emerald-50 ${compact ? "text-sm" : ""}`}>{profiles[member]?.name ?? member}</p>
+                  <p className={`truncate font-bold text-slate-500 dark:text-emerald-200/60 ${compact ? "text-[10px]" : "text-sm"}`}>
                     {fmt(paidByMember[member] ?? 0)} paid ·{" "}
                     <span className={(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}>
                       {(balances[member] ?? 0) >= 0 ? "+" : "-"}
@@ -2545,7 +2580,7 @@ function GroupMembers({
                   event.stopPropagation();
                   removeMember(member);
                 }}
-                className="shrink-0 rounded-full bg-red-50 p-1.5 text-red-600 transition hover:bg-red-100"
+                className="shrink-0 rounded-full bg-red-50 p-2 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:bg-red-950/40 dark:text-red-300"
                 aria-label={`Remove ${member}`}
               >
                 <Trash2 size={14} />
@@ -2573,19 +2608,28 @@ function GroupMembers({
             ) : null}
           </div>
         ))}
-      </div>
-      <div className={`flex gap-2 ${compact ? "mt-3" : "mt-4"}`}>
+        </div>
+      )}
+
+      <div className={`flex min-w-0 gap-2 ${compact ? "mt-3" : "mt-4"}`}>
         <input
           value={newMember}
           onChange={(event) => setNewMember(event.target.value)}
-          className={`min-w-0 flex-1 rounded-xl border border-emerald-100 font-bold outline-none focus:border-emerald-600 ${
+          onKeyDown={(event) => {
+            if (event.key === "Enter") addMember();
+          }}
+          className={`min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-100 font-bold text-emerald-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-50 dark:focus:ring-emerald-800 ${
             compact ? "px-3 py-2 text-sm" : "rounded-2xl px-4 py-3 text-sm"
           }`}
           placeholder="Add roommate"
+          aria-label="New roommate name"
+          disabled={loading}
         />
         <button
+          type="button"
           onClick={addMember}
-          className={`rounded-xl bg-emerald-700 font-black text-white transition hover:bg-emerald-800 ${
+          disabled={loading || !newMember.trim()}
+          className={`min-h-11 shrink-0 rounded-xl bg-emerald-700 font-black text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 active:bg-emerald-900 disabled:opacity-50 dark:focus-visible:ring-offset-emerald-950 ${
             compact ? "px-4 py-2 text-sm" : "rounded-2xl px-5 py-3 text-sm"
           }`}
         >
