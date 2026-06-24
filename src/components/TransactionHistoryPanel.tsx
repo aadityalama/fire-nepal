@@ -94,8 +94,9 @@ export function TransactionHistoryPanel({
         setRows((current) => (reset ? result.rows : [...current, ...result.rows]));
         cursorRef.current = result.nextCursor;
         setHasMore(Boolean(result.nextCursor));
-      } catch {
-        toast.error("Could not load transaction history");
+      } catch (error) {
+        console.error("Transaction history load failed", error);
+        toast.error("Unable to load transaction history. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -177,8 +178,9 @@ export function TransactionHistoryPanel({
       if (kind === "xlsx") await exportTransactionHistoryXlsx(exportRows, groupProfile, filters, exportSummary);
       if (kind === "pdf") await exportTransactionHistoryPdf(exportRows, groupProfile, filters, exportSummary, currency);
       toast.success("Export ready");
-    } catch {
-      toast.error("Export failed");
+    } catch (error) {
+      console.error("Transaction history export failed", error);
+      toast.error("Unable to export transaction history. Please try again.");
     } finally {
       setExporting(false);
     }

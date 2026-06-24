@@ -16,6 +16,26 @@ import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
 
 type Client = SupabaseClient<Database>;
 
+export class ExpenseTransactionHistoryError extends Error {
+  constructor(
+    message: string,
+    public readonly context: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "ExpenseTransactionHistoryError";
+  }
+}
+
+function formatSupabaseError(error: unknown, fallback: string): string {
+  if (!error) return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  return fallback;
+}
+
 export type ExpenseTransactionInput = {
   localExpenseId?: number | null;
   transactionType: ExpenseTransactionType;
@@ -272,9 +292,24 @@ export async function listExpenseTransactions(
   }
 
   const { data, error } = await query;
-  if (error || !data) {
-    console.warn("[expense-transactions] list failed", error);
-    return { rows: [], nextCursor: null, summary: { totalIncome: 0, totalExpense: 0, netBalance: 0 } };
+  if (error) {
+    console.error("[expense-transactions] list failed", {
+      context: "expense-transaction-list",
+      workspaceId: workspace.id,
+      filters,
+      error,
+    });
+    throw new ExpenseTransactionHistoryError(
+      formatSupabaseError(error, "Could not load expense transactions."),
+      "expense-transaction-list",
+      error,
+    );
+  }
+  if (!data) {
+    throw new ExpenseTransactionHistoryError(
+      "Expense transaction query returned no data.",
+      "expense-transaction-list",
+    );
   }
 
   let rows = data.map(rowToTransaction);

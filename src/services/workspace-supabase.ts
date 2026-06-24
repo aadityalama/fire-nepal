@@ -5,6 +5,9 @@ type Client = SupabaseClient<Database>;
 
 export type FireWorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 
+/** Columns guaranteed by the base workspaces migration (safe before optional profile columns exist). */
+const WORKSPACE_CORE_COLUMNS = "id,user_id,name,created_at,updated_at" as const;
+
 export class WorkspaceSupabaseError extends Error {
   constructor(
     message: string,
@@ -68,7 +71,7 @@ export async function ensureAuthenticatedWorkspace(
 
   const selected = await client
     .from("workspaces")
-    .select("id,user_id,name,company_name,room_number,created_at,updated_at")
+    .select(WORKSPACE_CORE_COLUMNS)
     .eq("user_id", authUserId)
     .maybeSingle();
 
@@ -89,7 +92,7 @@ export async function ensureAuthenticatedWorkspace(
   const created = await client
     .from("workspaces")
     .insert({ user_id: authUserId })
-    .select("id,user_id,name,company_name,room_number,created_at,updated_at")
+    .select(WORKSPACE_CORE_COLUMNS)
     .single();
 
   if (created.error || !created.data) {
