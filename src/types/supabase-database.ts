@@ -64,6 +64,90 @@ export type Database = {
         };
         Relationships: [];
       };
+      expense_transactions: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          local_expense_id: number | null;
+          transaction_type: "income" | "expense" | "transfer" | "settlement" | "adjustment";
+          description: string;
+          category: string | null;
+          amount: number;
+          currency: string;
+          member_id: string | null;
+          member_name: string | null;
+          transaction_date: string;
+          metadata: Json;
+          created_by_name: string | null;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          local_expense_id?: number | null;
+          transaction_type: "income" | "expense" | "transfer" | "settlement" | "adjustment";
+          description: string;
+          category?: string | null;
+          amount?: number;
+          currency?: string;
+          member_id?: string | null;
+          member_name?: string | null;
+          transaction_date?: string;
+          metadata?: Json;
+          created_by_name?: string | null;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          local_expense_id?: number | null;
+          transaction_type?: "income" | "expense" | "transfer" | "settlement" | "adjustment";
+          description?: string;
+          category?: string | null;
+          amount?: number;
+          currency?: string;
+          member_id?: string | null;
+          member_name?: string | null;
+          transaction_date?: string;
+          metadata?: Json;
+          created_by_name?: string | null;
+          deleted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      expense_transaction_audit_log: {
+        Row: {
+          id: string;
+          transaction_id: string;
+          workspace_id: string;
+          user_id: string;
+          action: "created" | "updated" | "deleted" | "restored";
+          changes: Json;
+          actor_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          transaction_id: string;
+          workspace_id: string;
+          user_id: string;
+          action: "created" | "updated" | "deleted" | "restored";
+          changes?: Json;
+          actor_name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          action?: "created" | "updated" | "deleted" | "restored";
+          changes?: Json;
+          actor_name?: string | null;
+        };
+        Relationships: [];
+      };
       bank_accounts: {
         Row: {
           id: string;

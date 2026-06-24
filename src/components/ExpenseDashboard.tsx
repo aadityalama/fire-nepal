@@ -52,7 +52,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { GroupProfileCard } from "@/components/GroupProfileCard";
-import { ExpenseHistoryPanel } from "@/components/ExpenseHistoryPanel";
+import { TransactionHistoryPanel } from "@/components/TransactionHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
 import { ExpenseReceiptUpload } from "@/components/ExpenseReceiptUpload";
 import { sanitizeDecimalTyping } from "@/components/NumericMoneyInput";
@@ -95,6 +95,11 @@ import {
   loadExpenseWorkspaceSettings,
   saveExpenseWorkspaceSettings,
 } from "@/services/expense-workspace-supabase";
+import {
+  insertExpenseTransaction,
+  softDeleteExpenseTransactionByLocalId,
+  upsertExpenseTransactionByLocalId,
+} from "@/services/expense-transactions-supabase";
 import {
   generateMemberId,
   memberDisplayName,
@@ -878,6 +883,28 @@ export function ExpenseDashboard() {
     setActivities((current) => [createActivity(activity), ...current]);
   }, []);
 
+  const actorName = user?.name ?? "Member";
+
+  const recordTransaction = useCallback(
+    async (
+      input: Parameters<typeof insertExpenseTransaction>[2],
+      options?: { upsertLocalId?: boolean },
+    ) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      try {
+        const client = getSupabaseBrowserClient();
+        if (options?.upsertLocalId && input.localExpenseId != null) {
+          await upsertExpenseTransactionByLocalId(client, user.id, input, actorName);
+        } else {
+          await insertExpenseTransaction(client, user.id, input, actorName);
+        }
+      } catch (error) {
+        console.warn("[expense-dashboard] transaction persist failed", error);
+      }
+    },
+    [user?.id, actorName],
+  );
+
   const { balances, equalSplitAmount, memberExpectedShare, paidByMember, totalExpense, transfers: rawTransfers } =
     useMemo(() => getSettlement(members, monthExpenses), [members, monthExpenses]);
 
@@ -1132,6 +1159,21 @@ export function ExpenseDashboard() {
         category: normalizeCategory(snapshot.category),
         message: `${memberDisplayName(snapshot.payerId, profiles)} updated amount for ${snapshot.title}`,
       });
+      void recordTransaction(
+        {
+          localExpenseId: snapshot.id,
+          transactionType: "adjustment",
+          description: `Amount adjusted for ${snapshot.title}`,
+          category: normalizeCategory(snapshot.category),
+          amount: amountNpr,
+          currency: snapshot.amountCurrency ?? "NPR",
+          memberId: snapshot.payerId,
+          memberName: memberDisplayName(snapshot.payerId, profiles),
+          transactionDate: snapshot.date,
+          metadata: { source: "amount_edit", expenseId: snapshot.id },
+        },
+        { upsertLocalId: true },
+      );
     }
   }
 
@@ -1142,8 +1184,18 @@ export function ExpenseDashboard() {
         ...prev,
         [selectedMonthKey]: { ...(prev[selectedMonthKey] ?? {}), [key]: npr },
       }));
+      void recordTransaction({
+        transactionType: "transfer",
+        description: `${memberDisplayName(from, profiles)} → ${memberDisplayName(to, profiles)}`,
+        amount: npr,
+        currency: "NPR",
+        memberId: from,
+        memberName: memberDisplayName(from, profiles),
+        transactionDate: new Date().toISOString().slice(0, 10),
+        metadata: { monthKey: selectedMonthKey, transferTo: to, source: "override" },
+      });
     },
-    [selectedMonthKey],
+    [selectedMonthKey, profiles, recordTransaction],
   );
 
   const resetTransferOverride = useCallback(
@@ -1197,6 +1249,21 @@ export function ExpenseDashboard() {
         category: normalizeCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} updated ${nextExpense.title}`,
       });
+      void recordTransaction(
+        {
+          localExpenseId: nextExpense.id,
+          transactionType: "expense",
+          description: nextExpense.title,
+          category: normalizeCategory(nextExpense.category),
+          amount: nextExpense.amount,
+          currency: nextExpense.amountCurrency ?? "NPR",
+          memberId: nextExpense.payerId,
+          memberName: memberDisplayName(nextExpense.payerId, profiles),
+          transactionDate: nextExpense.date,
+          metadata: { monthKey, source: "expense_edit" },
+        },
+        { upsertLocalId: true },
+      );
     } else {
       setExpenses((current) => [nextExpense, ...current]);
       appendActivity({
@@ -1208,6 +1275,21 @@ export function ExpenseDashboard() {
         category: normalizeCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} added ${nextExpense.title}`,
       });
+      void recordTransaction(
+        {
+          localExpenseId: nextExpense.id,
+          transactionType: "expense",
+          description: nextExpense.title,
+          category: normalizeCategory(nextExpense.category),
+          amount: nextExpense.amount,
+          currency: nextExpense.amountCurrency ?? "NPR",
+          memberId: nextExpense.payerId,
+          memberName: memberDisplayName(nextExpense.payerId, profiles),
+          transactionDate: nextExpense.date,
+          metadata: { monthKey, source: "expense_add" },
+        },
+        { upsertLocalId: true },
+      );
     }
 
     if (!monthKeys.includes(monthKey)) {
@@ -1219,15 +1301,30 @@ export function ExpenseDashboard() {
 
   function confirmDeleteExpense() {
     if (!expenseToDelete) return;
+    const deleted = expenseToDelete;
     setExpenses((current) => current.filter((expense) => expense.id !== expenseToDelete.id));
     appendActivity({
       type: "expense_deleted",
-      monthKey: expenseMonthKey(expenseToDelete.date),
-      memberId: expenseToDelete.payerId,
-      title: expenseToDelete.title,
-      category: normalizeCategory(expenseToDelete.category),
-      message: `${memberDisplayName(expenseToDelete.payerId, profiles)} removed ${expenseToDelete.title}`,
+      monthKey: expenseMonthKey(deleted.date),
+      memberId: deleted.payerId,
+      title: deleted.title,
+      category: normalizeCategory(deleted.category),
+      message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
     });
+    void recordTransaction({
+      transactionType: "adjustment",
+      description: `Deleted: ${deleted.title}`,
+      category: normalizeCategory(deleted.category),
+      amount: deleted.amount,
+      currency: deleted.amountCurrency ?? "NPR",
+      memberId: deleted.payerId,
+      memberName: memberDisplayName(deleted.payerId, profiles),
+      transactionDate: deleted.date,
+      metadata: { localExpenseId: deleted.id, source: "expense_delete" },
+    });
+    if (user?.id && isSupabaseConfigured()) {
+      void softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
+    }
     setExpenseToDelete(null);
   }
 
@@ -1269,15 +1366,37 @@ export function ExpenseDashboard() {
     console.log("[settlement-complete] persisting activity", activity);
     appendActivity(activity);
 
+    void recordTransaction({
+      transactionType: "settlement",
+      description: activity.message,
+      amount: 0,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      metadata: { monthKey: selectedMonthKey, transferCount: transfers.length },
+    });
+    for (const transfer of transfers) {
+      void recordTransaction({
+        transactionType: "transfer",
+        description: `${memberDisplayName(transfer.from, profiles)} → ${memberDisplayName(transfer.to, profiles)}`,
+        amount: transfer.amount,
+        currency: "NPR",
+        memberId: transfer.from,
+        memberName: memberDisplayName(transfer.from, profiles),
+        transactionDate: new Date().toISOString().slice(0, 10),
+        metadata: { monthKey: selectedMonthKey, transferTo: transfer.to, source: "settlement_complete" },
+      });
+    }
+
     console.log("[settlement-complete] updating UI — celebration + toast");
     setShowCelebration(true);
     toast.success(`${monthLabel} settlement marked complete`);
   }, [
     appendActivity,
     monthExpenses.length,
+    profiles,
+    recordTransaction,
     selectedMonthKey,
     settlementMarkedComplete,
-    transfers.length,
+    transfers,
   ]);
 
   const settlementShareInput = useMemo(
@@ -1723,13 +1842,20 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "History" && (
-          <ExpenseHistoryPanel
-            expenses={expenses}
+          <TransactionHistoryPanel
+            userId={user?.id}
+            actorName={actorName}
+            groupProfile={groupProfile}
+            currency={currency}
+            krwPerNpr={krwPerNpr}
             members={members}
             profiles={profiles}
-            currency={currency}
+            expenses={expenses}
             activities={activities}
-            krwPerNpr={krwPerNpr}
+            onEditExpense={openEditExpenseModal}
+            onDeleteExpense={(expense) => {
+              setExpenses((current) => current.filter((e) => e.id !== expense.id));
+            }}
           />
         )}
       </div>
