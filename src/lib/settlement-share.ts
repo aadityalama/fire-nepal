@@ -22,7 +22,10 @@ export type SettlementShareTransferLine = {
   amountLabel: string;
 };
 
-export type SettlementReportUserRole = "ADMIN" | "ACCOUNTANT" | "OWNER" | "MANAGER" | "MEMBER";
+export type SettlementLocationInput = {
+  companyName?: string | null;
+  roomNumber?: string | null;
+};
 
 export type SettlementShareData = {
   monthKey: string;
@@ -35,7 +38,10 @@ export type SettlementShareData = {
   paysTotalLabel: string;
   totalMembers: number;
   totalTransfers: number;
-  userRole: SettlementReportUserRole;
+  companyName: string;
+  roomNumber: string;
+  reportHeader: string;
+  roomBadgeLabel: string | null;
   generatedOnLabel: string;
   generatedAtLabel: string;
   siteUrl: string;
@@ -50,33 +56,29 @@ export const SETTLEMENT_COLOR_PAYS = "#DC2626";
 export const SETTLEMENT_COLOR_NEUTRAL = "#1e293b";
 export const SETTLEMENT_COLOR_MUTED = "#64748b";
 
-const REPORT_ROLE_VALUES: SettlementReportUserRole[] = [
-  "ADMIN",
-  "ACCOUNTANT",
-  "OWNER",
-  "MANAGER",
-  "MEMBER",
-];
+const REPORT_ROOM_BADGE_STYLE = { bg: "#d1fae5", text: "#047857", border: "#6ee7b7" };
 
-export const REPORT_ROLE_BADGE_STYLES: Record<
-  SettlementReportUserRole,
-  { bg: string; text: string; border: string }
-> = {
-  ADMIN: { bg: "#d1fae5", text: "#047857", border: "#6ee7b7" },
-  ACCOUNTANT: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
-  OWNER: { bg: "#fef3c7", text: "#b45309", border: "#fcd34d" },
-  MANAGER: { bg: "#ede9fe", text: "#6d28d9", border: "#c4b5fd" },
-  MEMBER: { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
-};
-
-export function isSettlementReportUserRole(value: string | null | undefined): value is SettlementReportUserRole {
-  return Boolean(value && REPORT_ROLE_VALUES.includes(value as SettlementReportUserRole));
+export function normalizeSettlementSetting(value?: string | null): string {
+  return value?.trim() ?? "";
 }
 
-export function resolveSettlementReportUserRole(
-  value: string | null | undefined,
-): SettlementReportUserRole {
-  return isSettlementReportUserRole(value) ? value : "MEMBER";
+export function buildSettlementReportHeader(location: SettlementLocationInput): string {
+  const company = normalizeSettlementSetting(location.companyName);
+  const room = normalizeSettlementSetting(location.roomNumber);
+  if (company && room) return `${company} • Room ${room}`;
+  if (company) return company;
+  if (room) return `Room ${room}`;
+  return "Roommate Settlement Summary";
+}
+
+export function buildSettlementRoomBadgeLabel(location: SettlementLocationInput): string | null {
+  const room = normalizeSettlementSetting(location.roomNumber);
+  if (!room) return null;
+  return `ROOM ${room.toUpperCase()}`;
+}
+
+export function settlementReportRoomBadgeClass() {
+  return "bg-emerald-100 text-emerald-800 ring-emerald-200";
 }
 
 export function formatSettlementGeneratedTimestamp(date = new Date()) {
@@ -94,21 +96,6 @@ export function formatSettlementGeneratedTimestamp(date = new Date()) {
   }).format(date);
 
   return { generatedOnLabel, generatedAtLabel };
-}
-
-export function settlementReportRoleBadgeClass(role: SettlementReportUserRole) {
-  switch (role) {
-    case "ADMIN":
-      return "bg-emerald-100 text-emerald-800 ring-emerald-200";
-    case "ACCOUNTANT":
-      return "bg-blue-100 text-blue-800 ring-blue-200";
-    case "OWNER":
-      return "bg-amber-100 text-amber-800 ring-amber-200";
-    case "MANAGER":
-      return "bg-violet-100 text-violet-800 ring-violet-200";
-    default:
-      return "bg-slate-100 text-slate-600 ring-slate-200";
-  }
 }
 
 export function memberRoleIcon(role: SettlementShareMemberLine["role"]) {
@@ -169,12 +156,18 @@ export function buildSettlementShareData(input: {
   currency: Currency;
   krwPerNpr?: number;
   siteUrl?: string;
-  userRole?: SettlementReportUserRole | string | null;
+  companyName?: string | null;
+  roomNumber?: string | null;
   generatedAt?: Date;
 }): SettlementShareData {
   const krwPerNpr = input.krwPerNpr ?? FALLBACK_KRW_PER_NPR;
   const generatedAt = input.generatedAt ?? new Date();
   const { generatedOnLabel, generatedAtLabel } = formatSettlementGeneratedTimestamp(generatedAt);
+  const companyName = normalizeSettlementSetting(input.companyName);
+  const roomNumber = normalizeSettlementSetting(input.roomNumber);
+  const location = { companyName, roomNumber };
+  const reportHeader = buildSettlementReportHeader(location);
+  const roomBadgeLabel = buildSettlementRoomBadgeLabel(location);
 
   const memberLines: SettlementShareMemberLine[] = input.members.map((memberId) => {
     const balanceNpr = input.balances[memberId] ?? 0;
@@ -231,7 +224,10 @@ export function buildSettlementShareData(input: {
     paysTotalLabel: fmtAmount(paysTotalNpr, input.currency, krwPerNpr),
     totalMembers: input.members.length,
     totalTransfers: transfers.length,
-    userRole: resolveSettlementReportUserRole(input.userRole),
+    companyName,
+    roomNumber,
+    reportHeader,
+    roomBadgeLabel,
     generatedOnLabel,
     generatedAtLabel,
     siteUrl: input.siteUrl ?? defaultSettlementSiteUrl(),
@@ -261,8 +257,7 @@ export function buildSettlementShareCardText(data: SettlementShareData): string 
       : "All settled — no transfers needed";
 
   return [
-    "🏠 Roommate Settlement Summary",
-    `Role: ${data.userRole}`,
+    data.reportHeader === "Roommate Settlement Summary" ? "🏠 Roommate Settlement Summary" : data.reportHeader,
     "",
     "Settlement Period:",
     data.monthLabel,
@@ -318,8 +313,8 @@ export function buildSettlementShareSocialMessage(data: SettlementShareData): st
       : "All settled — no transfers needed";
 
   return [
-    "🏠 Roommate Settlement Summary",
-    `[${data.userRole}]`,
+    data.reportHeader === "Roommate Settlement Summary" ? "🏠 Roommate Settlement Summary" : data.reportHeader,
+    data.roomBadgeLabel ? `[${data.roomBadgeLabel}]` : "",
     "",
     `Settlement Period: ${data.monthLabel}`,
     `Generated: ${data.generatedOnLabel} · ${data.generatedAtLabel}`,
@@ -488,15 +483,15 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-function drawRoleBadge(
+function drawRoomBadge(
   ctx: CanvasRenderingContext2D,
-  role: SettlementReportUserRole,
+  label: string,
   rightX: number,
   centerY: number,
 ) {
-  const style = REPORT_ROLE_BADGE_STYLES[role];
+  const style = REPORT_ROOM_BADGE_STYLE;
   ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
-  const textW = ctx.measureText(role).width;
+  const textW = ctx.measureText(label).width;
   const padX = 10;
   const badgeW = textW + padX * 2;
   const badgeH = 22;
@@ -512,7 +507,7 @@ function drawRoleBadge(
   ctx.fillStyle = style.text;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(role, x + badgeW / 2, centerY);
+  ctx.fillText(label, x + badgeW / 2, centerY);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
@@ -564,9 +559,15 @@ function drawSettlementCard(
 
   ctx.textAlign = "left";
   ctx.fillStyle = "#065f46";
+  const headerTitle =
+    data.reportHeader === "Roommate Settlement Summary"
+      ? "🏠 Roommate Settlement Summary"
+      : data.reportHeader;
   ctx.font = "800 20px ui-sans-serif, system-ui, -apple-system, sans-serif";
-  ctx.fillText("🏠 Roommate Settlement Summary", innerX, y);
-  drawRoleBadge(ctx, data.userRole, contentRight, y - 2);
+  ctx.fillText(headerTitle, innerX, y);
+  if (data.roomBadgeLabel) {
+    drawRoomBadge(ctx, data.roomBadgeLabel, contentRight, y - 2);
+  }
   y += 26;
 
   ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";

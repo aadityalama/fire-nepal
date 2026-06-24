@@ -35,6 +35,7 @@ import {
   Plus,
   Crown,
   ReceiptText,
+  Settings,
   Share2,
   Sparkles,
   Trash2,
@@ -57,6 +58,7 @@ import { sanitizeDecimalTyping } from "@/components/NumericMoneyInput";
 import { RoommateShareSummaryModal } from "@/components/RoommateShareSummaryModal";
 import { SettlementCelebration } from "@/components/SettlementCelebration";
 import { SettlementShareModal } from "@/components/SettlementShareModal";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   formatExpenseAmountForInput,
   krwToNpr,
@@ -84,9 +86,13 @@ import {
   buildSettlementShareData,
   downloadSettlementSharePdf,
   downloadSettlementSharePng,
-  isSettlementReportUserRole,
-  type SettlementReportUserRole,
 } from "@/lib/settlement-share";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  loadExpenseWorkspaceSettings,
+  saveExpenseWorkspaceSettings,
+} from "@/services/expense-workspace-supabase";
 import {
   generateMemberId,
   memberDisplayName,
@@ -581,6 +587,7 @@ function SettlementTransferRowEditor({
 }
 
 export function ExpenseDashboard() {
+  const { user } = useProductAuth();
   const [hydrated, setHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
   const [currency, setCurrency] = useState<Currency>("NPR");
@@ -604,34 +611,51 @@ export function ExpenseDashboard() {
   const [shareModalKey, setShareModalKey] = useState(0);
   const [settlementShareOpen, setSettlementShareOpen] = useState(false);
   const [shareGeneratedAt, setShareGeneratedAt] = useState<Date | null>(null);
-  const [exportUserRole, setExportUserRole] = useState<SettlementReportUserRole>("MEMBER");
+  const [companyName, setCompanyName] = useState("");
+  const [roomNumber, setRoomNumber] = useState("");
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState({ companyName: "", roomNumber: "" });
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const stored = localStorage.getItem("fire-nepal-expense-export-role");
-        if (isSettlementReportUserRole(stored)) {
-          if (!cancelled) setExportUserRole(stored);
-          return;
-        }
-        const res = await fetch("/api/auth/admin-status", { credentials: "include" });
-        if (!res.ok) return;
-        const json = (await res.json()) as { isAdmin?: boolean };
-        if (!cancelled && json.isAdmin) setExportUserRole("ADMIN");
-      } catch {
-        /* MEMBER fallback */
+  const openExpenseSettings = useCallback(() => {
+    setSettingsDraft({ companyName, roomNumber });
+    setSettingsSheetOpen(true);
+  }, [companyName, roomNumber]);
+
+  const saveExpenseSettings = useCallback(async () => {
+    const nextCompany = settingsDraft.companyName.trim();
+    const nextRoom = settingsDraft.roomNumber.trim();
+    setSettingsSaving(true);
+    try {
+      setCompanyName(nextCompany);
+      setRoomNumber(nextRoom);
+
+      if (user?.id && isSupabaseConfigured()) {
+        const client = getSupabaseBrowserClient();
+        const saved = await saveExpenseWorkspaceSettings(client, user.id, {
+          companyName: nextCompany,
+          roomNumber: nextRoom,
+        });
+        setCompanyName(saved.companyName);
+        setRoomNumber(saved.roomNumber);
+        setSettingsDraft(saved);
+        toast.success("Expense settings saved to your workspace");
+      } else {
+        toast.success("Expense settings saved on this device");
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+
+      setSettingsSheetOpen(false);
+    } catch {
+      toast.error("Could not save expense settings");
+    } finally {
+      setSettingsSaving(false);
+    }
+  }, [settingsDraft.companyName, settingsDraft.roomNumber, user?.id]);
 
   const krwPerNpr = exchangeRate.krwPerNpr;
   const fmt = (amount: number, cur: Currency = currency) => formatMoney(amount, cur, krwPerNpr);
@@ -658,9 +682,32 @@ export function ExpenseDashboard() {
         setSettlementOverrides(stored.settlementTransferOverrides);
       }
       if (stored.displayCurrency) setCurrency(stored.displayCurrency);
+      if (stored.companyName) setCompanyName(stored.companyName);
+      if (stored.roomNumber) setRoomNumber(stored.roomNumber);
     }
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !user?.id || !isSupabaseConfigured()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const client = getSupabaseBrowserClient();
+        const remote = await loadExpenseWorkspaceSettings(client, user.id);
+        if (cancelled) return;
+        if (remote.companyName || remote.roomNumber) {
+          setCompanyName(remote.companyName);
+          setRoomNumber(remote.roomNumber);
+        }
+      } catch {
+        /* local fallback remains */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, user?.id]);
 
   useEffect(() => {
     void fetchLiveExchangeRate().then(setExchangeRate);
@@ -681,8 +728,10 @@ export function ExpenseDashboard() {
       exchangeRate,
       displayCurrency: currency,
       settlementTransferOverrides: settlementOverrides,
+      companyName,
+      roomNumber,
     });
-  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides]);
+  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, companyName, roomNumber]);
 
   useEffect(() => {
     if (!members.length) return;
@@ -1157,20 +1206,22 @@ export function ExpenseDashboard() {
     () =>
       buildSettlementShareData({
         ...settlementShareInput,
-        userRole: exportUserRole,
+        companyName,
+        roomNumber,
         generatedAt: shareGeneratedAt ?? new Date(),
       }),
-    [settlementShareInput, exportUserRole, shareGeneratedAt],
+    [settlementShareInput, companyName, roomNumber, shareGeneratedAt],
   );
 
   const freshSettlementShareData = useCallback(
     () =>
       buildSettlementShareData({
         ...settlementShareInput,
-        userRole: exportUserRole,
+        companyName,
+        roomNumber,
         generatedAt: new Date(),
       }),
-    [settlementShareInput, exportUserRole],
+    [settlementShareInput, companyName, roomNumber],
   );
 
   const openSettlementShare = useCallback(() => {
@@ -1625,6 +1676,7 @@ export function ExpenseDashboard() {
       <ExpenseBottomSheet open={actionsSheetOpen} onClose={() => setActionsSheetOpen(false)} title="More">
         <div className="space-y-1 p-2">
           {[
+            { label: "Expense settings", icon: Settings, action: openExpenseSettings },
             { label: "Download PDF", icon: Download, action: () => window.print() },
             { label: "Share summary", icon: Share2, action: () => void handleShareSummary() },
             { label: "AI Insights", icon: Sparkles, action: () => setActiveTab("AI Insights") },
@@ -1645,6 +1697,58 @@ export function ExpenseDashboard() {
               {item.label}
             </button>
           ))}
+        </div>
+      </ExpenseBottomSheet>
+
+      <ExpenseBottomSheet
+        open={settingsSheetOpen}
+        onClose={() => !settingsSaving && setSettingsSheetOpen(false)}
+        title="Expense settings"
+        subtitle="Company and room details auto-fill settlement reports"
+      >
+        <div className="space-y-3 px-3 pb-4">
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
+              Company name
+            </span>
+            <input
+              value={settingsDraft.companyName}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({ ...current, companyName: event.target.value }))
+              }
+              className="w-full rounded-xl border border-emerald-100 px-3 py-2.5 text-sm font-bold outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              placeholder="KP Electric"
+              autoComplete="organization"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-slate-500">
+              Room number
+            </span>
+            <input
+              value={settingsDraft.roomNumber}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({ ...current, roomNumber: event.target.value }))
+              }
+              className="w-full rounded-xl border border-emerald-100 px-3 py-2.5 text-sm font-bold outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+              placeholder="305"
+              inputMode="text"
+              autoComplete="off"
+            />
+          </label>
+          <p className="text-[11px] font-semibold leading-5 text-slate-500">
+            These values appear on settlement PNG, PDF, and share cards — for example{" "}
+            <span className="font-black text-emerald-800">KP Electric • Room 305</span> with a{" "}
+            <span className="font-black text-emerald-800">ROOM 305</span> badge.
+          </p>
+          <button
+            type="button"
+            disabled={settingsSaving}
+            onClick={() => void saveExpenseSettings()}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-black text-white transition active:bg-emerald-800 disabled:opacity-60"
+          >
+            {settingsSaving ? "Saving…" : "Save settings"}
+          </button>
         </div>
       </ExpenseBottomSheet>
 

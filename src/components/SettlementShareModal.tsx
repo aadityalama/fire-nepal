@@ -18,7 +18,7 @@ import {
   lineShareUrl,
   memberRoleColor,
   memberRoleIcon,
-  settlementReportRoleBadgeClass,
+  settlementReportRoomBadgeClass,
   settlementSharePngBlob,
   SETTLEMENT_COLOR_NEUTRAL,
   SETTLEMENT_COLOR_PAYS,
@@ -87,15 +87,21 @@ function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
       <div className="rounded-xl bg-white p-4 shadow-inner">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-base font-black text-emerald-900">🏠 Roommate Settlement Summary</p>
+            <p className="text-base font-black text-emerald-900">
+              {data.reportHeader === "Roommate Settlement Summary"
+                ? "🏠 Roommate Settlement Summary"
+                : data.reportHeader}
+            </p>
             <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Settlement Period</p>
             <p className="text-lg font-black text-emerald-950">{data.monthLabel}</p>
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${settlementReportRoleBadgeClass(data.userRole)}`}
-          >
-            {data.userRole}
-          </span>
+          {data.roomBadgeLabel ? (
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${settlementReportRoomBadgeClass()}`}
+            >
+              {data.roomBadgeLabel}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">

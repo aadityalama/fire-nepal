@@ -33,6 +33,8 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          company_name: string | null;
+          room_number: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -40,11 +42,15 @@ export type Database = {
           id?: string;
           user_id: string;
           name?: string;
+          company_name?: string | null;
+          room_number?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           name?: string;
+          company_name?: string | null;
+          room_number?: string | null;
           updated_at?: string;
         };
         Relationships: [];
