@@ -21,9 +21,11 @@ import {
   CalendarDays,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Download,
   History,
+  Info,
   LayoutDashboard,
   MessageCircle,
   MoreHorizontal,
@@ -404,6 +406,7 @@ function SettlementTransferRowEditor({
   fmt,
   onSave,
   onReset,
+  compact = false,
 }: {
   from: string;
   to: string;
@@ -416,7 +419,9 @@ function SettlementTransferRowEditor({
   fmt: (amount: number, cur?: Currency) => string;
   onSave: (fromMember: string, toMember: string, npr: number) => void;
   onReset: (fromMember: string, toMember: string) => void;
+  compact?: boolean;
 }) {
+  const [editing, setEditing] = useState(!compact);
   const [inputCurrency, setInputCurrency] = useState<"NPR" | "KRW">("NPR");
   const [amountStr, setAmountStr] = useState(() =>
     formatExpenseAmountForInput(amountNpr, "NPR", krwPerNpr),
@@ -446,21 +451,57 @@ function SettlementTransferRowEditor({
     setInputCurrency(next);
   }
 
-  return (
-    <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-black text-emerald-950">
+  if (compact && !editing) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-2.5 py-2">
+        <p className="min-w-0 flex-1 truncate text-xs font-bold text-emerald-950">
           {fromLabel} <span className="text-emerald-400">→</span> {toLabel}
         </p>
+        <p className="shrink-0 text-xs font-black tabular-nums text-emerald-800">{fmt(amountNpr)}</p>
         {hasOverride ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
+          <span className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-black uppercase text-amber-800">
             Custom
           </span>
-        ) : (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
-            Auto
-          </span>
-        )}
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-emerald-700 transition active:bg-emerald-50"
+          aria-label={`Edit transfer ${fromLabel} to ${toLabel}`}
+        >
+          <Pencil size={13} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`border border-emerald-100 bg-white shadow-sm ${compact ? "rounded-lg p-3" : "rounded-2xl p-4"}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-2 ${compact ? "mb-2" : "mb-3"}`}>
+        <p className={`font-black text-emerald-950 ${compact ? "text-xs" : "text-sm"}`}>
+          {fromLabel} <span className="text-emerald-400">→</span> {toLabel}
+        </p>
+        <div className="flex items-center gap-1.5">
+          {hasOverride ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-800">
+              Custom
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
+              Auto
+            </span>
+          )}
+          {compact ? (
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="grid h-6 w-6 place-items-center rounded-md text-slate-400 transition active:bg-slate-50"
+              aria-label="Close editor"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -492,16 +533,28 @@ function SettlementTransferRowEditor({
           <button
             type="button"
             disabled={!dirty || parsedNpr === null}
-            onClick={() => parsedNpr !== null && onSave(from, to, parsedNpr)}
-            className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-black text-white transition enabled:hover:bg-emerald-800 disabled:opacity-40"
+            onClick={() => {
+              if (parsedNpr !== null) {
+                onSave(from, to, parsedNpr);
+                if (compact) setEditing(false);
+              }
+            }}
+            className={`rounded-xl bg-emerald-700 font-black text-white transition enabled:hover:bg-emerald-800 disabled:opacity-40 ${
+              compact ? "px-3 py-2 text-xs" : "px-4 py-2.5 text-sm"
+            }`}
           >
             Save
           </button>
           {hasOverride ? (
             <button
               type="button"
-              onClick={() => onReset(from, to)}
-              className="rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-black text-emerald-800 transition hover:bg-emerald-50"
+              onClick={() => {
+                onReset(from, to);
+                if (compact) setEditing(false);
+              }}
+              className={`rounded-xl border border-emerald-200 bg-white font-black text-emerald-800 transition hover:bg-emerald-50 ${
+                compact ? "px-2.5 py-2 text-xs" : "px-3 py-2.5 text-sm"
+              }`}
             >
               Reset
             </button>
@@ -1094,7 +1147,13 @@ export function ExpenseDashboard() {
   const selectedProfile = selectedMember ? profiles[selectedMember] ?? createProfile(selectedMember) : null;
 
   return (
-    <main className="min-h-screen bg-[#f6f8f7] px-3 pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))] pt-3 text-emerald-950 sm:px-5 lg:px-10">
+    <main
+      className={`min-h-screen bg-[#f6f8f7] px-3 pt-3 text-emerald-950 sm:px-5 lg:px-10 ${
+        activeTab === "Settlement"
+          ? "pb-[calc(6rem+env(safe-area-inset-bottom,0px))]"
+          : "pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]"
+      }`}
+    >
       <div className="mx-auto max-w-lg lg:max-w-7xl">
         <div className="mb-2 flex items-center justify-between gap-2">
           <Link
@@ -1241,8 +1300,9 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab !== "History" && activeTab !== "AI Insights" && activeTab !== "Dashboard" && (
-          <div className="mb-3">
+          <div className={activeTab === "Settlement" ? "mb-2" : "mb-3"}>
             <ExpenseMonthPicker
+              dense={activeTab === "Settlement"}
               monthKeys={monthKeys}
               selectedMonthKey={selectedMonthKey}
               onChange={setSelectedMonthKey}
@@ -1343,7 +1403,7 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Settlement" && (
-          <section className="mb-3 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="mb-2">
             <SettlementPanel
               balances={balances}
               equalSplitAmount={equalSplitAmount}
@@ -1357,59 +1417,11 @@ export function ExpenseDashboard() {
               monthOverrideMap={settlementOverrides[selectedMonthKey] ?? {}}
               onSaveTransfer={saveTransferOverride}
               onResetTransfer={resetTransferOverride}
+              onMarkComplete={markSettlementComplete}
+              onShareSettlement={openSettlementShare}
+              onDownloadPng={() => void downloadSettlementPng()}
+              onDownloadPdf={() => void downloadSettlementPdf()}
             />
-            <div className="glass-card rounded-[1.7rem] p-6">
-              <h2 className="mb-6 text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Auto Settlement Logic</h2>
-              <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold leading-6 text-emerald-900">
-                Each expense is split among the members you pick (equal NPR per person, or custom % weights).
-                Settlement balances use <span className="font-black">paid − attributed share</span> for the month.
-              </div>
-              <div className="space-y-3">
-                {transfers.length ? (
-                  transfers.map((transfer) => (
-                    <div key={`${transfer.from}-${transfer.to}`} className="flex items-center gap-3 rounded-2xl bg-white p-4">
-                      <CheckCircle2 className="shrink-0 text-emerald-700" size={19} />
-                      <p className="font-bold text-slate-700">
-                        {memberDisplayName(transfer.from, profiles)} pays {memberDisplayName(transfer.to, profiles)}{" "}
-                        {fmt(transfer.amount)}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl bg-emerald-50 p-4 font-black text-emerald-800">All settled.</div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={markSettlementComplete}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-emerald-800"
-              >
-                <CheckCircle2 size={16} /> Mark settlement complete
-              </button>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={openSettlementShare}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 text-sm font-black text-white shadow-md transition active:scale-[0.98] sm:col-span-3"
-                >
-                  <Share2 size={16} /> Share Result
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void downloadSettlementPng()}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-800 transition active:bg-emerald-50"
-                >
-                  <Download size={14} /> Download PNG
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void downloadSettlementPdf()}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-800 transition active:bg-emerald-50 sm:col-span-2"
-                >
-                  <Download size={14} /> Download PDF
-                </button>
-              </div>
-            </div>
           </section>
         )}
 
@@ -1491,6 +1503,7 @@ export function ExpenseDashboard() {
           setActiveTab("Settlement");
         }}
         onScanReceipt={openAddExpenseModal}
+        raised={activeTab === "Settlement"}
       />
 
       <ExpenseBottomNav
@@ -2029,6 +2042,7 @@ function ExpenseFabSpeedDial({
   onAddIncome,
   onAddTransfer,
   onScanReceipt,
+  raised = false,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -2037,6 +2051,7 @@ function ExpenseFabSpeedDial({
   onAddIncome: () => void;
   onAddTransfer: () => void;
   onScanReceipt: () => void;
+  raised?: boolean;
 }) {
   const actions = [
     { label: "Add Expense", icon: ReceiptText, onClick: onAddExpense },
@@ -2061,7 +2076,13 @@ function ExpenseFabSpeedDial({
           />
         ) : null}
       </AnimatePresence>
-      <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-3 z-[60] flex flex-col items-end gap-2">
+      <div
+        className={`fixed right-3 z-[60] flex flex-col items-end gap-2 ${
+          raised
+            ? "bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
+            : "bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))]"
+        }`}
+      >
         <AnimatePresence>
           {open
             ? actions.map((action, index) => (
@@ -2684,7 +2705,10 @@ function SettlementPanel({
   monthOverrideMap,
   onSaveTransfer,
   onResetTransfer,
-  compact = false,
+  onMarkComplete,
+  onShareSettlement,
+  onDownloadPng,
+  onDownloadPdf,
 }: {
   balances: Record<string, number>;
   equalSplitAmount: number;
@@ -2698,21 +2722,31 @@ function SettlementPanel({
   monthOverrideMap: Record<string, number>;
   onSaveTransfer: (from: string, to: string, npr: number) => void;
   onResetTransfer: (from: string, to: string) => void;
-  compact?: boolean;
+  onMarkComplete: () => void;
+  onShareSettlement: () => void;
+  onDownloadPng: () => void;
+  onDownloadPdf: () => void;
 }) {
+  const [logicOpen, setLogicOpen] = useState(false);
+  const totalTransferAmount = displayTransfers.reduce((sum, transfer) => sum + transfer.amount, 0);
+
   return (
-    <div className={`glass-card rounded-2xl ${compact ? "p-4" : "rounded-[1.7rem] p-6 sm:p-7"}`}>
-      <div className={compact ? "mb-3" : "mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"}>
-        <div>
-          <h2 className={`font-black leading-snug tracking-tight text-emerald-950 ${compact ? "text-base" : "text-2xl sm:text-3xl"}`}>
-            Settlement: लिनु / दिनु
-          </h2>
-          <p className={`font-bold text-slate-500 ${compact ? "mt-0.5 text-[11px]" : "mt-1 text-sm"}`}>
-            Avg {fmt(equalSplitAmount)} · {displayTransfers.length} transfer{displayTransfers.length === 1 ? "" : "s"}
-          </p>
-        </div>
+    <div className="glass-card rounded-2xl p-3 lg:p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg bg-emerald-50/90 px-3 py-2">
+        <p className="text-xs font-black text-emerald-900">
+          Total Transfers: <span className="tabular-nums">{displayTransfers.length}</span>
+        </p>
+        <p className="text-xs font-black text-emerald-900">
+          Total Amount: <span className="tabular-nums">{fmt(totalTransferAmount)}</span>
+        </p>
       </div>
-      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "gap-3 sm:grid-cols-2"}`}>
+
+      <h2 className="mb-2 text-sm font-black text-emerald-950 lg:text-base">Settlement: लिनु / दिनु</h2>
+      <p className="mb-2 text-[11px] font-bold text-slate-500">
+        Avg {fmt(equalSplitAmount)} per member
+      </p>
+
+      <div className="space-y-2">
         {Object.entries(balances).map(([memberId, amount]) => {
           const isReceive = amount >= 0;
           const sign = isReceive ? "+" : "-";
@@ -2721,47 +2755,26 @@ function SettlementPanel({
           return (
             <div
               key={memberId}
-              className={`rounded-xl border border-emerald-50/80 bg-white shadow-sm ${compact ? "p-2.5" : "rounded-2xl p-4 transition hover:shadow-md"}`}
+              className="rounded-lg border border-emerald-50/80 bg-white px-3 py-2 shadow-sm"
             >
-              <div className={`flex items-center gap-2 ${compact ? "mb-1.5" : "mb-3 gap-3"}`}>
-                <div
-                  className={`grid place-items-center rounded-full bg-emerald-50 font-black text-emerald-800 ${
-                    compact ? "h-7 w-7 text-[10px]" : "h-10 w-10 text-sm"
-                  }`}
-                >
-                  {initials(displayName)}
-                </div>
-                <p className={`truncate font-black text-emerald-950 ${compact ? "text-xs" : ""}`}>{displayName}</p>
-              </div>
-              {!compact ? (
-                <div className="mb-3 grid grid-cols-2 gap-2 text-sm font-bold text-slate-500">
-                  <span>Paid: {fmt(paidByMember[memberId] ?? 0)}</span>
-                  <span>Share: {fmt(memberExpectedShare[memberId] ?? 0)}</span>
-                </div>
-              ) : null}
-              <p className={`font-black ${isReceive ? "text-emerald-700" : "text-red-600"} ${compact ? "text-[10px]" : "text-sm"}`}>
-                {isReceive ? "लिनु" : "दिनु"}
+              <p className="truncate text-sm font-black text-emerald-950">{displayName}</p>
+              <p className="mt-0.5 text-[11px] font-bold text-slate-500">
+                Paid: {fmt(paidByMember[memberId] ?? 0)} | Share: {fmt(memberExpectedShare[memberId] ?? 0)}
               </p>
               <p
-                className={`font-black tabular-nums ${isReceive ? "text-emerald-800" : "text-red-600"} ${
-                  compact ? "text-sm" : "mt-1 text-2xl"
-                }`}
+                className={`mt-0.5 text-xs font-black tabular-nums ${isReceive ? "text-emerald-700" : "text-red-600"}`}
               >
-                {sign}
+                Balance: {sign}
                 {fmt(Math.abs(amount))}
               </p>
             </div>
           );
         })}
       </div>
-      <div className={`rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-white ${compact ? "mt-3 p-3" : "mt-5 rounded-2xl p-4"}`}>
-        <p className={`font-black text-emerald-900 ${compact ? "text-xs" : "mb-1 text-sm"}`}>Transfers</p>
-        {!compact ? (
-          <p className="mb-4 text-sm font-bold leading-relaxed text-slate-600">
-            Edit in NPR or KRW, then Save. Reset restores the auto-calculated split.
-          </p>
-        ) : null}
-        <div className="space-y-2">
+
+      <div className="mt-3 rounded-lg border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-white p-3">
+        <p className="mb-2 text-xs font-black text-emerald-900">Transfers</p>
+        <div className="space-y-1.5">
           {displayTransfers.length ? (
             rawTransfers.map((raw, index) => {
               const display = displayTransfers[index];
@@ -2771,6 +2784,7 @@ function SettlementPanel({
               return (
                 <SettlementTransferRowEditor
                   key={key}
+                  compact
                   from={raw.from}
                   to={raw.to}
                   fromLabel={memberDisplayName(raw.from, profiles)}
@@ -2786,9 +2800,63 @@ function SettlementPanel({
               );
             })
           ) : (
-            <p className={`font-bold text-emerald-700 ${compact ? "text-xs" : "text-sm"}`}>No transfers needed.</p>
+            <p className="text-xs font-bold text-emerald-700">No transfers needed — all settled.</p>
           )}
         </div>
+      </div>
+
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setLogicOpen((open) => !open)}
+          className="flex w-full items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-left transition active:bg-emerald-50"
+          aria-expanded={logicOpen}
+        >
+          <Info size={14} className="shrink-0 text-emerald-700" />
+          <span className="text-xs font-black text-emerald-900">Settlement Logic</span>
+          <ChevronDown
+            size={14}
+            className={`ml-auto shrink-0 text-emerald-600 transition ${logicOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {logicOpen ? (
+          <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] font-bold leading-5 text-emerald-900">
+            Each expense is split among the members you pick (equal NPR per person, or custom % weights).
+            Settlement balances use <span className="font-black">paid − attributed share</span> for the month.
+            Tap a transfer row to edit amounts in NPR or KRW.
+          </div>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={onMarkComplete}
+        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-black text-white transition active:bg-emerald-800"
+      >
+        <CheckCircle2 size={15} /> Mark settlement complete
+      </button>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={onShareSettlement}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2.5 text-xs font-black text-white shadow-sm transition active:scale-[0.98] sm:col-span-3"
+        >
+          <Share2 size={14} /> Share Result
+        </button>
+        <button
+          type="button"
+          onClick={onDownloadPng}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50"
+        >
+          <Download size={13} /> PNG
+        </button>
+        <button
+          type="button"
+          onClick={onDownloadPdf}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50 sm:col-span-2"
+        >
+          <Download size={13} /> PDF
+        </button>
       </div>
     </div>
   );
