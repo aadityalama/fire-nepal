@@ -1055,7 +1055,11 @@ export function ExpenseDashboard() {
         monthKey: selectedMonthKey,
         members,
         memberLabels: memberNameMap(members, profiles),
+        memberAvatars: Object.fromEntries(members.map((id) => [id, profiles[id]?.avatarUrl])),
         balances,
+        paidByMember,
+        memberExpectedShare,
+        totalExpenseNpr: totalExpense,
         transfers,
         transferLabels: transfers.map((t) => ({
           fromName: memberDisplayName(t.from, profiles),
@@ -1064,7 +1068,18 @@ export function ExpenseDashboard() {
         currency,
         krwPerNpr,
       }),
-    [selectedMonthKey, members, profiles, balances, transfers, currency, krwPerNpr],
+    [
+      selectedMonthKey,
+      members,
+      profiles,
+      balances,
+      paidByMember,
+      memberExpectedShare,
+      totalExpense,
+      transfers,
+      currency,
+      krwPerNpr,
+    ],
   );
 
   const openSettlementShare = useCallback(() => {
@@ -1909,7 +1924,6 @@ export function ExpenseDashboard() {
         open={settlementShareOpen}
         onOpenChange={setSettlementShareOpen}
         data={settlementShareData}
-        krwPerNpr={krwPerNpr}
         downloadBaseName={`roommate-settlement-${selectedMonthKey}`}
       />
 

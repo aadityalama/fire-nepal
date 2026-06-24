@@ -16,7 +16,12 @@ import {
   downloadSettlementSharePdf,
   downloadSettlementSharePng,
   lineShareUrl,
+  memberRoleColor,
+  memberRoleIcon,
   settlementSharePngBlob,
+  SETTLEMENT_COLOR_NEUTRAL,
+  SETTLEMENT_COLOR_PAYS,
+  SETTLEMENT_COLOR_RECEIVES,
   type SettlementShareData,
 } from "@/lib/settlement-share";
 
@@ -80,46 +85,128 @@ function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
     <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] to-[#047857] p-3 shadow-lg shadow-emerald-950/25">
       <div className="rounded-xl bg-white p-4 shadow-inner">
         <p className="text-base font-black text-emerald-900">🏠 Roommate Settlement Summary</p>
-        <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-slate-400">Month</p>
-        <p className="text-lg font-black text-emerald-950">{data.monthLabel}</p>
+        <p className="mt-1 text-lg font-black text-emerald-950">{data.monthLabel}</p>
 
-        <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Members</p>
-        <ul className="mt-2 space-y-1.5">
-          {data.members.map((m) => (
-            <li key={m.memberId} className="flex items-center justify-between gap-2 text-sm">
-              <span className="truncate font-semibold text-slate-800">{m.name}</span>
-              <span
-                className={`shrink-0 font-black tabular-nums ${
-                  m.role === "receives"
-                    ? "text-emerald-700"
-                    : m.role === "pays"
-                      ? "text-red-600"
-                      : "text-slate-500"
-                }`}
-              >
-                {m.signedLabel}
-              </span>
-            </li>
-          ))}
+        <div className="my-3 border-t border-slate-200" />
+
+        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Member Summary</p>
+        <ul className="mt-2 space-y-3">
+          {data.members.map((m) => {
+            const roleColor = memberRoleColor(m.role);
+            const icon = memberRoleIcon(m.role);
+            const avatarRing =
+              m.role === "receives"
+                ? "ring-[#059669]"
+                : m.role === "pays"
+                  ? "ring-[#DC2626]"
+                  : "ring-slate-200";
+            const avatarBg =
+              m.role === "receives"
+                ? "bg-emerald-50 text-[#059669]"
+                : m.role === "pays"
+                  ? "bg-red-50 text-[#DC2626]"
+                  : "bg-slate-50 text-slate-600";
+
+            return (
+              <li key={m.memberId}>
+                <div className="flex items-center gap-2.5">
+                  {m.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.avatarUrl}
+                      alt=""
+                      className={`h-9 w-9 shrink-0 rounded-full object-cover ring-2 ${avatarRing}`}
+                    />
+                  ) : (
+                    <div
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[10px] font-black ring-2 ${avatarBg} ${avatarRing}`}
+                    >
+                      {m.initials}
+                    </div>
+                  )}
+                  <p className="min-w-0 truncate text-sm font-black" style={{ color: roleColor }}>
+                    {icon ? `${icon} ` : ""}
+                    {m.name}
+                  </p>
+                </div>
+                <div className="mt-1.5 space-y-0.5 pl-[2.875rem]">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-500">Paid:</span>
+                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
+                      {m.paidLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-500">Share:</span>
+                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
+                      {m.shareLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-500">Balance:</span>
+                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
+                      {m.balanceLabel}
+                    </span>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
 
-        <p className="mt-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Transfers</p>
+        <div className="my-3 border-t border-slate-200" />
+
+        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Final Transfers</p>
         {data.transfers.length === 0 ? (
-          <p className="mt-2 text-sm font-bold text-emerald-700">All settled — no transfers needed</p>
+          <p className="mt-2 text-sm font-bold text-[#059669]">All settled — no transfers needed</p>
         ) : (
-          <ul className="mt-2 space-y-1.5">
+          <ul className="mt-2 space-y-2.5">
             {data.transfers.map((t, i) => (
-              <li key={`${t.fromName}-${t.toName}-${i}`} className="flex items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate font-semibold text-slate-700">
-                  {t.fromName} → {t.toName}
-                </span>
-                <span className="shrink-0 font-black tabular-nums text-emerald-800">{t.amountLabel}</span>
+              <li key={`${t.fromName}-${t.toName}-${i}`}>
+                <p className="text-xs font-semibold">
+                  <span style={{ color: SETTLEMENT_COLOR_PAYS }}>{t.fromName}</span>
+                  <span className="text-slate-400"> → </span>
+                  <span style={{ color: SETTLEMENT_COLOR_RECEIVES }}>{t.toName}</span>
+                </p>
+                <p
+                  className="text-right text-sm font-black tabular-nums"
+                  style={{ color: SETTLEMENT_COLOR_NEUTRAL }}
+                >
+                  {t.amountLabel}
+                </p>
               </li>
             ))}
           </ul>
         )}
 
-        <p className="mt-4 text-center text-[10px] font-semibold text-slate-400">Generated by FIRE Nepal</p>
+        <div className="my-3 border-t border-slate-200" />
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-black uppercase tracking-wide text-slate-500">Receives Total</span>
+            <span className="font-black tabular-nums" style={{ color: SETTLEMENT_COLOR_RECEIVES }}>
+              {data.receivesTotalLabel}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-black uppercase tracking-wide text-slate-500">Pays Total</span>
+            <span className="font-black tabular-nums" style={{ color: SETTLEMENT_COLOR_PAYS }}>
+              {data.paysTotalLabel}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-black uppercase tracking-wide text-slate-500">Total Group Expense</span>
+            <span className="font-black tabular-nums text-emerald-950">{data.totalGroupExpenseLabel}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-black uppercase tracking-wide text-slate-500">Total Members</span>
+            <span className="font-black tabular-nums text-emerald-950">{data.totalMembers}</span>
+          </div>
+        </div>
+
+        <p className="mt-4 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Generated by FIRE Nepal
+        </p>
       </div>
     </div>
   );
@@ -129,7 +216,6 @@ export type SettlementShareModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: SettlementShareData;
-  krwPerNpr: number;
   downloadBaseName: string;
 };
 
@@ -137,14 +223,13 @@ export function SettlementShareModal({
   open,
   onOpenChange,
   data,
-  krwPerNpr,
   downloadBaseName,
 }: SettlementShareModalProps) {
   const titleId = useId();
   const [busy, setBusy] = useState<"png" | "pdf" | "share" | null>(null);
 
   const cardText = buildSettlementShareCardText(data);
-  const socialText = buildSettlementShareSocialMessage(data, krwPerNpr);
+  const socialText = buildSettlementShareSocialMessage(data);
   const pageUrl = data.siteUrl;
 
   useEffect(() => {
