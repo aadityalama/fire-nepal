@@ -201,7 +201,7 @@ function GroupProfileCardInner({
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: motionEase }}
-        className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/60 p-3.5 shadow-[0_10px_40px_rgba(5,150,105,0.09)] backdrop-blur-xl dark:border-emerald-900/35 dark:bg-emerald-950/40 dark:shadow-emerald-950/30 sm:p-4"
+        className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/60 p-4 shadow-[0_12px_48px_rgba(5,150,105,0.11)] backdrop-blur-xl dark:border-emerald-900/35 dark:bg-emerald-950/40 dark:shadow-emerald-950/30 sm:p-[1.125rem]"
         aria-label={branded ? `${profile.companyName || "Group"} profile` : "Group profile"}
       >
         <div

@@ -1587,7 +1587,7 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Members" && (
-          <section className="mb-3 min-w-0 space-y-3 overflow-x-hidden">
+          <section className="mb-3 min-w-0 space-y-2.5 overflow-x-hidden">
             <GroupProfileCard
               loading={!hydrated}
               memberCount={members.length}
@@ -2464,16 +2464,16 @@ function ExpenseBottomNav({
 
 function GroupMembersSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="animate-pulse space-y-2" aria-hidden>
+    <div className="animate-pulse space-y-1.5" aria-hidden>
       {Array.from({ length: rows }).map((_, index) => (
         <div
           key={index}
-          className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white/80 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/30"
+          className="flex items-center gap-2.5 rounded-lg border border-slate-100 bg-white/80 p-2.5 dark:border-emerald-900/40 dark:bg-emerald-950/30"
         >
-          <div className="h-11 w-11 shrink-0 rounded-full bg-emerald-100/80 dark:bg-emerald-900/40" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-2/5 rounded bg-emerald-100/70 dark:bg-emerald-900/50" />
-            <div className="h-3 w-3/5 rounded bg-slate-100 dark:bg-emerald-900/30" />
+          <div className="h-10 w-10 shrink-0 rounded-full bg-emerald-100/80 dark:bg-emerald-900/40" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="h-3.5 w-2/5 rounded bg-emerald-100/70 dark:bg-emerald-900/50" />
+            <div className="h-2.5 w-3/5 rounded bg-slate-100 dark:bg-emerald-900/30" />
           </div>
         </div>
       ))}
@@ -2509,13 +2509,13 @@ function GroupMembers({
   loading?: boolean;
 }) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80 p-3 backdrop-blur dark:border-emerald-900/40 dark:bg-emerald-950/25 sm:p-4">
-      <div className={`mb-3 flex min-w-0 items-center justify-between gap-2 ${compact ? "mb-2" : ""}`}>
-        <h2 className={`font-black text-emerald-950 dark:text-emerald-50 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>
+    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/60 bg-white/70 p-2.5 backdrop-blur dark:border-emerald-900/35 dark:bg-emerald-950/20 sm:p-3">
+      <div className={`mb-2 flex min-w-0 items-center justify-between gap-2 ${compact ? "mb-1.5" : ""}`}>
+        <h2 className={`font-bold text-slate-600 dark:text-emerald-200/75 ${compact ? "text-xs" : "text-sm sm:text-base"}`}>
           Members
         </h2>
         {!compact && !loading ? (
-          <p className="hidden text-[11px] font-bold text-slate-500 dark:text-emerald-200/60 sm:block">Tap to view profile</p>
+          <p className="hidden text-[10px] font-semibold text-slate-400 dark:text-emerald-200/50 sm:block">Tap to view profile</p>
         ) : null}
       </div>
 
@@ -2530,7 +2530,7 @@ function GroupMembers({
           </p>
         </div>
       ) : (
-        <div className={`grid min-w-0 gap-2 ${compact ? "grid-cols-1" : "gap-2.5 sm:grid-cols-2"}`}>
+        <div className={`grid min-w-0 gap-1.5 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
         {members.map((member) => (
           <div
             key={member}
@@ -2540,35 +2540,37 @@ function GroupMembers({
             }}
             role="button"
             tabIndex={0}
-            className={`group min-w-0 cursor-pointer rounded-xl border border-white/70 bg-white/75 shadow-sm backdrop-blur transition active:scale-[0.99] hover:border-emerald-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:hover:border-emerald-700 ${
-              compact ? "flex items-center gap-3 p-2.5" : "rounded-2xl p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(0,122,61,0.12)]"
+            className={`group min-w-0 cursor-pointer rounded-lg border border-slate-100/90 bg-white/80 shadow-sm transition active:scale-[0.99] hover:border-emerald-200/80 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-900/35 dark:bg-emerald-950/25 dark:hover:border-emerald-800 ${
+              compact ? "flex items-center gap-2.5 p-2" : "p-2.5 sm:p-3"
             }`}
           >
-            <div className={`flex shrink-0 items-center gap-2 ${compact ? "" : "mb-4 w-full items-start justify-between gap-3"}`}>
-              <div className="flex min-w-0 items-center gap-2">
+            <div className={`flex shrink-0 items-center gap-2 ${compact ? "w-full" : "mb-2 w-full items-start justify-between gap-2"}`}>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <div
                   className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-700 to-lime-500 font-black text-white ${
-                    compact ? "h-9 w-9 text-xs" : "h-12 w-12 text-sm shadow-lg shadow-emerald-950/15"
+                    compact ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-xs shadow-md shadow-emerald-950/10"
                   }`}
                 >
                   {profiles[member]?.avatarUrl ? (
                     <Image
                       alt={`${profiles[member]?.name ?? member} avatar`}
                       className="h-full w-full object-cover"
-                      height={compact ? 36 : 48}
+                      height={compact ? 32 : 40}
                       src={profiles[member]?.avatarUrl}
                       unoptimized
-                      width={compact ? 36 : 48}
+                      width={compact ? 32 : 40}
                     />
                   ) : (
                     initials(profiles[member]?.name ?? member)
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className={`truncate font-black text-emerald-950 dark:text-emerald-50 ${compact ? "text-sm" : ""}`}>{profiles[member]?.name ?? member}</p>
-                  <p className={`truncate font-bold text-slate-500 dark:text-emerald-200/60 ${compact ? "text-[10px]" : "text-sm"}`}>
+                  <p className={`truncate font-black text-emerald-950 dark:text-emerald-50 ${compact ? "text-sm" : "text-sm"}`}>
+                    {profiles[member]?.name ?? member}
+                  </p>
+                  <p className={`truncate font-semibold text-slate-500 dark:text-emerald-200/55 ${compact ? "text-[10px]" : "text-[11px]"}`}>
                     {fmt(paidByMember[member] ?? 0)} paid ·{" "}
-                    <span className={(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}>
+                    <span className={(balances[member] ?? 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600"}>
                       {(balances[member] ?? 0) >= 0 ? "+" : "-"}
                       {fmt(Math.abs(balances[member] ?? 0))}
                     </span>
@@ -2584,35 +2586,38 @@ function GroupMembers({
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-50 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 dark:bg-red-950/40 dark:text-red-300"
                 aria-label={`Remove ${profiles[member]?.name ?? member}`}
               >
-                <Trash2 size={16} aria-hidden />
+                <Trash2 size={15} aria-hidden />
               </button>
             </div>
             {!compact ? (
-              <>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl bg-emerald-50 p-3">
-                    <p className="font-bold text-slate-500">Contribution</p>
-                    <p className="mt-1 font-black text-emerald-800">{fmt(paidByMember[member] ?? 0)}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 p-3">
-                    <p className="font-bold text-slate-500">Settlement</p>
-                    <p className={`mt-1 font-black ${(balances[member] ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                      {(balances[member] ?? 0) >= 0 ? "+" : "-"}
-                      {fmt(Math.abs(balances[member] ?? 0))}
-                    </p>
-                  </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="rounded-lg bg-emerald-50/90 px-2 py-1.5 dark:bg-emerald-950/35">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-emerald-200/55">
+                    Contribution
+                  </p>
+                  <p className="mt-0.5 text-sm font-black tabular-nums text-emerald-800 dark:text-emerald-300">
+                    {fmt(paidByMember[member] ?? 0)}
+                  </p>
                 </div>
-                <p className="mt-3 text-xs font-black text-emerald-700 opacity-0 transition group-hover:opacity-100">
-                  Open premium profile →
-                </p>
-              </>
+                <div className="rounded-lg bg-slate-50/90 px-2 py-1.5 dark:bg-emerald-950/20">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-emerald-200/55">
+                    Settlement
+                  </p>
+                  <p
+                    className={`mt-0.5 text-sm font-black tabular-nums ${(balances[member] ?? 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600"}`}
+                  >
+                    {(balances[member] ?? 0) >= 0 ? "+" : "-"}
+                    {fmt(Math.abs(balances[member] ?? 0))}
+                  </p>
+                </div>
+              </div>
             ) : null}
           </div>
         ))}
         </div>
       )}
 
-      <div className={`flex min-w-0 gap-2 ${compact ? "mt-3" : "mt-4"}`}>
+      <div className={`flex min-w-0 gap-2 ${compact ? "mt-2" : "mt-3"}`}>
         <input
           value={newMember}
           onChange={(event) => setNewMember(event.target.value)}
