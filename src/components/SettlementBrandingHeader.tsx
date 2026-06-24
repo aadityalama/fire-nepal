@@ -33,24 +33,24 @@ function SettlementBrandingHeaderInner({
 
   const titleClass =
     variant === "export"
-      ? "text-xl font-black tracking-tight text-emerald-950 sm:text-2xl"
+      ? "text-xl font-black tracking-tight text-[#111827] sm:text-2xl"
       : variant === "compact"
-        ? "text-[15px] font-black leading-tight tracking-tight text-emerald-950"
-        : "text-lg font-black leading-tight tracking-tight text-emerald-950 sm:text-xl";
+        ? "text-[15px] font-black leading-tight tracking-tight text-[#111827]"
+        : "text-lg font-black leading-tight tracking-tight text-[#111827] sm:text-xl";
 
   const roomClass =
     variant === "export"
-      ? "text-base font-bold text-emerald-700"
+      ? "text-base font-bold text-[#10B981]"
       : variant === "compact"
-        ? "text-xs font-semibold text-emerald-700"
-        : "text-sm font-semibold text-emerald-700";
+        ? "text-xs font-semibold text-[#10B981]"
+        : "text-sm font-semibold text-[#10B981]";
 
   const subtitleClass =
     variant === "export"
-      ? "text-sm font-medium text-slate-500"
+      ? "text-sm font-medium text-[#6B7280]"
       : variant === "compact"
-        ? "text-[10px] font-medium text-slate-500"
-        : "text-xs font-medium text-slate-500";
+        ? "text-[10px] font-medium text-[#6B7280]"
+        : "text-xs font-medium text-[#6B7280]";
 
   const logoSize =
     variant === "export" ? "h-12 w-12 sm:h-14 sm:w-14" : variant === "compact" ? "h-10 w-10" : "h-11 w-11";
@@ -58,7 +58,7 @@ function SettlementBrandingHeaderInner({
   if (!hasGroupBranding) {
     return (
       <h2
-        className={`font-black text-emerald-900 dark:text-emerald-50 ${variant === "export" ? "text-xl sm:text-2xl" : "text-base sm:text-lg"} ${className}`}
+        className={`font-black text-[#111827] ${variant === "export" ? "text-xl sm:text-2xl" : "text-base sm:text-lg"} ${className}`}
       >
         <span aria-hidden>🏠 </span>
         {DEFAULT_TITLE}
@@ -72,7 +72,7 @@ function SettlementBrandingHeaderInner({
   return (
     <div className={`flex min-w-0 items-start gap-3 ${className}`}>
       <div
-        className={`grid ${logoSize} shrink-0 place-items-center overflow-hidden rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-900/10 ring-1 ring-white/60 dark:border-emerald-700/50`}
+        className={`grid ${logoSize} shrink-0 place-items-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white text-[#10B981] shadow-sm`}
         role="img"
         aria-label={showLogo ? logoAlt : initials.length >= 2 ? `${initials} group mark` : "Default group icon"}
       >
@@ -95,16 +95,16 @@ function SettlementBrandingHeaderInner({
       </div>
       <div className="min-w-0 flex-1">
         {companyName ? (
-          <h2 className={`truncate ${titleClass} dark:text-emerald-50`}>{companyName}</h2>
+          <h2 className={`truncate ${titleClass}`}>{companyName}</h2>
         ) : null}
         {roomNumber ? (
-          <p className={`truncate ${roomClass} dark:text-emerald-300 ${companyName ? "mt-0.5" : ""}`}>
+          <p className={`truncate ${roomClass} ${companyName ? "mt-0.5" : ""}`}>
             Room {roomNumber}
           </p>
         ) : null}
         {(reportSubtitle ?? DEFAULT_TITLE) ? (
           <p
-            className={`${subtitleClass} dark:text-emerald-200/65 ${companyName || roomNumber ? "mt-1.5" : ""}`}
+            className={`${subtitleClass} ${companyName || roomNumber ? "mt-1.5" : ""}`}
           >
             {reportSubtitle ?? DEFAULT_TITLE}
           </p>
@@ -119,17 +119,17 @@ export const SettlementBrandingHeader = memo(SettlementBrandingHeaderInner);
 export function GroupProfileCardSkeleton() {
   return (
     <div
-      className="animate-pulse overflow-hidden rounded-2xl border border-white/60 bg-white/55 p-4 shadow-[0_8px_32px_rgba(5,150,105,0.06)] backdrop-blur-xl"
+      className="animate-pulse overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm"
       aria-hidden
     >
       <div className="flex items-start gap-3">
-        <div className="h-14 w-14 shrink-0 rounded-2xl bg-emerald-100/80" />
+        <div className="h-14 w-14 shrink-0 rounded-2xl bg-gray-100" />
         <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-          <div className="h-5 w-3/5 rounded-lg bg-emerald-100/80" />
-          <div className="h-4 w-2/5 rounded-lg bg-emerald-50" />
-          <div className="h-3 w-4/5 rounded bg-slate-100" />
+          <div className="h-5 w-3/5 rounded-lg bg-gray-100" />
+          <div className="h-4 w-2/5 rounded-lg bg-gray-50" />
+          <div className="h-3 w-4/5 rounded bg-gray-100" />
         </div>
-        <div className="h-11 w-11 shrink-0 rounded-xl bg-slate-100" />
+        <div className="h-11 w-11 shrink-0 rounded-xl bg-gray-100" />
       </div>
     </div>
   );

@@ -20,9 +20,6 @@ import {
   memberRoleIcon,
   settlementReportRoomBadgeClass,
   settlementSharePngBlob,
-  SETTLEMENT_COLOR_NEUTRAL,
-  SETTLEMENT_COLOR_PAYS,
-  SETTLEMENT_COLOR_RECEIVES,
   type SettlementShareData,
 } from "@/lib/settlement-share";
 import { SettlementBrandingHeader } from "@/components/SettlementBrandingHeader";
@@ -84,152 +81,150 @@ function IconLine({ className }: { className?: string }) {
 
 function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
   return (
-    <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#064e3b] to-[#047857] p-3 shadow-lg shadow-emerald-950/25">
-      <div className="min-w-0 rounded-xl bg-white p-4 shadow-inner dark:bg-emerald-950/90">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <SettlementBrandingHeader
-              companyName={data.companyName}
-              roomNumber={data.roomNumber}
-              logoUrl={data.logoUrl}
-              hasGroupBranding={data.hasGroupBranding}
-              reportSubtitle={data.reportSubtitle}
-              variant="export"
-            />
-            <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Settlement Period</p>
-            <p className="text-lg font-black text-emerald-950">{data.monthLabel}</p>
-          </div>
-          {data.roomBadgeLabel ? (
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${settlementReportRoomBadgeClass()}`}
+    <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <SettlementBrandingHeader
+            companyName={data.companyName}
+            roomNumber={data.roomNumber}
+            logoUrl={data.logoUrl}
+            hasGroupBranding={data.hasGroupBranding}
+            reportSubtitle={data.reportSubtitle}
+            variant="export"
+          />
+          <p className="mt-3 text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Settlement Period</p>
+          <p className="text-lg font-black text-[#111827]">{data.monthLabel}</p>
+          <p className="mt-1 text-xs font-semibold text-[#6B7280]">{data.currency}</p>
+        </div>
+        {data.roomBadgeLabel ? (
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 ${settlementReportRoomBadgeClass()}`}
+          >
+            {data.roomBadgeLabel}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-[#E5E7EB] bg-gray-50 px-3 py-2.5">
+        <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Generated On</p>
+        <p className="text-xs font-bold text-[#111827]">{data.generatedOnLabel}</p>
+        <p className="text-xs font-semibold text-[#6B7280]">{data.generatedAtLabel}</p>
+      </div>
+
+      <div className="my-4 border-t border-[#E5E7EB]" />
+
+      <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">
+        Member Settlement Breakdown
+      </p>
+      <ul className="mt-3 space-y-3">
+        {data.members.map((m) => {
+          const roleColor = memberRoleColor(m.role);
+          const icon = memberRoleIcon(m.role);
+          const avatarRing =
+            m.role === "receives"
+              ? "ring-[#10B981]"
+              : m.role === "pays"
+                ? "ring-[#DC2626]"
+                : "ring-[#E5E7EB]";
+          const avatarBg =
+            m.role === "receives"
+              ? "bg-emerald-50 text-[#10B981]"
+              : m.role === "pays"
+                ? "bg-red-50 text-[#DC2626]"
+                : "bg-gray-50 text-[#6B7280]";
+
+          return (
+            <li
+              key={m.memberId}
+              className="rounded-xl border border-[#E5E7EB] bg-white p-3 shadow-sm"
             >
-              {data.roomBadgeLabel}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Generated On</p>
-          <p className="text-xs font-bold text-slate-700">{data.generatedOnLabel}</p>
-          <p className="text-xs font-bold text-slate-500">{data.generatedAtLabel}</p>
-        </div>
-
-        <div className="my-3 border-t border-slate-200" />
-
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-          Member Settlement Breakdown
-        </p>
-        <ul className="mt-2 space-y-3">
-          {data.members.map((m) => {
-            const roleColor = memberRoleColor(m.role);
-            const icon = memberRoleIcon(m.role);
-            const avatarRing =
-              m.role === "receives"
-                ? "ring-[#059669]"
-                : m.role === "pays"
-                  ? "ring-[#DC2626]"
-                  : "ring-slate-200";
-            const avatarBg =
-              m.role === "receives"
-                ? "bg-emerald-50 text-[#059669]"
-                : m.role === "pays"
-                  ? "bg-red-50 text-[#DC2626]"
-                  : "bg-slate-50 text-slate-600";
-
-            return (
-              <li key={m.memberId}>
-                <div className="flex items-center gap-2.5">
-                  {m.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={m.avatarUrl}
-                      alt=""
-                      className={`h-9 w-9 shrink-0 rounded-full object-cover ring-2 ${avatarRing}`}
-                    />
-                  ) : (
-                    <div
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[10px] font-black ring-2 ${avatarBg} ${avatarRing}`}
-                    >
-                      {m.initials}
-                    </div>
-                  )}
-                  <p className="min-w-0 truncate text-sm font-black" style={{ color: roleColor }}>
-                    {icon ? `${icon} ` : ""}
-                    {m.name}
-                  </p>
+              <div className="flex items-center gap-2.5">
+                {m.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={m.avatarUrl}
+                    alt=""
+                    className={`h-9 w-9 shrink-0 rounded-full object-cover ring-2 ${avatarRing}`}
+                  />
+                ) : (
+                  <div
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[10px] font-black ring-2 ${avatarBg} ${avatarRing}`}
+                  >
+                    {m.initials}
+                  </div>
+                )}
+                <p className="min-w-0 truncate text-sm font-black text-[#111827]">
+                  {icon ? (
+                    <span style={{ color: roleColor }}>{icon} </span>
+                  ) : null}
+                  {m.name}
+                </p>
+              </div>
+              <div className="mt-2 space-y-1 pl-[2.875rem]">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-[#6B7280]">Paid:</span>
+                  <span className="font-black tabular-nums text-[#111827]">{m.paidLabel}</span>
                 </div>
-                <div className="mt-1.5 space-y-0.5 pl-[2.875rem]">
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-500">Paid:</span>
-                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
-                      {m.paidLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-500">Share:</span>
-                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
-                      {m.shareLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-500">Balance:</span>
-                    <span className="font-black tabular-nums" style={{ color: roleColor }}>
-                      {m.balanceLabel}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-[#6B7280]">Share:</span>
+                  <span className="font-black tabular-nums text-[#111827]">{m.shareLabel}</span>
                 </div>
-              </li>
-            );
-          })}
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="font-semibold text-[#6B7280]">Balance:</span>
+                  <span className="font-black tabular-nums" style={{ color: roleColor }}>
+                    {m.balanceLabel}
+                  </span>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="my-4 border-t border-[#E5E7EB]" />
+
+      <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Final Transfers</p>
+      {data.transfers.length === 0 ? (
+        <p className="mt-2 text-sm font-bold text-[#10B981]">All settled — no transfers needed</p>
+      ) : (
+        <ul className="mt-3 space-y-2.5">
+          {data.transfers.map((t, i) => (
+            <li
+              key={`${t.fromName}-${t.toName}-${i}`}
+              className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5"
+            >
+              <p className="text-xs font-semibold">
+                <span className="text-[#DC2626]">{t.fromName}</span>
+                <span className="text-[#6B7280]"> → </span>
+                <span className="text-[#10B981]">{t.toName}</span>
+              </p>
+              <p className="text-right text-sm font-black tabular-nums text-[#111827]">{t.amountLabel}</p>
+            </li>
+          ))}
         </ul>
+      )}
 
-        <div className="my-3 border-t border-slate-200" />
+      <div className="my-4 border-t border-[#E5E7EB]" />
 
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Final Transfers</p>
-        {data.transfers.length === 0 ? (
-          <p className="mt-2 text-sm font-bold text-[#059669]">All settled — no transfers needed</p>
-        ) : (
-          <ul className="mt-2 space-y-2.5">
-            {data.transfers.map((t, i) => (
-              <li key={`${t.fromName}-${t.toName}-${i}`}>
-                <p className="text-xs font-semibold">
-                  <span style={{ color: SETTLEMENT_COLOR_PAYS }}>{t.fromName}</span>
-                  <span className="text-slate-400"> → </span>
-                  <span style={{ color: SETTLEMENT_COLOR_RECEIVES }}>{t.toName}</span>
-                </p>
-                <p
-                  className="text-right text-sm font-black tabular-nums"
-                  style={{ color: SETTLEMENT_COLOR_NEUTRAL }}
-                >
-                  {t.amountLabel}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="my-3 border-t border-slate-200" />
-
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Report Summary</p>
-        <div className="mt-2 space-y-1.5">
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="font-semibold text-slate-500">Total Group Expense:</span>
-            <span className="font-black tabular-nums text-emerald-950">{data.totalGroupExpenseLabel}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="font-semibold text-slate-500">Total Members:</span>
-            <span className="font-black tabular-nums text-emerald-950">{data.totalMembers}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="font-semibold text-slate-500">Total Transfers:</span>
-            <span className="font-black tabular-nums text-emerald-950">{data.totalTransfers}</span>
-          </div>
+      <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Report Summary</p>
+      <div className="mt-3 space-y-2 rounded-xl border border-[#E5E7EB] bg-gray-50 p-3">
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="font-semibold text-[#6B7280]">Total Group Expense:</span>
+          <span className="font-black tabular-nums text-[#111827]">{data.totalGroupExpenseLabel}</span>
         </div>
-
-        <div className="mt-4 text-center">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Generated by FIRE Nepal</p>
-          <p className="text-[10px] font-semibold text-slate-500">{data.footerUrl}</p>
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="font-semibold text-[#6B7280]">Total Members:</span>
+          <span className="font-black tabular-nums text-[#111827]">{data.totalMembers}</span>
         </div>
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="font-semibold text-[#6B7280]">Total Transfers:</span>
+          <span className="font-black tabular-nums text-[#111827]">{data.totalTransfers}</span>
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-[#E5E7EB] pt-4 text-center">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">Generated by FIRE Nepal</p>
+        <p className="text-[10px] font-semibold text-[#6B7280]">{data.footerUrl}</p>
       </div>
     </div>
   );
@@ -360,34 +355,34 @@ export function SettlementShareModal({
         if (e.target === e.currentTarget) onOpenChange(false);
       }}
     >
-      <div className="absolute inset-0 bg-emerald-950/55 backdrop-blur-md" aria-hidden />
+      <div className="absolute inset-0 bg-black/30" aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-[81] flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-white/20 bg-gradient-to-b from-emerald-950 via-[#0a2e22] to-emerald-950 text-white shadow-[0_28px_80px_rgba(0,0,0,0.45)] sm:max-h-[90vh] sm:rounded-[1.75rem]"
+        className="relative z-[81] flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-[#E5E7EB] bg-white text-[#111827] shadow-2xl sm:max-h-[90vh] sm:rounded-[1.75rem]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-5 pb-4 pt-5 sm:px-6">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#E5E7EB] px-5 pb-4 pt-5 sm:px-6">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300/90">FIRE Nepal</p>
-            <h2 id={titleId} className="mt-1 font-nepali text-xl font-black tracking-tight sm:text-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#10B981]">FIRE Nepal</p>
+            <h2 id={titleId} className="mt-1 font-nepali text-xl font-black tracking-tight text-[#111827] sm:text-2xl">
               Share settlement
             </h2>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-emerald-100/75 sm:text-sm">
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-[#6B7280] sm:text-sm">
               {data.monthLabel} · {data.currency}
             </p>
           </div>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/15 bg-white/5 text-emerald-100 transition hover:bg-white/10"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#E5E7EB] bg-white text-[#6B7280] transition hover:bg-gray-50"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-5 py-4 sm:px-6">
           <SettlementShareCardPreview data={data} />
 
           <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
@@ -395,7 +390,7 @@ export function SettlementShareModal({
               type="button"
               disabled={busy !== null}
               onClick={shareResult}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-950/30 transition hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 sm:col-span-3"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50 sm:col-span-3"
             >
               <Share2 className="h-4 w-4" />
               {busy === "share" ? "Sharing…" : "Share Result"}
@@ -404,7 +399,7 @@ export function SettlementShareModal({
               type="button"
               disabled={busy !== null}
               onClick={savePng}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-3 text-xs font-black text-emerald-50 transition hover:bg-emerald-500/25 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-black text-[#111827] transition hover:bg-gray-50 disabled:opacity-50"
             >
               <ImageIcon className="h-4 w-4" />
               {busy === "png" ? "Saving…" : "Download PNG"}
@@ -413,19 +408,19 @@ export function SettlementShareModal({
               type="button"
               disabled={busy !== null}
               onClick={savePdf}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/30 bg-emerald-600/25 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-600/35 disabled:opacity-50 sm:col-span-2"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-black text-[#111827] transition hover:bg-gray-50 disabled:opacity-50 sm:col-span-2"
             >
               <Download className="h-4 w-4" />
               {busy === "pdf" ? "Saving…" : "Download PDF"}
             </button>
           </div>
 
-          <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200/70">Share via</p>
+          <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6B7280]">Share via</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
             <button
               type="button"
               onClick={() => openExternal(wa)}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-[#128C7E]/20 px-2 py-3 text-[10px] font-black text-emerald-50"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white px-2 py-3 text-[10px] font-black text-[#111827]"
             >
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#25D366] text-white">
                 <IconWhatsApp className="h-4 w-4" />
@@ -435,7 +430,7 @@ export function SettlementShareModal({
             <button
               type="button"
               onClick={() => openExternal(ms)}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-[#0084ff]/15 px-2 py-3 text-[10px] font-black text-emerald-50"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white px-2 py-3 text-[10px] font-black text-[#111827]"
             >
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#0084FF] text-white">
                 <IconMessenger className="h-4 w-4" />
@@ -445,7 +440,7 @@ export function SettlementShareModal({
             <a
               href={kakao}
               rel="noopener noreferrer"
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-[#FEE500]/10 px-2 py-3 text-center text-[10px] font-black text-emerald-50"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white px-2 py-3 text-center text-[10px] font-black text-[#111827]"
               onClick={notifyShared}
             >
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#FEE500] text-[#191919]">
@@ -456,7 +451,7 @@ export function SettlementShareModal({
             <button
               type="button"
               onClick={() => openExternal(tg)}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-sky-500/15 px-2 py-3 text-[10px] font-black text-emerald-50"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white px-2 py-3 text-[10px] font-black text-[#111827]"
             >
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-sky-500 text-white">
                 <IconTelegram className="h-4 w-4" />
@@ -466,7 +461,7 @@ export function SettlementShareModal({
             <button
               type="button"
               onClick={() => openExternal(line)}
-              className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-[#00B900]/15 px-2 py-3 text-[10px] font-black text-emerald-50"
+              className="flex flex-col items-center gap-1.5 rounded-2xl border border-[#E5E7EB] bg-white px-2 py-3 text-[10px] font-black text-[#111827]"
             >
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#00B900] text-white">
                 <IconLine className="h-4 w-4" />
@@ -475,29 +470,29 @@ export function SettlementShareModal({
             </button>
           </div>
 
-          <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200/70">Copy & export</p>
+          <p className="mt-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#6B7280]">Copy & export</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={copyText}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-black text-white"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-black text-[#111827]"
             >
-              <Copy className="h-4 w-4 text-emerald-200" />
+              <Copy className="h-4 w-4 text-[#6B7280]" />
               Copy text
             </button>
             <button
               type="button"
               onClick={copyLink}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-xs font-black text-white"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-black text-[#111827]"
             >
-              <Link2 className="h-4 w-4 text-emerald-200" />
+              <Link2 className="h-4 w-4 text-[#6B7280]" />
               Copy link
             </button>
             <button
               type="button"
               disabled={busy !== null}
               onClick={savePng}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-pink-400/25 bg-pink-500/10 px-4 py-3 text-xs font-black text-pink-100"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-xs font-black text-[#111827]"
             >
               <ImageIcon className="h-4 w-4" />
               Instagram / Story
@@ -508,14 +503,14 @@ export function SettlementShareModal({
             <button
               type="button"
               onClick={shareResult}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm font-black text-[#111827]"
             >
               <Send className="h-4 w-4" />
               System share
             </button>
           ) : null}
 
-          <pre className="mt-4 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/20 p-3 font-mono text-[10px] leading-relaxed text-emerald-50/80">
+          <pre className="mt-4 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-xl border border-[#E5E7EB] bg-white p-3 font-mono text-[10px] leading-relaxed text-[#374151]">
             {cardText}
           </pre>
         </div>

@@ -60,10 +60,10 @@ export type SettlementShareData = {
 const FIRE_NEPAL_SITE = "https://firenepal.com";
 const DIVIDER = "━━━━━━━━━━━━━━━━";
 
-export const SETTLEMENT_COLOR_RECEIVES = "#059669";
+export const SETTLEMENT_COLOR_RECEIVES = "#10B981";
 export const SETTLEMENT_COLOR_PAYS = "#DC2626";
-export const SETTLEMENT_COLOR_NEUTRAL = "#1e293b";
-export const SETTLEMENT_COLOR_MUTED = "#64748b";
+export const SETTLEMENT_COLOR_NEUTRAL = "#111827";
+export const SETTLEMENT_COLOR_MUTED = "#6B7280";
 
 const REPORT_ROOM_BADGE_STYLE = { bg: "#d1fae5", text: "#047857", border: "#6ee7b7" };
 
@@ -446,7 +446,7 @@ function drawGroupLogo(
     ctx.fillRect(x, y, size, size);
   }
   ctx.restore();
-  ctx.strokeStyle = "#6ee7b7";
+  ctx.strokeStyle = "#E5E7EB";
   ctx.lineWidth = 1.5;
   drawRoundedRect(ctx, x, y, size, size, r);
   ctx.stroke();
@@ -471,7 +471,7 @@ function drawSettlementBrandingHeader(
 
   if (!data.hasGroupBranding) {
     ctx.textAlign = "left";
-    ctx.fillStyle = "#065f46";
+    ctx.fillStyle = "#111827";
     ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(`🏠 ${DEFAULT_SETTLEMENT_TITLE}`, innerX, cursorY);
     if (data.roomBadgeLabel) {
@@ -482,20 +482,20 @@ function drawSettlementBrandingHeader(
 
   ctx.textAlign = "left";
   if (data.companyName) {
-    ctx.fillStyle = "#022c22";
+    ctx.fillStyle = "#111827";
     ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(data.companyName, textX, cursorY);
     cursorY += 26;
   }
   if (data.roomNumber) {
-    ctx.fillStyle = "#047857";
+    ctx.fillStyle = "#10B981";
     ctx.font = "700 16px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(`Room ${data.roomNumber}`, textX, cursorY);
     cursorY += 22;
   }
   if (data.reportSubtitle) {
     cursorY += 6;
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = "#6B7280";
     ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText(data.reportSubtitle, textX, cursorY);
     cursorY += 18;
@@ -507,7 +507,7 @@ function drawSettlementBrandingHeader(
 }
 
 function drawDivider(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
-  ctx.strokeStyle = "#e2e8f0";
+  ctx.strokeStyle = "#E5E7EB";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -518,8 +518,23 @@ function drawDivider(ctx: CanvasRenderingContext2D, x: number, y: number, width:
 function drawSectionTitle(ctx: CanvasRenderingContext2D, x: number, y: number, title: string) {
   ctx.textAlign = "left";
   ctx.font = "700 11px ui-sans-serif, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#64748b";
+  ctx.fillStyle = "#6B7280";
   ctx.fillText(title, x, y);
+}
+
+function drawMemberCard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#E5E7EB";
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, x, y, w, h, 12);
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawAvatar(
@@ -576,7 +591,7 @@ function drawLabelAmountRow(
 ) {
   ctx.textAlign = "left";
   ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillStyle = "#64748b";
+  ctx.fillStyle = "#6B7280";
   ctx.fillText(label, x, y);
   ctx.textAlign = "right";
   ctx.font = `700 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
@@ -664,63 +679,47 @@ function drawSettlementCard(
   avatarImages: Map<string, HTMLImageElement>,
   logoImage: HTMLImageElement | null,
 ) {
-  const pad = 36;
+  const pad = 32;
   const avatarSize = 36;
   const textX = pad + avatarSize + 12;
-  const innerW = width - 48 - pad * 2;
+  const innerW = width - pad * 2;
 
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, "#064e3b");
-  bg.addColorStop(1, "#047857");
-  ctx.fillStyle = bg;
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  const cardX = 24;
-  const cardY = 24;
-  const cardW = width - 48;
-  const cardH = height - 48;
-  const r = 24;
-  ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = "rgba(0, 50, 30, 0.25)";
-  ctx.shadowBlur = 32;
-  ctx.shadowOffsetY = 12;
-  ctx.beginPath();
-  ctx.moveTo(cardX + r, cardY);
-  ctx.lineTo(cardX + cardW - r, cardY);
-  ctx.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + r);
-  ctx.lineTo(cardX + cardW, cardY + cardH - r);
-  ctx.quadraticCurveTo(cardX + cardW, cardY + cardH, cardX + cardW - r, cardY + cardH);
-  ctx.lineTo(cardX + r, cardY + cardH);
-  ctx.quadraticCurveTo(cardX, cardY + cardH, cardX, cardY + cardH - r);
-  ctx.lineTo(cardX, cardY + r);
-  ctx.quadraticCurveTo(cardX, cardY, cardX + r, cardY);
-  ctx.closePath();
-  ctx.fill();
-  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = "#E5E7EB";
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, 12, 12, width - 24, height - 24, 16);
+  ctx.stroke();
 
-  const innerX = cardX + pad;
-  let y = cardY + pad + 6;
+  const innerX = pad;
+  let y = pad + 8;
   const contentRight = innerX + innerW;
 
   y = drawSettlementBrandingHeader(ctx, data, innerX, y, contentRight, logoImage);
 
   ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#64748b";
+  ctx.fillStyle = "#6B7280";
   ctx.fillText("SETTLEMENT PERIOD", innerX, y);
   y += 16;
   ctx.font = "700 17px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#064e3b";
+  ctx.fillStyle = "#111827";
   ctx.fillText(data.monthLabel, innerX, y);
+  y += 18;
+  ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#6B7280";
+  ctx.fillText(data.currency, innerX, y);
   y += 22;
 
   ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#64748b";
+  ctx.fillStyle = "#6B7280";
   ctx.fillText("GENERATED ON", innerX, y);
   y += 16;
   ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#334155";
+  ctx.fillStyle = "#111827";
   ctx.fillText(data.generatedOnLabel, innerX, y);
   y += 16;
+  ctx.fillStyle = "#6B7280";
   ctx.fillText(data.generatedAtLabel, innerX, y);
   y += 20;
 
@@ -731,8 +730,12 @@ function drawSettlementCard(
   y += 22;
 
   for (const member of data.members) {
-    const rowTop = y - 10;
-    drawAvatar(ctx, innerX, rowTop, avatarSize, member, avatarImages);
+    const cardTop = y;
+    const cardH = 96;
+    drawMemberCard(ctx, innerX, cardTop, innerW, cardH);
+
+    const rowTop = cardTop + 12;
+    drawAvatar(ctx, innerX + 12, rowTop, avatarSize, member, avatarImages);
 
     const amountColor = memberRoleColor(member.role);
     const icon = memberRoleIcon(member.role);
@@ -740,18 +743,18 @@ function drawSettlementCard(
 
     ctx.textAlign = "left";
     ctx.font = "700 14px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillStyle = amountColor;
-    ctx.fillText(nameText, textX, y + 4);
-    y += 20;
+    ctx.fillStyle = "#111827";
+    ctx.fillText(nameText, textX, rowTop + 16);
+    y = rowTop + 34;
 
     const detailX = textX;
-    const detailW = contentRight - detailX;
-    drawLabelAmountRow(ctx, "Paid:", member.paidLabel, detailX, y, detailW, amountColor);
+    const detailW = contentRight - detailX - 12;
+    drawLabelAmountRow(ctx, "Paid:", member.paidLabel, detailX, y, detailW, "#111827");
     y += 18;
-    drawLabelAmountRow(ctx, "Share:", member.shareLabel, detailX, y, detailW, amountColor);
+    drawLabelAmountRow(ctx, "Share:", member.shareLabel, detailX, y, detailW, "#111827");
     y += 18;
     drawLabelAmountRow(ctx, "Balance:", member.balanceLabel, detailX, y, detailW, amountColor);
-    y += 22;
+    y = cardTop + cardH + 12;
   }
 
   y += 4;
@@ -763,19 +766,20 @@ function drawSettlementCard(
 
   if (data.transfers.length === 0) {
     ctx.font = "600 13px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillStyle = "#047857";
+    ctx.fillStyle = "#10B981";
     ctx.fillText("All settled — no transfers needed", innerX, y);
     y += 24;
   } else {
     for (const transfer of data.transfers) {
-      drawTransferNames(ctx, innerX, y, transfer.fromName, transfer.toName);
-      y += 18;
+      const transferCardH = 52;
+      drawMemberCard(ctx, innerX, y, innerW, transferCardH);
+      drawTransferNames(ctx, innerX + 12, y + 18, transfer.fromName, transfer.toName);
       ctx.textAlign = "right";
       ctx.font = "800 15px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillStyle = SETTLEMENT_COLOR_NEUTRAL;
-      ctx.fillText(transfer.amountLabel, contentRight, y);
+      ctx.fillStyle = "#111827";
+      ctx.fillText(transfer.amountLabel, contentRight - 12, y + 38);
       ctx.textAlign = "left";
-      y += 22;
+      y += transferCardH + 10;
     }
   }
 
@@ -784,47 +788,51 @@ function drawSettlementCard(
   y += 18;
 
   drawSectionTitle(ctx, innerX, y, "REPORT SUMMARY");
-  y += 22;
+  y += 14;
+  const summaryCardH = 88;
+  drawMemberCard(ctx, innerX, y, innerW, summaryCardH);
+  let summaryY = y + 22;
+  const summaryPadX = innerX + 12;
+  const summaryW = innerW - 24;
 
   drawLabelAmountRow(
     ctx,
     "Total Group Expense",
     data.totalGroupExpenseLabel,
-    innerX,
-    y,
-    innerW,
-    "#064e3b",
+    summaryPadX,
+    summaryY,
+    summaryW,
+    "#111827",
     12,
   );
-  y += 22;
-  drawLabelAmountRow(ctx, "Total Members", String(data.totalMembers), innerX, y, innerW, "#064e3b", 12);
-  y += 22;
+  summaryY += 22;
+  drawLabelAmountRow(ctx, "Total Members", String(data.totalMembers), summaryPadX, summaryY, summaryW, "#111827", 12);
+  summaryY += 22;
   drawLabelAmountRow(
     ctx,
     "Total Transfers",
     String(data.totalTransfers),
-    innerX,
-    y,
-    innerW,
-    "#064e3b",
+    summaryPadX,
+    summaryY,
+    summaryW,
+    "#111827",
     12,
   );
-  y += 30;
+  y += summaryCardH + 24;
 
   ctx.textAlign = "center";
   ctx.font = "700 10px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#94a3b8";
-  ctx.fillText("Generated by FIRE Nepal", cardX + cardW / 2, cardY + cardH - pad - 6);
+  ctx.fillStyle = "#6B7280";
+  ctx.fillText("Generated by FIRE Nepal", width / 2, height - pad - 10);
   ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.fillText(data.footerUrl, cardX + cardW / 2, cardY + cardH - pad + 8);
+  ctx.fillText(data.footerUrl, width / 2, height - pad + 6);
 }
 
 function settlementCardHeight(data: SettlementShareData): number {
-  const pad = 36;
-  let headerH = 148;
+  const pad = 32;
+  let headerH = 168;
   if (data.hasGroupBranding) {
-    headerH = 108;
+    headerH = 120;
     if (data.companyName) headerH += 24;
     if (data.roomNumber) headerH += 22;
     if (data.reportSubtitle) headerH += 24;
@@ -832,17 +840,17 @@ function settlementCardHeight(data: SettlementShareData): number {
   }
   const dividerBlock = 18;
   const memberHeader = 22;
-  const memberRowH = 88;
+  const memberRowH = 108;
   const transferHeader = 22;
-  const transferRowH = data.transfers.length === 0 ? 24 : data.transfers.length * 40;
-  const footerH = 88;
-  const summaryH = 88;
+  const transferRowH = data.transfers.length === 0 ? 24 : data.transfers.length * 62;
+  const footerH = 56;
+  const summaryH = 112;
   const dividers = dividerBlock * 3;
   const sections = memberHeader + transferHeader + summaryH;
 
   return Math.min(
-    2600,
-    48 + pad * 2 + headerH + dividers + sections + data.members.length * memberRowH + transferRowH + footerH,
+    2800,
+    pad * 2 + headerH + dividers + sections + data.members.length * memberRowH + transferRowH + footerH + 24,
   );
 }
 
