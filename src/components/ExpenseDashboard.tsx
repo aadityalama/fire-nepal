@@ -73,6 +73,7 @@ import {
 import {
   createActivity,
   filterExpensesByMonth,
+  formatMonthLabel,
   listMonthKeys,
   loadDashboardState,
   saveDashboardState,
@@ -1071,13 +1072,54 @@ export function ExpenseDashboard() {
     setExpenseToDelete(null);
   }
 
-  function markSettlementComplete() {
-    appendActivity({
-      type: "settlement",
+  const settlementMarkedComplete = useMemo(
+    () =>
+      activities.some(
+        (activity) => activity.type === "settlement" && activity.monthKey === selectedMonthKey,
+      ),
+    [activities, selectedMonthKey],
+  );
+
+  const markSettlementComplete = useCallback(() => {
+    const monthLabel = formatMonthLabel(selectedMonthKey);
+    console.log("[settlement-complete] handler invoked", {
       monthKey: selectedMonthKey,
-      message: `Settlement completed for ${selectedMonthKey}`,
+      monthLabel,
+      transferCount: transfers.length,
+      expenseCount: monthExpenses.length,
+      alreadyMarked: settlementMarkedComplete,
     });
-  }
+
+    if (settlementMarkedComplete) {
+      console.log("[settlement-complete] skipped — already marked for month");
+      toast.info(`${monthLabel} settlement is already marked complete`);
+      return;
+    }
+
+    if (monthExpenses.length === 0) {
+      console.log("[settlement-complete] blocked — no expenses for month");
+      toast.error("Add expenses for this month before marking settlement complete");
+      return;
+    }
+
+    const activity = {
+      type: "settlement" as const,
+      monthKey: selectedMonthKey,
+      message: `Settlement completed for ${monthLabel}`,
+    };
+    console.log("[settlement-complete] persisting activity", activity);
+    appendActivity(activity);
+
+    console.log("[settlement-complete] updating UI — celebration + toast");
+    setShowCelebration(true);
+    toast.success(`${monthLabel} settlement marked complete`);
+  }, [
+    appendActivity,
+    monthExpenses.length,
+    selectedMonthKey,
+    settlementMarkedComplete,
+    transfers.length,
+  ]);
 
   const settlementShareInput = useMemo(
     () => ({
@@ -1215,7 +1257,7 @@ export function ExpenseDashboard() {
     <main
       className={`min-h-screen bg-[#f6f8f7] px-3 pt-3 text-emerald-950 sm:px-5 lg:px-10 ${
         activeTab === "Settlement"
-          ? "pb-[calc(6rem+env(safe-area-inset-bottom,0px))]"
+          ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))]"
           : "pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]"
       }`}
     >
@@ -1483,6 +1525,7 @@ export function ExpenseDashboard() {
               onSaveTransfer={saveTransferOverride}
               onResetTransfer={resetTransferOverride}
               onMarkComplete={markSettlementComplete}
+              settlementMarkedComplete={settlementMarkedComplete}
               onShareSettlement={openSettlementShare}
               onDownloadPng={() => void downloadSettlementPng()}
               onDownloadPdf={() => void downloadSettlementPdf()}
@@ -2770,6 +2813,7 @@ function SettlementPanel({
   onSaveTransfer,
   onResetTransfer,
   onMarkComplete,
+  settlementMarkedComplete,
   onShareSettlement,
   onDownloadPng,
   onDownloadPdf,
@@ -2787,6 +2831,7 @@ function SettlementPanel({
   onSaveTransfer: (from: string, to: string, npr: number) => void;
   onResetTransfer: (from: string, to: string) => void;
   onMarkComplete: () => void;
+  settlementMarkedComplete: boolean;
   onShareSettlement: () => void;
   onDownloadPng: () => void;
   onDownloadPdf: () => void;
@@ -2892,35 +2937,47 @@ function SettlementPanel({
         ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={onMarkComplete}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-sm font-black text-white transition active:bg-emerald-800"
-      >
-        <CheckCircle2 size={15} /> Mark settlement complete
-      </button>
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="relative z-10 mt-3 space-y-2 touch-manipulation pb-2">
         <button
           type="button"
-          onClick={onShareSettlement}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2.5 text-xs font-black text-white shadow-sm transition active:scale-[0.98] sm:col-span-3"
+          onClick={() => {
+            console.log("[settlement-complete] button click");
+            onMarkComplete();
+          }}
+          disabled={settlementMarkedComplete}
+          aria-disabled={settlementMarkedComplete}
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black text-white transition touch-manipulation ${
+            settlementMarkedComplete
+              ? "cursor-default bg-emerald-500/80"
+              : "bg-emerald-700 active:bg-emerald-800"
+          }`}
         >
-          <Share2 size={14} /> Share Result
+          <CheckCircle2 size={15} />
+          {settlementMarkedComplete ? "Settlement complete" : "Mark settlement complete"}
         </button>
-        <button
-          type="button"
-          onClick={onDownloadPng}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50"
-        >
-          <Download size={13} /> PNG
-        </button>
-        <button
-          type="button"
-          onClick={onDownloadPdf}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50 sm:col-span-2"
-        >
-          <Download size={13} /> PDF
-        </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={onShareSettlement}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2.5 text-xs font-black text-white shadow-sm transition active:scale-[0.98] touch-manipulation sm:col-span-3"
+          >
+            <Share2 size={14} /> Share Result
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadPng}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50 touch-manipulation"
+          >
+            <Download size={13} /> PNG
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadPdf}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 transition active:bg-emerald-50 touch-manipulation sm:col-span-2"
+          >
+            <Download size={13} /> PDF
+          </button>
+        </div>
       </div>
     </div>
   );
