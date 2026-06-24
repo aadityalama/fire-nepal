@@ -315,6 +315,85 @@ function transferOverrideKey(from: string, to: string) {
   return `${from}|${to}`;
 }
 
+function expenseSplitSummary(expense: Expense, members: string[]) {
+  const memberCount =
+    expense.splitAmong && expense.splitAmong.length > 0
+      ? expense.splitAmong.filter((memberId) => members.includes(memberId)).length
+      : members.length;
+  const splitType = expense.splitEqually !== false ? "Equal" : "Custom %";
+  return { memberCount, splitType };
+}
+
+function ExpenseCompactCard({
+  expense,
+  members,
+  profiles,
+  fmt,
+  onOpen,
+  onEdit,
+  onDelete,
+}: {
+  expense: Expense;
+  members: string[];
+  profiles: Record<string, RoommateProfile>;
+  fmt: (amount: number, cur?: Currency) => string;
+  onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { memberCount, splitType } = expenseSplitSummary(expense, members);
+  const payer = resolveExpensePayerName(expense, profiles);
+
+  return (
+    <article className="relative overflow-hidden rounded-xl border border-emerald-50/90 bg-white shadow-sm transition active:scale-[0.99]">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full flex-col gap-1 px-3 py-2 pr-[4.25rem] text-left touch-manipulation"
+        aria-label={`Open ${expense.title}`}
+      >
+        <p className="truncate text-[13px] font-black leading-tight text-emerald-950">{expense.title}</p>
+        <p className="truncate text-[10px] font-semibold leading-snug text-slate-500">
+          {expense.category} · {payer} · {expense.date}
+        </p>
+        <div className="flex items-end justify-between gap-2">
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-700">
+            {splitType} · {memberCount} {memberCount === 1 ? "member" : "members"}
+          </span>
+          <div className="shrink-0 text-right leading-tight">
+            <p className="text-xs font-black tabular-nums text-emerald-800">{fmt(expense.amount, "NPR")}</p>
+            <p className="text-[10px] font-bold tabular-nums text-slate-500">{fmt(expense.amount, "KRW")}</p>
+          </div>
+        </div>
+      </button>
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit();
+          }}
+          className="grid h-7 w-7 place-items-center rounded-lg text-emerald-700 transition active:bg-emerald-50"
+          aria-label={`Edit ${expense.title}`}
+        >
+          <Pencil size={13} strokeWidth={2.25} />
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          className="grid h-7 w-7 place-items-center rounded-lg text-red-600 transition active:bg-red-50"
+          aria-label={`Delete ${expense.title}`}
+        >
+          <Trash2 size={13} strokeWidth={2.25} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function ExpenseInlineAmountEditor({
   expense,
   krwPerNpr,
@@ -602,6 +681,7 @@ export function ExpenseDashboard() {
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [form, setForm] = useState<ExpenseForm>(() => emptyExpenseForm());
+  const [amountInputCurrency, setAmountInputCurrency] = useState<"NPR" | "KRW">("NPR");
   const [exchangeRate, setExchangeRate] = useState<ExchangeRateSnapshot>(fallbackExchangeRate);
   const [receiptPreview, setReceiptPreview] = useState<string | undefined>();
   const [receiptOcrText, setReceiptOcrText] = useState("");
@@ -665,10 +745,26 @@ export function ExpenseDashboard() {
     [editingExpenseId, expenses],
   );
 
-  const formEntryCurrency = useMemo((): "NPR" | "KRW" => {
-    if (editingExpense) return editingExpense.amountCurrency ?? "NPR";
-    return expenseEntryCurrency(currency);
-  }, [editingExpense, currency]);
+  const formEntryCurrency = amountInputCurrency;
+
+  const switchAmountInputCurrency = useCallback(
+    (next: "NPR" | "KRW") => {
+      if (next === amountInputCurrency) return;
+      setForm((current) => {
+        const n = Number(String(current.amount).replace(/,/g, ""));
+        if (!Number.isFinite(n) || n <= 0) return current;
+        const amount =
+          amountInputCurrency === "NPR" && next === "KRW"
+            ? String(Math.round(nprToKrw(n, krwPerNpr)))
+            : amountInputCurrency === "KRW" && next === "NPR"
+              ? String(Math.round(krwToNpr(n, krwPerNpr) * 100) / 100)
+              : current.amount;
+        return { ...current, amount };
+      });
+      setAmountInputCurrency(next);
+    },
+    [amountInputCurrency, krwPerNpr],
+  );
 
   useEffect(() => {
     const stored = loadDashboardState();
@@ -760,6 +856,7 @@ export function ExpenseDashboard() {
       return { ...current, amount };
     });
     prevFormEntryCurrency.current = nextCur;
+    setAmountInputCurrency(nextCur);
   }, [currency, isModalOpen, editingExpenseId, krwPerNpr]);
 
   const monthKeys = useMemo(() => listMonthKeys(expenses), [expenses]);
@@ -964,7 +1061,9 @@ export function ExpenseDashboard() {
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
-    prevFormEntryCurrency.current = expenseEntryCurrency(currency);
+    const entryCur = expenseEntryCurrency(currency);
+    prevFormEntryCurrency.current = entryCur;
+    setAmountInputCurrency(entryCur);
     setForm(emptyExpenseForm(members[0], members));
     setIsModalOpen(true);
   }
@@ -972,6 +1071,8 @@ export function ExpenseDashboard() {
   function openEditExpenseModal(expense: Expense) {
     setEditingExpenseId(expense.id);
     const entryCur = expense.amountCurrency ?? "NPR";
+    prevFormEntryCurrency.current = entryCur;
+    setAmountInputCurrency(entryCur);
     const baseAmong =
       expense.splitAmong && expense.splitAmong.length > 0
         ? expense.splitAmong.filter((m) => members.includes(m))
@@ -1309,7 +1410,9 @@ export function ExpenseDashboard() {
       className={`min-h-screen bg-[#f6f8f7] px-3 pt-3 text-emerald-950 sm:px-5 lg:px-10 ${
         activeTab === "Settlement"
           ? "pb-[calc(10.5rem+env(safe-area-inset-bottom,0px))]"
-          : "pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]"
+          : activeTab === "Expenses"
+            ? "pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]"
+            : "pb-[calc(5.25rem+env(safe-area-inset-bottom,0px))]"
       }`}
     >
       <div className="mx-auto max-w-lg lg:max-w-7xl">
@@ -1486,75 +1589,34 @@ export function ExpenseDashboard() {
         )}
 
         {activeTab === "Expenses" && (
-          <section className="mb-3 glass-card rounded-2xl p-4 sm:p-5">
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-2xl font-black leading-snug tracking-tight text-emerald-950 sm:text-3xl">Expense Ledger</h2>
+          <section className="mb-2">
+            <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+              <h2 className="text-base font-black text-emerald-950 sm:text-lg">Expense Ledger</h2>
               <button
+                type="button"
                 onClick={openAddExpenseModal}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800"
+                className="hidden items-center justify-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-800 sm:inline-flex"
               >
-                <Plus size={16} /> Add Expense
+                <Plus size={14} /> Add
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {monthExpenses.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-8 text-center text-sm font-bold text-slate-600">
-                  यो महिनामा कुनै खर्च छैन। Add expense to begin tracking.
+                <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center text-xs font-bold text-slate-600">
+                  यो महिनामा कुनै खर्च छैन। Tap + to add an expense.
                 </div>
               ) : null}
               {monthExpenses.map((expense) => (
-                <article
+                <ExpenseCompactCard
                   key={expense.id}
-                  className="flex flex-col gap-4 rounded-2xl border border-emerald-50/80 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(0,122,61,0.12)] lg:flex-row lg:items-start lg:justify-between"
-                >
-                  <div className="flex min-w-0 flex-1 gap-3">
-                    {expense.receiptImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={expense.receiptImage}
-                        alt={`${expense.title} receipt`}
-                        className="h-16 w-16 shrink-0 rounded-xl border border-emerald-100 object-cover"
-                      />
-                    ) : null}
-                    <div className="min-w-0">
-                      <p className="font-black text-emerald-950">{expense.title}</p>
-                      <p className="mt-1 text-sm font-bold text-slate-500">
-                        {expense.category} · Paid by {resolveExpensePayerName(expense, profiles)} · {expense.date}
-                      </p>
-                      <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                        {(() => {
-                          const n =
-                            expense.splitAmong && expense.splitAmong.length > 0
-                              ? expense.splitAmong.filter((m) => members.includes(m)).length
-                              : members.length;
-                          return expense.splitEqually !== false ? `Equal · ${n}` : `Custom % · ${n}`;
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                  <ExpenseInlineAmountEditor
-                    expense={expense}
-                    krwPerNpr={krwPerNpr}
-                    fmt={fmt}
-                    onSave={saveExpenseAmount}
-                  />
-                  <div className="flex shrink-0 gap-2 lg:flex-col">
-                    <button
-                      type="button"
-                      onClick={() => openEditExpenseModal(expense)}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-black text-emerald-700 transition hover:bg-emerald-50 lg:flex-none"
-                    >
-                      <Pencil size={14} /> Full edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExpenseToDelete(expense)}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-red-50 px-3 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 lg:flex-none"
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  </div>
-                </article>
+                  expense={expense}
+                  members={members}
+                  profiles={profiles}
+                  fmt={fmt}
+                  onOpen={() => openEditExpenseModal(expense)}
+                  onEdit={() => openEditExpenseModal(expense)}
+                  onDelete={() => setExpenseToDelete(expense)}
+                />
               ))}
             </div>
           </section>
@@ -1662,7 +1724,7 @@ export function ExpenseDashboard() {
           setActiveTab("Settlement");
         }}
         onScanReceipt={openAddExpenseModal}
-        raised={activeTab === "Settlement"}
+        raised={activeTab === "Settlement" || activeTab === "Expenses"}
       />
 
       <ExpenseBottomNav
@@ -1777,9 +1839,28 @@ export function ExpenseDashboard() {
                   <span className="text-[10px] font-black uppercase tracking-wide text-emerald-800 sm:text-xs">
                     Amount
                   </span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-emerald-800 ring-1 ring-emerald-100 sm:text-xs">
-                    Currency: {formEntryCurrency}
-                  </span>
+                  {editingExpenseId ? (
+                    <div className="flex rounded-lg bg-white/90 p-0.5 shadow-sm ring-1 ring-emerald-100/80">
+                      {(["NPR", "KRW"] as const).map((cur) => (
+                        <button
+                          key={cur}
+                          type="button"
+                          onClick={() => switchAmountInputCurrency(cur)}
+                          className={`rounded-md px-2.5 py-1 text-[10px] font-black transition ${
+                            amountInputCurrency === cur
+                              ? "bg-emerald-700 text-white shadow"
+                              : "text-emerald-800 hover:bg-emerald-50"
+                          }`}
+                        >
+                          {cur === "NPR" ? "रु NPR" : "₩ KRW"}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-emerald-800 ring-1 ring-emerald-100 sm:text-xs">
+                      Currency: {formEntryCurrency}
+                    </span>
+                  )}
                 </div>
                 <input
                   type="text"
