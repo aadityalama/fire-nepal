@@ -54,6 +54,7 @@ import { ExpenseReceiptUpload } from "@/components/ExpenseReceiptUpload";
 import { sanitizeDecimalTyping } from "@/components/NumericMoneyInput";
 import { RoommateShareSummaryModal } from "@/components/RoommateShareSummaryModal";
 import { SettlementCelebration } from "@/components/SettlementCelebration";
+import { SettlementShareModal } from "@/components/SettlementShareModal";
 import {
   formatExpenseAmountForInput,
   krwToNpr,
@@ -76,6 +77,7 @@ import {
   type TimelineActivity,
 } from "@/lib/expense-storage";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
+import { buildSettlementShareData, downloadSettlementSharePdf, downloadSettlementSharePng } from "@/lib/settlement-share";
 import {
   generateMemberId,
   memberDisplayName,
@@ -540,6 +542,7 @@ export function ExpenseDashboard() {
   const [settlementOverrides, setSettlementOverrides] = useState<Record<string, Record<string, number>>>({});
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
+  const [settlementShareOpen, setSettlementShareOpen] = useState(false);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const skipNextSave = useRef(true);
@@ -993,6 +996,52 @@ export function ExpenseDashboard() {
     });
   }
 
+  const settlementShareData = useMemo(
+    () =>
+      buildSettlementShareData({
+        monthKey: selectedMonthKey,
+        members,
+        memberLabels: memberNameMap(members, profiles),
+        balances,
+        transfers,
+        transferLabels: transfers.map((t) => ({
+          fromName: memberDisplayName(t.from, profiles),
+          toName: memberDisplayName(t.to, profiles),
+        })),
+        currency,
+        krwPerNpr,
+      }),
+    [selectedMonthKey, members, profiles, balances, transfers, currency, krwPerNpr],
+  );
+
+  const openSettlementShare = useCallback(() => {
+    setSettlementShareOpen(true);
+  }, []);
+
+  const downloadSettlementPng = useCallback(async () => {
+    try {
+      await downloadSettlementSharePng(
+        settlementShareData,
+        `roommate-settlement-${selectedMonthKey}.png`,
+      );
+      toast.success("Settlement image saved");
+    } catch {
+      toast.error("Could not export PNG");
+    }
+  }, [settlementShareData, selectedMonthKey]);
+
+  const downloadSettlementPdf = useCallback(async () => {
+    try {
+      await downloadSettlementSharePdf(
+        settlementShareData,
+        `roommate-settlement-${selectedMonthKey}.pdf`,
+      );
+      toast.success("Settlement PDF saved");
+    } catch {
+      toast.error("Could not export PDF");
+    }
+  }, [settlementShareData, selectedMonthKey]);
+
   const buildShareSummaryText = useCallback(() => {
     return buildRoommateExpenseSummaryText({
       monthKey: selectedMonthKey,
@@ -1054,7 +1103,18 @@ export function ExpenseDashboard() {
           >
             <ArrowLeft size={14} /> Back
           </Link>
-          <div className="flex gap-0.5 rounded-lg bg-white p-0.5 ring-1 ring-slate-200/80">
+          <div className="flex items-center gap-1.5">
+            {activeTab === "Settlement" ? (
+              <button
+                type="button"
+                onClick={openSettlementShare}
+                className="grid h-8 w-8 place-items-center rounded-lg bg-white text-emerald-700 ring-1 ring-slate-200/80 transition active:bg-emerald-50"
+                aria-label="Share settlement"
+              >
+                <Share2 size={15} />
+              </button>
+            ) : null}
+            <div className="flex gap-0.5 rounded-lg bg-white p-0.5 ring-1 ring-slate-200/80">
             {(["NPR", "KRW", "USD"] as Currency[]).map((item) => (
               <button
                 key={item}
@@ -1066,6 +1126,7 @@ export function ExpenseDashboard() {
                 {item}
               </button>
             ))}
+            </div>
           </div>
         </div>
 
@@ -1325,6 +1386,29 @@ export function ExpenseDashboard() {
               >
                 <CheckCircle2 size={16} /> Mark settlement complete
               </button>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={openSettlementShare}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 text-sm font-black text-white shadow-md transition active:scale-[0.98] sm:col-span-3"
+                >
+                  <Share2 size={16} /> Share Result
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadSettlementPng()}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-800 transition active:bg-emerald-50"
+                >
+                  <Download size={14} /> Download PNG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadSettlementPdf()}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-xs font-black text-emerald-800 transition active:bg-emerald-50 sm:col-span-2"
+                >
+                  <Download size={14} /> Download PDF
+                </button>
+              </div>
             </div>
           </section>
         )}
@@ -1807,6 +1891,14 @@ export function ExpenseDashboard() {
           transfers={transfers}
         />
       )}
+
+      <SettlementShareModal
+        open={settlementShareOpen}
+        onOpenChange={setSettlementShareOpen}
+        data={settlementShareData}
+        krwPerNpr={krwPerNpr}
+        downloadBaseName={`roommate-settlement-${selectedMonthKey}`}
+      />
 
       <RoommateShareSummaryModal
         key={shareModal ? `share-${shareModalKey}` : "share-off"}
