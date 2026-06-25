@@ -23,6 +23,7 @@ export const FIRE_BIZ_I18N = {
       finance: "Finance",
       portfolio: "Portfolio",
       fireBiz: "FIRE Biz",
+      fireAi: "FIRE AI",
       more: "More",
     },
     hubPromo: {
@@ -496,6 +497,7 @@ export const FIRE_BIZ_I18N = {
       finance: "वित्त",
       portfolio: "पोर्टफोलियो",
       fireBiz: "FIRE Biz",
+      fireAi: "FIRE AI",
       more: "थप",
     },
     hubPromo: {

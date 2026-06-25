@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Briefcase, Home, LayoutGrid, MoreHorizontal, type LucideIcon } from "lucide-react";
+import { Banknote, Briefcase, Home, LayoutGrid, MoreHorizontal, Sparkles, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -8,15 +8,16 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 
 const MAIN_NAV = [
-  { href: "/hub", labelKey: "home" as const, icon: Home, match: (p: string) => p === "/hub" || p === "/account" || p.startsWith("/fire-ai") },
+  { href: "/hub", labelKey: "home" as const, icon: Home, match: (p: string) => p === "/hub" || p === "/account" },
   { href: "/cashflow-dashboard", labelKey: "finance" as const, icon: Banknote, match: (p: string) => p.startsWith("/cashflow") || p.startsWith("/expense-dashboard") || p.startsWith("/savings-tracker") },
   { href: "/portfolio", labelKey: "portfolio" as const, icon: Briefcase, match: (p: string) => p.startsWith("/portfolio") || p.startsWith("/return-to-nepal") || p.startsWith("/fire-summary") },
   { href: "/fire-biz", labelKey: "fireBiz" as const, icon: LayoutGrid, match: (p: string) => p.startsWith("/fire-biz") },
+  { href: "/fire-ai", labelKey: "fireAi" as const, icon: Sparkles, match: (p: string) => p === "/fire-ai" || p.startsWith("/fire-ai/") },
   { href: "/more", labelKey: "more" as const, icon: MoreHorizontal, match: (p: string) => p === "/more" || p.startsWith("/dashboard") || p.startsWith("/family") || p.startsWith("/smart-reminders") || p.startsWith("/admin") },
 ];
 
 /** Center hero tab — FIRE wealth journey (portfolio, return-to-nepal, fire-summary). */
-const HERO_NAV_INDEX = Math.floor(MAIN_NAV.length / 2);
+const HERO_NAV_INDEX = 2;
 
 const NAV_TRANSITION_MS = 200;
 
@@ -91,7 +92,7 @@ const MainBottomNavItem = memo(function MainBottomNavItem({
       aria-current={active ? "page" : undefined}
       data-testid={`main-nav-${labelKey}`}
       onClick={handleClick}
-      className="fn-main-bottom-nav-item group relative flex min-h-[48px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2"
+      className="fn-main-bottom-nav-item group relative z-10 flex min-h-[48px] min-w-0 flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-2xl px-0.5 py-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 focus-visible:ring-offset-2"
       style={{ transitionDuration: `${NAV_TRANSITION_MS}ms` }}
     >
       <span
@@ -102,7 +103,7 @@ const MainBottomNavItem = memo(function MainBottomNavItem({
       >
         <span
           aria-hidden
-          className={`absolute inset-0 rounded-full bg-emerald-500 shadow-[0_8px_20px_-6px_rgba(16,185,129,0.55)] transition-[transform,opacity] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          className={`pointer-events-none absolute inset-0 rounded-full bg-emerald-500 shadow-[0_8px_20px_-6px_rgba(16,185,129,0.55)] transition-[transform,opacity] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
             active ? "scale-100 opacity-100" : "scale-[0.72] opacity-0"
           } ${isHero ? "shadow-[0_10px_24px_-6px_rgba(16,185,129,0.62)]" : ""}`}
           style={{ transitionDuration: `${NAV_TRANSITION_MS}ms` }}
@@ -110,7 +111,7 @@ const MainBottomNavItem = memo(function MainBottomNavItem({
         {isHero && !active ? (
           <span
             aria-hidden
-            className={`absolute inset-[3px] rounded-full border transition-opacity ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+            className={`pointer-events-none absolute inset-[3px] rounded-full border transition-opacity ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
               light ? "border-emerald-500/20 bg-emerald-500/[0.06]" : "border-emerald-400/25 bg-emerald-500/[0.08]"
             }`}
             style={{ transitionDuration: `${NAV_TRANSITION_MS}ms` }}
@@ -179,7 +180,7 @@ export function FireNepalMainBottomNav({ locale = "en" }: FireNepalMainBottomNav
 
   return (
     <nav
-      className="fn-main-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-5 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden"
+      className="fn-main-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-5 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden"
       aria-label="Main navigation"
     >
       <div
