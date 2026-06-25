@@ -40,10 +40,10 @@ function SettlementBrandingHeaderInner({
 
   const roomClass =
     variant === "export"
-      ? "text-base font-bold text-[#10B981]"
+      ? "text-base font-medium text-[#10B981]"
       : variant === "compact"
-        ? "text-xs font-semibold text-[#10B981]"
-        : "text-sm font-semibold text-[#10B981]";
+        ? "text-xs font-medium text-[#10B981]"
+        : "text-sm font-medium text-[#10B981]";
 
   const subtitleClass =
     variant === "export"
