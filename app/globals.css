@@ -1269,8 +1269,42 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-fire-score-inner {
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.18) inset;
 }
 
+/* ── FIRE Nepal floating main bottom navigation ── */
+.fn-main-bottom-nav-card--light {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.06),
+    0 22px 56px -18px rgba(15, 23, 42, 0.14),
+    0 8px 24px -12px rgba(16, 185, 129, 0.12);
+  -webkit-backdrop-filter: blur(22px) saturate(1.12);
+  backdrop-filter: blur(22px) saturate(1.12);
+}
+
+.fn-main-bottom-nav-card--dark {
+  background: rgba(4, 20, 15, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(16, 185, 129, 0.08) inset,
+    0 22px 56px -18px rgba(0, 0, 0, 0.45),
+    0 8px 24px -12px rgba(16, 185, 129, 0.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
+.fn-main-bottom-nav-item:focus-visible {
+  --tw-ring-offset-color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     transition: none;
+  }
+
+  .fn-main-bottom-nav-card,
+  .fn-main-bottom-nav-item,
+  .fn-main-bottom-nav-item span,
+  .fn-main-bottom-nav-item svg {
+    transition: none !important;
   }
 }
