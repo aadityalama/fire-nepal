@@ -74,6 +74,12 @@ const PRIMARY_APPS: LauncherItem[] = [
 
 const POPULAR_TOOLS: ToolLauncherItem[] = [
   {
+    href: "/fire-ai",
+    title: "FIRE AI",
+    icon: Sparkles,
+    accent: "from-emerald-500/25 to-lime-400/15",
+  },
+  {
     href: "/sip-calculator",
     title: "SIP",
     icon: BarChart3,

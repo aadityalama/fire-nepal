@@ -100,6 +100,8 @@ export const config = {
     "/fire-biz/:path*",
     "/more",
     "/more/:path*",
+    "/fire-ai",
+    "/fire-ai/:path*",
     "/auth/callback",
   ],
 };

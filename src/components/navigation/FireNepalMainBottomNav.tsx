@@ -8,7 +8,7 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 
 const MAIN_NAV = [
-  { href: "/hub", labelKey: "home" as const, icon: Home, match: (p: string) => p === "/hub" || p === "/account" },
+  { href: "/hub", labelKey: "home" as const, icon: Home, match: (p: string) => p === "/hub" || p === "/account" || p.startsWith("/fire-ai") },
   { href: "/cashflow-dashboard", labelKey: "finance" as const, icon: Banknote, match: (p: string) => p.startsWith("/cashflow") || p.startsWith("/expense-dashboard") || p.startsWith("/savings-tracker") },
   { href: "/portfolio", labelKey: "portfolio" as const, icon: Briefcase, match: (p: string) => p.startsWith("/portfolio") || p.startsWith("/return-to-nepal") || p.startsWith("/fire-summary") },
   { href: "/fire-biz", labelKey: "fireBiz" as const, icon: LayoutGrid, match: (p: string) => p.startsWith("/fire-biz") },

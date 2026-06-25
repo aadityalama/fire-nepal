@@ -33,4 +33,5 @@ export const FN_PROTECTED_PREFIXES = [
   "/admin",
   "/fire-biz",
   "/more",
+  "/fire-ai",
 ] as const;
