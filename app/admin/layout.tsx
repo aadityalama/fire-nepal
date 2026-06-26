@@ -38,6 +38,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Membership payments
             </Link>
             <Link
+              href="/admin/reviews"
+              className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/18"
+            >
+              Reviews
+            </Link>
+            <Link
               href="/hub"
               className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-white/[0.07]"
             >

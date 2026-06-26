@@ -16,6 +16,7 @@
     "verify:supabase-login-routes": "node scripts/verify-supabase-login-routes.mjs",
     "db:apply:fire-biz": "node scripts/apply-fire-biz-production-migration.mjs",
     "db:apply:expense-transactions": "node scripts/apply-expense-transaction-history-migration.mjs",
+    "db:apply:community-reviews": "node scripts/apply-community-reviews-migration.mjs",
     "verify:fire-biz-production": "node scripts/verify-fire-biz-production-migration.mjs",
     "db:push:remote": "env SUPABASE_CLI_DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 npx --yes supabase@latest db push --db-url \"$SUPABASE_DB_URL\" --yes",
     "db:push-verify:production": "node scripts/push-verify-production-schema.mjs",

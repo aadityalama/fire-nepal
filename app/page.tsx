@@ -24,7 +24,6 @@ import {
   Play,
   ReceiptText,
   ShieldCheck,
-  Star,
   TrendingUp,
   UsersRound,
   WalletCards,
@@ -36,6 +35,7 @@ import { FireDashboardSection } from "@/components/FireDashboardSection";
 import { ProductHomeMobileDock } from "@/components/product/landing/ProductHomeMobileDock";
 import { ProductMarketingNav } from "@/components/product/landing/ProductMarketingNav";
 import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSection";
+import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 
 const tools: Array<[string, string, string, LucideIcon]> = [
@@ -79,13 +79,6 @@ const posts: Array<[string, string, string]> = [
   ["How to invest your Korea salary from Nepal", "Money guide", "5 min read"],
   ["FIRE mistakes Nepali workers make abroad", "Retirement", "7 min read"],
   ["KRW to NPR: what to track before coming home", "Currency", "4 min read"],
-];
-
-const testimonials: Array<[string, string, string]> = [
-  ["Bikash Gurung", "Busan, Korea", "The planner finally made my Nepal return number feel practical."],
-  ["Sita Magar", "Incheon, Korea", "Savings tracker and cost planning changed how I send money home."],
-  ["Rajesh Chaudhary", "Daegu, Korea", "AI advice gave me clear steps for emergency fund and SIPs."],
-  ["Anita Shrestha", "Seoul, Korea", "I can see FIRE progress, family goals, and readiness in one place."],
 ];
 
 const exchangeRates = [
@@ -597,33 +590,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="community" className="mt-12">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-2xl font-black text-emerald-950">What Our Community Says</h2>
-            <a className="text-sm font-black text-emerald-700" href="#reviews">See All Reviews</a>
-          </div>
-          <div className="no-scrollbar flex gap-5 overflow-x-auto pb-4">
-            {testimonials.map(([name, place, quote], index) => (
-              <article key={name} className="glass-card min-w-[280px] rounded-[1.5rem] p-5 transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_55px_rgba(0,122,61,0.14)] md:min-w-0 md:flex-1">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-emerald-700 to-lime-500 font-black text-white">
-                    {name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-black text-emerald-950">{name}</p>
-                    <p className="text-xs font-bold text-slate-500">{place}</p>
-                  </div>
-                </div>
-                <div className="mb-3 flex gap-1 text-amber-500">
-                  {Array.from({ length: 5 }).map((_, starIndex) => (
-                    <Star key={`${index}-${starIndex}`} size={15} fill="currentColor" />
-                  ))}
-                </div>
-                <p className="text-sm leading-6 text-slate-600">&quot;{quote}&quot;</p>
-              </article>
-            ))}
-          </div>
-        </section>
+        <CommunityReviewsSection />
       </div>
 
       <footer className="relative overflow-hidden bg-gradient-to-br from-[#021f1a] via-[#063f31] to-[#0b5f43] text-white">
