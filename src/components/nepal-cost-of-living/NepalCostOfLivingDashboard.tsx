@@ -1,35 +1,38 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  BarChart3,
-  Calculator,
-  Crown,
+  ArrowLeft,
+  Bell,
+  Bot,
+  Building2,
+  Car,
+  FileText,
+  GraduationCap,
+  HeartPulse,
   Home,
-  LineChart,
-  Plus,
-  MapPinned,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-  Trophy,
-  Upload,
-  Download,
-  Trash2,
+  MapPin,
+  Pencil,
   Save,
+  Shirt,
+  Sparkles,
+  Tv,
+  Utensils,
+  Wifi,
+  Wrench,
+  X,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
-  CartesianGrid,
   Cell,
   Line,
-  LineChart as ReLineChart,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -37,977 +40,779 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
-import { formatNprInteger } from "@/components/savings-tracker/savings-currency";
+import { formatKrwInteger, formatNprInteger } from "@/components/savings-tracker/savings-currency";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useLocalStorageJsonState } from "@/hooks/useLocalStorageJsonState";
+import { DEFAULT_NEPAL_COST_CITIES } from "@/lib/nepal-cost-data";
 import {
-  COST_CATEGORY_FIELDS,
-  DEFAULT_NEPAL_COST_CITIES,
-  NEPAL_COST_STORAGE_KEY,
-  createBlankCity,
-  normalizeCityDatabase,
-} from "@/lib/nepal-cost-data";
-import {
-  COST_CATEGORY_LABELS,
-  DEFAULT_COMPARISON_CITY_IDS,
-  NEPAL_LIFESTYLE_TEMPLATES,
-  type LifestyleCost,
-  type NepalCostLocation,
-  type NepalCostLocationId,
-  type NepalLifestyleId,
-  cityCostSnapshot,
-  costForecastSeries,
-  futureFireCorpus,
-  lifestyleById,
-  locationById,
-  monthlyCost,
-  scaledLifestyleCost,
-} from "@/lib/nepal-cost-of-living";
+  COL_LIFESTYLE_OPTIONS,
+  COL_PLAN_STORAGE_KEY,
+  computeColSnapshot,
+  defaultColPlan,
+  provinceForCity,
+  sanitizeColPlan,
+  type ColExpenseCategoryId,
+  type ColLifestyleId,
+  type ColPlanState,
+} from "@/lib/nepal-col-dashboard";
+import { FALLBACK_KRW_PER_NPR, nprToKrw } from "@/lib/exchange-rate";
 
-const chartColors = ["#10b981", "#22d3ee", "#f59e0b", "#60a5fa", "#f472b6", "#a3e635"];
-const MAP_VIEWBOX = { width: 960, height: 420 };
-const MAP_BOUNDS = { minLon: 80.02, maxLon: 88.24, minLat: 26.25, maxLat: 30.55 };
-const NEPAL_OUTLINE_COORDS: Array<[number, number]> = [
-  [80.058, 30.199],
-  [80.416, 30.568],
-  [81.031, 30.354],
-  [81.525, 30.422],
-  [82.105, 30.339],
-  [82.421, 29.945],
-  [82.954, 30.016],
-  [83.363, 29.797],
-  [83.951, 29.286],
-  [84.744, 29.244],
-  [85.116, 28.642],
-  [85.621, 28.204],
-  [86.176, 27.928],
-  [86.759, 28.111],
-  [87.343, 27.822],
-  [87.857, 27.876],
-  [88.135, 27.881],
-  [88.201, 27.445],
-  [88.105, 26.81],
-  [87.287, 26.397],
-  [86.705, 26.434],
-  [86.011, 26.63],
-  [85.251, 26.726],
-  [84.675, 27.041],
-  [84.091, 27.491],
-  [83.304, 27.364],
-  [82.719, 27.495],
-  [81.909, 27.963],
-  [81.242, 28.067],
-  [80.651, 28.612],
-  [80.058, 28.837],
-  [80.148, 29.31],
-  [80.058, 30.199],
-];
+const EXPENSE_ICONS: Record<ColExpenseCategoryId, LucideIcon> = {
+  home: Home,
+  food: Utensils,
+  transportation: Car,
+  utilities: Zap,
+  internet: Wifi,
+  healthcare: HeartPulse,
+  education: GraduationCap,
+  entertainment: Tv,
+  clothing: Shirt,
+  miscellaneous: Wrench,
+};
 
-function compactNpr(value: number): string {
-  if (value >= 10_000_000) return `रु ${(value / 10_000_000).toFixed(2)}Cr`;
-  if (value >= 100_000) return `रु ${(value / 100_000).toFixed(1)}L`;
-  return formatNprInteger(value);
+function AnimatedNpr({ value, className }: { value: number; className?: string }) {
+  const display = useCountUpNumber(value, { durationMs: 900 });
+  return <span className={className}>{formatNprInteger(Math.round(display))}</span>;
 }
 
-function tooltipNpr(value: number): string {
-  if (value >= 1_000_000) return `₨${(value / 1_000_000).toFixed(value >= 10_000_000 ? 1 : 2)}M`;
-  return `₨${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(value))}`;
-}
-
-function projectNepalCoordinate(longitude: number, latitude: number) {
-  const x = ((longitude - MAP_BOUNDS.minLon) / (MAP_BOUNDS.maxLon - MAP_BOUNDS.minLon)) * MAP_VIEWBOX.width;
-  const y = ((MAP_BOUNDS.maxLat - latitude) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * MAP_VIEWBOX.height;
-  return { x, y };
-}
-
-function outlinePathFromCoordinates(coords: Array<[number, number]>): string {
-  return coords
-    .map(([longitude, latitude], index) => {
-      const point = projectNepalCoordinate(longitude, latitude);
-      return `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-    })
-    .join(" ");
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  min = 0,
-  max,
-  step = 1,
-  suffix,
+function GlassCard({
+  children,
+  className = "",
+  delay = 0,
 }: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-  suffix?: string;
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
 }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200/80">{label}</span>
-      <span className="flex min-w-0 items-center overflow-hidden rounded-2xl border border-slate-200 bg-white/90 shadow-sm ring-1 ring-white/70 dark:border-white/10 dark:bg-white/[0.06] dark:ring-white/5">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm font-black text-slate-950 outline-none dark:text-white"
-        />
-        {suffix ? <span className="shrink-0 px-3 text-xs font-black text-slate-500 dark:text-zinc-400">{suffix}</span> : null}
-      </span>
-    </label>
-  );
-}
-
-function AnimatedMetric({
-  label,
-  value,
-  format,
-  hint,
-  icon: Icon,
-}: {
-  label: string;
-  value: number;
-  format: (value: number) => string;
-  hint: string;
-  icon: LucideIcon;
-}) {
-  const display = useCountUpNumber(value, { durationMs: 1050 });
-
   return (
     <motion.div
-      layout
-      className="rounded-3xl border border-white/55 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.07]"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={`rounded-[1.35rem] border border-emerald-400/20 bg-gradient-to-br from-emerald-950/70 via-[#062018]/85 to-[#021510]/90 p-4 shadow-[0_20px_60px_-28px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ${className}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200/70">{label}</p>
-          <p className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">{format(display)}</p>
-        </div>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-200">
-          <Icon size={18} />
-        </span>
-      </div>
-      <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500 dark:text-zinc-400">{hint}</p>
+      {children}
     </motion.div>
   );
 }
 
-function DashboardPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-      className={`rounded-[2rem] border border-white/55 bg-white/76 p-4 shadow-[0_28px_90px_-45px_rgba(15,23,42,0.55)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.065] sm:p-5 lg:p-6 ${className}`}
-    >
-      {children}
-    </motion.section>
-  );
-}
-
-function PanelTitle({ icon: Icon, title, subtitle }: { icon: LucideIcon; title: string; subtitle: string }) {
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-2">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-200">
-          <Icon size={18} />
-        </span>
-        <h2 className="text-lg font-black tracking-tight text-slate-950 dark:text-white sm:text-xl">{title}</h2>
-      </div>
-      <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{subtitle}</p>
-    </div>
-  );
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="h-full min-h-[240px] animate-pulse rounded-3xl border border-slate-200/70 bg-gradient-to-br from-slate-100 to-emerald-50 dark:border-white/10 dark:from-white/[0.07] dark:to-emerald-400/[0.04]" />
-  );
-}
-
-function NepalCountryOutline() {
-  const outlinePath = outlinePathFromCoordinates(NEPAL_OUTLINE_COORDS);
-
-  return (
-    <svg className="h-full w-full drop-shadow-[0_26px_42px_rgba(6,78,59,0.28)] transition-transform duration-500 group-hover:scale-[1.035]" viewBox={`0 0 ${MAP_VIEWBOX.width} ${MAP_VIEWBOX.height}`} fill="none" aria-hidden>
-      <path
-        d={`${outlinePath} Z`}
-        fill="url(#nepalRealMapGradient)"
-        stroke="rgba(255,255,255,0.92)"
-        strokeWidth="4"
-        strokeLinejoin="round"
-      />
-      <defs>
-        <linearGradient id="nepalRealMapGradient" x1="120" x2="860" y1="60" y2="360" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#34d399" />
-          <stop offset="0.48" stopColor="#14b8a6" />
-          <stop offset="1" stopColor="#fbbf24" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function InteractiveNepalMap({
-  cities,
-  selectedId,
-  comparisonIds,
-  onComparisonToggle,
-  onSelect,
-  snapshots,
+function Stepper({
+  label,
+  value,
+  onChange,
+  min,
+  max,
 }: {
-  cities: NepalCostLocation[];
-  selectedId: NepalCostLocationId;
-  comparisonIds: NepalCostLocationId[];
-  onComparisonToggle: (id: NepalCostLocationId) => void;
-  onSelect: (id: NepalCostLocationId) => void;
-  snapshots: Map<NepalCostLocationId, ReturnType<typeof cityCostSnapshot>>;
+  label: string;
+  value: number;
+  onChange: (next: number) => void;
+  min: number;
+  max: number;
 }) {
-  const markerCities = cities.filter((city) => city.latitude != null && city.longitude != null);
-  const comparisonChoices = DEFAULT_COMPARISON_CITY_IDS.map((id) => cities.find((city) => city.id === id)).filter(
-    (city): city is NepalCostLocation => city != null,
-  );
-  const selectedCity = cities.find((city) => city.id === selectedId) ?? cities[0];
-
   return (
-    <div className="group relative min-h-[360px] overflow-hidden rounded-[2rem] border border-emerald-200/80 bg-[linear-gradient(135deg,#dff8ef_0%,#bdeee5_45%,#ecfdf5_100%)] p-3 shadow-inner dark:border-white/10 dark:bg-[linear-gradient(135deg,#04251d_0%,#06372d_48%,#071c18_100%)] sm:min-h-[450px] sm:p-5">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,118,110,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(15,118,110,0.08)_1px,transparent_1px)] bg-[size:44px_44px] dark:bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)]" />
-      <div className="absolute left-4 top-4 z-20 rounded-2xl border border-white/60 bg-white/78 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-900 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.08] dark:text-emerald-100">
-        Real Nepal SVG Map
-      </div>
-      <div className="absolute inset-x-3 top-[15%] h-[58%] sm:inset-x-8">
-        <NepalCountryOutline />
-      </div>
-      {markerCities.map((city) => {
-        const active = city.id === selectedId;
-        const snapshot = snapshots.get(city.id);
-        const point = projectNepalCoordinate(city.longitude ?? 0, city.latitude ?? 0);
-        const left = 3 + (point.x / MAP_VIEWBOX.width) * 94;
-        const top = 15 + (point.y / MAP_VIEWBOX.height) * 58;
-        return (
-          <motion.button
-            key={city.id}
-            type="button"
-            onClick={() => onSelect(city.id)}
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.95 }}
-            className="group/marker absolute z-20 -translate-x-1/2 -translate-y-1/2 text-left"
-            style={{ left: `${left}%`, top: `${top}%` }}
-            aria-label={`Select ${city.label}`}
-          >
-            <span
-              className={`relative flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 shadow-lg backdrop-blur-xl transition sm:px-3 ${
-                active
-                  ? "border-amber-200 bg-amber-300 text-slate-950 shadow-[0_0_34px_rgba(251,191,36,0.95)]"
-                  : "border-white/70 bg-white/84 text-emerald-950 hover:bg-white dark:border-white/20 dark:bg-white/14 dark:text-white dark:hover:bg-white/22"
-              }`}
-            >
-              {active ? <span className="absolute inset-[-8px] animate-ping rounded-full border border-amber-300/70" /> : null}
-              <span className={`relative h-2.5 w-2.5 rounded-full ${active ? "bg-slate-950" : "bg-emerald-500 dark:bg-emerald-300"}`} />
-              <span className="text-[10px] font-black uppercase tracking-[0.12em] sm:text-xs">{city.shortLabel}</span>
-            </span>
-            {snapshot ? (
-              <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-56 -translate-x-1/2 rounded-2xl border border-white/70 bg-white/95 p-3 text-slate-950 shadow-2xl backdrop-blur-xl group-hover/marker:block dark:border-white/10 dark:bg-slate-950/95 dark:text-white">
-                <span className="block text-sm font-black">{city.label}</span>
-                <span className="mt-2 block text-xs font-bold text-slate-600 dark:text-zinc-300">Monthly Cost: {tooltipNpr(snapshot.monthly)}</span>
-                <span className="block text-xs font-bold text-slate-600 dark:text-zinc-300">Annual Cost: {tooltipNpr(snapshot.annual)}</span>
-                <span className="block text-xs font-bold text-slate-600 dark:text-zinc-300">FIRE Corpus: {tooltipNpr(snapshot.fireCorpus)}</span>
-              </span>
-            ) : null}
-          </motion.button>
-        );
-      })}
-      <div className="absolute bottom-4 left-4 right-4 z-20 grid gap-3 rounded-3xl border border-white/70 bg-white/82 p-4 text-slate-950 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/72 dark:text-white lg:grid-cols-[1fr_auto] lg:items-end">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-200/80">Selected City</p>
-          <p className="mt-1 text-2xl font-black">{selectedCity?.label ?? "Nepal"}</p>
-          <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-300">{selectedCity?.lifestyleNote ?? "Choose a city to update costs."}</p>
-        </div>
-        <div>
-          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">Compare Cities</p>
-          <div className="flex flex-wrap gap-2">
-            {comparisonChoices.map((city) => (
-              <label key={city.id} className="flex cursor-pointer items-center gap-2 rounded-full border border-emerald-200 bg-white/72 px-3 py-2 text-xs font-black text-emerald-950 shadow-sm dark:border-white/10 dark:bg-white/[0.08] dark:text-white">
-                <input
-                  type="checkbox"
-                  checked={comparisonIds.includes(city.id)}
-                  onChange={() => onComparisonToggle(city.id)}
-                  className="h-3.5 w-3.5 accent-emerald-600"
-                />
-                {city.label}
-              </label>
-            ))}
-          </div>
-        </div>
+    <div className="flex flex-col gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/70">{label}</span>
+      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-lg font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
+        >
+          −
+        </button>
+        <span className="text-xl font-black tabular-nums text-white">{value}</span>
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          onClick={() => onChange(Math.min(max, value + 1))}
+          className="grid h-9 w-9 place-items-center rounded-xl bg-white/8 text-lg font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
+        >
+          +
+        </button>
       </div>
     </div>
   );
 }
 
-function LifestyleCard({
-  id,
-  selected,
-  costs,
-  onSelect,
-}: {
-  id: NepalLifestyleId;
-  selected: boolean;
-  costs: LifestyleCost;
-  onSelect: (id: NepalLifestyleId) => void;
-}) {
-  const lifestyle = lifestyleById(id);
-  const totalMonthly = monthlyCost(costs);
-
-  return (
-    <motion.button
-      type="button"
-      onClick={() => onSelect(id)}
-      layout
-      whileHover={{ y: -7, scale: 1.01 }}
-      whileTap={{ scale: 0.985 }}
-      className={`group flex h-full flex-col rounded-[1.8rem] border p-4 text-left shadow-[0_22px_70px_-42px_rgba(15,23,42,0.8)] transition sm:p-5 ${
-        selected
-          ? "border-emerald-400/70 bg-emerald-50/90 dark:border-emerald-300/35 dark:bg-emerald-400/[0.11]"
-          : "border-white/55 bg-white/70 hover:border-emerald-300/70 dark:border-white/10 dark:bg-white/[0.055] dark:hover:border-emerald-300/25"
-      }`}
-    >
-      <div className={`mb-4 h-1.5 w-24 rounded-full bg-gradient-to-r ${lifestyle.accent}`} />
-      <h3 className="text-lg font-black text-slate-950 dark:text-white">{lifestyle.title}</h3>
-      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">{lifestyle.subtitle}</p>
-      <div className="mt-5 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white/75 p-3 dark:bg-white/[0.07]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-400">Monthly</p>
-          <p className="mt-1 text-lg font-black text-emerald-800 dark:text-emerald-200">{compactNpr(totalMonthly)}</p>
-        </div>
-        <div className="rounded-2xl bg-white/75 p-3 dark:bg-white/[0.07]">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-400">Annual</p>
-          <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{compactNpr(totalMonthly * 12)}</p>
-        </div>
-      </div>
-      <div className="mt-4 space-y-2 text-sm">
-        {(["housing", "food", "transport", "utilities", "healthcare"] as const).map((category) => (
-          <div key={category} className="flex items-center justify-between rounded-2xl bg-white/58 px-3 py-2 dark:bg-white/[0.055]">
-            <span className="font-bold text-slate-600 dark:text-zinc-300">{COST_CATEGORY_LABELS[category]}</span>
-            <span className="font-black text-slate-950 dark:text-white">{compactNpr(costs[category])}</span>
-          </div>
-        ))}
-      </div>
-    </motion.button>
-  );
-}
-
-function CityRankCard({
-  rank,
-  city,
-  selected,
-  onSelect,
-}: {
-  rank: number;
-  city: ReturnType<typeof cityCostSnapshot> & { note: string };
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onSelect}
-      whileHover={{ y: -5 }}
-      whileTap={{ scale: 0.985 }}
-      className={`flex items-center gap-3 rounded-3xl border p-4 text-left transition ${
-        selected
-          ? "border-amber-300 bg-amber-50 text-slate-950 shadow-[0_18px_60px_-34px_rgba(245,158,11,0.8)] dark:border-amber-200/35 dark:bg-amber-300/[0.12] dark:text-white"
-          : "border-slate-200 bg-white/70 text-slate-700 hover:border-emerald-200 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300"
-      }`}
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-500 text-sm font-black text-white">#{rank}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-base font-black">{city.label}</span>
-        <span className="mt-1 block text-xs font-semibold opacity-75">{city.note}</span>
-      </span>
-      <span className="text-right">
-        <span className="block text-lg font-black">{city.valueIndex}</span>
-        <span className="block text-[10px] font-black uppercase tracking-widest opacity-60">Index</span>
-      </span>
-    </motion.button>
-  );
-}
-
-function AdminTextInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-950 outline-none focus:border-emerald-300 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-      />
-    </label>
-  );
-}
-
-function AdminNumberInput({
-  label,
-  value,
-  onChange,
-  step = 1,
-}: {
-  label: string;
-  value: number | undefined;
-  onChange: (value: number | undefined) => void;
-  step?: number;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">{label}</span>
-      <input
-        type="number"
-        value={value ?? ""}
-        step={step}
-        onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))}
-        className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-950 outline-none focus:border-emerald-300 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-      />
-    </label>
-  );
-}
-
-function ManageCitiesPanel({
-  cities,
-  selectedCityId,
+function EditPlanSheet({
+  open,
+  plan,
   onClose,
   onSave,
 }: {
-  cities: NepalCostLocation[];
-  selectedCityId: NepalCostLocationId;
+  open: boolean;
+  plan: ColPlanState;
   onClose: () => void;
-  onSave: (cities: NepalCostLocation[]) => void;
+  onSave: (next: ColPlanState) => void;
 }) {
-  const [draftCities, setDraftCities] = useState(() => normalizeCityDatabase(cities));
-  const [editingCityId, setEditingCityId] = useState<NepalCostLocationId>(() => selectedCityId);
-  const [jsonText, setJsonText] = useState("");
-  const editingCity = draftCities.find((city) => city.id === editingCityId) ?? draftCities[0];
+  const [draft, setDraft] = useState(plan);
 
-  const patchCity = (id: NepalCostLocationId, patch: Partial<NepalCostLocation>) => {
-    setDraftCities((current) => current.map((city) => (city.id === id ? { ...city, ...patch } : city)));
-  };
-
-  const patchCost = (id: NepalCostLocationId, category: keyof LifestyleCost, value: number) => {
-    setDraftCities((current) =>
-      current.map((city) =>
-        city.id === id
-          ? {
-              ...city,
-              costs: { ...city.costs, [category]: Math.max(0, Math.round(value || 0)) },
-            }
-          : city,
-      ),
-    );
-  };
-
-  const addCity = () => {
-    const next = createBlankCity("Custom City");
-    let id = next.id;
-    if (draftCities.some((city) => city.id === id)) id = `${id}-${Date.now()}`;
-    const city = { ...next, id };
-    setDraftCities((current) => [...current, city]);
-    setEditingCityId(city.id);
-  };
-
-  const deleteCity = (id: NepalCostLocationId) => {
-    if (draftCities.length <= 1) return;
-    const next = draftCities.filter((city) => city.id !== id);
-    setDraftCities(next);
-    if (editingCityId === id) setEditingCityId(next[0]?.id ?? "");
-  };
-
-  const importJson = () => {
-    try {
-      const imported = normalizeCityDatabase(JSON.parse(jsonText));
-      setDraftCities(imported);
-      setEditingCityId(imported[0]?.id ?? "");
-    } catch {
-      setJsonText("Invalid JSON. Paste an exported city database array and try again.");
-    }
-  };
-
-  const exportJson = () => {
-    const payload = JSON.stringify(normalizeCityDatabase(draftCities), null, 2);
-    setJsonText(payload);
-    if (typeof window === "undefined") return;
-    const blob = new Blob([payload], { type: "application/json" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "fire-nepal-cost-cities.json";
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  const saveChanges = () => {
-    onSave(normalizeCityDatabase(draftCities));
-  };
-
-  if (!editingCity) return null;
+  useEffect(() => {
+    if (open) setDraft(plan);
+  }, [open, plan]);
 
   return (
-    <DashboardPanel>
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <PanelTitle
-          icon={Settings2}
-          title="Admin Cost Editor"
-          subtitle="Edit monthly city costs, add custom Nepal cities or districts, delete records, and import/export the database as JSON."
-        />
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={addCity} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-900/20">
-            <Plus size={16} /> Add New City
-          </button>
-          <button type="button" onClick={saveChanges} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white dark:bg-white dark:text-slate-950">
-            <Save size={16} /> Save Changes
-          </button>
-          <button type="button" onClick={onClose} className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-black text-slate-700 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-200">
-            Close
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
-        <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
-          {draftCities.map((city) => (
-            <button
-              key={city.id}
-              type="button"
-              onClick={() => setEditingCityId(city.id)}
-              className={`flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition ${
-                city.id === editingCity.id
-                  ? "border-emerald-400 bg-emerald-50 text-emerald-950 dark:border-emerald-300/35 dark:bg-emerald-300/[0.12] dark:text-white"
-                  : "border-slate-200 bg-white/64 text-slate-700 hover:border-emerald-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300"
-              }`}
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-black">{city.label}</span>
-                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">{city.shortLabel}</span>
-              </span>
-              <span className="text-xs font-black">{compactNpr(monthlyCost(city.costs))}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-5">
-          <div className="rounded-[1.6rem] border border-slate-200 bg-white/64 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-lg font-black text-slate-950 dark:text-white">Edit Existing City</p>
-                <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Changes are staged until you press Save Changes.</p>
-              </div>
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.button
+            type="button"
+            aria-label="Close edit plan"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[430px] rounded-t-[1.75rem] border border-emerald-400/20 bg-gradient-to-b from-[#083026] to-[#021510] p-5 pb-8 shadow-[0_-20px_80px_rgba(0,0,0,0.55)]"
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-black text-white">Edit Plan</h2>
               <button
                 type="button"
-                onClick={() => deleteCity(editingCity.id)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200"
+                onClick={onClose}
+                className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/8 text-white"
               >
-                <Trash2 size={15} /> Delete City
+                <X size={18} />
               </button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <AdminTextInput
-                label="City / District Name"
-                value={editingCity.label}
-                onChange={(value) => patchCity(editingCity.id, { label: value })}
-              />
-              <AdminTextInput label="Short Label" value={editingCity.shortLabel} onChange={(value) => patchCity(editingCity.id, { shortLabel: value.slice(0, 6).toUpperCase() })} />
-              <AdminNumberInput label="Latitude" value={editingCity.latitude} step={0.0001} onChange={(value) => patchCity(editingCity.id, { latitude: value })} />
-              <AdminNumberInput label="Longitude" value={editingCity.longitude} step={0.0001} onChange={(value) => patchCity(editingCity.id, { longitude: value })} />
-            </div>
+            <div className="space-y-4">
+              <label className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/70">City</span>
+                <select
+                  value={draft.cityId}
+                  onChange={(event) => {
+                    const cityId = event.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      cityId,
+                      province: provinceForCity(cityId),
+                    }));
+                  }}
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none"
+                >
+                  {DEFAULT_NEPAL_COST_CITIES.map((city) => (
+                    <option key={city.id} value={city.id} className="bg-[#062018]">
+                      {city.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <AdminNumberInput label="Healthcare Score" value={editingCity.healthcareScore} onChange={(value) => patchCity(editingCity.id, { healthcareScore: value ?? 70 })} />
-              <AdminNumberInput label="Climate Score" value={editingCity.climateScore} onChange={(value) => patchCity(editingCity.id, { climateScore: value ?? 70 })} />
-              <AdminNumberInput label="Connectivity Score" value={editingCity.connectivityScore} onChange={(value) => patchCity(editingCity.id, { connectivityScore: value ?? 70 })} />
-              <AdminNumberInput label="Safety Score" value={editingCity.safetyScore} onChange={(value) => patchCity(editingCity.id, { safetyScore: value ?? 70 })} />
-            </div>
+              <label className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/70">Province</span>
+                <select
+                  value={draft.province}
+                  onChange={(event) => setDraft((current) => ({ ...current, province: event.target.value }))}
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none"
+                >
+                  {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
+                    <option key={province} value={province} className="bg-[#062018]">
+                      {province}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="mt-4 flex flex-col gap-1.5">
-              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-400">City Note</span>
-              <textarea
-                value={editingCity.lifestyleNote}
-                onChange={(event) => patchCity(editingCity.id, { lifestyleNote: event.target.value })}
-                rows={3}
-                className="rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-sm font-bold text-slate-950 outline-none focus:border-emerald-300 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              />
-            </label>
-          </div>
-
-          <div className="rounded-[1.6rem] border border-slate-200 bg-white/64 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-base font-black text-slate-950 dark:text-white">Monthly Cost Categories</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {COST_CATEGORY_FIELDS.map((category) => (
-                <AdminNumberInput
-                  key={category}
-                  label={`${COST_CATEGORY_LABELS[category]} Cost`}
-                  value={editingCity.costs[category]}
-                  onChange={(value) => patchCost(editingCity.id, category, value ?? 0)}
+              <div className="grid grid-cols-3 gap-3">
+                <Stepper
+                  label="Adults"
+                  value={draft.family.adults}
+                  min={1}
+                  max={6}
+                  onChange={(adults) => setDraft((current) => ({ ...current, family: { ...current.family, adults } }))}
                 />
+                <Stepper
+                  label="Children"
+                  value={draft.family.children}
+                  min={0}
+                  max={6}
+                  onChange={(children) => setDraft((current) => ({ ...current, family: { ...current.family, children } }))}
+                />
+                <Stepper
+                  label="Parents"
+                  value={draft.family.parents}
+                  min={0}
+                  max={4}
+                  onChange={(parents) => setDraft((current) => ({ ...current, family: { ...current.family, parents } }))}
+                />
+              </div>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/70">
+                  Korea monthly spend (NPR model)
+                </span>
+                <input
+                  type="number"
+                  min={40_000}
+                  max={800_000}
+                  step={1000}
+                  value={draft.monthlyKoreaSpendNpr}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      monthlyKoreaSpendNpr: Number(event.target.value),
+                    }))
+                  }
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-bold text-white outline-none"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                {COL_LIFESTYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setDraft((current) => ({ ...current, lifestyle: option.id }))}
+                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-black transition active:scale-[0.98] ${
+                      draft.lifestyle === option.id
+                        ? "border-emerald-300/50 bg-emerald-500/20 text-emerald-50"
+                        : "border-white/10 bg-white/5 text-emerald-100/80 hover:border-emerald-400/30"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSave(draft);
+                  onClose();
+                }}
+                className="mt-2 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-300 py-3.5 text-sm font-black text-emerald-950 shadow-[0_12px_40px_-12px_rgba(52,211,153,0.65)] transition hover:brightness-105 active:scale-[0.99]"
+              >
+                Apply changes
+              </button>
+            </div>
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function CompareCitiesSheet({
+  open,
+  onClose,
+  cities,
+  selectedId,
+  onSelect,
+}: {
+  open: boolean;
+  onClose: () => void;
+  cities: Array<{ id: string; label: string; total: number }>;
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.button
+            type="button"
+            aria-label="Close compare cities"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[430px] rounded-t-[1.75rem] border border-emerald-400/20 bg-gradient-to-b from-[#083026] to-[#021510] p-5 pb-8"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-black text-white">Compare Cities</h2>
+              <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/8 text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {cities.map((city) => (
+                <button
+                  key={city.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(city.id);
+                    onClose();
+                  }}
+                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3.5 text-left transition active:scale-[0.99] ${
+                    selectedId === city.id
+                      ? "border-emerald-300/50 bg-emerald-500/15"
+                      : "border-white/10 bg-white/5 hover:border-emerald-400/25"
+                  }`}
+                >
+                  <span className="text-sm font-black text-white">{city.label}</span>
+                  <span className="text-sm font-black tabular-nums text-emerald-200">{formatNprInteger(city.total)}</span>
+                </button>
               ))}
             </div>
-          </div>
-
-          <div className="rounded-[1.6rem] border border-slate-200 bg-white/64 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="mb-3 flex flex-wrap gap-2">
-              <button type="button" onClick={exportJson} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/[0.1] dark:text-emerald-100">
-                <Download size={15} /> Export JSON
-              </button>
-              <button type="button" onClick={importJson} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 dark:border-cyan-300/20 dark:bg-cyan-300/[0.1] dark:text-cyan-100">
-                <Upload size={15} /> Import JSON
-              </button>
-            </div>
-            <textarea
-              value={jsonText}
-              onChange={(event) => setJsonText(event.target.value)}
-              placeholder="Paste exported city database JSON here, or click Export JSON to generate it."
-              rows={8}
-              className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 font-mono text-xs text-slate-950 outline-none focus:border-emerald-300 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-            />
-          </div>
-        </div>
-      </div>
-    </DashboardPanel>
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
 export function NepalCostOfLivingDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const gradientId = useId().replace(/:/g, "");
-  const [cities, setCities, citiesHydrated] = useLocalStorageJsonState<NepalCostLocation[]>({
-    storageKey: NEPAL_COST_STORAGE_KEY,
-    getDefault: () => DEFAULT_NEPAL_COST_CITIES,
-    sanitize: normalizeCityDatabase,
+  const [plan, setPlan, hydrated] = useLocalStorageJsonState({
+    storageKey: COL_PLAN_STORAGE_KEY,
+    getDefault: defaultColPlan,
+    sanitize: sanitizeColPlan,
   });
   const [chartsReady, setChartsReady] = useState(false);
-  const [locationId, setLocationId] = useState<NepalCostLocationId>("kathmandu");
-  const [lifestyleId, setLifestyleId] = useState<NepalLifestyleId>("city");
-  const [inflationRate, setInflationRate] = useState(6);
-  const [projectionYears, setProjectionYears] = useState(10);
-  const [withdrawalRate, setWithdrawalRate] = useState(4);
-  const [comparisonIds, setComparisonIds] = useState<NepalCostLocationId[]>(DEFAULT_COMPARISON_CITY_IDS);
-  const [manageCitiesOpen, setManageCitiesOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
+  const [krwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setChartsReady(true), 420);
+    const timer = window.setTimeout(() => setChartsReady(true), 380);
     return () => window.clearTimeout(timer);
   }, []);
 
-  const location = locationById(locationId, cities);
-  const lifestyle = lifestyleById(lifestyleId);
-  const selectedCosts = useMemo(() => scaledLifestyleCost(lifestyle, location), [lifestyle, location]);
-  const selectedMonthlyCost = monthlyCost(selectedCosts);
-  const selectedAnnualCost = selectedMonthlyCost * 12;
-  const liveFireCorpus = futureFireCorpus(selectedMonthlyCost, inflationRate, projectionYears, withdrawalRate / 100);
-  const selectedRetirementScore = cityCostSnapshot(location, lifestyle, inflationRate).retirementScore;
+  const snapshot = useMemo(() => computeColSnapshot(plan), [plan]);
+  const animatedSavings = useCountUpNumber(snapshot.monthlySavings, { durationMs: 900 });
+  const animatedSavingsPct = useCountUpNumber(snapshot.savingsPct, { durationMs: 900 });
+  const animatedReadiness = useCountUpNumber(snapshot.readiness, { durationMs: 1100 });
 
-  const lifestyleCosts = useMemo(
-    () =>
-      NEPAL_LIFESTYLE_TEMPLATES.map((template) => ({
-        id: template.id,
-        costs: scaledLifestyleCost(template, location),
-      })),
-    [location],
-  );
+  const compareMax = Math.max(snapshot.koreaSpend, snapshot.total, 1);
+  const koreaBarPct = (snapshot.koreaSpend / compareMax) * 100;
+  const nepalBarPct = (snapshot.total / compareMax) * 100;
 
-  const allCitySnapshots = useMemo(
-    () =>
-      cities.map((city) => ({
-        ...cityCostSnapshot(city, lifestyle, inflationRate),
-        note: city.lifestyleNote,
-      })),
-    [cities, inflationRate, lifestyle],
-  );
+  const patchPlan = (patch: Partial<ColPlanState>) => setPlan((current) => ({ ...current, ...patch }));
 
-  const snapshotMap = useMemo(
-    () => new Map(allCitySnapshots.map((snapshot) => [snapshot.id, snapshot])),
-    [allCitySnapshots],
-  );
-
-  const rankedCities = useMemo(() => [...allCitySnapshots].sort((a, b) => b.valueIndex - a.valueIndex), [allCitySnapshots]);
-
-  const corpusComparisonData = useMemo(
-    () =>
-      allCitySnapshots.map((city) => ({
-        city: city.shortLabel,
-        corpus: Math.round(city.fireCorpus),
-        projectedCorpus: Math.round(city.corpus10Year),
-      })),
-    [allCitySnapshots],
-  );
-
-  const comparisonData = useMemo(
-    () =>
-      comparisonIds.map((id) => {
-        const city = locationById(id, cities);
-        const snapshot = cityCostSnapshot(city, lifestyle, inflationRate);
-        return {
-          city: city.label,
-          monthly: snapshot.monthly,
-          fireCorpus: snapshot.fireCorpus,
-          score: snapshot.retirementScore,
-        };
-      }),
-    [cities, comparisonIds, inflationRate, lifestyle],
-  );
-
-  const forecastData = useMemo(() => costForecastSeries(selectedMonthlyCost, inflationRate), [inflationRate, selectedMonthlyCost]);
-
-  const breakdownData = useMemo(
-    () =>
-      Object.entries(selectedCosts).map(([key, value], index) => ({
-        name: COST_CATEGORY_LABELS[key as keyof typeof COST_CATEGORY_LABELS],
-        value,
-        fill: chartColors[index % chartColors.length],
-      })),
-    [selectedCosts],
-  );
-
-  const selectedCityRanking = rankedCities.findIndex((city) => city.id === locationId) + 1;
-  const fiveYearMonthly = forecastData[5]?.monthly ?? selectedMonthlyCost;
-  const tenYearMonthly = forecastData[10]?.monthly ?? selectedMonthlyCost;
-
-  const toggleComparisonCity = (id: NepalCostLocationId) => {
-    setComparisonIds((current) => {
-      if (current.includes(id)) {
-        return current.length === 1 ? current : current.filter((cityId) => cityId !== id);
-      }
-      return [...current, id];
-    });
+  const handleSavePlan = () => {
+    setPlan(plan);
+    setSavedToast(true);
+    window.setTimeout(() => setSavedToast(false), 2200);
   };
 
-  const saveEditedCities = (nextCities: NepalCostLocation[]) => {
-    const normalized = normalizeCityDatabase(nextCities);
-    setCities(normalized);
-    if (!normalized.some((city) => city.id === locationId)) {
-      setLocationId(normalized[0]?.id ?? "kathmandu");
-    }
-    setComparisonIds((current) => {
-      const availableIds = new Set(normalized.map((city) => city.id));
-      const next = current.filter((id) => availableIds.has(id));
-      return next.length ? next : DEFAULT_COMPARISON_CITY_IDS.filter((id) => availableIds.has(id));
+  const handleExportPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("FIRE Nepal — Cost of Living Plan", 48, 56);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(`City: ${snapshot.location.label}`, 48, 84);
+    doc.text(`Province: ${plan.province}`, 48, 100);
+    doc.text(`Lifestyle: ${snapshot.lifestyle.label}`, 48, 116);
+    doc.text(`Monthly total: ${formatNprInteger(snapshot.total)}`, 48, 140);
+    doc.text(`Monthly savings vs Korea model: ${formatNprInteger(snapshot.monthlySavings)}`, 48, 156);
+    let y = 188;
+    doc.setFont("helvetica", "bold");
+    doc.text("Expense breakdown", 48, y);
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    snapshot.items.forEach((item) => {
+      doc.text(`${item.label}: ${formatNprInteger(item.amount)} (${item.pct.toFixed(1)}%)`, 48, y);
+      y += 16;
     });
+    doc.save(`fire-nepal-col-${snapshot.location.label.toLowerCase().replace(/\s+/g, "-")}.pdf`);
   };
+
+  const shellBg = light
+    ? "bg-gradient-to-b from-emerald-50 via-white to-emerald-100/80"
+    : "bg-[#010d0a]";
+
+  const frameBorder = light ? "border-emerald-200/80 shadow-[0_40px_120px_-40px_rgba(5,46,22,0.25)]" : "border-emerald-500/15 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.85)]";
 
   return (
-    <WealthDashboardShell
-      brand={{ tagline: "Cost Intelligence", iconGradient: "from-emerald-300 to-cyan-300" }}
-      footerNote="Nepal Cost of Living Intelligence focuses on lifestyle costs, inflation-adjusted FIRE corpus, and city retirement fit estimates for Nepal."
-    >
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }} className="space-y-5 sm:space-y-6">
-        <section className="relative overflow-hidden rounded-[2.2rem] border border-white/60 bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-950 p-5 text-white shadow-[0_34px_120px_-50px_rgba(5,46,22,0.85)] sm:p-7 lg:p-9">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.22),transparent_26rem),radial-gradient(circle_at_70%_80%,rgba(16,185,129,0.22),transparent_22rem)]" />
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] backdrop-blur-xl">
-              <Sparkles size={15} />
-              Nepal Cost Intelligence {citiesHydrated ? "· Editable" : ""}
+    <div className={`min-h-[100dvh] ${shellBg}`}>
+      <div
+        className={`mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col border-x border-transparent lg:my-6 lg:min-h-[calc(100dvh-3rem)] lg:overflow-hidden lg:rounded-[2rem] lg:border ${frameBorder}`}
+      >
+        {/* Header */}
+        <header className="sticky top-0 z-30 border-b border-emerald-500/10 bg-[#021510]/92 px-4 py-3 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/"
+              className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 text-emerald-100 transition hover:bg-white/10 active:scale-95"
+              aria-label="Go back"
+            >
+              <ArrowLeft size={18} />
+            </Link>
+            <div className="flex items-center gap-2">
+              <Image src="/logo.png" alt="FIRE Nepal" width={28} height={28} className="rounded-lg" />
+              <span className="text-sm font-black tracking-tight text-white">FIRE Nepal</span>
             </div>
-            <h1 className="mt-5 max-w-4xl text-4xl font-black tracking-[-0.055em] sm:text-5xl lg:text-6xl">Nepal Cost of Living Intelligence</h1>
-            <p className="mt-4 max-w-2xl text-base font-semibold leading-relaxed text-emerald-50/82 sm:text-lg">City-by-city lifestyle costs, retirement ranking, inflation forecasts, and FIRE corpus planning for Nepal.</p>
             <button
               type="button"
-              onClick={() => setManageCitiesOpen((open) => !open)}
-              className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/12 px-4 py-3 text-sm font-black text-white shadow-lg backdrop-blur-xl transition hover:bg-white/20"
+              aria-label="Notifications"
+              className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 text-emerald-100 transition hover:bg-white/10 active:scale-95"
             >
-              <Settings2 size={17} />
-              Manage Cities
+              <Bell size={18} />
             </button>
           </div>
-        </section>
+        </header>
 
-        {manageCitiesOpen ? (
-          <ManageCitiesPanel
-            cities={cities}
-            selectedCityId={locationId}
-            onClose={() => setManageCitiesOpen(false)}
-            onSave={saveEditedCities}
-          />
-        ) : null}
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <AnimatedMetric label="Monthly Cost" value={selectedMonthlyCost} format={compactNpr} hint={`${location.label} · ${lifestyle.title}`} icon={Home} />
-          <AnimatedMetric label="Annual Cost" value={selectedAnnualCost} format={compactNpr} hint="Current-year lifestyle spend" icon={BarChart3} />
-          <AnimatedMetric label="FIRE Corpus" value={liveFireCorpus} format={compactNpr} hint={`${projectionYears}Y @ ${inflationRate}% inflation`} icon={Calculator} />
-          <AnimatedMetric label="Retirement Score" value={selectedRetirementScore} format={(value) => `${Math.round(value)}/100`} hint={`Rank #${selectedCityRanking} for ${lifestyle.title}`} icon={ShieldCheck} />
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-          <DashboardPanel>
-            <PanelTitle icon={MapPinned} title="Interactive Nepal Map" subtitle="Click a city on the map to update lifestyle costs, rankings, corpus charts, and forecasts instantly." />
-            <InteractiveNepalMap
-              cities={cities}
-              selectedId={locationId}
-              comparisonIds={comparisonIds}
-              onComparisonToggle={toggleComparisonCity}
-              onSelect={setLocationId}
-              snapshots={snapshotMap}
-            />
-          </DashboardPanel>
-
-          <DashboardPanel>
-            <PanelTitle icon={Trophy} title="Best Cities to Retire in Nepal" subtitle="Ranking blends affordability, healthcare, climate, connectivity, and safety for the selected lifestyle mode." />
-            <div className="space-y-3">
-              {rankedCities.slice(0, 5).map((city, index) => (
-                <CityRankCard key={city.id} rank={index + 1} city={city} selected={city.id === locationId} onSelect={() => setLocationId(city.id)} />
-              ))}
+        <main className="flex-1 overflow-x-hidden px-4 pb-28 pt-5">
+          {/* Title row */}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-[1.65rem] font-black leading-tight tracking-[-0.03em] text-white">
+                Nepal Cost of Living <span aria-hidden>🇳🇵</span>
+              </h1>
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-emerald-100/70">
+                Plan your life in Nepal before you return.
+              </p>
             </div>
-          </DashboardPanel>
-        </div>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/12 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-500/20 active:scale-95"
+            >
+              <Pencil size={14} />
+              Edit Plan
+            </button>
+          </motion.div>
 
-        <DashboardPanel>
-          <PanelTitle icon={Home} title="Lifestyle Modes" subtitle="Choose a Nepal lifestyle baseline. The city map and every chart recalculate from this selection." />
-          <div className="grid gap-4 md:grid-cols-3">
-            {lifestyleCosts.map((item) => (
-              <LifestyleCard key={item.id} id={item.id} selected={item.id === lifestyleId} costs={item.costs} onSelect={setLifestyleId} />
-            ))}
-          </div>
-        </DashboardPanel>
-
-        <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-          <DashboardPanel>
-            <PanelTitle icon={Calculator} title="Inflation Impact Simulator" subtitle="Change inflation, forecast horizon, and withdrawal rate to recalculate the future Nepal FIRE corpus live." />
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Inflation Rate" value={inflationRate} min={0} max={18} step={0.25} suffix="%" onChange={setInflationRate} />
-              <Field label="Forecast Horizon" value={projectionYears} min={1} max={30} step={1} suffix="years" onChange={setProjectionYears} />
-              <Field label="Withdrawal Rate" value={withdrawalRate} min={2.5} max={6} step={0.1} suffix="%" onChange={setWithdrawalRate} />
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <AnimatedMetric label="Today Corpus" value={(selectedMonthlyCost * 12) / (withdrawalRate / 100)} format={compactNpr} hint="No inflation applied" icon={LineChart} />
-              <AnimatedMetric label="Future Corpus" value={liveFireCorpus} format={compactNpr} hint={`${projectionYears}-year inflation impact`} icon={TrendingUp} />
-              <AnimatedMetric label="10Y Monthly Cost" value={tenYearMonthly} format={compactNpr} hint="Projected lifestyle spend" icon={Crown} />
-            </div>
-          </DashboardPanel>
-
-          <DashboardPanel>
-            <PanelTitle icon={BarChart3} title="Cost Breakdown" subtitle="Category-level view of the selected city and lifestyle." />
-            <div className="h-[310px] sm:h-[340px]">
-              {chartsReady ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={breakdownData} dataKey="value" nameKey="name" innerRadius="54%" outerRadius="82%" paddingAngle={3} isAnimationActive animationDuration={900}>
-                      {breakdownData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.fill} />
+          {/* Hero card */}
+          <GlassCard className="mb-4 p-4 sm:p-5" delay={0.04}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/30 bg-gradient-to-br from-emerald-400/30 via-teal-500/20 to-emerald-950 shadow-[0_0_40px_-8px_rgba(52,211,153,0.55)]">
+                  <Building2 size={26} className="text-emerald-100" />
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_55%)]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/65">Selected City</p>
+                  <p className="truncate text-xl font-black text-white">{snapshot.location.label}</p>
+                  <label className="mt-2 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/55">Province</span>
+                    <select
+                      value={plan.province}
+                      onChange={(event) => patchPlan({ province: event.target.value })}
+                      className="w-full rounded-xl border border-white/10 bg-black/25 px-2.5 py-1.5 text-xs font-bold text-emerald-50 outline-none"
+                    >
+                      {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
+                        <option key={province} value={province} className="bg-[#062018]">
+                          {province}
+                        </option>
                       ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => compactNpr(Number(value))} contentStyle={{ borderRadius: 18, border: "1px solid rgba(16,185,129,0.2)", background: light ? "rgba(255,255,255,0.96)" : "rgba(2,24,18,0.96)" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/65">Monthly Estimated Cost</p>
+                <AnimatedNpr value={snapshot.total} className="mt-1 block text-2xl font-black tabular-nums tracking-tight text-white" />
+                <p className="mt-1 text-[11px] font-bold text-emerald-200/70">
+                  {formatKrwInteger(nprToKrw(snapshot.total, krwPerNpr))}
+                </p>
+                <span className="mt-2 inline-flex rounded-full border border-emerald-300/25 bg-emerald-400/12 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-100">
+                  {snapshot.lifestyle.label} Lifestyle
+                </span>
+              </div>
             </div>
-          </DashboardPanel>
-        </div>
+          </GlassCard>
 
-        <DashboardPanel>
-          <PanelTitle icon={BarChart3} title="FIRE Corpus Comparison for All Cities" subtitle="Compare current 25x corpus and 10-year inflation-adjusted corpus across Nepal locations." />
-          <div className="h-[360px] min-w-0">
-            {chartsReady ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={corpusComparisonData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
-                  <CartesianGrid stroke={light ? "#dbe7e1" : "rgba(255,255,255,0.08)"} strokeDasharray="4 8" vertical={false} />
-                  <XAxis dataKey="city" tickLine={false} axisLine={false} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 800 }} />
-                  <YAxis tickLine={false} axisLine={false} tickFormatter={compactNpr} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 700 }} width={74} />
-                  <Tooltip formatter={(value) => compactNpr(Number(value))} contentStyle={{ borderRadius: 18, border: "1px solid rgba(16,185,129,0.2)", background: light ? "rgba(255,255,255,0.96)" : "rgba(2,24,18,0.96)" }} />
-                  <Bar dataKey="corpus" name="Today Corpus" fill="#10b981" radius={[12, 12, 4, 4]} isAnimationActive animationDuration={950} />
-                  <Bar dataKey="projectedCorpus" name="10Y Corpus" fill="#f59e0b" radius={[12, 12, 4, 4]} isAnimationActive animationDuration={1150} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <ChartSkeleton />
-            )}
+          {/* Second row */}
+          <div className="mb-4 grid grid-cols-3 gap-2.5">
+            <GlassCard className="p-3" delay={0.08}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/60">Family</p>
+              <div className="mt-2 space-y-1 text-[11px] font-bold text-emerald-50/90">
+                <p>Adults {plan.family.adults}</p>
+                <p>Children {plan.family.children}</p>
+                <p>Parents {plan.family.parents}</p>
+              </div>
+            </GlassCard>
+            <GlassCard className="p-3" delay={0.1}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/60">Lifestyle</p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {COL_LIFESTYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => patchPlan({ lifestyle: option.id as ColLifestyleId })}
+                    className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide transition ${
+                      plan.lifestyle === option.id
+                        ? "bg-emerald-400 text-emerald-950"
+                        : "bg-white/8 text-emerald-100/70 hover:bg-white/12"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-1">
+                {COL_LIFESTYLE_OPTIONS.map((option) => (
+                  <span
+                    key={option.id}
+                    className={`h-1.5 flex-1 rounded-full ${plan.lifestyle === option.id ? "bg-emerald-400" : "bg-white/10"}`}
+                  />
+                ))}
+              </div>
+            </GlassCard>
+            <GlassCard className="p-3" delay={0.12}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/60">Monthly Savings</p>
+              <p className="mt-2 text-lg font-black tabular-nums text-emerald-300">{formatNprInteger(Math.round(animatedSavings))}</p>
+              <p className="mt-1 text-[11px] font-bold text-emerald-100/70">{animatedSavingsPct.toFixed(1)}%</p>
+            </GlassCard>
           </div>
-        </DashboardPanel>
 
-        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-          <DashboardPanel>
-            <PanelTitle icon={LineChart} title="5-Year and 10-Year Forecast" subtitle="Projected monthly cost, annual cost, and FIRE corpus using the selected inflation rate." />
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <AnimatedMetric label="5Y Monthly Cost" value={fiveYearMonthly} format={compactNpr} hint="Mid-range cost forecast" icon={TrendingUp} />
-              <AnimatedMetric label="10Y Monthly Cost" value={tenYearMonthly} format={compactNpr} hint="Long-range cost forecast" icon={TrendingUp} />
+          {/* Expense grid */}
+          <section className="mb-4">
+            <h2 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-emerald-200/75">Monthly Expenses</h2>
+            <div className="grid grid-cols-2 gap-2.5">
+              {snapshot.items.map((item, index) => {
+                const Icon = EXPENSE_ICONS[item.id];
+                return (
+                  <motion.button
+                    key={item.id}
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.05 + index * 0.03 }}
+                    whileHover={{ y: -3, scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="rounded-[1.1rem] border border-emerald-400/15 bg-gradient-to-br from-emerald-950/55 to-[#041610]/90 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/15 text-emerald-200">
+                        <Icon size={15} />
+                      </span>
+                      <span className="text-[10px] font-black text-emerald-200/70">{item.pct.toFixed(0)}%</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-emerald-100/75">{item.label}</p>
+                    <p className="mt-1 text-sm font-black tabular-nums text-white">{formatNprInteger(item.amount)}</p>
+                  </motion.button>
+                );
+              })}
             </div>
-            <div className="h-[320px]">
+          </section>
+
+          {/* Total cost card */}
+          <GlassCard className="mb-4 p-4" delay={0.16}>
+            <div className="mb-3 flex items-end justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200/65">Total Cost</p>
+                <AnimatedNpr value={snapshot.total} className="mt-1 block text-3xl font-black tabular-nums text-white" />
+              </div>
+              <Sparkles size={18} className="text-emerald-300/80" />
+            </div>
+            <div className="h-[88px]">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={forecastData}>
-                    <defs>
-                      <linearGradient id={`${gradientId}-forecast`} x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={light ? "#dbe7e1" : "rgba(255,255,255,0.08)"} strokeDasharray="4 8" />
-                    <XAxis dataKey="year" tickLine={false} axisLine={false} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 800 }} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={compactNpr} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 700 }} width={74} />
-                    <Tooltip formatter={(value) => compactNpr(Number(value))} contentStyle={{ borderRadius: 18, border: "1px solid rgba(16,185,129,0.2)", background: light ? "rgba(255,255,255,0.96)" : "rgba(2,24,18,0.96)" }} />
-                    <Area type="monotone" dataKey="monthly" name="Monthly Cost" stroke="#10b981" fill={`url(#${gradientId}-forecast)`} strokeWidth={3} isAnimationActive animationDuration={1000} />
-                    <Line type="monotone" dataKey="corpus" name="FIRE Corpus" stroke="#f59e0b" strokeWidth={3} dot={false} isAnimationActive animationDuration={1200} />
-                  </AreaChart>
+                  <LineChart data={snapshot.trend}>
+                    <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2.5} dot={false} isAnimationActive animationDuration={900} />
+                    <Tooltip
+                      formatter={(value) => formatNprInteger(Number(value))}
+                      contentStyle={{
+                        borderRadius: 14,
+                        border: "1px solid rgba(52,211,153,0.25)",
+                        background: "rgba(2,24,18,0.96)",
+                        color: "#ecfdf5",
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <ChartSkeleton />
+                <div className="h-full animate-pulse rounded-xl bg-white/5" />
               )}
             </div>
-          </DashboardPanel>
+          </GlassCard>
 
-          <DashboardPanel>
-            <PanelTitle icon={MapPinned} title="Location Comparison Mode" subtitle="Select Kathmandu, Pokhara, and Chitwan from the map checkboxes to compare one or multiple cities." />
-            <div className="h-[320px]">
-              {chartsReady ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ReLineChart data={comparisonData}>
-                    <CartesianGrid stroke={light ? "#dbe7e1" : "rgba(255,255,255,0.08)"} strokeDasharray="4 8" />
-                    <XAxis dataKey="city" tickLine={false} axisLine={false} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 800 }} />
-                    <YAxis yAxisId="money" tickLine={false} axisLine={false} tickFormatter={compactNpr} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 700 }} width={72} />
-                    <YAxis yAxisId="score" orientation="right" domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: light ? "#475569" : "#a1a1aa", fontSize: 11, fontWeight: 700 }} width={36} />
-                    <Tooltip formatter={(value, name) => (name === "Retirement Score" ? `${Number(value).toFixed(0)}/100` : compactNpr(Number(value)))} contentStyle={{ borderRadius: 18, border: "1px solid rgba(16,185,129,0.2)", background: light ? "rgba(255,255,255,0.96)" : "rgba(2,24,18,0.96)" }} />
-                    <Line yAxisId="money" type="monotone" dataKey="monthly" name="Monthly Cost" stroke="#10b981" strokeWidth={3} isAnimationActive animationDuration={900} />
-                    <Line yAxisId="money" type="monotone" dataKey="fireCorpus" name="FIRE Corpus" stroke="#f59e0b" strokeWidth={3} isAnimationActive animationDuration={1050} />
-                    <Line yAxisId="score" type="monotone" dataKey="score" name="Retirement Score" stroke="#22d3ee" strokeWidth={3} isAnimationActive animationDuration={1200} />
-                  </ReLineChart>
-                </ResponsiveContainer>
-              ) : (
-                <ChartSkeleton />
-              )}
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {comparisonData.map((city) => (
-                <button
-                  key={city.city}
-                  type="button"
-                  onClick={() => setLocationId(cities.find((item) => item.label === city.city)?.id ?? cities[0]?.id ?? "kathmandu")}
-                  className="rounded-3xl border border-slate-200 bg-white/70 p-4 text-left transition hover:border-emerald-300 dark:border-white/10 dark:bg-white/[0.05]"
+          {/* Analytics */}
+          <section className="mb-4 space-y-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-200/75">Analytics</h2>
+
+            <GlassCard className="p-4" delay={0.18}>
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-emerald-200/70">Expense Distribution</p>
+              <div className="grid grid-cols-[1fr_1.1fr] items-center gap-2">
+                <div className="relative h-[150px]">
+                  {chartsReady ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={snapshot.donutData} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="82%" paddingAngle={2} isAnimationActive animationDuration={950}>
+                          {snapshot.donutData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full animate-pulse rounded-full bg-white/5" />
+                  )}
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                    <span className="text-xs font-black text-emerald-100">{formatNprInteger(snapshot.total)}</span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {snapshot.items.slice(0, 5).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 text-[10px] font-bold text-emerald-100/80">
+                      <span className="truncate">{item.label}</span>
+                      <span className="tabular-nums">{item.pct.toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-4" delay={0.2}>
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-emerald-200/70">Korea vs Nepal</p>
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 flex justify-between text-[11px] font-bold text-emerald-100/80">
+                    <span>Korea spend model</span>
+                    <span>{formatNprInteger(snapshot.koreaSpend)}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-white/8">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${koreaBarPct}%` }}
+                      transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                      className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-300"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 flex justify-between text-[11px] font-bold text-emerald-100/80">
+                    <span>Nepal lifestyle cost</span>
+                    <span>{formatNprInteger(snapshot.total)}</span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-white/8">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${nepalBarPct}%` }}
+                      transition={{ duration: 0.9, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 h-[120px]">
+                {chartsReady ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        { label: "Korea", value: snapshot.koreaSpend, fill: "#22d3ee" },
+                        { label: "Nepal", value: snapshot.total, fill: "#34d399" },
+                      ]}
+                      margin={{ top: 4, right: 4, left: -18, bottom: 0 }}
+                    >
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#a7f3d0", fontSize: 11, fontWeight: 700 }} />
+                      <YAxis hide />
+                      <Bar dataKey="value" radius={[10, 10, 4, 4]} isAnimationActive animationDuration={900} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : null}
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-4" delay={0.22}>
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-emerald-200/70">Retirement Readiness</p>
+              <div className="flex items-center gap-4">
+                <div
+                  className="relative grid h-24 w-24 shrink-0 place-items-center rounded-full"
+                  style={{
+                    background: `conic-gradient(#34d399 ${animatedReadiness * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+                  }}
                 >
-                  <p className="text-sm font-black text-slate-950 dark:text-white">{city.city}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-zinc-400">{compactNpr(city.monthly)} / month</p>
-                  <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-200">{city.score}/100</p>
-                </button>
-              ))}
+                  <div className="grid h-[72%] w-[72%] place-items-center rounded-full bg-[#041610]">
+                    <span className="text-lg font-black tabular-nums text-white">{Math.round(animatedReadiness)}</span>
+                  </div>
+                </div>
+                <p className="text-sm font-semibold leading-relaxed text-emerald-100/75">
+                  {snapshot.location.label} scores {Math.round(snapshot.readiness)}/100 for your selected lifestyle and family profile.
+                </p>
+              </div>
+            </GlassCard>
+          </section>
+
+          {/* AI insight */}
+          <GlassCard className="mb-2 p-4" delay={0.24}>
+            <div className="flex items-start gap-3">
+              <div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-emerald-300/25 bg-gradient-to-br from-emerald-400/25 to-cyan-500/15">
+                <Bot size={24} className="text-emerald-100" />
+                <div className="pointer-events-none absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-emerald-400 text-[10px] font-black text-emerald-950">
+                  AI
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-200/70">AI Insight</p>
+                <p className="mt-1.5 text-sm font-semibold leading-relaxed text-emerald-50/90">{snapshot.aiMessage}</p>
+              </div>
             </div>
-          </DashboardPanel>
+          </GlassCard>
+
+          {!hydrated ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs font-bold text-emerald-100/60">
+              Loading your saved plan…
+            </div>
+          ) : null}
+        </main>
+
+        {/* Bottom action bar */}
+        <div className="sticky bottom-0 z-30 border-t border-emerald-500/10 bg-[#021510]/95 px-4 py-3 backdrop-blur-xl">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={handleSavePlan}
+              className="inline-flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-2xl border border-emerald-400/20 bg-emerald-500/12 px-2 text-[10px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/20 active:scale-[0.98]"
+            >
+              <Save size={16} />
+              Save Plan
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompareOpen(true)}
+              className="inline-flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/6 px-2 text-[10px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              <MapPin size={16} />
+              Compare Cities
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExportPdf()}
+              className="inline-flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/6 px-2 text-[10px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98]"
+            >
+              <FileText size={16} />
+              Export PDF
+            </button>
+          </div>
+          <AnimatePresence>
+            {savedToast ? (
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                className="mt-2 text-center text-[11px] font-bold text-emerald-300"
+              >
+                Plan saved locally on this device.
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
         </div>
-      </motion.div>
-    </WealthDashboardShell>
+      </div>
+
+      <EditPlanSheet open={editOpen} plan={plan} onClose={() => setEditOpen(false)} onSave={setPlan} />
+      <CompareCitiesSheet
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        cities={snapshot.compareCities}
+        selectedId={plan.cityId}
+        onSelect={(cityId) => patchPlan({ cityId, province: provinceForCity(cityId) })}
+      />
+    </div>
   );
 }
