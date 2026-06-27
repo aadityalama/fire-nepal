@@ -25,6 +25,8 @@ export type ColExpenseCategoryId =
   | "clothing"
   | "miscellaneous";
 
+export type ColExpenseAmounts = Record<ColExpenseCategoryId, number>;
+
 export type ColExpenseItem = {
   id: ColExpenseCategoryId;
   label: string;
@@ -39,9 +41,11 @@ export type ColPlanState = {
   family: ColFamilyPlan;
   /** Korea-side monthly spend in NPR (for savings comparison). */
   monthlyKoreaSpendNpr: number;
+  /** User-editable monthly amounts per category — total is always their sum. */
+  expenses: ColExpenseAmounts;
 };
 
-export const COL_PLAN_STORAGE_KEY = "fire-nepal-col-plan-v2";
+export const COL_PLAN_STORAGE_KEY = "fire-nepal-col-plan-v3";
 
 export const COL_LIFESTYLE_OPTIONS: Array<{
   id: ColLifestyleId;
@@ -92,20 +96,51 @@ export function provinceForCity(cityId: string): string {
   return CITY_PROVINCES[cityId] ?? "Nepal";
 }
 
+export function emptyExpenseAmounts(): ColExpenseAmounts {
+  return Object.fromEntries(COL_EXPENSE_META.map((meta) => [meta.id, 0])) as ColExpenseAmounts;
+}
+
+function clampExpense(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n));
+}
+
+export function itemsFromExpenses(expenses: ColExpenseAmounts): { items: ColExpenseItem[]; total: number } {
+  const amounts = COL_EXPENSE_META.reduce<ColExpenseAmounts>((acc, meta) => {
+    acc[meta.id] = clampExpense(expenses[meta.id]);
+    return acc;
+  }, emptyExpenseAmounts());
+
+  const total = COL_EXPENSE_META.reduce((sum, meta) => sum + amounts[meta.id], 0);
+  const items = COL_EXPENSE_META.map((meta) => ({
+    ...meta,
+    amount: amounts[meta.id],
+    pct: total > 0 ? (amounts[meta.id] / total) * 100 : 0,
+  }));
+
+  return { items, total };
+}
+
 export function defaultColPlan(): ColPlanState {
+  const cityId = "pokhara";
+  const lifestyle: ColLifestyleId = "comfortable";
+  const family: ColFamilyPlan = { adults: 2, children: 1, parents: 1 };
+  const location = locationById(cityId);
   return {
-    cityId: "pokhara",
-    province: provinceForCity("pokhara"),
-    lifestyle: "comfortable",
-    family: { adults: 2, children: 1, parents: 1 },
+    cityId,
+    province: provinceForCity(cityId),
+    lifestyle,
+    family,
     monthlyKoreaSpendNpr: 150_000,
+    expenses: computeSuggestedExpenses(location, lifestyle, family),
   };
 }
 
 export function sanitizeColPlan(raw: unknown): ColPlanState {
   const base = defaultColPlan();
   if (!raw || typeof raw !== "object") return base;
-  const input = raw as Partial<ColPlanState>;
+  const input = raw as Partial<ColPlanState> & { expenses?: Partial<ColExpenseAmounts> };
   const lifestyle = COL_LIFESTYLE_OPTIONS.some((item) => item.id === input.lifestyle)
     ? input.lifestyle!
     : base.lifestyle;
@@ -119,12 +154,60 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
     typeof input.cityId === "string" && DEFAULT_NEPAL_COST_CITIES.some((city) => city.id === input.cityId)
       ? input.cityId
       : base.cityId;
+  const location = locationById(cityId);
+
+  const hasStoredExpenses =
+    input.expenses &&
+    typeof input.expenses === "object" &&
+    COL_EXPENSE_META.every((meta) => Number.isFinite(Number(input.expenses?.[meta.id])));
+
+  const expenses = hasStoredExpenses
+    ? COL_EXPENSE_META.reduce<ColExpenseAmounts>((acc, meta) => {
+        acc[meta.id] = clampExpense(input.expenses?.[meta.id]);
+        return acc;
+      }, emptyExpenseAmounts())
+    : computeSuggestedExpenses(location, lifestyle, family);
+
   return {
     cityId,
     province: typeof input.province === "string" && input.province.trim() ? input.province.trim() : provinceForCity(cityId),
     lifestyle,
     family,
     monthlyKoreaSpendNpr: clampNumber(input.monthlyKoreaSpendNpr, 40_000, 800_000, base.monthlyKoreaSpendNpr),
+    expenses,
+  };
+}
+
+/** Recompute category suggestions when city, lifestyle, or family changes. */
+export function applyPlanSettings(
+  current: ColPlanState,
+  patch: Partial<Omit<ColPlanState, "expenses">>,
+  cities: NepalCostLocation[] = DEFAULT_NEPAL_COST_CITIES,
+): ColPlanState {
+  const next: ColPlanState = {
+    ...current,
+    ...patch,
+    expenses: current.expenses,
+  };
+  if (patch.cityId) {
+    next.province = provinceForCity(patch.cityId);
+  }
+  const location = locationById(next.cityId, cities);
+  next.expenses = computeSuggestedExpenses(location, next.lifestyle, next.family);
+  return next;
+}
+
+export function patchExpenseAmount(
+  current: ColPlanState,
+  categoryId: ColExpenseCategoryId,
+  amount: number,
+): ColPlanState {
+  return {
+    ...current,
+    expenses: {
+      ...current.expenses,
+      [categoryId]: clampExpense(amount),
+    },
   };
 }
 
@@ -153,11 +236,12 @@ function familyScale(family: ColFamilyPlan): number {
   );
 }
 
-export function computeColBreakdown(
+/** Starting-point amounts when city / lifestyle / family changes — user can edit afterward. */
+export function computeSuggestedExpenses(
   location: NepalCostLocation,
   lifestyle: ColLifestyleId,
   family: ColFamilyPlan,
-): { items: ColExpenseItem[]; total: number } {
+): ColExpenseAmounts {
   const lifestyleMult = lifestyleMultiplier(lifestyle);
   const famMult = familyScale(family);
   const base = location.costs;
@@ -178,7 +262,7 @@ export function computeColBreakdown(
     housing + food + transportation + utilities + healthcare + entertainment + education + internet + clothing;
   const miscellaneous = Math.round(preMisc * 0.055);
 
-  const amounts: Record<ColExpenseCategoryId, number> = {
+  return {
     home: housing,
     food,
     transportation,
@@ -190,21 +274,12 @@ export function computeColBreakdown(
     clothing,
     miscellaneous,
   };
-
-  const total = Object.values(amounts).reduce((sum, value) => sum + value, 0);
-  const items = COL_EXPENSE_META.map((meta) => ({
-    ...meta,
-    amount: amounts[meta.id],
-    pct: total > 0 ? (amounts[meta.id] / total) * 100 : 0,
-  }));
-
-  return { items, total };
 }
 
 export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation[] = DEFAULT_NEPAL_COST_CITIES) {
   const location = locationById(plan.cityId, cities);
   const lifestyle = COL_LIFESTYLE_OPTIONS.find((item) => item.id === plan.lifestyle)!;
-  const { items, total } = computeColBreakdown(location, plan.lifestyle, plan.family);
+  const { items, total } = itemsFromExpenses(plan.expenses);
   const monthlySavings = Math.max(0, plan.monthlyKoreaSpendNpr - total);
   const savingsPct = plan.monthlyKoreaSpendNpr > 0 ? (monthlySavings / plan.monthlyKoreaSpendNpr) * 100 : 0;
   const readiness = retirementScore(location, total);
@@ -216,7 +291,8 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
 
   const compareCities = ["kathmandu", "pokhara", "chitwan"].map((id) => {
     const city = locationById(id, cities);
-    const cityTotal = computeColBreakdown(city, plan.lifestyle, plan.family).total;
+    const suggested = computeSuggestedExpenses(city, plan.lifestyle, plan.family);
+    const cityTotal = itemsFromExpenses(suggested).total;
     return { id, label: city.label, total: cityTotal };
   });
 
@@ -235,23 +311,26 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
     compareCities,
     koreaSpend,
     aiMessage,
-    donutData: items.map((item, index) => ({
-      name: item.label,
-      value: item.amount,
-      fill: COL_CHART_COLORS[index % COL_CHART_COLORS.length],
-    })),
+    donutData: items
+      .filter((item) => item.amount > 0)
+      .map((item, index) => ({
+        name: item.label,
+        value: item.amount,
+        fill: COL_CHART_COLORS[index % COL_CHART_COLORS.length],
+      })),
   };
 }
 
+/** Emerald-only palette for charts — consistent fintech branding. */
 export const COL_CHART_COLORS = [
-  "#34d399",
-  "#22d3ee",
-  "#a78bfa",
-  "#fbbf24",
-  "#fb7185",
-  "#60a5fa",
-  "#4ade80",
-  "#f472b6",
-  "#94a3b8",
-  "#2dd4bf",
+  "#10B981",
+  "#059669",
+  "#34D399",
+  "#047857",
+  "#6EE7B7",
+  "#065F46",
+  "#A7F3D0",
+  "#064E3B",
+  "#D1FAE5",
+  "#022C22",
 ];
