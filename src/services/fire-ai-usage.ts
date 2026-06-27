@@ -24,12 +24,24 @@ export type FireAiUsageRecordInput = {
   userId: string;
   conversationId: string | null;
   model: string;
+  aiFeature?: string;
   membershipPlan: FireAiMembershipPlan;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
   estimatedCost: number;
   responseTimeMs: number;
+};
+
+export type FireAiFailureRecordInput = {
+  userId: string;
+  conversationId?: string | null;
+  model?: string;
+  aiFeature?: string;
+  membershipPlan: FireAiMembershipPlan;
+  status: "failed" | "blocked_quota";
+  errorMessage: string;
+  responseTimeMs?: number;
 };
 
 export const FIRE_AI_QUOTAS: Record<FireAiMembershipPlan, { scope: FireAiQuotaScope; messages: number }> = {
@@ -129,6 +141,7 @@ export async function syncFireAiMonthlyUsage(
     .from("fire_ai_usage_events")
     .select("total_tokens, estimated_cost")
     .eq("user_id", userId)
+    .eq("status", "success")
     .gte("created_at", from);
 
   if (error) throw new Error(formatFireAiUsageDbError(error.message));
@@ -165,6 +178,7 @@ async function countToday(userId: string): Promise<number> {
     .from("fire_ai_usage_events")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("status", "success")
     .gte("created_at", dayStartIso());
   if (error) throw new Error(formatFireAiUsageDbError(error.message));
   return count ?? 0;
@@ -210,7 +224,9 @@ export async function recordFireAiUsage(input: FireAiUsageRecordInput): Promise<
     user_id: input.userId,
     conversation_id: input.conversationId,
     model: input.model,
+    ai_feature: input.aiFeature ?? "ai_chat",
     membership_plan: input.membershipPlan,
+    status: "success",
     prompt_tokens: input.promptTokens,
     completion_tokens: input.completionTokens,
     total_tokens: input.totalTokens,
@@ -220,6 +236,27 @@ export async function recordFireAiUsage(input: FireAiUsageRecordInput): Promise<
 
   if (error) throw new Error(formatFireAiUsageDbError(error.message));
   return getFireAiQuotaSnapshot(input.userId);
+}
+
+export async function recordFireAiRequestFailure(input: FireAiFailureRecordInput): Promise<void> {
+  const sb = serviceClient();
+  const { error } = await sb.from("fire_ai_usage_events").insert({
+    user_id: input.userId,
+    conversation_id: input.conversationId ?? null,
+    model: input.model ?? "gpt-4o-mini",
+    ai_feature: input.aiFeature ?? "ai_chat",
+    membership_plan: input.membershipPlan,
+    status: input.status,
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    estimated_cost: 0,
+    response_time: Math.max(0, Math.round(input.responseTimeMs ?? 0)),
+    error_message: input.errorMessage.slice(0, 500),
+  });
+  if (error) {
+    console.warn("[fire-ai-usage] failed request log skipped", error.message);
+  }
 }
 
 export function formatFireAiUsageDbError(message: string): string {

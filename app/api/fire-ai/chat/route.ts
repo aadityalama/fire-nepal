@@ -13,6 +13,7 @@ import {
   FireAiQuotaExceededError,
   assertFireAiQuota,
   estimateOpenAiCostUsd,
+  recordFireAiRequestFailure,
   recordFireAiUsage,
 } from "@/services/fire-ai-usage";
 
@@ -81,6 +82,12 @@ export async function POST(req: NextRequest) {
     quota = await assertFireAiQuota(user.id);
   } catch (e) {
     if (e instanceof FireAiQuotaExceededError) {
+      await recordFireAiRequestFailure({
+        userId: user.id,
+        membershipPlan: e.quota.plan,
+        status: "blocked_quota",
+        errorMessage: "AI usage limit reached",
+      });
       return Response.json(
         {
           ok: false,
@@ -241,6 +248,15 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : "AI generation failed";
           await sb.from("fire_ai_messages").delete().eq("id", assistantRow.id);
+          await recordFireAiRequestFailure({
+            userId: user.id,
+            conversationId,
+            model,
+            membershipPlan: quota.plan,
+            status: "failed",
+            errorMessage: errMsg,
+            responseTimeMs: Date.now() - responseStartedAt,
+          });
           send({ type: "error", message: errMsg });
           controller.close();
           return;
@@ -285,6 +301,7 @@ export async function POST(req: NextRequest) {
           userId: user.id,
           conversationId,
           model,
+          aiFeature: "ai_chat",
           membershipPlan: quota.plan,
           promptTokens: usage.promptTokens,
           completionTokens: usage.completionTokens,

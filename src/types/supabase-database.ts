@@ -1289,6 +1289,9 @@ export type Database = {
           total_tokens: number;
           estimated_cost: number;
           response_time: number;
+          ai_feature: string;
+          status: "success" | "failed" | "blocked_quota";
+          error_message: string | null;
           created_at: string;
         };
         Insert: {
@@ -1302,6 +1305,9 @@ export type Database = {
           total_tokens?: number;
           estimated_cost?: number;
           response_time?: number;
+          ai_feature?: string;
+          status?: "success" | "failed" | "blocked_quota";
+          error_message?: string | null;
           created_at?: string;
         };
         Update: {
@@ -1313,6 +1319,9 @@ export type Database = {
           total_tokens?: number;
           estimated_cost?: number;
           response_time?: number;
+          ai_feature?: string;
+          status?: "success" | "failed" | "blocked_quota";
+          error_message?: string | null;
         };
         Relationships: [];
       };
@@ -1369,6 +1378,34 @@ export type Database = {
         };
         Update: {
           state?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      fire_ai_admin_settings: {
+        Row: {
+          id: string;
+          monthly_budget_usd: number;
+          warn_50_enabled: boolean;
+          warn_80_enabled: boolean;
+          warn_100_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          monthly_budget_usd?: number;
+          warn_50_enabled?: boolean;
+          warn_80_enabled?: boolean;
+          warn_100_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          monthly_budget_usd?: number;
+          warn_50_enabled?: boolean;
+          warn_80_enabled?: boolean;
+          warn_100_enabled?: boolean;
           updated_at?: string;
         };
         Relationships: [];
