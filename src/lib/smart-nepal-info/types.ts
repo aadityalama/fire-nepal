@@ -19,24 +19,4 @@ export type SmartNepalDayInfo = {
   specialDay: LocalizedLabel | null;
 };
 
-export type InfoChipKind =
-  | "bs-date"
-  | "festival"
-  | "public-holiday"
-  | "special-day"
-  | "nepal-time"
-  | "weather"
-  | "gold"
-  | "nepse"
-  | "exchange";
-
-export type InfoChipData = {
-  id: string;
-  kind: InfoChipKind;
-  emoji: string;
-  label: string;
-  value: string;
-  subValue?: string;
-};
-
 export type SmartNepalInfoBarLocale = "en" | "np";

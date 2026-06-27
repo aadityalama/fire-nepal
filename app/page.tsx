@@ -37,7 +37,7 @@ import { ProductMarketingNav } from "@/components/product/landing/ProductMarketi
 import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSection";
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
-import { SmartNepalInfoBar } from "@/components/smart-nepal-info/SmartNepalInfoBar";
+import { HomeTopInfoBar } from "@/components/smart-nepal-info/HomeTopInfoBar";
 import { buildHomepageMetadata } from "@/lib/brand/site-seo";
 
 export const metadata = buildHomepageMetadata();
@@ -141,6 +141,36 @@ function SectionCard({
     <section id={id} className={`glass-card soft-gradient-border hover-lift rounded-[1.7rem] p-5 sm:p-6 ${className}`}>
       {children}
     </section>
+  );
+}
+
+function SmartFinancialToolCard({
+  href,
+  children,
+  className = "",
+}: Readonly<{
+  href: string;
+  children: ReactNode;
+  className?: string;
+}>) {
+  return (
+    <Link
+      href={href}
+      className={`glass-card soft-gradient-border group relative flex h-full cursor-pointer touch-manipulation flex-col overflow-hidden rounded-[1.7rem] p-5 transition duration-200 hover:-translate-y-1.5 hover:border-emerald-200 hover:shadow-[0_18px_48px_rgba(0,122,61,0.16)] active:scale-[0.98] active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:p-6 ${className}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function SmartFinancialToolCta({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <span
+      aria-hidden="true"
+      className="glow-button pointer-events-none mt-auto inline-flex w-full items-center justify-center rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition group-hover:-translate-y-0.5 group-hover:bg-emerald-800 group-active:translate-y-0"
+    >
+      {children}
+    </span>
   );
 }
 
@@ -254,7 +284,7 @@ function FinancialOperatingSystem() {
 export default function HomePage() {
   return (
     <main className="premium-shell overflow-hidden pb-20 sm:pb-0">
-      <SmartNepalInfoBar />
+      <HomeTopInfoBar />
 
       <ProductMarketingNav />
 
@@ -315,7 +345,7 @@ export default function HomePage() {
         <FireDashboardSection />
 
         <div id="investments" className="mt-8 grid auto-rows-fr gap-6 sm:mt-10 md:grid-cols-2 xl:grid-cols-5">
-          <SectionCard className="flex h-full flex-col">
+          <SmartFinancialToolCard href="/cost-of-living">
             <Globe2 className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Nepal Cost of Living</h3>
             <div className="mt-4 flex flex-1 flex-col justify-start gap-3 text-sm">
@@ -330,12 +360,10 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-              Calculate Now
-            </button>
-          </SectionCard>
+            <SmartFinancialToolCta>Calculate Now</SmartFinancialToolCta>
+          </SmartFinancialToolCard>
 
-          <SectionCard className="flex h-full flex-col">
+          <SmartFinancialToolCard href="/investment-planner">
             <Coins className="mb-4 h-6 w-6 text-amber-600" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Investment Planner</h3>
             <div className="mt-4 flex flex-1 flex-col justify-start gap-3 text-sm">
@@ -351,12 +379,10 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-              Compare All
-            </button>
-          </SectionCard>
+            <SmartFinancialToolCta>Compare All</SmartFinancialToolCta>
+          </SmartFinancialToolCard>
 
-          <SectionCard className="flex h-full flex-col">
+          <SmartFinancialToolCard href="/savings-tracker">
             <PiggyBank className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Savings Tracker</h3>
             <div className="mt-4 flex flex-1 flex-col gap-4">
@@ -373,12 +399,10 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-              Track Now
-            </button>
-          </SectionCard>
+            <SmartFinancialToolCta>Track Now</SmartFinancialToolCta>
+          </SmartFinancialToolCard>
 
-          <SectionCard className="flex h-full flex-col">
+          <SmartFinancialToolCard href="/return-to-nepal">
             <Plane className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Can I Return to Nepal?</h3>
             <div className="mt-4 flex flex-1 flex-col justify-start gap-5">
@@ -393,12 +417,10 @@ export default function HomePage() {
                 ))}
               </ul>
             </div>
-            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-              Check Details
-            </button>
-          </SectionCard>
+            <SmartFinancialToolCta>Check Details</SmartFinancialToolCta>
+          </SmartFinancialToolCard>
 
-          <SectionCard className="flex h-full flex-col">
+          <SmartFinancialToolCard href="/emergency-fund">
             <ShieldCheck className="mb-4 h-6 w-6 text-emerald-700" />
             <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Emergency Fund</h3>
             <div className="mt-4 flex flex-1 flex-col justify-start gap-4">
@@ -420,10 +442,8 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <button className="glow-button mt-auto w-full rounded-2xl bg-emerald-700 py-3.5 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-              Calculate Mine
-            </button>
-          </SectionCard>
+            <SmartFinancialToolCta>Calculate Mine</SmartFinancialToolCta>
+          </SmartFinancialToolCard>
         </div>
 
         <SectionCard className="mt-8 sm:mt-10">

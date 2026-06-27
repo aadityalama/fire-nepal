@@ -1,4 +1,4 @@
-export type { InfoChipData, InfoChipKind, LocalizedLabel, SmartNepalDayInfo, SmartNepalInfoBarLocale } from "./types";
+export type { LocalizedLabel, SmartNepalDayInfo, SmartNepalInfoBarLocale } from "./types";
 export {
   clearDayInfoCache,
   getCachedDayInfo,
