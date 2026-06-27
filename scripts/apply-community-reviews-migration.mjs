@@ -47,16 +47,35 @@ function resolveDbUrl() {
   return "";
 }
 
-function poolerFallbackUrl(dbUrl) {
+function poolerFallbackUrls(dbUrl) {
   try {
     const u = new URL(dbUrl);
     const ref = u.hostname.match(/^db\.([^.]+)\.supabase\.co$/)?.[1];
-    if (!ref) return null;
+    if (!ref) return [];
     const password = u.password;
     const user = `postgres.${ref}`;
-    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@aws-0-ap-south-1.pooler.supabase.com:6543/postgres`;
+    const regions = [
+      "ap-southeast-2",
+      "ap-south-1",
+      "ap-southeast-1",
+      "us-east-1",
+      "us-east-2",
+      "us-west-1",
+      "eu-west-1",
+      "eu-central-1",
+    ];
+    const urls = [];
+    for (const region of regions) {
+      for (const cluster of [1, 0, 2]) {
+        urls.push(
+          `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@aws-${cluster}-${region}.pooler.supabase.com:6543/postgres`,
+          `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@aws-${cluster}-${region}.pooler.supabase.com:5432/postgres`,
+        );
+      }
+    }
+    return urls;
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -70,7 +89,7 @@ async function applyWithPg(dbUrl) {
     process.exit(1);
   }
 
-  const attempts = [dbUrl, poolerFallbackUrl(dbUrl)].filter(Boolean);
+  const attempts = [dbUrl, ...poolerFallbackUrls(dbUrl)];
   let lastErr = null;
   for (const url of attempts) {
     const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
