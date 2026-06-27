@@ -41,33 +41,80 @@ export function buildRootMetadata(): Metadata {
     creator: FIRE_NEPAL_BRAND.name,
     publisher: FIRE_NEPAL_BRAND.name,
     category: "finance",
-    openGraph: {
-      type: "website",
-      locale: "en_US",
-      alternateLocale: ["ne_NP", "ko_KR", "ja_JP"],
-      url: origin,
-      siteName: FIRE_NEPAL_BRAND.name,
-      title,
-      description,
-      images: [
-        {
-          url: "/logo.png",
-          width: 512,
-          height: 512,
-          alt: `${FIRE_NEPAL_BRAND.name} — ${FIRE_NEPAL_BRAND.platformLine}`,
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: ["/logo.png"],
-    },
+    openGraph: buildOpenGraphTags({ origin, title, description }),
+    twitter: buildTwitterTags({ title, description, origin }),
     robots: {
       index: true,
       follow: true,
     },
+  };
+}
+
+function buildOpenGraphTags({
+  origin,
+  title,
+  description,
+  path = "",
+}: {
+  origin: string;
+  title: string;
+  description: string;
+  path?: string;
+}) {
+  return {
+    type: "website" as const,
+    locale: "en_US",
+    alternateLocale: ["ne_NP", "ko_KR", "ja_JP"],
+    url: `${origin}${path}`,
+    siteName: FIRE_NEPAL_BRAND.name,
+    title,
+    description,
+    images: [
+      {
+        url: `${origin}/logo.png`,
+        width: 512,
+        height: 512,
+        alt: `${FIRE_NEPAL_BRAND.name} — ${FIRE_NEPAL_BRAND.platformLine}`,
+      },
+    ],
+  };
+}
+
+function buildTwitterTags({
+  title,
+  description,
+  origin,
+}: {
+  title: string;
+  description: string;
+  origin: string;
+}) {
+  return {
+    card: "summary_large_image" as const,
+    title,
+    description,
+    images: [`${origin}/logo.png`],
+  };
+}
+
+/** Homepage-only metadata — explicit title, description, OG and Twitter (no layout template suffix). */
+export function buildHomepageMetadata(): Metadata {
+  const origin = getSiteOrigin();
+  const title = `${FIRE_NEPAL_BRAND.name} | ${FIRE_NEPAL_BRAND.tagline}`;
+  const description = FIRE_NEPAL_BRAND.description;
+
+  return {
+    metadataBase: new URL(origin),
+    title: {
+      absolute: title,
+    },
+    description,
+    keywords: [...FIRE_NEPAL_BRAND.keywords],
+    alternates: {
+      canonical: origin,
+    },
+    openGraph: buildOpenGraphTags({ origin, title, description }),
+    twitter: buildTwitterTags({ title, description, origin }),
   };
 }
 

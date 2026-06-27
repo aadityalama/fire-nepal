@@ -28,7 +28,6 @@ import {
   UsersRound,
   WalletCards,
 } from "lucide-react";
-import type { Metadata } from "next";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -39,15 +38,9 @@ import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSect
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { SmartNepalInfoBar } from "@/components/smart-nepal-info/SmartNepalInfoBar";
-import { FIRE_NEPAL_BRAND, getSiteOrigin } from "@/lib/brand/site-seo";
+import { buildHomepageMetadata } from "@/lib/brand/site-seo";
 
-export const metadata: Metadata = {
-  title: `${FIRE_NEPAL_BRAND.name} | ${FIRE_NEPAL_BRAND.tagline}`,
-  description: FIRE_NEPAL_BRAND.description,
-  alternates: {
-    canonical: getSiteOrigin(),
-  },
-};
+export const metadata = buildHomepageMetadata();
 
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
