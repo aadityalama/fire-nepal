@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import "@/lib/fire-nepal-ai/context-modules/register";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { checkRateLimit } from "@/lib/api/rate-limit";
