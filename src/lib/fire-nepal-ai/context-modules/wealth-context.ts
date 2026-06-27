@@ -46,6 +46,8 @@ export async function buildWealthSummaryContext(userId: string): Promise<string 
     `Wealth score: ${health.score == null ? "unavailable" : `${health.score}/${health.maxScore}`} (${health.statusLabel}).`,
     `Financial strengths: ${[hasCash ? "cash/FD base exists" : null, hasInvestments ? "investment or retirement assets are tracked" : null, !hasDebt ? "no synced liabilities" : null].filter(Boolean).join("; ") || "not enough data to identify strengths"}.`,
     `Areas for improvement: ${[hasDebt ? "review debt reduction plan" : null, !hasCash ? "add cash/FD data" : null, !hasInvestments ? "add investment/retirement data" : null].filter(Boolean).join("; ") || "continue updating data for sharper insights"}.`,
-    "Server-side cashflow/savings data is not synced yet, so do not claim monthly savings or savings rate from Wealth Summary unless the user provides it in chat.",
+    snapshot.wealth.cashflowSynced
+      ? `Synced cashflow is available for savings and FIRE calculations: income ${formatNpr(summary.monthlyIncome)}, expenses ${formatNpr(summary.monthlyExpenses)}, savings rate ${summary.savingsRatePct == null ? "unavailable" : formatPct(summary.savingsRatePct)}.`
+      : "Cashflow is not synced yet, so do not claim savings rate, monthly savings, retirement date, or FIRE number unless the user provides those numbers in chat.",
   ]);
 }

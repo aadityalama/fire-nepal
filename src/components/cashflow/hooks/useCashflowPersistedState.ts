@@ -19,6 +19,7 @@ import {
 } from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState, ExpenseCategoryKey, IncomeSourceKey } from "@/components/cashflow/types";
 import { useLocalStorageJsonState } from "@/hooks/useLocalStorageJsonState";
+import { hasCashflowData } from "@/services/cashflow-supabase";
 
 /** Derived FIRE metrics — always recomputed from persisted `state` (no drift vs stored inputs). */
 export type CashflowDerivedMetrics = {
@@ -58,6 +59,43 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
   }, [setState, userId]);
+
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    let alive = true;
+    void fetch("/api/cashflow", { credentials: "include", cache: "no-store" })
+      .then((res) => res.json() as Promise<{ ok: boolean; snapshot?: { state: CashflowDashboardState } | null }>)
+      .then((json) => {
+        if (!alive || !json.ok || !json.snapshot?.state) return;
+        setState((current) => (hasCashflowData(current) ? current : sanitizeCashflowState(json.snapshot?.state)));
+      })
+      .catch(() => {
+        /* Cloud sync is best-effort; local cashflow remains source for UI. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [hydrated, setState, userId]);
+
+  useEffect(() => {
+    if (!hydrated || !userId || !hasCashflowData(state)) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch("/api/cashflow", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state }),
+        signal: controller.signal,
+      }).catch(() => {
+        /* Keep local data even if cloud sync is unavailable. */
+      });
+    }, 700);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [hydrated, state, userId]);
 
   const metrics = useMemo((): CashflowDerivedMetrics => {
     return {

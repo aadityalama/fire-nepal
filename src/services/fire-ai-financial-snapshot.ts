@@ -1,6 +1,7 @@
 import "server-only";
 
 import { defaultCashflowState } from "@/components/cashflow/cashflow-storage";
+import type { CashflowDashboardState } from "@/components/cashflow/types";
 import { computeWealthTotals, type WealthTotals } from "@/components/portfolio/calculations";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
@@ -8,6 +9,7 @@ import { fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { defaultTransactionFilters, type ExpenseTransactionRow } from "@/lib/transaction-history-types";
 import { listAllExpenseTransactionsForExport } from "@/services/expense-transactions-supabase";
+import { hasCashflowData, loadCashflowFromSupabase } from "@/services/cashflow-supabase";
 import { resolveFireAiMembershipPlan, type FireAiMembershipPlan } from "@/services/fire-ai-usage";
 import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
 import { fetchUserProfile } from "@/services/user-profile-supabase";
@@ -27,7 +29,9 @@ export type FireAiWealthContext = {
   portfolio: WealthPortfolioStateV2 | null;
   wealthTotals: WealthTotals | null;
   summary: UnifiedFireSummary | null;
-  cashflowSynced: false;
+  cashflow: CashflowDashboardState;
+  cashflowSynced: boolean;
+  cashflowUpdatedAt: string | null;
 };
 
 export type FireAiFinancialSnapshot = {
@@ -49,7 +53,7 @@ function sixMonthsAgoIsoDate(): string {
 async function loadSnapshot(userId: string): Promise<FireAiFinancialSnapshot> {
   const sb = await createServerSupabaseClient();
 
-  const [profileRow, membershipPlan, expensesResult, portfolio, rates] = await Promise.all([
+  const [profileRow, membershipPlan, expensesResult, portfolio, cashflowSnapshot, rates] = await Promise.all([
     fetchUserProfile(sb, userId),
     resolveFireAiMembershipPlan(userId).catch(() => null),
     listAllExpenseTransactionsForExport(sb, userId, {
@@ -60,12 +64,15 @@ async function loadSnapshot(userId: string): Promise<FireAiFinancialSnapshot> {
       transactionType: "expense",
     }).catch(() => ({ rows: [], summary: { totalIncome: 0, totalExpense: 0, netBalance: 0 } })),
     loadWealthPortfolioFromSupabase(sb, userId).catch(() => null),
+    loadCashflowFromSupabase(sb, userId).catch(() => null),
     fetchNprCrossRates(),
   ]);
 
+  const cashflow = cashflowSnapshot?.state ?? defaultCashflowState();
+  const cashflowSynced = hasCashflowData(cashflow);
   const wealthTotals = portfolio ? computeWealthTotals(portfolio, rates.krwPerNpr, rates.usdPerNpr) : null;
   const summary = portfolio
-    ? computeUnifiedFireSummary(portfolio, defaultCashflowState(), rates.krwPerNpr, rates.usdPerNpr)
+    ? computeUnifiedFireSummary(portfolio, cashflow, rates.krwPerNpr, rates.usdPerNpr)
     : null;
 
   return {
@@ -83,7 +90,9 @@ async function loadSnapshot(userId: string): Promise<FireAiFinancialSnapshot> {
       portfolio,
       wealthTotals,
       summary,
-      cashflowSynced: false,
+      cashflow,
+      cashflowSynced,
+      cashflowUpdatedAt: cashflowSnapshot?.updatedAt ?? null,
     },
   };
 }

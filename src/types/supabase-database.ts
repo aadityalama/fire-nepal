@@ -1354,6 +1354,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      cashflow_snapshots: {
+        Row: {
+          user_id: string;
+          state: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          state?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          state?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       community_reviews: {
         Row: {
           id: string;

@@ -5,6 +5,7 @@
 
 export type FireAiContextModuleId =
   | "expense_tracker"
+  | "cashflow"
   | "portfolio"
   | "net_worth"
   | "fire_progress"

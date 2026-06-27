@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BarChart3, ChevronDown, Flame, MessageCircle, PiggyBank, TrendingUp } from "lucide-react";
+import { Banknote, BarChart3, ChevronDown, Flame, MessageCircle, PiggyBank, TrendingUp } from "lucide-react";
 import { formatNprInteger } from "@/components/savings-tracker/savings-currency";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import type {
@@ -24,6 +24,12 @@ type FireAiFinancialIntelligenceDashboardProps = {
 
 function formatPercent(value: number | null): string {
   return value == null ? "—" : `${Math.round(value)}%`;
+}
+
+function formatSignedNpr(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}NPR ${formatNprInteger(Math.abs(value))}`;
 }
 
 function valueOrDash(value: number): string {
@@ -119,6 +125,9 @@ export function FireAiFinancialIntelligenceDashboard({
     summary.totalInvestableAssetsNpr > 0 ||
     summary.liabilitiesNpr > 0 ||
     summary.monthlyIncome > 0;
+  const hasCashflow = summary.monthlyIncome > 0 || summary.monthlyExpenses > 0;
+  const monthlySavings = summary.monthlyIncome - summary.monthlyExpenses;
+  const expenseRatio = summary.monthlyIncome > 0 ? (summary.monthlyExpenses / summary.monthlyIncome) * 100 : null;
 
   if (!hydrated) {
     return (
@@ -168,9 +177,9 @@ export function FireAiFinancialIntelligenceDashboard({
 
         <div className="grid grid-cols-3 gap-2 lg:grid-cols-1">
           <div className={`rounded-2xl border p-3 ${light ? "border-emerald-100 bg-white/80" : "border-emerald-400/15 bg-emerald-950/25"}`}>
-            <p className={`text-[10px] font-black uppercase ${light ? "text-slate-500" : "text-emerald-200/55"}`}>Net worth</p>
+            <p className={`text-[10px] font-black uppercase ${light ? "text-slate-500" : "text-emerald-200/55"}`}>Surplus</p>
             <p className={`mt-1 truncate text-sm font-black sm:text-lg ${light ? "text-slate-900" : "text-white"}`}>
-              {valueOrDash(summary.totalNetWorthNpr)}
+              {hasCashflow ? formatSignedNpr(monthlySavings) : "—"}
             </p>
           </div>
           <div className={`rounded-2xl border p-3 ${light ? "border-emerald-100 bg-white/80" : "border-emerald-400/15 bg-emerald-950/25"}`}>
@@ -188,7 +197,31 @@ export function FireAiFinancialIntelligenceDashboard({
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-4">
+        <InsightCard
+          title="Cashflow"
+          icon={Banknote}
+          value={hasCashflow ? formatSignedNpr(monthlySavings) : "No data"}
+          subtitle={hasCashflow ? "Monthly surplus / deficit" : "Add income and expenses"}
+          defaultOpen
+        >
+          {hasCashflow ? (
+            <DetailList>
+              <DetailRow label="Monthly income" value={valueOrDash(summary.monthlyIncome)} />
+              <DetailRow label="Monthly expenses" value={valueOrDash(summary.monthlyExpenses)} />
+              <DetailRow label="Savings rate" value={formatPercent(summary.savingsRatePct)} />
+              <DetailRow label="Expense ratio" value={formatPercent(expenseRatio)} />
+              <Link href="/cashflow-dashboard" className="mt-1 text-xs font-black text-emerald-600 hover:underline">
+                Open Cashflow
+              </Link>
+            </DetailList>
+          ) : (
+            <p className={`text-sm font-semibold leading-relaxed ${light ? "text-slate-500" : "text-emerald-200/65"}`}>
+              Add recurring income and expenses in Cashflow to unlock savings rate, expense ratio, surplus/deficit, and FIRE timeline.
+            </p>
+          )}
+        </InsightCard>
+
         <InsightCard
           title="Expense Insights"
           icon={BarChart3}
