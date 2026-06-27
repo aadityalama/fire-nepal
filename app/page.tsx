@@ -28,6 +28,7 @@ import {
   UsersRound,
   WalletCards,
 } from "lucide-react";
+import type { Metadata } from "next";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -38,11 +39,20 @@ import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSect
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { SmartNepalInfoBar } from "@/components/smart-nepal-info/SmartNepalInfoBar";
+import { FIRE_NEPAL_BRAND, getSiteOrigin } from "@/lib/brand/site-seo";
+
+export const metadata: Metadata = {
+  title: `${FIRE_NEPAL_BRAND.name} | ${FIRE_NEPAL_BRAND.tagline}`,
+  description: FIRE_NEPAL_BRAND.description,
+  alternates: {
+    canonical: getSiteOrigin(),
+  },
+};
 
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],
-  ["Baby Plan Estimator", "Family goals after Korea", "/baby-plan-estimator", Home],
+  ["Baby Plan Estimator", "Family goals while living abroad", "/baby-plan-estimator", Home],
   ["Remittance Calculator", "Compare fees and timing", "/remittance-calculator", CreditCard],
   ["SIP Calculator", "Monthly investing growth", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Safe withdrawal & retirement drawdown", "/swp-calculator", LineChart],
@@ -71,15 +81,15 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
 ];
 
 const videos: Array<[string, string, string]> = [
-  ["Korean income to FIRE strategy", "9:05", "from-green-950 to-emerald-700"],
+  ["Overseas income to FIRE strategy", "9:05", "from-green-950 to-emerald-700"],
   ["Passive income after returning", "12:18", "from-amber-600 to-yellow-400"],
   ["Nepal bazaar investment basics", "8:29", "from-slate-900 to-green-700"],
 ];
 
 const posts: Array<[string, string, string]> = [
-  ["How to invest your Korea salary from Nepal", "Money guide", "5 min read"],
+  ["How to invest your abroad salary for Nepal goals", "Money guide", "5 min read"],
   ["FIRE mistakes Nepali workers make abroad", "Retirement", "7 min read"],
-  ["KRW to NPR: what to track before coming home", "Currency", "4 min read"],
+  ["Multi-currency remittance: what to track before coming home", "Currency", "4 min read"],
 ];
 
 const operatingSystemCards: Array<[string, string, string, LucideIcon]> = [
@@ -171,7 +181,7 @@ function FinancialOperatingSystem() {
               FIRE Nepal OS
             </p>
             <h2 className="max-w-xl text-3xl font-black tracking-[-0.04em] sm:text-4xl lg:text-5xl">
-              Your premium financial operating system between Korea and Nepal.
+              Your premium financial operating system for Nepalis worldwide.
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-emerald-50/82 sm:text-[1.05rem] sm:leading-relaxed">
               One emotionally motivating dashboard for savings, FIRE readiness, emergency safety,
@@ -517,7 +527,7 @@ export default function HomePage() {
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-emerald-50/85 sm:text-[1.05rem]">
                 Personalized advice for retirement passive income, tax-saving tips, remittance timing,
-                emergency planning, and wealth building between Korea and Nepal.
+                emergency planning, and wealth building across borders and back home in Nepal.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 {["Retirement Passive", "Investment Advice", "Tax Saving Tips", "Emergency Planning", "Wealth Building"].map((item) => (
@@ -538,7 +548,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="my-4 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4 text-sm leading-relaxed text-slate-700">
-                Based on your KRW income, save ₩1.2M monthly, keep 6 months in NPR cash, and split new
+                Based on your abroad income, increase monthly savings, keep 6 months in NPR cash, and split new
                 investments 60% mutual funds, 25% FD, 15% equities.
               </div>
               <div className="flex gap-2">
@@ -565,7 +575,7 @@ export default function HomePage() {
             <div className="grid items-center gap-4 md:grid-cols-[1fr_auto]">
               <div>
                 <h3 className="text-2xl font-black">Stay Updated with FIRE Nepal</h3>
-                <p className="mt-1 text-sm text-emerald-50/75">FIRE tips, KRW alerts, and investment strategy for Nepali workers.</p>
+                <p className="mt-1 text-sm text-emerald-50/75">FIRE tips, currency alerts, and investment strategy for Nepalis abroad.</p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <input className="rounded-full border border-white/20 bg-white/90 px-5 py-3 text-sm text-emerald-950 outline-none backdrop-blur focus:ring-4 focus:ring-emerald-200/30" placeholder="Enter your email" />
@@ -584,11 +594,11 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="text-lg font-black">FIRE NEPAL</p>
-                  <p className="text-xs text-emerald-100">Financial freedom for Nepali workers</p>
+                  <p className="text-xs text-emerald-100">Financial Platform for Nepalis Worldwide</p>
                 </div>
               </div>
               <p className="mt-4 max-w-sm text-sm leading-6 text-emerald-50/70">
-                KRW to NPR planning, savings tracking, investment education, and return-home readiness
+                Multi-currency planning, savings tracking, investment education, and return-home readiness
                 in one premium dashboard.
               </p>
             </div>
@@ -611,7 +621,7 @@ export default function HomePage() {
           </div>
           <div className="mt-8 flex flex-col justify-between gap-4 border-t border-white/10 pt-6 text-xs text-emerald-50/60 sm:flex-row">
             <p>&copy; 2026 FIRE Nepal. All rights reserved.</p>
-            <p>Built for Korean workers returning to Nepal.</p>
+            <p>Built for Nepalis living, working and studying abroad.</p>
           </div>
         </div>
       </footer>

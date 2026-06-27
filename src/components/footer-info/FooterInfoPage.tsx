@@ -340,12 +340,12 @@ export const aboutSections: InfoSection[] = [
   },
   {
     title: "Built for Nepalis Abroad",
-    body: "The platform is shaped around KRW to NPR planning, remittance timing, family commitments, long-distance savings goals, and the realities of building wealth across borders.",
+    body: "The platform is shaped around multi-currency planning, remittance timing, family commitments, long-distance savings goals, and the realities of building wealth across borders.",
     icon: Globe2,
   },
   {
-    title: "Korea Worker Focus",
-    body: "Korea workers need tools for salary discipline, pension and severance planning, payslip privacy, currency awareness, and a realistic Nepal return number.",
+    title: "Regional Tools, Global Platform",
+    body: "From Korea pension and payslip OCR to Gulf, Japan, Europe, and North America currency stacks — FIRE Nepal combines diaspora-wide planning with deep tools where Nepalis earn most today.",
     icon: UsersRound,
   },
   {

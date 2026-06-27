@@ -164,7 +164,7 @@ export function PremiumHeroSection() {
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-gradient-to-br from-emerald-950 to-emerald-700 p-4 text-white shadow-lg shadow-emerald-950/15">
-                <p className="text-xs text-emerald-100">{heroCopy.savedInKorea}</p>
+                <p className="text-xs text-emerald-100">{heroCopy.savedAbroad}</p>
                 <p className="mt-1 text-2xl font-black">₩31.2M</p>
               </div>
               <div className="rounded-2xl bg-white/75 p-4 shadow-inner shadow-emerald-950/5">

@@ -6,7 +6,7 @@ import { ReturnToNepalProvider } from "@/contexts/ReturnToNepalContext";
 export const metadata: Metadata = {
   title: "Return to Nepal Planner | FIRE Nepal",
   description:
-    "Premium life-transition OS for Nepalis abroad — Korea savings, Nepal cost of living, passive income, house build, family resettlement, and return readiness in one workspace.",
+    "Premium life-transition OS for Nepalis abroad — abroad savings, Nepal cost of living, passive income, house build, family resettlement, and return readiness in one workspace.",
 };
 
 export default function ReturnToNepalPage() {

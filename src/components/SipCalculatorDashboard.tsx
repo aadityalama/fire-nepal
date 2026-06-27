@@ -517,7 +517,7 @@ export function SipCalculatorDashboard() {
             <section className="mt-6 glass-card soft-gradient-border rounded-[2rem] p-5 sm:p-6">
               <div className="mb-5">
                 <h2 className="text-2xl font-black tracking-tight text-emerald-950">Quick Presets</h2>
-                <p className="text-sm font-bold text-slate-500">Fast scenarios for Nepali workers in Korea and Nepal.</p>
+                <p className="text-sm font-bold text-slate-500">Fast scenarios for Nepalis abroad and at home in Nepal.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                 {quickPresets.map((preset) => (
