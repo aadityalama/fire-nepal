@@ -30,6 +30,28 @@ export type AdminMembershipRequestsSummary = {
   rejectedToday: number;
 };
 
+export type AdminAiAnalyticsRow = {
+  id: string;
+  label: string;
+  detail: string;
+  messages: number;
+  tokens: number;
+  cost: number;
+};
+
+export type AdminAiAnalytics = {
+  totalCost: number;
+  costToday: number;
+  costThisMonth: number;
+  tokensToday: number;
+  tokensThisMonth: number;
+  averageResponseTimeMs: number;
+  mostActiveUsers: AdminAiAnalyticsRow[];
+  costPerUser: AdminAiAnalyticsRow[];
+  costPerMembership: AdminAiAnalyticsRow[];
+  mostExpensiveConversations: AdminAiAnalyticsRow[];
+};
+
 export type AdminSnapshot = {
   configured: boolean;
   serviceRoleConfigured: boolean;
@@ -38,6 +60,7 @@ export type AdminSnapshot = {
   membershipRenewal: AdminMembershipRenewalSnapshot;
   membershipRenewalReminders: MembershipRenewalReminderSnapshot;
   membershipRequestsSummary: AdminMembershipRequestsSummary;
+  aiAnalytics: AdminAiAnalytics;
   metrics: {
     totalUsers: number;
     newUsersToday: number;
@@ -119,6 +142,21 @@ function emptyMembershipRequestsSummary(): AdminMembershipRequestsSummary {
   return { pending: 0, approvedToday: 0, rejectedToday: 0 };
 }
 
+function emptyAiAnalytics(): AdminAiAnalytics {
+  return {
+    totalCost: 0,
+    costToday: 0,
+    costThisMonth: 0,
+    tokensToday: 0,
+    tokensThisMonth: 0,
+    averageResponseTimeMs: 0,
+    mostActiveUsers: [],
+    costPerUser: [],
+    costPerMembership: [],
+    mostExpensiveConversations: [],
+  };
+}
+
 export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   const emptyCharts = (): AdminSnapshot["charts"] => ({
     userGrowth30d: [],
@@ -135,6 +173,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       membershipRenewal: emptyMembershipRenewal(),
       membershipRenewalReminders: emptyMembershipRenewalReminderSnapshot(),
       membershipRequestsSummary: emptyMembershipRequestsSummary(),
+      aiAnalytics: emptyAiAnalytics(),
       metrics: {
         totalUsers: 0,
         newUsersToday: 0,
@@ -256,6 +295,118 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     if (uErr) loadError = loadError ?? uErr.message;
     for (const row of ups ?? []) {
       userProfilesName.set(row.id, row.display_name);
+    }
+  }
+
+  const emailByUser = new Map(users.map((u) => [u.id, u.email ?? "—"]));
+  const nameForUser = (userId: string): string => userProfilesName.get(userId) || emailByUser.get(userId) || userId.slice(0, 8);
+  const detailForUser = (userId: string): string => emailByUser.get(userId) ?? userId;
+
+  let aiAnalytics = emptyAiAnalytics();
+  if (sb) {
+    const { data: events, error: aiErr } = await sb
+      .from("fire_ai_usage_events")
+      .select("user_id, conversation_id, membership_plan, total_tokens, estimated_cost, response_time, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50000);
+
+    if (aiErr) {
+      if (!aiErr.message.includes("fire_ai_usage_events")) loadError = loadError ?? aiErr.message;
+    } else {
+      const rows = events ?? [];
+      const conversationIds = Array.from(new Set(rows.map((r) => r.conversation_id).filter((id): id is string => Boolean(id))));
+      const conversationTitleById = new Map<string, string>();
+      if (conversationIds.length > 0) {
+        const { data: convRows } = await sb
+          .from("fire_ai_conversations")
+          .select("id, title")
+          .in("id", conversationIds.slice(0, 1000));
+        for (const row of convRows ?? []) conversationTitleById.set(row.id, row.title);
+      }
+
+      const byUser = new Map<string, { messages: number; tokens: number; cost: number }>();
+      const byPlan = new Map<string, { messages: number; tokens: number; cost: number }>();
+      const byConversation = new Map<string, { messages: number; tokens: number; cost: number }>();
+      let responseTotal = 0;
+      let responseCount = 0;
+
+      for (const row of rows) {
+        const cost = Number(row.estimated_cost ?? 0);
+        const tokens = Number(row.total_tokens ?? 0);
+        const created = row.created_at ? new Date(row.created_at) : null;
+
+        aiAnalytics.totalCost += cost;
+        if (created && created >= todayStart) {
+          aiAnalytics.costToday += cost;
+          aiAnalytics.tokensToday += tokens;
+        }
+        if (created && created >= monthStart) {
+          aiAnalytics.costThisMonth += cost;
+          aiAnalytics.tokensThisMonth += tokens;
+        }
+        if (Number.isFinite(row.response_time) && row.response_time > 0) {
+          responseTotal += row.response_time;
+          responseCount += 1;
+        }
+
+        const userAgg = byUser.get(row.user_id) ?? { messages: 0, tokens: 0, cost: 0 };
+        userAgg.messages += 1;
+        userAgg.tokens += tokens;
+        userAgg.cost += cost;
+        byUser.set(row.user_id, userAgg);
+
+        const plan = row.membership_plan ?? "free";
+        const planAgg = byPlan.get(plan) ?? { messages: 0, tokens: 0, cost: 0 };
+        planAgg.messages += 1;
+        planAgg.tokens += tokens;
+        planAgg.cost += cost;
+        byPlan.set(plan, planAgg);
+
+        if (row.conversation_id) {
+          const convAgg = byConversation.get(row.conversation_id) ?? { messages: 0, tokens: 0, cost: 0 };
+          convAgg.messages += 1;
+          convAgg.tokens += tokens;
+          convAgg.cost += cost;
+          byConversation.set(row.conversation_id, convAgg);
+        }
+      }
+
+      const toUserRow = ([id, agg]: [string, { messages: number; tokens: number; cost: number }]): AdminAiAnalyticsRow => ({
+        id,
+        label: nameForUser(id),
+        detail: detailForUser(id),
+        messages: agg.messages,
+        tokens: agg.tokens,
+        cost: Number(agg.cost.toFixed(8)),
+      });
+      const toGenericRow = ([id, agg]: [string, { messages: number; tokens: number; cost: number }]): AdminAiAnalyticsRow => ({
+        id,
+        label: id,
+        detail: id,
+        messages: agg.messages,
+        tokens: agg.tokens,
+        cost: Number(agg.cost.toFixed(8)),
+      });
+      const toConversationRow = ([id, agg]: [string, { messages: number; tokens: number; cost: number }]): AdminAiAnalyticsRow => ({
+        id,
+        label: conversationTitleById.get(id) ?? "Untitled conversation",
+        detail: id,
+        messages: agg.messages,
+        tokens: agg.tokens,
+        cost: Number(agg.cost.toFixed(8)),
+      });
+
+      aiAnalytics = {
+        ...aiAnalytics,
+        totalCost: Number(aiAnalytics.totalCost.toFixed(8)),
+        costToday: Number(aiAnalytics.costToday.toFixed(8)),
+        costThisMonth: Number(aiAnalytics.costThisMonth.toFixed(8)),
+        averageResponseTimeMs: responseCount > 0 ? Math.round(responseTotal / responseCount) : 0,
+        mostActiveUsers: Array.from(byUser.entries()).sort((a, b) => b[1].messages - a[1].messages).slice(0, 8).map(toUserRow),
+        costPerUser: Array.from(byUser.entries()).sort((a, b) => b[1].cost - a[1].cost).slice(0, 8).map(toUserRow),
+        costPerMembership: Array.from(byPlan.entries()).sort((a, b) => b[1].cost - a[1].cost).map(toGenericRow),
+        mostExpensiveConversations: Array.from(byConversation.entries()).sort((a, b) => b[1].cost - a[1].cost).slice(0, 8).map(toConversationRow),
+      };
     }
   }
 
@@ -532,6 +683,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       approvedToday: approvedMembershipToday,
       rejectedToday: rejectedMembershipToday,
     },
+    aiAnalytics,
     metrics: {
       totalUsers,
       newUsersToday,

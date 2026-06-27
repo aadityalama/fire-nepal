@@ -20,6 +20,20 @@ export type FireAiConversation = {
 
 export type FireAiConversationSummary = Omit<FireAiConversation, "messages">;
 
+export type FireAiMembershipPlan = "free" | "premium" | "elite";
+
+export type FireAiQuotaSnapshot = {
+  plan: FireAiMembershipPlan;
+  scope: "day" | "month";
+  limit: number;
+  used: number;
+  remaining: number;
+  resetAt: string;
+  usageMonth: string;
+  tokensUsedThisMonth: number;
+  estimatedCostThisMonth: number;
+};
+
 export type FireAiHealthStatus = "excellent" | "needs_attention" | "unavailable";
 
 export type FireAiHealthScore = {

@@ -5,6 +5,18 @@ export type OpenAiChatMessage = {
   content: string;
 };
 
+export type OpenAiTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+export type OpenAiStreamResult = {
+  model: string;
+  content: string;
+  usage: OpenAiTokenUsage;
+};
+
 const OPENAI_BASE = "https://api.openai.com/v1";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 2;
@@ -66,12 +78,17 @@ async function openAiFetch(path: string, body: unknown, timeoutMs?: number): Pro
 
 export type StreamChunkHandler = (delta: string) => void;
 
+function estimateTokens(text: string): number {
+  if (!text.trim()) return 0;
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
 /** Stream a chat completion; calls onDelta for each content token. */
 export async function streamOpenAiChatCompletion(
   messages: OpenAiChatMessage[],
   onDelta: StreamChunkHandler,
   externalSignal?: AbortSignal,
-): Promise<string> {
+): Promise<OpenAiStreamResult> {
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   externalSignal?.addEventListener("abort", onAbort);
@@ -90,6 +107,7 @@ export async function streamOpenAiChatCompletion(
           model: FIRE_AI_MODEL,
           messages,
           stream: true,
+          stream_options: { include_usage: true },
           temperature: 0.7,
           max_tokens: 2048,
         }),
@@ -112,6 +130,7 @@ export async function streamOpenAiChatCompletion(
   const decoder = new TextDecoder();
   let fullContent = "";
   let buffer = "";
+  let usage: OpenAiTokenUsage | null = null;
 
   try {
     while (true) {
@@ -131,7 +150,19 @@ export async function streamOpenAiChatCompletion(
         try {
           const parsed = JSON.parse(payload) as {
             choices?: Array<{ delta?: { content?: string } }>;
+            usage?: {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+              total_tokens?: number;
+            } | null;
           };
+          if (parsed.usage) {
+            usage = {
+              promptTokens: parsed.usage.prompt_tokens ?? 0,
+              completionTokens: parsed.usage.completion_tokens ?? 0,
+              totalTokens: parsed.usage.total_tokens ?? 0,
+            };
+          }
           const delta = parsed.choices?.[0]?.delta?.content ?? "";
           if (delta) {
             fullContent += delta;
@@ -146,7 +177,18 @@ export async function streamOpenAiChatCompletion(
     reader.releaseLock();
   }
 
-  return fullContent;
+  const fallbackPromptTokens = messages.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
+  const fallbackCompletionTokens = estimateTokens(fullContent);
+
+  return {
+    model: FIRE_AI_MODEL,
+    content: fullContent,
+    usage: usage ?? {
+      promptTokens: fallbackPromptTokens,
+      completionTokens: fallbackCompletionTokens,
+      totalTokens: fallbackPromptTokens + fallbackCompletionTokens,
+    },
+  };
 }
 
 /** Generate a short conversation title from the first exchange. */

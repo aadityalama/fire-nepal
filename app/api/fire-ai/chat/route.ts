@@ -4,10 +4,16 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { buildFireAiUserContext } from "@/lib/fire-nepal-ai/context-builder";
 import { truncatePreview } from "@/lib/fire-nepal-ai/db-mapper";
-import { generateConversationTitle, isOpenAiConfigured, streamOpenAiChatCompletion } from "@/lib/fire-nepal-ai/openai";
+import { isOpenAiConfigured, streamOpenAiChatCompletion } from "@/lib/fire-nepal-ai/openai";
 import { buildFireAiSystemPrompt } from "@/lib/fire-nepal-ai/system-prompt";
 import type { OpenAiChatMessage } from "@/lib/fire-nepal-ai/openai";
 import { formatFireAiDbError } from "@/services/fire-ai-conversations";
+import {
+  FireAiQuotaExceededError,
+  assertFireAiQuota,
+  estimateOpenAiCostUsd,
+  recordFireAiUsage,
+} from "@/services/fire-ai-usage";
 
 export const runtime = "nodejs";
 
@@ -20,6 +26,12 @@ type ChatBody = {
   message?: string;
   regenerate?: boolean;
 };
+
+function fallbackConversationTitle(userMessage: string): string {
+  const trimmed = userMessage.trim();
+  if (!trimmed) return "New conversation";
+  return trimmed.length <= 48 ? trimmed : `${trimmed.slice(0, 45)}…`;
+}
 
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
@@ -61,6 +73,24 @@ export async function POST(req: NextRequest) {
   const user = authData.user;
   if (!user) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  let quota;
+  try {
+    quota = await assertFireAiQuota(user.id);
+  } catch (e) {
+    if (e instanceof FireAiQuotaExceededError) {
+      return Response.json(
+        {
+          ok: false,
+          code: "AI_QUOTA_EXCEEDED",
+          error: "AI usage limit reached",
+          quota: e.quota,
+        },
+        { status: 402 },
+      );
+    }
+    return Response.json({ ok: false, error: e instanceof Error ? e.message : "Usage check failed" }, { status: 500 });
   }
 
   const abortSignal = req.signal;
@@ -193,14 +223,20 @@ export async function POST(req: NextRequest) {
         send({ type: "message", messageId: assistantRow.id, role: "assistant" });
 
         let fullContent = "";
+        let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        let model = "gpt-4o-mini";
+        const responseStartedAt = Date.now();
         try {
-          fullContent = await streamOpenAiChatCompletion(
+          const result = await streamOpenAiChatCompletion(
             [{ role: "system", content: systemPrompt }, ...messagesForOpenAi],
             (delta) => {
               send({ type: "delta", content: delta });
             },
             abortSignal,
           );
+          fullContent = result.content;
+          usage = result.usage;
+          model = result.model;
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : "AI generation failed";
           await sb.from("fire_ai_messages").delete().eq("id", assistantRow.id);
@@ -225,7 +261,7 @@ export async function POST(req: NextRequest) {
         const isFirstExchange = history.length === 0 && !regenerate;
 
         if (isFirstExchange && userMessageContent) {
-          title = await generateConversationTitle(userMessageContent, fullContent);
+          title = fallbackConversationTitle(userMessageContent);
           send({ type: "title", title });
         }
 
@@ -244,6 +280,19 @@ export async function POST(req: NextRequest) {
           .eq("id", conversationId)
           .eq("user_id", user.id);
 
+        const updatedQuota = await recordFireAiUsage({
+          userId: user.id,
+          conversationId,
+          model,
+          membershipPlan: quota.plan,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
+          estimatedCost: estimateOpenAiCostUsd(model, usage.promptTokens, usage.completionTokens),
+          responseTimeMs: Date.now() - responseStartedAt,
+        });
+
+        send({ type: "quota", quota: updatedQuota });
         send({ type: "done", assistantMessageId: assistantRow.id, content: fullContent });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

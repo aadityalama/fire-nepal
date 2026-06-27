@@ -1,8 +1,13 @@
 "use client";
 
-import type { FireAiChatMessage, FireAiConversation, FireAiConversationSummary } from "@/lib/fire-nepal-ai/types";
+import type {
+  FireAiChatMessage,
+  FireAiConversation,
+  FireAiConversationSummary,
+  FireAiQuotaSnapshot,
+} from "@/lib/fire-nepal-ai/types";
 
-type ApiError = { ok: false; error: string };
+type ApiError = { ok: false; error: string; code?: string; quota?: FireAiQuotaSnapshot };
 type ApiOk<T> = { ok: true } & T;
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -64,8 +69,23 @@ export type FireAiStreamEvent =
   | { type: "message"; messageId: string; role: "user" | "assistant" }
   | { type: "delta"; content: string }
   | { type: "title"; title: string }
+  | { type: "quota"; quota: FireAiQuotaSnapshot }
   | { type: "done"; assistantMessageId: string; content: string }
   | { type: "error"; message: string };
+
+export class FireAiQuotaError extends Error {
+  constructor(public readonly quota: FireAiQuotaSnapshot) {
+    super("AI usage limit reached");
+    this.name = "FireAiQuotaError";
+  }
+}
+
+export async function fetchFireAiUsage(): Promise<FireAiQuotaSnapshot> {
+  const res = await fetch("/api/fire-ai/usage", { credentials: "include", cache: "no-store" });
+  const json = await parseJson<ApiOk<{ quota: FireAiQuotaSnapshot }> | ApiError>(res);
+  if (!json.ok) throw new Error(json.error);
+  return json.quota;
+}
 
 export type StreamFireAiChatOptions = {
   conversationId?: string;
@@ -91,6 +111,9 @@ export async function streamFireAiChat(opts: StreamFireAiChatOptions): Promise<v
 
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as ApiError | null;
+    if (json?.code === "AI_QUOTA_EXCEEDED" && json.quota) {
+      throw new FireAiQuotaError(json.quota);
+    }
     throw new Error(json?.error ?? `Chat request failed (${res.status})`);
   }
 

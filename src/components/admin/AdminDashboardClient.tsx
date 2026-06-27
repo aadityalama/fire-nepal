@@ -45,6 +45,16 @@ function formatNpr(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(n);
 }
 
+function formatUsd(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 4 }).format(n);
+}
+
+function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
 function formatLastCronSubtitle(lastCronStatus: string | null): string {
   if (!lastCronStatus) return "No runs recorded";
   if (lastCronStatus === "never") return "Awaiting first cron execution";
@@ -180,6 +190,7 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
   const mr = snapshot.membershipRenewal;
   const mrr = snapshot.membershipRenewalReminders;
   const mrq = snapshot.membershipRequestsSummary;
+  const ai = snapshot.aiAnalytics;
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -260,6 +271,122 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
             hint={`${re.emailsSentThisMonth} sends this month`}
             icon={Activity}
           />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-emerald-500/15 bg-[#04120d]/70 p-4 backdrop-blur-xl sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200/55">FIRE AI usage analytics</h2>
+            <p className="mt-1 text-xs font-medium text-zinc-500">
+              Server-side usage, token, cost, and response-time telemetry from AI chat requests.
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200">
+            Phase 2.2
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Total AI cost" value={formatUsd(ai.totalCost)} hint={`${formatUsd(ai.costToday)} today`} icon={Wallet} />
+          <StatTile label="Cost this month" value={formatUsd(ai.costThisMonth)} hint="Estimated OpenAI cost" icon={Sparkles} />
+          <StatTile label="Tokens this month" value={formatCompact(ai.tokensThisMonth)} hint={`${formatCompact(ai.tokensToday)} today`} icon={Activity} />
+          <StatTile label="Avg response" value={`${ai.averageResponseTimeMs}ms`} hint="Successful AI responses" icon={Timer} />
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08]">
+            <div className="border-b border-white/[0.06] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">
+              Most active users
+            </div>
+            <table className="w-full text-left text-xs">
+              <tbody>
+                {ai.mostActiveUsers.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-center text-zinc-500">No AI usage yet.</td></tr>
+                ) : (
+                  ai.mostActiveUsers.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-emerald-100">{row.label}</p>
+                        <p className="font-mono text-[10px] text-zinc-600">{row.detail}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">{row.messages} msgs</td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-200">{formatUsd(row.cost)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08]">
+            <div className="border-b border-white/[0.06] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">
+              Cost by membership
+            </div>
+            <table className="w-full text-left text-xs">
+              <tbody>
+                {ai.costPerMembership.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-center text-zinc-500">No cost data yet.</td></tr>
+                ) : (
+                  ai.costPerMembership.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-4 py-3 font-bold capitalize text-emerald-100">{row.label}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">{formatCompact(row.tokens)} tokens</td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-200">{formatUsd(row.cost)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08]">
+            <div className="border-b border-white/[0.06] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">
+              Cost per user
+            </div>
+            <table className="w-full text-left text-xs">
+              <tbody>
+                {ai.costPerUser.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-center text-zinc-500">No user cost data yet.</td></tr>
+                ) : (
+                  ai.costPerUser.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-emerald-100">{row.label}</p>
+                        <p className="font-mono text-[10px] text-zinc-600">{row.detail}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">{formatCompact(row.tokens)} tokens</td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-200">{formatUsd(row.cost)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08]">
+            <div className="border-b border-white/[0.06] px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-200/55">
+              Most expensive conversations
+            </div>
+            <table className="w-full text-left text-xs">
+              <tbody>
+                {ai.mostExpensiveConversations.length === 0 ? (
+                  <tr><td className="px-4 py-6 text-center text-zinc-500">No conversation cost data yet.</td></tr>
+                ) : (
+                  ai.mostExpensiveConversations.map((row) => (
+                    <tr key={row.id} className="border-b border-white/[0.04]">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-emerald-100">{row.label}</p>
+                        <p className="font-mono text-[10px] text-zinc-600">{row.detail}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-300">{row.messages} msgs</td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-200">{formatUsd(row.cost)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

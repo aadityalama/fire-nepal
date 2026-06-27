@@ -6,17 +6,20 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FireAiChatHeader } from "@/components/fire-nepal-ai/FireAiChatHeader";
 import { FireAiChatInput } from "@/components/fire-nepal-ai/FireAiChatInput";
 import { FireAiChatMessageBubble } from "@/components/fire-nepal-ai/FireAiChatMessageBubble";
+import { FireAiQuotaUpgradeCard } from "@/components/fire-nepal-ai/FireAiQuotaUpgradeCard";
 import { FireAiSuggestedPrompts } from "@/components/fire-nepal-ai/FireAiSuggestedPrompts";
 import {
+  FireAiQuotaError,
   createOptimisticUserMessage,
   createStreamingAssistantMessage,
   deleteFireAiConversation,
   fetchFireAiConversation,
   fetchFireAiConversations,
+  fetchFireAiUsage,
   renameFireAiConversation,
   streamFireAiChat,
 } from "@/lib/fire-nepal-ai/conversation-api";
-import type { FireAiChatMessage, FireAiConversationSummary } from "@/lib/fire-nepal-ai/types";
+import type { FireAiChatMessage, FireAiConversationSummary, FireAiQuotaSnapshot } from "@/lib/fire-nepal-ai/types";
 
 function ChatLoadingSkeleton() {
   const light = useFireTheme().resolvedTheme === "light";
@@ -44,6 +47,7 @@ export function FireAiChat() {
   const [loadingConversation, setLoadingConversation] = useState(Boolean(convIdParam));
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quota, setQuota] = useState<FireAiQuotaSnapshot | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -63,6 +67,20 @@ export function FireAiChat() {
   useEffect(() => {
     void refreshConversations();
   }, [refreshConversations]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchFireAiUsage()
+      .then((q) => {
+        if (alive) setQuota(q);
+      })
+      .catch(() => {
+        /* quota endpoint can fail before migrations are applied */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const loadConversation = useCallback(async (id: string) => {
     setLoadingConversation(true);
@@ -112,6 +130,7 @@ export function FireAiChat() {
       if ((!trimmed && !opts?.regenerate) || isGenerating) return;
 
       setError(null);
+      setQuota(null);
       setIsGenerating(true);
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -161,6 +180,8 @@ export function FireAiChat() {
               );
             } else if (event.type === "title") {
               setConversationTitle(event.title);
+            } else if (event.type === "quota") {
+              setQuota(event.quota);
             } else if (event.type === "done") {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -180,6 +201,12 @@ export function FireAiChat() {
         void refreshConversations();
       } catch (e) {
         if (controller.signal.aborted) return;
+        if (e instanceof FireAiQuotaError) {
+          setQuota(e.quota);
+          setMessages((prev) => prev.filter((m) => m.id !== assistantLocalId));
+          setError(null);
+          return;
+        }
         const msg = e instanceof Error ? e.message : "Failed to send message";
         setError(msg);
         setMessages((prev) =>
@@ -299,6 +326,7 @@ export function FireAiChat() {
               {error}
             </div>
           ) : null}
+          {quota && quota.remaining <= 0 ? <FireAiQuotaUpgradeCard quota={quota} /> : null}
           <div ref={bottomRef} />
         </div>
 

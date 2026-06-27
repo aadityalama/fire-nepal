@@ -1277,6 +1277,83 @@ export type Database = {
         };
         Relationships: [];
       };
+      fire_ai_usage_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          conversation_id: string | null;
+          model: string;
+          membership_plan: "free" | "premium" | "elite";
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens: number;
+          estimated_cost: number;
+          response_time: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          conversation_id?: string | null;
+          model: string;
+          membership_plan?: "free" | "premium" | "elite";
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          estimated_cost?: number;
+          response_time?: number;
+          created_at?: string;
+        };
+        Update: {
+          conversation_id?: string | null;
+          model?: string;
+          membership_plan?: "free" | "premium" | "elite";
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          estimated_cost?: number;
+          response_time?: number;
+        };
+        Relationships: [];
+      };
+      fire_ai_monthly_usage: {
+        Row: {
+          id: string;
+          user_id: string;
+          usage_month: string;
+          ai_messages_used: number;
+          tokens_used: number;
+          estimated_openai_cost: number;
+          current_membership: "free" | "premium" | "elite";
+          remaining_quota: number;
+          reset_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          usage_month: string;
+          ai_messages_used?: number;
+          tokens_used?: number;
+          estimated_openai_cost?: number;
+          current_membership?: "free" | "premium" | "elite";
+          remaining_quota?: number;
+          reset_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          ai_messages_used?: number;
+          tokens_used?: number;
+          estimated_openai_cost?: number;
+          current_membership?: "free" | "premium" | "elite";
+          remaining_quota?: number;
+          reset_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       community_reviews: {
         Row: {
           id: string;
@@ -1346,7 +1423,16 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      fire_ai_usage_month: {
+        Args: { ts: string };
+        Returns: string;
+      };
+      fire_ai_month_reset_at: {
+        Args: { month_ym: string };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
   };
 };
