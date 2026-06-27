@@ -1231,6 +1231,52 @@ export type Database = {
         };
         Relationships: [];
       };
+      fire_ai_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          preview: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title?: string;
+          preview?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          preview?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      fire_ai_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          user_id: string;
+          role: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          user_id: string;
+          role: string;
+          content?: string;
+          created_at?: string;
+        };
+        Update: {
+          content?: string;
+        };
+        Relationships: [];
+      };
       community_reviews: {
         Row: {
           id: string;

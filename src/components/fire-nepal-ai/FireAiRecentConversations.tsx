@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import type { FireAiConversation } from "@/lib/fire-nepal-ai/types";
+import type { FireAiConversationSummary } from "@/lib/fire-nepal-ai/types";
 import { FireAiGlassCard } from "@/components/fire-nepal-ai/ui/FireAiGlassCard";
 
 type FireAiRecentConversationsProps = {
-  conversations: FireAiConversation[];
+  conversations: FireAiConversationSummary[];
 };
 
 function formatRelativeTime(iso: string): string {

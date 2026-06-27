@@ -1,10 +1,13 @@
 export type FireAiMessageRole = "user" | "assistant";
 
+export type FireAiMessageStatus = "complete" | "streaming" | "failed";
+
 export type FireAiChatMessage = {
   id: string;
   role: FireAiMessageRole;
   content: string;
   timestamp: string;
+  status?: FireAiMessageStatus;
 };
 
 export type FireAiConversation = {
@@ -14,6 +17,8 @@ export type FireAiConversation = {
   updatedAt: string;
   messages: FireAiChatMessage[];
 };
+
+export type FireAiConversationSummary = Omit<FireAiConversation, "messages">;
 
 export type FireAiHealthStatus = "excellent" | "needs_attention" | "unavailable";
 

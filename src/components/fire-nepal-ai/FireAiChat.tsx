@@ -1,230 +1,316 @@
 "use client";
 
-import { Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useFireAiData } from "@/lib/fire-nepal-ai/use-fire-ai-data";
+import { FireAiChatHeader } from "@/components/fire-nepal-ai/FireAiChatHeader";
+import { FireAiChatInput } from "@/components/fire-nepal-ai/FireAiChatInput";
+import { FireAiChatMessageBubble } from "@/components/fire-nepal-ai/FireAiChatMessageBubble";
+import { FireAiSuggestedPrompts } from "@/components/fire-nepal-ai/FireAiSuggestedPrompts";
 import {
-  buildFireAiChatResponse,
-  FIRE_AI_SUGGESTED_PROMPTS,
-} from "@/lib/fire-nepal-ai/chat-responses";
-import {
-  createFireAiConversationId,
-  createFireAiMessageId,
-  getFireAiConversation,
-  saveFireAiConversation,
-} from "@/lib/fire-nepal-ai/conversation-storage";
-import type { FireAiChatMessage, FireAiConversation } from "@/lib/fire-nepal-ai/types";
+  createOptimisticUserMessage,
+  createStreamingAssistantMessage,
+  deleteFireAiConversation,
+  fetchFireAiConversation,
+  fetchFireAiConversations,
+  renameFireAiConversation,
+  streamFireAiChat,
+} from "@/lib/fire-nepal-ai/conversation-api";
+import type { FireAiChatMessage, FireAiConversationSummary } from "@/lib/fire-nepal-ai/types";
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function ChatLoadingSkeleton() {
+  const light = useFireTheme().resolvedTheme === "light";
+  return (
+    <div className="space-y-4 px-1 py-6">
+      <div className={`ml-auto h-14 w-3/4 animate-pulse rounded-2xl ${light ? "bg-emerald-100/40" : "bg-emerald-900/30"}`} />
+      <div className={`h-20 w-4/5 animate-pulse rounded-2xl ${light ? "bg-emerald-100/25" : "bg-emerald-900/20"}`} />
+    </div>
+  );
 }
 
 export function FireAiChat() {
   const light = useFireTheme().resolvedTheme === "light";
-  const { user } = useProductAuth();
-  const { summary, expenseState, hydrated, refreshConversations } = useFireAiData();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const convIdParam = searchParams.get("id");
   const promptParam = searchParams.get("prompt");
 
-  const [conversationId, setConversationId] = useState(() => convIdParam ?? createFireAiConversationId());
+  const [conversations, setConversations] = useState<FireAiConversationSummary[]>([]);
+  const [conversationId, setConversationId] = useState<string | undefined>(convIdParam ?? undefined);
+  const [conversationTitle, setConversationTitle] = useState("Ask FIRE AI");
   const [messages, setMessages] = useState<FireAiChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingConversation, setLoadingConversation] = useState(Boolean(convIdParam));
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const bootedRef = useRef(false);
 
-  useEffect(() => {
-    if (convIdParam) {
-      const existing = getFireAiConversation(convIdParam, user?.id);
-      if (existing) {
-        setConversationId(existing.id);
-        setMessages(existing.messages);
-      }
+  const refreshConversations = useCallback(async () => {
+    try {
+      const list = await fetchFireAiConversations();
+      setConversations(list);
+    } catch {
+      /* list may fail if migration not applied */
+    } finally {
+      setLoadingConversations(false);
     }
-  }, [convIdParam, user?.id]);
+  }, []);
+
+  useEffect(() => {
+    void refreshConversations();
+  }, [refreshConversations]);
+
+  const loadConversation = useCallback(async (id: string) => {
+    setLoadingConversation(true);
+    setError(null);
+    try {
+      const conv = await fetchFireAiConversation(id);
+      setConversationId(conv.id);
+      setConversationTitle(conv.title);
+      setMessages(conv.messages);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load conversation");
+      setMessages([]);
+    } finally {
+      setLoadingConversation(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (convIdParam) void loadConversation(convIdParam);
+    else {
+      setConversationId(undefined);
+      setConversationTitle("Ask FIRE AI");
+      setMessages([]);
+      setLoadingConversation(false);
+    }
+  }, [convIdParam, loadConversation]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing]);
+  }, [messages, isGenerating]);
 
-  const persist = useCallback(
-    (msgs: FireAiChatMessage[], title?: string) => {
-      const conv: FireAiConversation = {
-        id: conversationId,
-        title: title ?? msgs.find((m) => m.role === "user")?.content.slice(0, 40) ?? "New conversation",
-        preview: msgs[msgs.length - 1]?.content.slice(0, 80) ?? "",
-        updatedAt: new Date().toISOString(),
-        messages: msgs,
-      };
-      saveFireAiConversation(conv, user?.id);
-      refreshConversations();
+  const updateUrl = useCallback(
+    (id?: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (id) params.set("id", id);
+      else params.delete("id");
+      params.delete("prompt");
+      const qs = params.toString();
+      router.replace(qs ? `/fire-ai/chat?${qs}` : "/fire-ai/chat", { scroll: false });
     },
-    [conversationId, user?.id, refreshConversations],
+    [router, searchParams],
   );
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { regenerate?: boolean }) => {
       const trimmed = text.trim();
-      if (!trimmed || typing) return;
+      if ((!trimmed && !opts?.regenerate) || isGenerating) return;
 
-      const userMsg: FireAiChatMessage = {
-        id: createFireAiMessageId(),
-        role: "user",
-        content: trimmed,
-        timestamp: new Date().toISOString(),
-      };
-      const next = [...messages, userMsg];
-      setMessages(next);
-      setInput("");
-      setTyping(true);
+      setError(null);
+      setIsGenerating(true);
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
+      let activeConvId = conversationId;
+      let assistantLocalId = createStreamingAssistantMessage().id;
 
-      const reply = buildFireAiChatResponse(trimmed, summary, expenseState);
-      const assistantMsg: FireAiChatMessage = {
-        id: createFireAiMessageId(),
-        role: "assistant",
-        content: reply,
-        timestamp: new Date().toISOString(),
-      };
-      const final = [...next, assistantMsg];
-      setMessages(final);
-      setTyping(false);
-      persist(final, trimmed.slice(0, 40));
+      if (!opts?.regenerate) {
+        const userMsg = createOptimisticUserMessage(trimmed);
+        const assistantMsg = createStreamingAssistantMessage();
+        assistantLocalId = assistantMsg.id;
+        setMessages((prev) => [...prev, userMsg, assistantMsg]);
+        setInput("");
+      } else {
+        setMessages((prev) => {
+          const lastAsstIdx = [...prev].reverse().findIndex((m) => m.role === "assistant");
+          if (lastAsstIdx < 0) return prev;
+          const cutFrom = prev.length - 1 - lastAsstIdx;
+          const assistantMsg = createStreamingAssistantMessage();
+          assistantLocalId = assistantMsg.id;
+          return [...prev.slice(0, cutFrom), assistantMsg];
+        });
+      }
+
+      try {
+        await streamFireAiChat({
+          conversationId: activeConvId,
+          message: opts?.regenerate ? "" : trimmed,
+          regenerate: opts?.regenerate,
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type === "conversation") {
+              activeConvId = event.conversationId;
+              setConversationId(event.conversationId);
+              updateUrl(event.conversationId);
+            } else if (event.type === "message" && event.role === "assistant") {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantLocalId ? { ...m, id: event.messageId } : m)),
+              );
+              assistantLocalId = event.messageId;
+            } else if (event.type === "delta") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantLocalId ? { ...m, content: m.content + event.content, status: "streaming" } : m,
+                ),
+              );
+            } else if (event.type === "title") {
+              setConversationTitle(event.title);
+            } else if (event.type === "done") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantLocalId
+                    ? { ...m, id: event.assistantMessageId, content: event.content, status: "complete" }
+                    : m,
+                ),
+              );
+            } else if (event.type === "error") {
+              setError(event.message);
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantLocalId ? { ...m, status: "failed", content: "" } : m)),
+              );
+            }
+          },
+        });
+        void refreshConversations();
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        const msg = e instanceof Error ? e.message : "Failed to send message";
+        setError(msg);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantLocalId ? { ...m, status: "failed" } : m)),
+        );
+      } finally {
+        setIsGenerating(false);
+        abortRef.current = null;
+      }
     },
-    [typing, messages, summary, expenseState, persist],
+    [conversationId, isGenerating, refreshConversations, updateUrl],
   );
 
   useEffect(() => {
-    if (!hydrated || bootedRef.current || !promptParam) return;
+    if (bootedRef.current || !promptParam || loadingConversation) return;
     bootedRef.current = true;
     void sendMessage(promptParam);
-  }, [hydrated, promptParam, sendMessage]);
+  }, [promptParam, loadingConversation, sendMessage]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void sendMessage(input);
-  };
+  const handleNewChat = useCallback(() => {
+    abortRef.current?.abort();
+    setIsGenerating(false);
+    setMessages([]);
+    setConversationId(undefined);
+    setConversationTitle("Ask FIRE AI");
+    setError(null);
+    updateUrl(undefined);
+  }, [updateUrl]);
 
-  const empty = messages.length === 0 && !typing;
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      updateUrl(id);
+    },
+    [updateUrl],
+  );
+
+  const handleRename = useCallback(
+    async (id: string, title: string) => {
+      const updated = await renameFireAiConversation(id, title);
+      setConversationTitle(updated.title);
+      void refreshConversations();
+    },
+    [refreshConversations],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      await deleteFireAiConversation(id);
+      if (id === conversationId) handleNewChat();
+      void refreshConversations();
+    },
+    [conversationId, handleNewChat, refreshConversations],
+  );
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+    setIsGenerating(false);
+    setMessages((prev) =>
+      prev.map((m) => (m.status === "streaming" ? { ...m, status: "complete" } : m)),
+    );
+  }, []);
+
+  const handleRegenerate = useCallback(() => {
+    void sendMessage("", { regenerate: true });
+  }, [sendMessage]);
+
+  const handleRetry = useCallback(() => {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (lastUser) void sendMessage(lastUser.content, { regenerate: true });
+  }, [messages, sendMessage]);
+
+  const lastAssistantIdx = [...messages].reverse().findIndex((m) => m.role === "assistant");
+  const lastAssistantId = lastAssistantIdx >= 0 ? messages[messages.length - 1 - lastAssistantIdx]?.id : undefined;
+
+  const empty = messages.length === 0 && !isGenerating && !loadingConversation;
 
   return (
-    <div className="flex min-h-[calc(100dvh-10rem)] flex-col">
-      <div className="flex-1 space-y-4 overflow-y-auto pb-4">
-        {empty ? (
-          <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-            <p className={`text-4xl`} aria-hidden>
-              💬
-            </p>
-            <h2 className={`mt-4 text-lg font-black ${light ? "text-slate-900" : "text-white"}`}>
-              Ask FIRE AI anything
-            </h2>
-            <p className={`mt-2 max-w-xs text-sm font-medium leading-relaxed ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
-              Get answers about your savings, spending, settlement, and FIRE progress — based on your real data.
-            </p>
-            <div className="mt-6 flex w-full flex-col gap-2">
-              {FIRE_AI_SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => void sendMessage(prompt)}
-                  className={`min-h-[48px] rounded-2xl border px-4 py-3 text-left text-sm font-bold transition active:scale-[0.98] ${
-                    light
-                      ? "border-emerald-200/80 bg-white/90 text-emerald-800 hover:bg-emerald-50"
-                      : "border-emerald-400/20 bg-emerald-950/40 text-emerald-100 hover:bg-emerald-950/60"
-                  }`}
-                >
-                  {prompt}
-                </button>
+    <div className="flex min-h-[100dvh] flex-col">
+      <FireAiChatHeader
+        title={conversationTitle}
+        conversations={conversations}
+        currentConversationId={conversationId}
+        onNewChat={handleNewChat}
+        onSelectConversation={handleSelectConversation}
+        onRenameConversation={handleRename}
+        onDeleteConversation={handleDelete}
+        loadingConversations={loadingConversations}
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+          {loadingConversation ? (
+            <ChatLoadingSkeleton />
+          ) : empty ? (
+            <FireAiSuggestedPrompts onSelect={(p) => void sendMessage(p)} disabled={isGenerating} />
+          ) : (
+            <div className="mx-auto max-w-2xl space-y-4">
+              {messages.map((msg) => (
+                <FireAiChatMessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isLastAssistant={msg.id === lastAssistantId}
+                  isGenerating={isGenerating}
+                  onRegenerate={handleRegenerate}
+                  onRetry={msg.status === "failed" ? handleRetry : undefined}
+                />
               ))}
             </div>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    msg.role === "user"
-                      ? light
-                        ? "bg-emerald-700 text-white"
-                        : "bg-emerald-600 text-white"
-                      : light
-                        ? "border border-emerald-100 bg-white text-slate-800"
-                        : "border border-emerald-400/15 bg-emerald-950/50 text-emerald-50"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed">{msg.content}</p>
-                  <p
-                    className={`mt-1.5 text-[10px] font-semibold ${
-                      msg.role === "user" ? "text-emerald-100/70" : light ? "text-slate-400" : "text-emerald-300/50"
-                    }`}
-                  >
-                    {formatTime(msg.timestamp)}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {typing ? (
-              <div className="flex justify-start">
-                <div
-                  className={`rounded-2xl px-4 py-3 ${
-                    light ? "border border-emerald-100 bg-white" : "border border-emerald-400/15 bg-emerald-950/50"
-                  }`}
-                >
-                  <div className="flex gap-1.5">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className={`h-2 w-2 animate-bounce rounded-full ${light ? "bg-emerald-400" : "bg-emerald-400/80"}`}
-                        style={{ animationDelay: `${i * 150}ms` }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-        <div ref={bottomRef} />
-      </div>
+          )}
+          {error ? (
+            <div
+              className={`mx-auto mt-4 max-w-2xl rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                light ? "border-red-200 bg-red-50 text-red-700" : "border-red-400/30 bg-red-950/30 text-red-200"
+              }`}
+              role="alert"
+            >
+              {error}
+            </div>
+          ) : null}
+          <div ref={bottomRef} />
+        </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className={`sticky bottom-0 flex gap-2 border-t pt-3 ${
-          light ? "border-emerald-100 bg-[#f4fbf6]/95" : "border-emerald-400/10 bg-[#030806]/95"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="text"
+        <FireAiChatInput
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about your finances…"
-          className={`min-h-[48px] flex-1 rounded-2xl border px-4 text-sm font-medium outline-none transition focus:ring-2 ${
-            light
-              ? "border-emerald-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-emerald-400 focus:ring-emerald-100"
-              : "border-emerald-400/20 bg-emerald-950/50 text-white placeholder:text-emerald-300/40 focus:border-emerald-400/50 focus:ring-emerald-500/20"
-          }`}
-          aria-label="Message FIRE AI"
+          onChange={setInput}
+          onSubmit={() => void sendMessage(input)}
+          onStop={handleStop}
+          disabled={loadingConversation}
+          isGenerating={isGenerating}
         />
-        <button
-          type="submit"
-          disabled={!input.trim() || typing}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-700 text-white transition hover:bg-emerald-600 disabled:opacity-40"
-          aria-label="Send message"
-        >
-          <Send size={18} />
-        </button>
-      </form>
+      </div>
     </div>
   );
 }

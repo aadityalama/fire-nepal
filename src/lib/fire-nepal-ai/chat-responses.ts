@@ -8,11 +8,12 @@ import { formatNprInteger } from "@/components/savings-tracker/savings-currency"
 import { buildTodayInsight } from "@/lib/fire-nepal-ai/today-insight";
 
 export const FIRE_AI_SUGGESTED_PROMPTS = [
-  "How much did I save this month?",
-  "Explain my settlement.",
-  "How can I reach FIRE faster?",
-  "Review my spending.",
-  "Should I increase SIP?",
+  "Analyze my monthly expenses",
+  "Review my FIRE progress",
+  "Help me build a budget",
+  "Explain my investment portfolio",
+  "Plan my retirement",
+  "Help me reach financial independence",
 ] as const;
 
 function normalizePrompt(text: string): string {
