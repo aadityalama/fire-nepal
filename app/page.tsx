@@ -14,7 +14,7 @@ import {
   CreditCard,
   Flame,
   Globe2,
-  Home,
+  GraduationCap,
   Landmark,
   LayoutDashboard,
   LayoutGrid,
@@ -45,7 +45,7 @@ export const metadata = buildHomepageMetadata();
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],
-  ["Baby Plan Estimator", "Family goals while living abroad", "/baby-plan-estimator", Home],
+  ["Family Wealth + Child Education", "Plan your family's future, child education, savings and long-term wealth goals.", "/family", GraduationCap],
   ["Remittance Calculator", "Compare fees and timing", "/remittance-calculator", CreditCard],
   ["SIP Calculator", "Monthly investing growth", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Safe withdrawal & retirement drawdown", "/swp-calculator", LineChart],
