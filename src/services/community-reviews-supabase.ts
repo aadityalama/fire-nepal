@@ -12,7 +12,7 @@ type Client = SupabaseClient<Database>;
 type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["Update"];
 
 const ADMIN_COLUMNS =
-  "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, display_order, created_at, updated_at, approved_by, approved_at, updated_by, deleted_at";
+  "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at, approved_by, approved_at, updated_by, deleted_at";
 
 export function clampRating(rating: number): number {
   return Math.min(5, Math.max(1, Math.round(rating)));
@@ -122,6 +122,7 @@ export async function communityReviewAdminStats(client: Client): Promise<Communi
 export function buildReviewPatch(
   input: Partial<CommunityReviewInput> & {
     status?: CommunityReviewStatus;
+    review_type?: CommunityReviewInput["review_type"];
     deleted_at?: string | null;
     approved_by?: string | null;
     approved_at?: string | null;
@@ -139,6 +140,7 @@ export function buildReviewPatch(
   if (input.verified !== undefined) patch.verified = input.verified;
   if (input.is_demo !== undefined) patch.is_demo = input.is_demo;
   if (input.status !== undefined) patch.status = input.status;
+  if (input.review_type !== undefined) patch.review_type = input.review_type;
   if (input.display_order !== undefined) patch.display_order = input.display_order;
   if (input.deleted_at !== undefined) patch.deleted_at = input.deleted_at;
   if (input.approved_by !== undefined) patch.approved_by = input.approved_by;

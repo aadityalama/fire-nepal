@@ -49,7 +49,8 @@ export async function fetchApprovedCommunityReviews(): Promise<CommunityReviewPu
           .select(PUBLIC_COLUMNS)
           .eq("status", "approved")
           .is("deleted_at", null)
-          .order("display_order", { ascending: true });
+          .order("display_order", { ascending: true })
+          .order("created_at", { ascending: false });
         if (seeded.data?.length) return seeded.data as CommunityReviewPublic[];
       }
       return fallbackReviews();

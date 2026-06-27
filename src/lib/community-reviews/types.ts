@@ -1,4 +1,5 @@
 export type CommunityReviewStatus = "pending" | "approved" | "rejected";
+export type CommunityReviewType = "community" | "homepage";
 
 export type CommunityReviewRow = {
   id: string;
@@ -13,6 +14,7 @@ export type CommunityReviewRow = {
   verified: boolean;
   is_demo: boolean;
   status: CommunityReviewStatus;
+  review_type: CommunityReviewType;
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -47,6 +49,7 @@ export type CommunityReviewInput = {
   verified?: boolean;
   is_demo?: boolean;
   status?: CommunityReviewStatus;
+  review_type?: CommunityReviewType;
   display_order?: number;
 };
 

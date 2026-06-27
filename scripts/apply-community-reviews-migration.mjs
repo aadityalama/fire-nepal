@@ -3,11 +3,11 @@
  * Apply community reviews migration to production.
  *
  * Requires ONE of:
- *   - SUPABASE_DB_URL in .env.local
+ *   - SUPABASE_DB_URL in .env.local (Postgres URI)
  *   - SUPABASE_ACCESS_TOKEN in .env.local + NEXT_PUBLIC_SUPABASE_URL
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadDotEnvLocal } from "./load-dotenv-local.mjs";
@@ -18,18 +18,98 @@ loadDotEnvLocal();
 process.env.SUPABASE_CLI_DISABLE_TELEMETRY = "1";
 process.env.DO_NOT_TRACK = "1";
 
-const dbUrl = (process.env.SUPABASE_DB_URL ?? "").trim();
+const migrationFile = "20260626120000_community_reviews.sql";
+const migrations = [migrationFile];
+
+function resolveDbUrl() {
+  const direct = (
+    process.env.SUPABASE_DB_URL ??
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_URL ??
+    ""
+  ).trim();
+  if (direct.length >= 20) return direct;
+
+  const password = (process.env.SUPABASE_DB_PASSWORD ?? "").trim();
+  const projectUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
+  const projectRef = projectUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] ?? "";
+  if (password.length >= 4 && projectRef.length === 20) {
+    return `postgresql://postgres:${encodeURIComponent(password)}@db.${projectRef}.supabase.co:5432/postgres`;
+  }
+
+  for (const file of [join(root, ".env.local"), join(root, ".env.production.local"), join(root, ".env.vercel")]) {
+    if (!existsSync(file)) continue;
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      const match = line.match(/postgresql:\/\/[^\s'"]+/);
+      if (match?.[0]) return match[0];
+    }
+  }
+  return "";
+}
+
+function poolerFallbackUrl(dbUrl) {
+  try {
+    const u = new URL(dbUrl);
+    const ref = u.hostname.match(/^db\.([^.]+)\.supabase\.co$/)?.[1];
+    if (!ref) return null;
+    const password = u.password;
+    const user = `postgres.${ref}`;
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@aws-0-ap-south-1.pooler.supabase.com:6543/postgres`;
+  } catch {
+    return null;
+  }
+}
+
+async function applyWithPg(dbUrl) {
+  const sql = readFileSync(join(root, "supabase", "migrations", migrationFile), "utf8");
+  let pg;
+  try {
+    pg = (await import("pg")).default;
+  } catch {
+    console.error("FAIL: pg package not installed. Run: npm install pg");
+    process.exit(1);
+  }
+
+  const attempts = [dbUrl, poolerFallbackUrl(dbUrl)].filter(Boolean);
+  let lastErr = null;
+  for (const url of attempts) {
+    const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+    try {
+      console.log(`\nMethod: pg direct SQL (${url.includes("pooler") ? "pooler IPv4" : "direct"})\n`);
+      await client.connect();
+      await client.query(sql);
+      await client.query("notify pgrst, 'reload schema'");
+      await client.end();
+      console.log("\nOK: migration SQL applied via pg.\n");
+      return true;
+    } catch (e) {
+      lastErr = e;
+      try {
+        await client.end();
+      } catch {
+        /* ignore */
+      }
+      console.error(`pg attempt failed: ${e.message}`);
+    }
+  }
+  console.error(`\nFAIL: pg could not apply migration — ${lastErr?.message ?? "unknown error"}\n`);
+  return false;
+}
+
+const dbUrl = resolveDbUrl();
 const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
 const projectUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
 const projectRef = projectUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] ?? "";
 
-const migrations = ["20260626120000_community_reviews.sql"];
-
 console.log("\n--- Community reviews production migration apply ---\n");
 for (const m of migrations) console.log("  -", m);
+console.log(`  SUPABASE_DB_URL length: ${dbUrl.length}`);
 
 if (dbUrl.length >= 20) {
-  console.log("\nMethod: supabase db push (--db-url)\n");
+  const ok = await applyWithPg(dbUrl);
+  if (ok) process.exit(0);
+
+  console.log("\nFallback: supabase db push (--db-url)\n");
   const push = spawnSync(
     "npx",
     ["--yes", "supabase@latest", "db", "push", "--db-url", dbUrl, "--yes"],
@@ -37,12 +117,11 @@ if (dbUrl.length >= 20) {
   );
   process.stdout.write(push.stdout ?? "");
   process.stderr.write(push.stderr ?? "");
-  if (push.status !== 0) {
-    console.error("\nFAIL: db push exit", push.status);
-    process.exit(push.status ?? 1);
+  if (push.status === 0) {
+    console.log("\nOK: db push completed.\n");
+    process.exit(0);
   }
-  console.log("\nOK: db push completed.\n");
-  process.exit(0);
+  process.exit(push.status ?? 1);
 }
 
 if (accessToken.length >= 20 && projectRef.length === 20) {
@@ -69,9 +148,10 @@ if (accessToken.length >= 20 && projectRef.length === 20) {
 }
 
 console.error(`
-FAIL: Cannot apply migrations — set ONE of these in .env.local:
+FAIL: Cannot apply migrations — set in .env.local:
 
-  SUPABASE_DB_URL=postgresql://...
-  SUPABASE_ACCESS_TOKEN=... + NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+  SUPABASE_DB_URL=postgresql://postgres:YOUR_PASSWORD@db.mnxxcewvgnohsavojdzu.supabase.co:5432/postgres
+
+  (Replace YOUR_PASSWORD with your database password; URL-encode special characters.)
 `);
 process.exit(1);

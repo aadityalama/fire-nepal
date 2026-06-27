@@ -252,3 +252,5 @@ where not exists (
     and cr.full_name = v.full_name
     and cr.display_order = v.display_order
 );
+
+notify pgrst, 'reload schema';

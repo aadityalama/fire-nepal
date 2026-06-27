@@ -1245,6 +1245,7 @@ export type Database = {
           verified: boolean;
           is_demo: boolean;
           status: "pending" | "approved" | "rejected";
+          review_type: "community" | "homepage";
           display_order: number;
           created_at: string;
           updated_at: string;
@@ -1266,6 +1267,7 @@ export type Database = {
           verified?: boolean;
           is_demo?: boolean;
           status?: "pending" | "approved" | "rejected";
+          review_type?: "community" | "homepage";
           display_order?: number;
           created_at?: string;
           updated_at?: string;
@@ -1286,6 +1288,7 @@ export type Database = {
           verified?: boolean;
           is_demo?: boolean;
           status?: "pending" | "approved" | "rejected";
+          review_type?: "community" | "homepage";
           display_order?: number;
           updated_at?: string;
           approved_by?: string | null;

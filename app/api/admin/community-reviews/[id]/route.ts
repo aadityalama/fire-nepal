@@ -3,7 +3,7 @@ import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase-database";
 import { buildReviewPatch } from "@/services/community-reviews-supabase";
-import type { CommunityReviewStatus } from "@/lib/community-reviews/types";
+import type { CommunityReviewStatus, CommunityReviewType } from "@/lib/community-reviews/types";
 
 type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["Update"];
 
@@ -30,6 +30,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     verified?: boolean;
     is_demo?: boolean;
     status?: CommunityReviewStatus;
+    review_type?: CommunityReviewType;
     display_order?: number;
     action?: "approve" | "reject" | "publish" | "unpublish" | "restore" | "soft_delete";
   };
@@ -46,6 +47,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     verified: body.verified,
     is_demo: body.is_demo,
     status: body.status,
+    review_type: body.review_type,
     display_order: body.display_order,
     updated_by: gate.userId,
   });

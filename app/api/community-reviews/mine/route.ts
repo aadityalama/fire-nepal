@@ -81,10 +81,11 @@ export async function POST(req: Request) {
       verified: false,
       is_demo: false,
       status: "pending",
+      review_type: "community",
       display_order: 9999,
     })
     .select(
-      "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, display_order, created_at, updated_at",
+      "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at",
     )
     .single();
 

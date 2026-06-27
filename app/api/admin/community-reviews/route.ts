@@ -6,7 +6,7 @@ import {
   communityReviewAdminStats,
   listCommunityReviewsAdmin,
 } from "@/services/community-reviews-supabase";
-import type { CommunityReviewListFilters, CommunityReviewStatus } from "@/lib/community-reviews/types";
+import type { CommunityReviewListFilters, CommunityReviewStatus, CommunityReviewType } from "@/lib/community-reviews/types";
 
 function parseStatus(v: string | null): CommunityReviewListFilters["status"] {
   if (v === "pending" || v === "approved" || v === "rejected" || v === "all") return v;
@@ -69,6 +69,7 @@ export async function POST(req: Request) {
     verified?: boolean;
     is_demo?: boolean;
     status?: CommunityReviewStatus;
+    review_type?: CommunityReviewType;
     display_order?: number;
   };
 
@@ -93,6 +94,7 @@ export async function POST(req: Request) {
       verified: body.verified ?? false,
       is_demo: body.is_demo ?? false,
       status,
+      review_type: body.review_type ?? (body.is_demo ? "homepage" : "community"),
       display_order: body.display_order ?? 0,
       updated_by: gate.userId,
       approved_by: status === "approved" ? gate.userId : null,
