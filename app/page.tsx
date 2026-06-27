@@ -37,6 +37,7 @@ import { ProductMarketingNav } from "@/components/product/landing/ProductMarketi
 import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSection";
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
+import { SmartNepalInfoBar } from "@/components/smart-nepal-info/SmartNepalInfoBar";
 
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
@@ -79,24 +80,6 @@ const posts: Array<[string, string, string]> = [
   ["How to invest your Korea salary from Nepal", "Money guide", "5 min read"],
   ["FIRE mistakes Nepali workers make abroad", "Retirement", "7 min read"],
   ["KRW to NPR: what to track before coming home", "Currency", "4 min read"],
-];
-
-const exchangeRates = [
-  { pair: "KRW/NPR", rate: "0.1029" },
-  { pair: "USD/NPR", rate: "133.50" },
-  { pair: "EUR/NPR", rate: "145.20" },
-  { pair: "AUD/NPR", rate: "88.40" },
-  { pair: "CAD/NPR", rate: "97.80" },
-  { pair: "GBP/NPR", rate: "171.30" },
-  { pair: "JPY/NPR", rate: "0.8751" },
-  { pair: "SAR/NPR", rate: "35.60" },
-  { pair: "QAR/NPR", rate: "36.60" },
-  { pair: "AED/NPR", rate: "36.35" },
-  { pair: "MYR/NPR", rate: "31.20" },
-  { pair: "SGD/NPR", rate: "98.50" },
-  { pair: "KWD/NPR", rate: "433.20" },
-  { pair: "BHD/NPR", rate: "354.00" },
-  { pair: "OMR/NPR", rate: "347.90" },
 ];
 
 const operatingSystemCards: Array<[string, string, string, LucideIcon]> = [
@@ -268,26 +251,7 @@ function FinancialOperatingSystem() {
 export default function HomePage() {
   return (
     <main className="premium-shell overflow-hidden pb-20 sm:pb-0">
-      <div className="bg-slate-900 text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 sm:px-6 lg:px-8">
-          <div className="ticker min-w-0 flex-1">
-            <div className="ticker-content">
-              {exchangeRates.map((item, index) => (
-                <span key={index}>
-                  <span className="ticker-pair">{item.pair}</span>
-                  <span className="ticker-value">: {item.rate}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="hidden shrink-0 items-center gap-4 px-4 text-[11px] text-emerald-50 sm:flex">
-            <span>YouTube</span>
-            <span>Blog</span>
-            <span>Tools</span>
-            <span>About Us</span>
-          </div>
-        </div>
-      </div>
+      <SmartNepalInfoBar />
 
       <ProductMarketingNav />
 

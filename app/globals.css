@@ -220,51 +220,6 @@ input {
   scrollbar-width: none;
 }
 
-.ticker {
-  overflow: hidden;
-  white-space: nowrap;
-  background: #0f172a;
-  padding: 8px 0;
-}
-
-.ticker-content {
-  display: inline-block;
-  min-width: 100%;
-  animation: scrollTicker 90s linear infinite;
-}
-
-.ticker-content span {
-  margin-right: 24px;
-  color: white;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: -0.01em;
-}
-
-.ticker-content .ticker-pair {
-  margin-right: 3px;
-  font-weight: 800;
-  color: white;
-}
-
-.ticker-content .ticker-value {
-  color: rgba(236, 253, 245, 0.86);
-}
-
-.ticker-content:hover {
-  animation-play-state: paused;
-}
-
-@keyframes scrollTicker {
-  from {
-    transform: translateX(100%);
-  }
-
-  to {
-    transform: translateX(-100%);
-  }
-}
-
 .relite-glass {
   background: linear-gradient(155deg, rgba(255, 255, 255, 0.94), rgba(236, 253, 245, 0.78));
   backdrop-filter: blur(20px);

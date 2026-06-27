@@ -36,6 +36,7 @@
     "heic2any": "^0.0.4",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
+    "nepali-date-converter": "^3.4.0",
     "next": "latest",
     "qrcode": "^1.5.4",
     "react": "latest",
