@@ -1,5 +1,6 @@
 import { CommunityReviewCard } from "@/components/community-reviews/CommunityReviewCard";
 import { UserCommunityReviewPanel } from "@/components/community-reviews/UserCommunityReviewPanel";
+import { WriteReviewLauncher } from "@/components/community-reviews/WriteReviewLauncher";
 import { fetchApprovedCommunityReviews } from "@/lib/community-reviews/fetch-public-reviews";
 
 function ReviewSkeleton() {
@@ -31,11 +32,14 @@ export async function CommunityReviewsSection() {
 
   return (
     <section id="community" className="mt-12">
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-2xl font-black text-emerald-950">What Our Community Says</h2>
-        <a className="text-sm font-black text-emerald-700" href="#reviews">
-          See All Reviews
-        </a>
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-emerald-950">What Our Community Says</h2>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Real stories from Nepalis building financial independence abroad.
+          </p>
+        </div>
+        <WriteReviewLauncher />
       </div>
 
       <UserCommunityReviewPanel />

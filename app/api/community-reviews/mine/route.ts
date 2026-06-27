@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { clampRating } from "@/services/community-reviews-supabase";
+import { validateReviewInput } from "@/lib/community-reviews/validate-review-input";
+import { clampRating, fetchUserCommunityReview } from "@/services/community-reviews-supabase";
 import { fetchUserProfile } from "@/services/user-profile-supabase";
+
+const REVIEW_COLUMNS =
+  "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at, deleted_at";
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
@@ -18,20 +22,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("community_reviews")
-    .select(
-      "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, display_order, created_at, updated_at, deleted_at",
-    )
-    .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ review: data ?? null });
+  const review = await fetchUserCommunityReview(supabase, user.id);
+  return NextResponse.json({ review });
 }
 
 export async function POST(req: Request) {
@@ -48,45 +40,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    full_name?: string;
-    country?: string;
-    city?: string;
-    rating?: number;
-    review_title?: string;
-    review_text?: string;
-  };
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const validated = validateReviewInput(body);
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error }, { status: 400 });
+  }
 
-  const fullName = body.full_name?.trim();
-  const reviewTitle = body.review_title?.trim();
-  const reviewText = body.review_text?.trim();
-  if (!fullName || !reviewTitle || !reviewText) {
-    return NextResponse.json({ error: "Name, title, and review text are required." }, { status: 400 });
+  const existing = await fetchUserCommunityReview(supabase, user.id);
+  if (existing) {
+    return NextResponse.json(
+      { error: "You already submitted a review. Edit your existing review instead." },
+      { status: 409 },
+    );
   }
 
   const profile = await fetchUserProfile(supabase, user.id);
-  const displayName = fullName || profile?.display_name?.trim() || user.email?.split("@")[0] || "Member";
-
   const { data, error } = await supabase
     .from("community_reviews")
     .insert({
       user_id: user.id,
-      full_name: displayName,
-      country: body.country?.trim() || null,
-      city: body.city?.trim() || null,
+      full_name: validated.data.full_name,
+      country: validated.data.country,
+      city: validated.data.city,
       avatar_url: profile?.avatar_url ?? null,
-      rating: clampRating(body.rating ?? 5),
-      review_title: reviewTitle,
-      review_text: reviewText,
+      rating: clampRating(validated.data.rating),
+      review_title: validated.data.review_title,
+      review_text: validated.data.review_text,
       verified: false,
       is_demo: false,
       status: "pending",
-      review_type: "community",
+      review_type: "homepage",
       display_order: 9999,
     })
-    .select(
-      "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at",
-    )
+    .select(REVIEW_COLUMNS)
     .single();
 
   if (error) {

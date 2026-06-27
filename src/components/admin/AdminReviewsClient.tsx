@@ -77,7 +77,7 @@ export function AdminReviewsClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<CommunityReviewStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<CommunityReviewStatus>("pending");
   const [demoFilter, setDemoFilter] = useState<"all" | "true" | "false">("all");
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -286,6 +286,12 @@ export function AdminReviewsClient() {
     [stats],
   );
 
+  const statusTabs: { id: CommunityReviewStatus; label: string; count: number }[] = [
+    { id: "pending", label: "Pending", count: stats?.pending ?? 0 },
+    { id: "approved", label: "Approved", count: stats?.approved ?? 0 },
+    { id: "rejected", label: "Rejected", count: stats?.rejected ?? 0 },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -318,7 +324,33 @@ export function AdminReviewsClient() {
       </div>
 
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 backdrop-blur-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-4">
+          {statusTabs.map((tab) => {
+            const active = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.id);
+                  setPage(1);
+                }}
+                className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${
+                  active
+                    ? "bg-emerald-500 text-emerald-950 shadow-md shadow-emerald-500/20"
+                    : "border border-white/10 bg-black/20 text-emerald-50 hover:bg-white/[0.06]"
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${active ? "bg-emerald-950/15" : "bg-white/10"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-100/40" />
             <input
@@ -332,19 +364,6 @@ export function AdminReviewsClient() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value as CommunityReviewStatus | "all");
-                setPage(1);
-              }}
-              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm font-bold text-emerald-50"
-            >
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
             <select
               value={demoFilter}
               onChange={(e) => {
