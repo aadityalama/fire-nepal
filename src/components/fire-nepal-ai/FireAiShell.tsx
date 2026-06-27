@@ -37,7 +37,7 @@ export function FireAiShell({ children, hideBack }: FireAiShellProps) {
           light ? "border-emerald-200/60 bg-white/90" : "border-emerald-400/10 bg-[#04140f]/95"
         }`}
       >
-        <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3.5 sm:max-w-2xl">
+        <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3.5 sm:max-w-2xl lg:max-w-7xl lg:px-6">
           {showBack ? (
             <Link
               href="/fire-ai"
@@ -58,7 +58,7 @@ export function FireAiShell({ children, hideBack }: FireAiShellProps) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 sm:max-w-2xl sm:py-5">{children}</main>
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 sm:max-w-2xl sm:py-5 lg:max-w-7xl lg:px-6 lg:py-6">{children}</main>
 
       <FireNepalMainBottomNav />
     </div>
