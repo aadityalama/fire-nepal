@@ -10,6 +10,7 @@ export type SmartNepalInfoBarCopy = {
   nepalTime: string;
   noFestivalToday: string;
   noSpecialDayToday: string;
+  publicHolidayStatus: string;
 };
 
 const COPY: Record<SmartNepalInfoBarLocale, SmartNepalInfoBarCopy> = {
@@ -22,6 +23,7 @@ const COPY: Record<SmartNepalInfoBarLocale, SmartNepalInfoBarCopy> = {
     specialDay: "Special Day",
     nepalTime: "Nepal Time",
     noFestivalToday: "Regular Day",
+    publicHolidayStatus: "Public Holiday",
     noSpecialDayToday: "No Special Day Today",
   },
   np: {
@@ -32,7 +34,8 @@ const COPY: Record<SmartNepalInfoBarLocale, SmartNepalInfoBarCopy> = {
     publicHolidayNo: "आज सार्वजनिक बिदा छैन",
     specialDay: "राष्ट्रिय / अन्तर्राष्ट्रिय दिवस",
     nepalTime: "नेपाल समय",
-    noFestivalToday: "सामान्य दिन",
+    noFestivalToday: "नियमित दिन",
+    publicHolidayStatus: "सार्वजनिक बिदा",
     noSpecialDayToday: "आज विशेष दिवस छैन",
   },
 };

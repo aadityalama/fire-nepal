@@ -7,16 +7,20 @@ export {
 } from "./daily-cache";
 export {
   formatBsDate,
+  formatBsDateCompact,
   formatBsDateParts,
   getSmartNepalDayInfo,
   pickLocalizedLabel,
+  resolveBarStatus,
   resolveSmartNepalDayInfo,
 } from "./resolve-day-info";
+export type { BarStatus, BarStatusKind } from "./resolve-day-info";
 export {
   getMsUntilNextNepalMidnight,
   getNepalAdDateParts,
   getNepalDateKey,
   getNepalReferenceDate,
+  nepalTimeCompactFormatter,
   nepalTimeFormatter,
   nepalTimeZoneLabel,
 } from "./nepal-time";

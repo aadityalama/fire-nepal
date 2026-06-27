@@ -43,6 +43,13 @@ export function getMsUntilNextNepalMidnight(now: Date = new Date()): number {
   return Math.max(probe - now.getTime() + 250, 1_000);
 }
 
+export const nepalTimeCompactFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: NEPAL_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 export const nepalTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: NEPAL_TIME_ZONE,
   hour: "2-digit",

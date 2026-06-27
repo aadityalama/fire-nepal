@@ -72,6 +72,35 @@ export function formatBsDate(info: SmartNepalDayInfo, locale: "en" | "np"): stri
   return nepaliDate.format("ddd DD, MMMM YYYY", locale);
 }
 
+export function formatBsDateCompact(info: SmartNepalDayInfo, locale: "en" | "np"): string {
+  const nepaliDate = new NepaliDate(info.bsDate.year, info.bsDate.month - 1, info.bsDate.day);
+  return `${nepaliDate.format("YYYY", locale)} ${nepaliDate.format("MMMM", locale)} ${nepaliDate.format("DD", locale)}`;
+}
+
+export type BarStatusKind = "regular" | "festival" | "public-holiday";
+
+export type BarStatus = {
+  text: string;
+  kind: BarStatusKind;
+};
+
+export function resolveBarStatus(
+  dayInfo: SmartNepalDayInfo,
+  copy: { noFestivalToday: string; publicHolidayStatus: string },
+  locale: "en" | "np",
+): BarStatus {
+  const festivalLabel = pickLocalizedLabel(dayInfo.festival, locale);
+  if (festivalLabel) {
+    return { text: festivalLabel, kind: "festival" };
+  }
+
+  if (dayInfo.publicHoliday) {
+    return { text: copy.publicHolidayStatus, kind: "public-holiday" };
+  }
+
+  return { text: copy.noFestivalToday, kind: "regular" };
+}
+
 export function formatBsDateParts(info: SmartNepalDayInfo, locale: "en" | "np"): {
   year: string;
   month: string;
