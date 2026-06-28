@@ -11,7 +11,6 @@ import {
   Calculator,
   Clock,
   Crown,
-  FileText,
   GraduationCap,
   HeartPulse,
   Home,
@@ -69,9 +68,6 @@ const ICON_CLS = "text-[#10B981]";
 const NUMBER_SAFE_CLS =
   "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap tabular-nums [font-variant-numeric:tabular-nums]";
 const LABEL_CLS = "text-[clamp(0.65rem,1.8vw,0.85rem)] max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]";
-const MICRO_LABEL_CLS = "text-[clamp(0.58rem,1.6vw,0.78rem)] max-[389px]:text-[clamp(0.5rem,1.36vw,0.66rem)]";
-const EXPENSE_AMOUNT_CLS =
-  "text-[clamp(0.95rem,2.8vw,1.35rem)] max-[389px]:text-[clamp(0.8rem,2.38vw,1.15rem)]";
 
 function SolidIcon({ icon: Icon, size = 14, className = "" }: { icon: LucideIcon; size?: number; className?: string }) {
   return <Icon size={size} className={`${ICON_CLS} ${className}`} fill={EMERALD} stroke={EMERALD} strokeWidth={1.25} />;
@@ -104,75 +100,6 @@ function AnimatedNpr({ value, className }: { value: number; className?: string }
 
 function NumericText({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <span className={`${NUMBER_SAFE_CLS} ${className}`}>{children}</span>;
-}
-
-function ExpenseCategoryCard({
-  item,
-  icon: Icon,
-  onAmountChange,
-}: {
-  item: ColExpenseItem;
-  icon: LucideIcon;
-  onAmountChange: (amount: number) => void;
-}) {
-  const [draftState, setDraftState] = useState({ amount: item.amount, value: String(item.amount) });
-  const draft = draftState.amount === item.amount ? draftState.value : String(item.amount);
-  const setDraft = (value: string, amount = item.amount) => setDraftState({ amount, value });
-
-  const commit = (raw: string) => {
-    const parsed = raw.trim() === "" ? 0 : Number(raw);
-    if (!Number.isFinite(parsed)) {
-      setDraft(String(item.amount));
-      return;
-    }
-    const next = Math.max(0, Math.round(parsed));
-    setDraft(String(next), next);
-    if (next !== item.amount) onAmountChange(next);
-  };
-
-  const handleChange = (raw: string) => {
-    setDraft(raw);
-    if (raw.trim() === "" || raw === "-") {
-      setDraft(raw, 0);
-      if (item.amount !== 0) onAmountChange(0);
-      return;
-    }
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed >= 0) {
-      const next = Math.round(parsed);
-      setDraft(raw, next);
-      if (next !== item.amount) onAmountChange(next);
-    }
-  };
-
-  return (
-    <div className="flex min-h-[98px] min-w-0 flex-col justify-between rounded-xl border border-emerald-400/12 bg-gradient-to-br from-emerald-950/50 to-[#041610]/88 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm max-[389px]:p-2 md:min-h-[112px] md:p-3.5 lg:min-h-[118px]">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <SolidIcon icon={Icon} size={13} />
-        <span className={`${LABEL_CLS} min-w-0 flex-1 truncate font-bold leading-tight text-emerald-100/80`}>{item.label}</span>
-        <NumericText className={`${MICRO_LABEL_CLS} font-black text-emerald-200/60`}>{item.pct.toFixed(0)}%</NumericText>
-      </div>
-      <label className="mt-2.5 block min-w-0">
-        <span className="sr-only">{item.label} monthly amount in NPR</span>
-        <div className="flex min-h-10 min-w-0 items-center gap-1.5 rounded-lg border border-white/8 bg-black/30 px-2.5 focus-within:border-emerald-400/35 md:min-h-11">
-          <span className={`${LABEL_CLS} shrink-0 font-bold text-emerald-200/50`}>₹</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={500}
-            value={draft}
-            onChange={(event) => handleChange(event.target.value)}
-            onBlur={() => commit(draft)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-            className={`${NUMBER_SAFE_CLS} ${EXPENSE_AMOUNT_CLS} flex-1 bg-transparent font-black text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-          />
-        </div>
-      </label>
-    </div>
-  );
 }
 
 function GlassCard({
@@ -702,18 +629,10 @@ export function NepalCostOfLivingDashboard() {
 
   const snapshot = useMemo(() => computeColSnapshot(plan), [plan]);
   const animatedSavings = useCountUpNumber(snapshot.monthlySavings, { durationMs: 900 });
-  const animatedSavingsPct = useCountUpNumber(snapshot.savingsPct, { durationMs: 900 });
   const animatedReadiness = useCountUpNumber(snapshot.readiness, { durationMs: 1100 });
-
-  const compareMax = Math.max(snapshot.koreaSpend, snapshot.total, 1);
-  const koreaBarPct = (snapshot.koreaSpend / compareMax) * 100;
-  const nepalBarPct = (snapshot.total / compareMax) * 100;
 
   const patchPlanSettings = (patch: Partial<Omit<ColPlanState, "expenses">>) =>
     setPlan((current) => applyPlanSettings(current, patch));
-
-  const patchPlanMeta = (patch: Partial<Pick<ColPlanState, "province" | "monthlyKoreaSpendNpr">>) =>
-    setPlan((current) => ({ ...current, ...patch }));
 
   const patchExpense = (categoryId: ColExpenseCategoryId, amount: number) =>
     setPlan((current) => patchExpenseAmount(current, categoryId, amount));
@@ -793,17 +712,17 @@ export function NepalCostOfLivingDashboard() {
             </div>
           </header>
 
-          <main className="hidden min-h-0 flex-1 bg-[#00120d] px-3 pb-2 pt-6 min-[1000px]:flex min-[1000px]:flex-col min-[1000px]:gap-2">
-            <div className="flex shrink-0 items-start justify-between gap-4">
-              <div className="min-w-[250px]">
-                <h1 className="whitespace-nowrap text-[28px] font-black leading-none tracking-[-0.04em] text-white">
+          <main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
+            <div className="flex shrink-0 flex-col gap-3 min-[1000px]:flex-row min-[1000px]:items-start min-[1000px]:justify-between min-[1000px]:gap-4">
+              <div className="min-w-0 min-[1000px]:min-w-[250px]">
+                <h1 className="text-[28px] font-black leading-none tracking-[-0.04em] text-white min-[1000px]:whitespace-nowrap">
                   Nepal Cost of Living
                 </h1>
                 <p className="mt-2 text-[13px] font-semibold text-emerald-50/70">Plan your life in Nepal before you return</p>
                 <div className="mt-3 h-0.5 w-8 rounded-full bg-emerald-400" />
               </div>
 
-              <div className="mt-3 grid w-[570px] grid-cols-[112px_112px_112px_1fr] gap-2">
+              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-4 min-[1000px]:mt-3 min-[1000px]:w-[570px] min-[1000px]:grid-cols-[112px_112px_112px_1fr]">
                 <label className="flex h-[48px] items-center gap-2 rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3">
                   <SolidIcon icon={MapPin} size={17} />
                   <span className="sr-only">City</span>
@@ -846,7 +765,7 @@ export function NepalCostOfLivingDashboard() {
                     ))}
                   </select>
                 </label>
-                <GlassCard className="flex h-[60px] flex-col items-center justify-center rounded-lg p-2 text-center" delay={0.02}>
+                <GlassCard className="flex min-h-[64px] flex-col items-center justify-center rounded-lg p-2 text-center min-[1000px]:h-[60px] min-[1000px]:min-h-0" delay={0.02}>
                   <p className="text-[11px] font-bold text-emerald-50/70">Total Monthly Cost</p>
                   <p className="text-[22px] font-black leading-[1.05] tracking-tight text-white tabular-nums">
                     {formatNprInteger(snapshot.total)}
@@ -856,7 +775,7 @@ export function NepalCostOfLivingDashboard() {
               </div>
             </div>
 
-            <div className="grid shrink-0 grid-cols-5 gap-3">
+            <div className="grid shrink-0 grid-cols-1 gap-3 min-[390px]:grid-cols-2 md:grid-cols-3 min-[1000px]:!grid-cols-5">
               <DesktopKpiCard
                 icon={Wallet}
                 label="Monthly Expenses"
@@ -889,9 +808,9 @@ export function NepalCostOfLivingDashboard() {
               />
             </div>
 
-            <div className="grid h-[326px] shrink-0 grid-cols-12 gap-3">
-              <GlassCard className="col-span-7 min-h-0 overflow-hidden rounded-lg p-0" delay={0.08}>
-                <div className="flex h-10 items-center justify-between border-b border-emerald-500/12 px-4">
+            <div className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
+              <GlassCard className="min-h-0 overflow-hidden rounded-lg p-0 min-[1000px]:col-span-7" delay={0.08}>
+                <div className="flex min-h-10 flex-col items-start gap-2 border-b border-emerald-500/12 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                   <h2 className="text-[15px] font-black uppercase tracking-wide text-white">Monthly Expense Breakdown</h2>
                   <button
                     type="button"
@@ -935,10 +854,10 @@ export function NepalCostOfLivingDashboard() {
                 </p>
               </GlassCard>
 
-              <div className="col-span-5 grid min-h-0 grid-rows-[1fr_1fr] gap-3">
+              <div className="grid min-h-0 gap-3 min-[1000px]:col-span-5 min-[1000px]:grid-rows-[1fr_1fr]">
                 <GlassCard className="overflow-hidden rounded-lg p-4" delay={0.1}>
                   <h2 className="text-[14px] font-black uppercase tracking-wide text-white">FIRE Readiness Score</h2>
-                  <div className="mt-3 flex items-center gap-6">
+                  <div className="mt-3 flex flex-col gap-4 min-[390px]:flex-row min-[390px]:items-center min-[1000px]:gap-6">
                     <div
                       className="grid h-28 w-28 shrink-0 place-items-center rounded-full"
                       style={{
@@ -998,13 +917,13 @@ export function NepalCostOfLivingDashboard() {
               </div>
             </div>
 
-            <div className="grid h-[158px] shrink-0 grid-cols-12 gap-3">
-              <GlassCard className="col-span-7 h-full overflow-hidden rounded-lg p-3" delay={0.14}>
+            <div className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[158px] min-[1000px]:grid-cols-12">
+              <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-7" delay={0.14}>
                 <h2 className="text-[14px] font-black uppercase tracking-wide text-white">Expense Analytics</h2>
-                <div className="mt-1 grid h-[120px] grid-cols-[150px_150px_1fr] gap-3">
+                <div className="mt-1 grid gap-3 md:grid-cols-[150px_150px_1fr] min-[1000px]:h-[120px]">
                   <div>
                     <p className="text-[11px] font-semibold text-emerald-50/75">Category Distribution</p>
-                    <div className="relative mt-1 h-[100px]">
+                    <div className="relative mt-1 h-[150px] md:h-[100px]">
                       {chartsReady ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -1021,7 +940,7 @@ export function NepalCostOfLivingDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-5 space-y-0.5">
+                  <div className="space-y-0.5 md:mt-5">
                     {snapshot.items.slice(0, 9).map((item) => (
                       <div key={item.id} className="flex items-center justify-between gap-2 text-[9px] font-semibold text-emerald-50/72">
                         <span className="flex min-w-0 items-center gap-1.5">
@@ -1035,7 +954,7 @@ export function NepalCostOfLivingDashboard() {
                   <div>
                     <p className="text-[11px] font-black text-white">Monthly Trend</p>
                     <p className="text-[9px] font-semibold text-emerald-50/55">Estimated Monthly Cost (₹)</p>
-                    <div className="h-[100px]">
+                    <div className="h-[150px] md:h-[100px]">
                       {chartsReady ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={snapshot.trend} margin={{ top: 14, right: 8, left: 4, bottom: 0 }}>
@@ -1051,7 +970,7 @@ export function NepalCostOfLivingDashboard() {
                 </div>
               </GlassCard>
 
-              <GlassCard className="col-span-5 h-full overflow-hidden rounded-lg p-3" delay={0.16}>
+              <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-5" delay={0.16}>
                 <h2 className="text-[14px] font-black text-white">Quick Actions</h2>
                 <div className="mt-2 grid grid-cols-3 gap-3">
                   <button
@@ -1105,232 +1024,10 @@ export function NepalCostOfLivingDashboard() {
                 {savedToast ? <p className="mt-2 text-center text-[11px] font-bold text-emerald-300">Plan saved{userId ? " to your account" : " locally"}.</p> : null}
               </GlassCard>
             </div>
-          </main>
-
-          <main className="mx-auto grid w-full max-w-[1180px] flex-1 grid-cols-1 gap-4 overflow-x-hidden px-4 py-4 pb-24 max-[389px]:gap-3 max-[389px]:px-3 md:grid-cols-2 md:gap-5 md:px-6 md:py-6 min-[1000px]:hidden">
-            <div className="flex min-w-0 items-start justify-between gap-3 md:col-span-2">
-              <div className="min-w-0">
-                <h1 className="text-[clamp(1.35rem,4vw,2.35rem)] font-black leading-tight tracking-[-0.02em] text-white max-[389px]:text-[clamp(1.15rem,3.4vw,2rem)]">
-                  Nepal Cost of Living <span aria-hidden>🇳🇵</span>
-                </h1>
-                <p className="text-[clamp(0.78rem,2.2vw,1rem)] font-semibold leading-snug text-emerald-100/65 max-[389px]:text-[clamp(0.66rem,1.87vw,0.85rem)]">
-                  Plan your life in Nepal before you return.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/12 px-3 py-2 text-[clamp(0.72rem,2vw,0.9rem)] font-black text-emerald-100 transition hover:bg-emerald-500/20 active:scale-95 max-[389px]:text-[clamp(0.61rem,1.7vw,0.76rem)]"
-              >
-                <SolidIcon icon={Pencil} size={10} />
-                Edit
-              </button>
-            </div>
-
-            <GlassCard className="min-w-0 p-4 max-[389px]:p-3 md:col-span-2 md:p-5" delay={0.03}>
-              <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/25 bg-gradient-to-br from-emerald-400/25 to-emerald-950 shadow-[0_0_24px_-6px_rgba(16,185,129,0.45)] md:h-14 md:w-14">
-                    <SolidIcon icon={Building2} size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.12em] text-emerald-200/60`}>Selected City</p>
-                    <p className="min-w-0 truncate text-[clamp(1rem,3vw,1.45rem)] font-black text-white max-[389px]:text-[clamp(0.85rem,2.55vw,1.23rem)]">
-                      {snapshot.location.label}
-                    </p>
-                    <select
-                      value={plan.province}
-                      onChange={(event) => patchPlanMeta({ province: event.target.value })}
-                      aria-label="Province"
-                      className="mt-2 w-full rounded-lg border border-white/10 bg-black/25 px-2.5 py-2 text-[clamp(0.72rem,2vw,0.9rem)] font-bold text-emerald-50 outline-none max-[389px]:text-[clamp(0.61rem,1.7vw,0.76rem)]"
-                    >
-                      {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
-                        <option key={province} value={province} className="bg-[#062018]">
-                          {province}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="min-w-0 rounded-2xl border border-emerald-300/15 bg-black/20 p-3 text-left sm:w-[45%] sm:text-right">
-                  <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.12em] text-emerald-200/60`}>Monthly Cost</p>
-                  <AnimatedNpr
-                    value={snapshot.total}
-                    className="block text-[clamp(1.75rem,5vw,2.8rem)] font-extrabold leading-none text-white max-[389px]:text-[clamp(1.49rem,4.25vw,2.38rem)]"
-                  />
-                  <p className={`${NUMBER_SAFE_CLS} mt-1 text-[clamp(0.78rem,2.1vw,1rem)] font-bold text-emerald-200/65 max-[389px]:text-[clamp(0.66rem,1.78vw,0.85rem)]`}>
-                    {formatKrwInteger(nprToKrw(snapshot.total, krwPerNpr))}
-                  </p>
-                  <span className="mt-2 inline-flex max-w-full rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[clamp(0.62rem,1.8vw,0.78rem)] font-black uppercase text-emerald-100 max-[389px]:text-[clamp(0.53rem,1.53vw,0.66rem)]">
-                    {snapshot.lifestyle.label}
-                  </span>
-                </div>
-              </div>
-            </GlassCard>
-
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2">
-              <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.05}>
-                <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Family</p>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-[clamp(0.78rem,2.2vw,0.95rem)] font-bold leading-tight text-emerald-50/85 max-[389px]:text-[clamp(0.66rem,1.87vw,0.8rem)]">
-                  <p className="min-w-0">A <NumericText>{plan.family.adults}</NumericText></p>
-                  <p className="min-w-0">C <NumericText>{plan.family.children}</NumericText></p>
-                  <p className="min-w-0">P <NumericText>{plan.family.parents}</NumericText></p>
-                </div>
-              </GlassCard>
-              <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.06}>
-                <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Lifestyle</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {COL_LIFESTYLE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => patchPlanSettings({ lifestyle: option.id })}
-                      className={`min-h-7 rounded-full px-2 py-1 text-[clamp(0.58rem,1.7vw,0.75rem)] font-black uppercase transition max-[389px]:text-[clamp(0.5rem,1.45vw,0.64rem)] ${
-                        plan.lifestyle === option.id
-                          ? "bg-[#10B981] text-emerald-950"
-                          : "bg-white/8 text-emerald-100/65 hover:bg-white/12"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </GlassCard>
-              <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.07}>
-                <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Savings</p>
-                <p className={`${NUMBER_SAFE_CLS} mt-2 text-[clamp(1rem,3vw,1.45rem)] font-black leading-none text-[#10B981] max-[389px]:text-[clamp(0.85rem,2.55vw,1.23rem)]`}>
-                  {formatNprInteger(Math.round(animatedSavings))}
-                </p>
-                <p className={`${NUMBER_SAFE_CLS} mt-1 text-[clamp(0.7rem,2vw,0.9rem)] font-bold text-emerald-100/65 max-[389px]:text-[clamp(0.6rem,1.7vw,0.76rem)]`}>
-                  {animatedSavingsPct.toFixed(1)}%
-                </p>
-              </GlassCard>
-            </div>
-
-            <section className="min-w-0 md:col-span-1">
-              <h2 className={`${LABEL_CLS} mb-3 font-black uppercase tracking-[0.12em] text-emerald-200/70`}>
-                Monthly Expense Breakdown
-              </h2>
-              <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-2">
-                {snapshot.items.map((item) => (
-                  <ExpenseCategoryCard
-                    key={item.id}
-                    item={item}
-                    icon={EXPENSE_ICONS[item.id]}
-                    onAmountChange={(amount) => patchExpense(item.id, amount)}
-                  />
-                ))}
-              </div>
-            </section>
-
-            <section className="min-w-0 md:col-span-2">
-              <h2 className={`${LABEL_CLS} mb-3 font-black uppercase tracking-[0.12em] text-emerald-200/70`}>Analytics</h2>
-              <GlassCard className="min-w-0 p-4 max-[389px]:p-3 md:p-5" delay={0.12}>
-                <div className="grid min-w-0 grid-cols-1 gap-5 md:grid-cols-3">
-                  <div className="min-w-0">
-                    <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Distribution</p>
-                    <div className="relative h-32 min-w-0 sm:h-36">
-                      {chartsReady ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart key={`col-donut-${snapshot.total}`}>
-                            <Pie data={snapshot.donutData} dataKey="value" nameKey="name" innerRadius="52%" outerRadius="78%" paddingAngle={1}>
-                              {snapshot.donutData.map((entry) => (
-                                <Cell key={entry.name} fill={entry.fill} />
-                              ))}
-                            </Pie>
-                          </PieChart>
-                        </ResponsiveContainer>
-                      ) : null}
-                      <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                        <NumericText className="max-w-[72%] text-center text-[clamp(0.72rem,2vw,0.95rem)] font-black text-emerald-100 max-[389px]:text-[clamp(0.61rem,1.7vw,0.8rem)]">
-                          {formatNprInteger(snapshot.total)}
-                        </NumericText>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Korea vs Nepal</p>
-                    <div className="space-y-1">
-                      <div className="mb-1 flex min-w-0 justify-between gap-2 text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/75 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">
-                        <span>Korea</span>
-                        <NumericText>{formatNprInteger(snapshot.koreaSpend)}</NumericText>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/8">
-                        <motion.div animate={{ width: `${koreaBarPct}%` }} className="h-full rounded-full bg-[#10B981]/45" />
-                      </div>
-                      <div className="mb-1 flex min-w-0 justify-between gap-2 text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/75 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">
-                        <span>Nepal</span>
-                        <NumericText>{formatNprInteger(snapshot.total)}</NumericText>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/8">
-                        <motion.div animate={{ width: `${nepalBarPct}%` }} className="h-full rounded-full bg-[#10B981]" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Retirement</p>
-                    <div
-                      className="relative mx-auto grid aspect-square w-full max-w-36 place-items-center rounded-full"
-                      style={{
-                        background: `conic-gradient(${EMERALD} ${animatedReadiness * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
-                      }}
-                    >
-                      <div className="grid h-[68%] w-[68%] place-items-center rounded-full bg-[#041610]">
-                        <NumericText className="text-[clamp(1rem,3vw,1.6rem)] font-black text-white max-[389px]:text-[clamp(0.85rem,2.55vw,1.36rem)]">
-                          {Math.round(animatedReadiness)}
-                        </NumericText>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold leading-tight text-emerald-100/65 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">/100 score</p>
-                  </div>
-                </div>
-              </GlassCard>
-            </section>
             {!hydrated ? (
-              <p className="text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/50 md:col-span-2">Loading plan…</p>
+              <p className="text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/50">Loading plan…</p>
             ) : null}
           </main>
-
-          <div className="sticky bottom-0 z-30 shrink-0 border-t border-emerald-500/10 bg-[#021510]/96 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl max-[389px]:px-3 min-[1000px]:hidden">
-            <div className="mx-auto grid max-w-[1180px] grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={handleSavePlan}
-                className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-emerald-400/20 bg-emerald-500/12 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/20 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
-              >
-                <SolidIcon icon={Save} size={13} />
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompareOpen(true)}
-                className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/6 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
-              >
-                <SolidIcon icon={MapPin} size={13} />
-                Compare
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExportPdf()}
-                className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/6 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
-              >
-                <SolidIcon icon={FileText} size={13} />
-                PDF
-              </button>
-            </div>
-            <AnimatePresence>
-              {savedToast ? (
-                <motion.p
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  className="mt-2 text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-[#10B981]"
-                >
-                  Plan saved{userId ? " to your account" : " locally"}.
-                </motion.p>
-              ) : null}
-            </AnimatePresence>
-          </div>
         </div>
       </div>
 
