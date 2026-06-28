@@ -59,6 +59,12 @@ import { FALLBACK_KRW_PER_NPR, nprToKrw } from "@/lib/exchange-rate";
 
 const EMERALD = "#10B981";
 const ICON_CLS = "text-[#10B981]";
+const NUMBER_SAFE_CLS =
+  "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap tabular-nums [font-variant-numeric:tabular-nums]";
+const LABEL_CLS = "text-[clamp(0.65rem,1.8vw,0.85rem)] max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]";
+const MICRO_LABEL_CLS = "text-[clamp(0.58rem,1.6vw,0.78rem)] max-[389px]:text-[clamp(0.5rem,1.36vw,0.66rem)]";
+const EXPENSE_AMOUNT_CLS =
+  "text-[clamp(0.95rem,2.8vw,1.35rem)] max-[389px]:text-[clamp(0.8rem,2.38vw,1.15rem)]";
 
 function SolidIcon({ icon: Icon, size = 14, className = "" }: { icon: LucideIcon; size?: number; className?: string }) {
   return <Icon size={size} className={`${ICON_CLS} ${className}`} fill={EMERALD} stroke={EMERALD} strokeWidth={1.25} />;
@@ -86,7 +92,11 @@ const NAV_LINKS = [
 
 function AnimatedNpr({ value, className }: { value: number; className?: string }) {
   const display = useCountUpNumber(value, { durationMs: 900 });
-  return <span className={className}>{formatNprInteger(Math.round(display))}</span>;
+  return <span className={`${NUMBER_SAFE_CLS} ${className ?? ""}`}>{formatNprInteger(Math.round(display))}</span>;
+}
+
+function NumericText({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <span className={`${NUMBER_SAFE_CLS} ${className}`}>{children}</span>;
 }
 
 function ExpenseCategoryCard({
@@ -129,16 +139,16 @@ function ExpenseCategoryCard({
   };
 
   return (
-    <div className="flex min-h-[34px] flex-col justify-center rounded-lg border border-emerald-400/12 bg-gradient-to-br from-emerald-950/50 to-[#041610]/88 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm">
-      <div className="flex items-center gap-0.5">
-        <SolidIcon icon={Icon} size={10} />
-        <span className="min-w-0 flex-1 truncate text-[8px] font-bold leading-none text-emerald-100/80">{item.label}</span>
-        <span className="text-[7px] font-black tabular-nums text-emerald-200/60">{item.pct.toFixed(0)}%</span>
+    <div className="flex min-h-[92px] min-w-0 flex-col justify-center rounded-xl border border-emerald-400/12 bg-gradient-to-br from-emerald-950/50 to-[#041610]/88 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm max-[389px]:p-2 md:p-3">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <SolidIcon icon={Icon} size={12} />
+        <span className={`${LABEL_CLS} min-w-0 flex-1 truncate font-bold leading-tight text-emerald-100/80`}>{item.label}</span>
+        <NumericText className={`${MICRO_LABEL_CLS} font-black text-emerald-200/60`}>{item.pct.toFixed(0)}%</NumericText>
       </div>
-      <label className="mt-0.5 block">
+      <label className="mt-2 block min-w-0">
         <span className="sr-only">{item.label} monthly amount in NPR</span>
-        <div className="flex h-5 items-center gap-0.5 rounded-md border border-white/8 bg-black/30 px-1 focus-within:border-emerald-400/35">
-          <span className="text-[8px] font-bold text-emerald-200/50">₹</span>
+        <div className="flex min-h-10 min-w-0 items-center gap-1.5 rounded-lg border border-white/8 bg-black/30 px-2 focus-within:border-emerald-400/35">
+          <span className={`${LABEL_CLS} shrink-0 font-bold text-emerald-200/50`}>₹</span>
           <input
             type="number"
             inputMode="numeric"
@@ -150,7 +160,7 @@ function ExpenseCategoryCard({
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
             }}
-            className="min-w-0 flex-1 bg-transparent text-[9px] font-black tabular-nums text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className={`${NUMBER_SAFE_CLS} ${EXPENSE_AMOUNT_CLS} flex-1 bg-transparent font-black text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
           />
         </div>
       </label>
@@ -194,22 +204,22 @@ function Stepper({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">{label}</span>
+      <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>{label}</span>
       <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/25 px-2.5 py-1.5">
         <button
           type="button"
           aria-label={`Decrease ${label}`}
           onClick={() => onChange(Math.max(min, value - 1))}
-          className="grid h-8 w-8 place-items-center rounded-lg bg-white/8 text-base font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
+          className="grid h-8 w-8 place-items-center rounded-lg bg-white/8 text-[clamp(1rem,2.8vw,1.15rem)] font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
         >
           −
         </button>
-        <span className="text-lg font-black tabular-nums text-white">{value}</span>
+        <NumericText className="text-[clamp(1.1rem,3vw,1.35rem)] font-black text-white">{value}</NumericText>
         <button
           type="button"
           aria-label={`Increase ${label}`}
           onClick={() => onChange(Math.min(max, value + 1))}
-          className="grid h-8 w-8 place-items-center rounded-lg bg-white/8 text-base font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
+          className="grid h-8 w-8 place-items-center rounded-lg bg-white/8 text-[clamp(1rem,2.8vw,1.15rem)] font-black text-white transition hover:bg-emerald-500/20 active:scale-95"
         >
           +
         </button>
@@ -242,7 +252,7 @@ function NavMenuSheet({ open, onClose }: { open: boolean; onClose: () => void })
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Image src="/logo.png" alt="FIRE Nepal" width={24} height={24} className="rounded-md" />
-                <span className="text-sm font-black text-white">FIRE Nepal</span>
+                <span className="text-[clamp(0.85rem,2vw,1rem)] font-black text-white">FIRE Nepal</span>
               </div>
               <button
                 type="button"
@@ -258,7 +268,7 @@ function NavMenuSheet({ open, onClose }: { open: boolean; onClose: () => void })
                   <Link
                     href={link.href}
                     onClick={onClose}
-                    className="block rounded-xl border border-transparent px-3 py-2.5 text-sm font-bold text-emerald-50/90 transition hover:border-emerald-400/25 hover:bg-emerald-500/10"
+                    className="block rounded-xl border border-transparent px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-emerald-50/90 transition hover:border-emerald-400/25 hover:bg-emerald-500/10"
                   >
                     {link.label}
                   </Link>
@@ -310,7 +320,7 @@ function EditPlanSheet({
             className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[390px] rounded-t-2xl border border-emerald-400/20 bg-gradient-to-b from-[#083026] to-[#021510] p-4 pb-8 shadow-[0_-20px_80px_rgba(0,0,0,0.55)]"
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-black text-white">Edit Plan</h2>
+              <h2 className="text-[clamp(1rem,2.6vw,1.2rem)] font-black text-white">Edit Plan</h2>
               <button
                 type="button"
                 onClick={onClose}
@@ -322,7 +332,7 @@ function EditPlanSheet({
 
             <div className="max-h-[70dvh] space-y-3 overflow-y-auto">
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">City</span>
+                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>City</span>
                 <select
                   value={draft.cityId}
                   onChange={(event) => {
@@ -333,7 +343,7 @@ function EditPlanSheet({
                       province: provinceForCity(cityId),
                     }));
                   }}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-bold text-white outline-none"
+                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none"
                 >
                   {DEFAULT_NEPAL_COST_CITIES.map((city) => (
                     <option key={city.id} value={city.id} className="bg-[#062018]">
@@ -344,11 +354,11 @@ function EditPlanSheet({
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">Province</span>
+                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>Province</span>
                 <select
                   value={draft.province}
                   onChange={(event) => setDraft((current) => ({ ...current, province: event.target.value }))}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-bold text-white outline-none"
+                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none"
                 >
                   {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
                     <option key={province} value={province} className="bg-[#062018]">
@@ -383,7 +393,7 @@ function EditPlanSheet({
               </div>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">
+                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>
                   Korea monthly spend (NPR model)
                 </span>
                 <input
@@ -398,7 +408,7 @@ function EditPlanSheet({
                       monthlyKoreaSpendNpr: Number(event.target.value),
                     }))
                   }
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-bold text-white outline-none"
+                  className={`${NUMBER_SAFE_CLS} rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none`}
                 />
               </label>
 
@@ -408,7 +418,7 @@ function EditPlanSheet({
                     key={option.id}
                     type="button"
                     onClick={() => setDraft((current) => ({ ...current, lifestyle: option.id }))}
-                    className={`rounded-xl border px-3 py-2.5 text-left text-sm font-black transition active:scale-[0.98] ${
+                    className={`rounded-xl border px-3 py-2.5 text-left text-[clamp(0.85rem,2vw,1rem)] font-black transition active:scale-[0.98] ${
                       draft.lifestyle === option.id
                         ? "border-emerald-300/50 bg-emerald-500/20 text-emerald-50"
                         : "border-white/10 bg-white/5 text-emerald-100/80 hover:border-emerald-400/30"
@@ -425,7 +435,7 @@ function EditPlanSheet({
                   onSave(draft);
                   onClose();
                 }}
-                className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-300 py-3 text-sm font-black text-emerald-950 shadow-[0_8px_32px_-8px_rgba(16,185,129,0.55)] transition hover:brightness-105 active:scale-[0.99]"
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-300 py-3 text-[clamp(0.85rem,2vw,1rem)] font-black text-emerald-950 shadow-[0_8px_32px_-8px_rgba(16,185,129,0.55)] transition hover:brightness-105 active:scale-[0.99]"
               >
                 Apply changes
               </button>
@@ -471,7 +481,7 @@ function CompareCitiesSheet({
             className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[390px] rounded-t-2xl border border-emerald-400/20 bg-gradient-to-b from-[#083026] to-[#021510] p-4 pb-8"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-black text-white">Compare Cities</h2>
+              <h2 className="text-[clamp(1rem,2.6vw,1.2rem)] font-black text-white">Compare Cities</h2>
               <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/8 text-white">
                 <X size={16} />
               </button>
@@ -491,8 +501,10 @@ function CompareCitiesSheet({
                       : "border-white/10 bg-white/5 hover:border-emerald-400/25"
                   }`}
                 >
-                  <span className="text-sm font-black text-white">{city.label}</span>
-                  <span className="text-sm font-black tabular-nums text-emerald-200">{formatNprInteger(city.total)}</span>
+                  <span className="min-w-0 truncate text-[clamp(0.85rem,2vw,1rem)] font-black text-white">{city.label}</span>
+                  <NumericText className="text-[clamp(0.85rem,2vw,1rem)] font-black text-emerald-200">
+                    {formatNprInteger(city.total)}
+                  </NumericText>
                 </button>
               ))}
             </div>
@@ -577,72 +589,70 @@ export function NepalCostOfLivingDashboard() {
     : "border-emerald-500/15 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.85)]";
 
   return (
-    <div className={`min-h-[100dvh] ${shellBg}`}>
+    <div className={`min-h-[100dvh] overflow-x-hidden ${shellBg}`}>
       <div
-        className={`mx-auto flex h-[100dvh] max-h-[844px] w-full max-w-[390px] flex-col overflow-hidden border-x border-transparent lg:my-6 lg:h-[844px] lg:rounded-[1.75rem] lg:border ${frameBorder}`}
+        className={`mx-auto flex min-h-[100dvh] w-full max-w-[1440px] flex-col overflow-x-hidden border-x border-transparent lg:my-6 lg:min-h-[calc(100dvh-3rem)] lg:rounded-[1.75rem] lg:border ${frameBorder}`}
       >
-        {/* Compact header */}
-        <header className="z-30 shrink-0 border-b border-emerald-500/10 bg-[#021510]/94 px-3 py-2 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
+        <header className="z-30 shrink-0 border-b border-emerald-500/10 bg-[#021510]/94 px-4 py-3 backdrop-blur-xl max-[389px]:px-3 md:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[1320px] items-center justify-between">
             <button
               type="button"
               aria-label="Open menu"
               onClick={() => setMenuOpen(true)}
-              className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95"
+              className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
             >
               <SolidIcon icon={Menu} size={16} />
             </button>
-            <div className="flex items-center gap-1.5">
-              <Image src="/logo.png" alt="FIRE Nepal" width={22} height={22} className="rounded-md" />
-              <span className="text-xs font-black tracking-tight text-white">FIRE Nepal</span>
+            <div className="flex items-center gap-2">
+              <Image src="/logo.png" alt="FIRE Nepal" width={28} height={28} className="rounded-md" />
+              <span className="text-[clamp(0.85rem,2vw,1rem)] font-black tracking-tight text-white">FIRE Nepal</span>
             </div>
             <button
               type="button"
               aria-label="Notifications"
-              className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95"
+              className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
             >
               <SolidIcon icon={Bell} size={15} />
             </button>
           </div>
         </header>
 
-        {/* Single-screen scroll-free main */}
-        <main className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden px-2.5 pb-1 pt-1.5">
-          {/* Title row */}
-          <div className="flex shrink-0 items-start justify-between gap-2">
+        <main className="mx-auto grid w-full max-w-[1320px] flex-1 grid-cols-1 gap-4 overflow-x-hidden px-4 py-4 pb-24 max-[389px]:gap-3 max-[389px]:px-3 md:grid-cols-2 md:gap-5 md:px-6 md:py-6 lg:grid-cols-12 lg:gap-6 lg:px-8 lg:pb-8">
+          <div className="flex min-w-0 items-start justify-between gap-3 md:col-span-2 lg:col-span-12">
             <div className="min-w-0">
-              <h1 className="text-base font-black leading-tight tracking-[-0.02em] text-white">
+              <h1 className="text-[clamp(1.35rem,4vw,2.35rem)] font-black leading-tight tracking-[-0.02em] text-white max-[389px]:text-[clamp(1.15rem,3.4vw,2rem)]">
                 Nepal Cost of Living <span aria-hidden>🇳🇵</span>
               </h1>
-              <p className="text-[10px] font-semibold leading-snug text-emerald-100/65">
+              <p className="text-[clamp(0.78rem,2.2vw,1rem)] font-semibold leading-snug text-emerald-100/65 max-[389px]:text-[clamp(0.66rem,1.87vw,0.85rem)]">
                 Plan your life in Nepal before you return.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/12 px-2 py-1 text-[10px] font-black text-emerald-100 transition hover:bg-emerald-500/20 active:scale-95"
+              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/12 px-3 py-2 text-[clamp(0.72rem,2vw,0.9rem)] font-black text-emerald-100 transition hover:bg-emerald-500/20 active:scale-95 max-[389px]:text-[clamp(0.61rem,1.7vw,0.76rem)]"
             >
               <SolidIcon icon={Pencil} size={10} />
               Edit
             </button>
           </div>
 
-          {/* Hero card */}
-          <GlassCard className="shrink-0 p-2" delay={0.03}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex min-w-0 items-start gap-2">
-                <div className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/25 bg-gradient-to-br from-emerald-400/25 to-emerald-950 shadow-[0_0_24px_-6px_rgba(16,185,129,0.45)]">
-                  <SolidIcon icon={Building2} size={16} />
+          <GlassCard className="min-w-0 p-4 max-[389px]:p-3 md:col-span-2 md:p-5 lg:col-span-8 xl:col-span-9" delay={0.03}>
+            <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/25 bg-gradient-to-br from-emerald-400/25 to-emerald-950 shadow-[0_0_24px_-6px_rgba(16,185,129,0.45)] md:h-14 md:w-14">
+                  <SolidIcon icon={Building2} size={18} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200/60">Selected City</p>
-                  <p className="truncate text-sm font-black text-white">{snapshot.location.label}</p>
+                <div className="min-w-0 flex-1">
+                  <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.12em] text-emerald-200/60`}>Selected City</p>
+                  <p className="min-w-0 truncate text-[clamp(1rem,3vw,1.45rem)] font-black text-white max-[389px]:text-[clamp(0.85rem,2.55vw,1.23rem)]">
+                    {snapshot.location.label}
+                  </p>
                   <select
                     value={plan.province}
                     onChange={(event) => patchPlanMeta({ province: event.target.value })}
                     aria-label="Province"
-                    className="mt-0.5 w-full rounded-md border border-white/10 bg-black/25 px-1.5 py-0.5 text-[9px] font-bold text-emerald-50 outline-none"
+                    className="mt-2 w-full rounded-lg border border-white/10 bg-black/25 px-2.5 py-2 text-[clamp(0.72rem,2vw,0.9rem)] font-bold text-emerald-50 outline-none max-[389px]:text-[clamp(0.61rem,1.7vw,0.76rem)]"
                   >
                     {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
                       <option key={province} value={province} className="bg-[#062018]">
@@ -652,48 +662,50 @@ export function NepalCostOfLivingDashboard() {
                   </select>
                 </div>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200/60">Monthly Cost</p>
-                <AnimatedNpr value={snapshot.total} className="block text-lg font-black tabular-nums leading-none text-white" />
-                <p className="mt-0.5 text-[9px] font-bold text-emerald-200/65">
+              <div className="min-w-0 rounded-2xl border border-emerald-300/15 bg-black/20 p-3 text-left sm:w-[45%] sm:text-right lg:p-4">
+                <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.12em] text-emerald-200/60`}>Monthly Cost</p>
+                <AnimatedNpr
+                  value={snapshot.total}
+                  className="block text-[clamp(1.75rem,5vw,2.8rem)] font-extrabold leading-none text-white max-[389px]:text-[clamp(1.49rem,4.25vw,2.38rem)]"
+                />
+                <p className={`${NUMBER_SAFE_CLS} mt-1 text-[clamp(0.78rem,2.1vw,1rem)] font-bold text-emerald-200/65 max-[389px]:text-[clamp(0.66rem,1.78vw,0.85rem)]`}>
                   {formatKrwInteger(nprToKrw(snapshot.total, krwPerNpr))}
                 </p>
-                <span className="mt-0.5 inline-flex rounded-full border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-[7px] font-black uppercase text-emerald-100">
+                <span className="mt-2 inline-flex max-w-full rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-[clamp(0.62rem,1.8vw,0.78rem)] font-black uppercase text-emerald-100 max-[389px]:text-[clamp(0.53rem,1.53vw,0.66rem)]">
                   {snapshot.lifestyle.label}
                 </span>
               </div>
             </div>
           </GlassCard>
 
-          {/* Family / Lifestyle / Savings */}
-          <div className="grid shrink-0 grid-cols-3 gap-1">
-            <GlassCard className="p-1.5" delay={0.05}>
-              <p className="text-[7px] font-bold uppercase tracking-[0.1em] text-emerald-200/55">Family</p>
-              <div className="mt-0.5 space-y-0 text-[8px] font-bold leading-tight text-emerald-50/85">
-                <p>A {plan.family.adults}</p>
-                <p>C {plan.family.children}</p>
-                <p>P {plan.family.parents}</p>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2 lg:col-span-4 lg:grid-cols-1 xl:col-span-3">
+            <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.05}>
+              <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Family</p>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-[clamp(0.78rem,2.2vw,0.95rem)] font-bold leading-tight text-emerald-50/85 max-[389px]:text-[clamp(0.66rem,1.87vw,0.8rem)]">
+                <p className="min-w-0">A <NumericText>{plan.family.adults}</NumericText></p>
+                <p className="min-w-0">C <NumericText>{plan.family.children}</NumericText></p>
+                <p className="min-w-0">P <NumericText>{plan.family.parents}</NumericText></p>
               </div>
             </GlassCard>
-            <GlassCard className="p-1.5" delay={0.06}>
-              <p className="text-[7px] font-bold uppercase tracking-[0.1em] text-emerald-200/55">Lifestyle</p>
-              <div className="mt-0.5 flex flex-wrap gap-0.5">
+            <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.06}>
+              <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Lifestyle</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {COL_LIFESTYLE_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => patchPlanSettings({ lifestyle: option.id })}
-                    className={`rounded-full px-1 py-px text-[6px] font-black uppercase transition ${
+                    className={`min-h-7 rounded-full px-2 py-1 text-[clamp(0.58rem,1.7vw,0.75rem)] font-black uppercase transition max-[389px]:text-[clamp(0.5rem,1.45vw,0.64rem)] ${
                       plan.lifestyle === option.id
                         ? "bg-[#10B981] text-emerald-950"
                         : "bg-white/8 text-emerald-100/65 hover:bg-white/12"
                     }`}
                   >
-                    {option.label.slice(0, 4)}
+                    {option.label}
                   </button>
                 ))}
               </div>
-              <div className="mt-0.5 flex gap-0.5">
+              <div className="mt-2 flex gap-1">
                 {COL_LIFESTYLE_OPTIONS.map((option) => (
                   <span
                     key={option.id}
@@ -702,21 +714,22 @@ export function NepalCostOfLivingDashboard() {
                 ))}
               </div>
             </GlassCard>
-            <GlassCard className="p-1.5" delay={0.07}>
-              <p className="text-[7px] font-bold uppercase tracking-[0.1em] text-emerald-200/55">Savings</p>
-              <p className="mt-0.5 text-xs font-black tabular-nums leading-none text-[#10B981]">
+            <GlassCard className="flex min-h-[92px] min-w-0 flex-col justify-center p-4 max-[389px]:p-3" delay={0.07}>
+              <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.1em] text-emerald-200/55`}>Savings</p>
+              <p className={`${NUMBER_SAFE_CLS} mt-2 text-[clamp(1rem,3vw,1.45rem)] font-black leading-none text-[#10B981] max-[389px]:text-[clamp(0.85rem,2.55vw,1.23rem)]`}>
                 {formatNprInteger(Math.round(animatedSavings))}
               </p>
-              <p className="mt-0.5 text-[8px] font-bold text-emerald-100/65">{animatedSavingsPct.toFixed(1)}%</p>
+              <p className={`${NUMBER_SAFE_CLS} mt-1 text-[clamp(0.7rem,2vw,0.9rem)] font-bold text-emerald-100/65 max-[389px]:text-[clamp(0.6rem,1.7vw,0.76rem)]`}>
+                {animatedSavingsPct.toFixed(1)}%
+              </p>
             </GlassCard>
           </div>
 
-          {/* Monthly expense breakdown — 5×2 compact grid */}
-          <section className="min-h-0 shrink-0">
-            <h2 className="mb-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-emerald-200/70">
+          <section className="min-w-0 md:col-span-1 lg:col-span-7 xl:col-span-8">
+            <h2 className={`${LABEL_CLS} mb-2 font-black uppercase tracking-[0.12em] text-emerald-200/70`}>
               Monthly Expense Breakdown
             </h2>
-            <div className="grid grid-cols-5 gap-0.5">
+            <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5">
               {snapshot.items.map((item) => (
                 <ExpenseCategoryCard
                   key={item.id}
@@ -728,19 +741,21 @@ export function NepalCostOfLivingDashboard() {
             </div>
           </section>
 
-          {/* Total monthly cost */}
-          <GlassCard className="shrink-0 p-2" delay={0.1}>
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-emerald-200/60">Total Monthly Cost</p>
-                <AnimatedNpr value={snapshot.total} className="block text-xl font-black tabular-nums leading-none text-white" />
+          <GlassCard className="flex min-h-[170px] min-w-0 flex-col justify-between p-4 max-[389px]:p-3 md:col-span-1 lg:col-span-5 lg:min-h-[220px] xl:col-span-4" delay={0.1}>
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className={`${LABEL_CLS} font-bold uppercase tracking-[0.12em] text-emerald-200/60`}>Total Monthly Cost</p>
+                <AnimatedNpr
+                  value={snapshot.total}
+                  className="block text-[clamp(1.75rem,5vw,2.8rem)] font-extrabold leading-none text-white max-[389px]:text-[clamp(1.49rem,4.25vw,2.38rem)]"
+                />
               </div>
               <SolidIcon icon={Sparkles} size={14} className="opacity-80" />
             </div>
-            <div className="mt-1 h-8">
+            <div className="mt-4 h-20 min-w-0 md:h-24 lg:h-28">
               {chartsReady ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={snapshot.trend} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                  <LineChart data={snapshot.trend} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
                     <Line
                       type="monotone"
                       dataKey="value"
@@ -769,15 +784,13 @@ export function NepalCostOfLivingDashboard() {
             </div>
           </GlassCard>
 
-          {/* Compact analytics — single card, three columns */}
-          <section className="min-h-0 shrink-0">
-            <h2 className="mb-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-emerald-200/70">Analytics</h2>
-            <GlassCard className="p-1.5" delay={0.12}>
-              <div className="grid grid-cols-[72px_1fr_56px] items-center gap-1.5">
-                {/* Donut */}
-                <div>
-                  <p className="mb-0.5 text-[6px] font-black uppercase tracking-wide text-emerald-200/55">Distribution</p>
-                  <div className="relative h-14">
+          <section className="min-w-0 md:col-span-2 lg:col-span-12">
+            <h2 className={`${LABEL_CLS} mb-2 font-black uppercase tracking-[0.12em] text-emerald-200/70`}>Analytics</h2>
+            <GlassCard className="min-w-0 p-4 max-[389px]:p-3 md:p-5" delay={0.12}>
+              <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-[minmax(180px,0.8fr)_minmax(280px,1.4fr)_minmax(160px,0.8fr)]">
+                <div className="min-w-0">
+                  <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Distribution</p>
+                  <div className="relative h-32 min-w-0 sm:h-36 lg:h-44">
                     {chartsReady ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart key={`col-donut-${snapshot.total}`}>
@@ -801,21 +814,22 @@ export function NepalCostOfLivingDashboard() {
                       <div className="h-full animate-pulse rounded-full bg-white/5" />
                     )}
                     <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                      <span className="text-[7px] font-black text-emerald-100">{formatNprInteger(snapshot.total)}</span>
+                      <NumericText className="max-w-[72%] text-center text-[clamp(0.72rem,2vw,0.95rem)] font-black text-emerald-100 max-[389px]:text-[clamp(0.61rem,1.7vw,0.8rem)]">
+                        {formatNprInteger(snapshot.total)}
+                      </NumericText>
                     </div>
                   </div>
                 </div>
 
-                {/* Korea vs Nepal */}
-                <div>
-                  <p className="mb-0.5 text-[6px] font-black uppercase tracking-wide text-emerald-200/55">Korea vs Nepal</p>
+                <div className="min-w-0">
+                  <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Korea vs Nepal</p>
                   <div className="space-y-1">
                     <div>
-                      <div className="mb-px flex justify-between text-[7px] font-bold text-emerald-100/75">
+                      <div className="mb-1 flex min-w-0 justify-between gap-2 text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/75 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">
                         <span>Korea</span>
-                        <span className="tabular-nums">{formatNprInteger(snapshot.koreaSpend)}</span>
+                        <NumericText>{formatNprInteger(snapshot.koreaSpend)}</NumericText>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                      <div className="h-2 overflow-hidden rounded-full bg-white/8">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${koreaBarPct}%` }}
@@ -825,11 +839,11 @@ export function NepalCostOfLivingDashboard() {
                       </div>
                     </div>
                     <div>
-                      <div className="mb-px flex justify-between text-[7px] font-bold text-emerald-100/75">
+                      <div className="mb-1 flex min-w-0 justify-between gap-2 text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/75 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">
                         <span>Nepal</span>
-                        <span className="tabular-nums">{formatNprInteger(snapshot.total)}</span>
+                        <NumericText>{formatNprInteger(snapshot.total)}</NumericText>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                      <div className="h-2 overflow-hidden rounded-full bg-white/8">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${nepalBarPct}%` }}
@@ -839,7 +853,7 @@ export function NepalCostOfLivingDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-1 h-10">
+                  <div className="mt-4 h-28 min-w-0 sm:h-32 lg:h-40">
                     {chartsReady ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -847,13 +861,13 @@ export function NepalCostOfLivingDashboard() {
                             { label: "KR", value: snapshot.koreaSpend, fill: "#10B981" },
                             { label: "NP", value: snapshot.total, fill: "#059669" },
                           ]}
-                          margin={{ top: 0, right: 0, left: -22, bottom: 0 }}
+                          margin={{ top: 4, right: 4, left: 4, bottom: 4 }}
                         >
                           <XAxis
                             dataKey="label"
                             tickLine={false}
                             axisLine={false}
-                            tick={{ fill: "#a7f3d0", fontSize: 7, fontWeight: 700 }}
+                            tick={{ fill: "#a7f3d0", fontSize: 10, fontWeight: 700 }}
                           />
                           <YAxis hide />
                           <Bar dataKey="value" radius={[4, 4, 2, 2]} isAnimationActive animationDuration={800} />
@@ -863,53 +877,52 @@ export function NepalCostOfLivingDashboard() {
                   </div>
                 </div>
 
-                {/* Retirement readiness */}
-                <div>
-                  <p className="mb-0.5 text-[6px] font-black uppercase tracking-wide text-emerald-200/55">Retirement</p>
+                <div className="min-w-0">
+                  <p className={`${MICRO_LABEL_CLS} mb-2 font-black uppercase tracking-wide text-emerald-200/55`}>Retirement</p>
                   <div
-                    className="relative mx-auto grid h-14 w-14 place-items-center rounded-full"
+                    className="relative mx-auto grid aspect-square w-full max-w-36 place-items-center rounded-full lg:max-w-44"
                     style={{
                       background: `conic-gradient(${EMERALD} ${animatedReadiness * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
                     }}
                   >
                     <div className="grid h-[68%] w-[68%] place-items-center rounded-full bg-[#041610]">
-                      <span className="text-xs font-black tabular-nums text-white">{Math.round(animatedReadiness)}</span>
+                      <NumericText className="text-[clamp(1rem,3vw,1.6rem)] font-black text-white max-[389px]:text-[clamp(0.85rem,2.55vw,1.36rem)]">
+                        {Math.round(animatedReadiness)}
+                      </NumericText>
                     </div>
                   </div>
-                  <p className="mt-0.5 text-center text-[6px] font-bold leading-tight text-emerald-100/65">/100 score</p>
+                  <p className="mt-2 text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold leading-tight text-emerald-100/65 max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]">/100 score</p>
                 </div>
               </div>
             </GlassCard>
           </section>
 
-          {/* AI insight */}
-          <GlassCard className="min-h-0 shrink p-1.5" delay={0.14}>
-            <div className="flex items-start gap-1.5">
-              <div className="relative grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-300/20 bg-emerald-500/10">
+          <GlassCard className="min-w-0 p-4 max-[389px]:p-3 md:col-span-2 lg:col-span-12" delay={0.14}>
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-emerald-300/20 bg-emerald-500/10">
                 <SolidIcon icon={Bot} size={14} />
-                <span className="absolute -right-0.5 -top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-[#10B981] text-[6px] font-black text-emerald-950">
+                <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-[#10B981] text-[clamp(0.5rem,1.4vw,0.62rem)] font-black text-emerald-950">
                   AI
                 </span>
               </div>
-              <div className="min-w-0">
-                <p className="text-[7px] font-black uppercase tracking-[0.1em] text-emerald-200/60">AI Insight</p>
-                <p className="line-clamp-2 text-[9px] font-semibold leading-snug text-emerald-50/90">{snapshot.aiMessage}</p>
+              <div className="min-w-0 flex-1">
+                <p className={`${LABEL_CLS} font-black uppercase tracking-[0.1em] text-emerald-200/60`}>AI Insight</p>
+                <p className="text-[clamp(0.78rem,2.2vw,1rem)] font-semibold leading-snug text-emerald-50/90 max-[389px]:text-[clamp(0.66rem,1.87vw,0.85rem)]">{snapshot.aiMessage}</p>
               </div>
             </div>
           </GlassCard>
 
           {!hydrated ? (
-            <p className="shrink-0 text-center text-[8px] font-bold text-emerald-100/50">Loading plan…</p>
+            <p className="text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-emerald-100/50 md:col-span-2 lg:col-span-12">Loading plan…</p>
           ) : null}
         </main>
 
-        {/* Sticky bottom action bar */}
-        <div className="z-30 shrink-0 border-t border-emerald-500/10 bg-[#021510]/96 px-2.5 py-1.5 backdrop-blur-xl">
-          <div className="grid grid-cols-3 gap-1">
+        <div className="sticky bottom-0 z-30 shrink-0 border-t border-emerald-500/10 bg-[#021510]/96 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl max-[389px]:px-3 lg:px-8">
+          <div className="mx-auto grid max-w-[1320px] grid-cols-3 gap-2">
             <button
               type="button"
               onClick={handleSavePlan}
-              className="inline-flex min-h-[38px] flex-col items-center justify-center gap-0.5 rounded-xl border border-emerald-400/20 bg-emerald-500/12 px-1 text-[8px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/20 active:scale-[0.98]"
+              className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-emerald-400/20 bg-emerald-500/12 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/20 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
             >
               <SolidIcon icon={Save} size={13} />
               Save
@@ -917,7 +930,7 @@ export function NepalCostOfLivingDashboard() {
             <button
               type="button"
               onClick={() => setCompareOpen(true)}
-              className="inline-flex min-h-[38px] flex-col items-center justify-center gap-0.5 rounded-xl border border-white/10 bg-white/6 px-1 text-[8px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98]"
+              className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/6 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
             >
               <SolidIcon icon={MapPin} size={13} />
               Compare
@@ -925,7 +938,7 @@ export function NepalCostOfLivingDashboard() {
             <button
               type="button"
               onClick={() => void handleExportPdf()}
-              className="inline-flex min-h-[38px] flex-col items-center justify-center gap-0.5 rounded-xl border border-white/10 bg-white/6 px-1 text-[8px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98]"
+              className="inline-flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-white/10 bg-white/6 px-2 text-[clamp(0.62rem,1.8vw,0.82rem)] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-white/10 active:scale-[0.98] max-[389px]:text-[clamp(0.53rem,1.53vw,0.7rem)] md:min-h-14"
             >
               <SolidIcon icon={FileText} size={13} />
               PDF
@@ -937,7 +950,7 @@ export function NepalCostOfLivingDashboard() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
-                className="mt-0.5 text-center text-[8px] font-bold text-[#10B981]"
+                className="mt-2 text-center text-[clamp(0.65rem,1.8vw,0.85rem)] font-bold text-[#10B981]"
               >
                 Plan saved{userId ? " to your account" : " locally"}.
               </motion.p>
