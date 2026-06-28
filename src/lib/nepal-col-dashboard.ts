@@ -39,6 +39,8 @@ export type ColPlanState = {
   province: string;
   lifestyle: ColLifestyleId;
   family: ColFamilyPlan;
+  /** User-provided monthly income in NPR; savings is hidden until this is set. */
+  monthlyIncomeNpr: number | null;
   /** Korea-side monthly spend in NPR (for savings comparison). */
   monthlyKoreaSpendNpr: number;
   /** User-editable monthly amounts per category — total is always their sum. */
@@ -132,6 +134,7 @@ export function defaultColPlan(): ColPlanState {
     province: provinceForCity(cityId),
     lifestyle,
     family,
+    monthlyIncomeNpr: null,
     monthlyKoreaSpendNpr: 150_000,
     expenses: computeSuggestedExpenses(location, lifestyle, family),
   };
@@ -173,6 +176,7 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
     province: typeof input.province === "string" && input.province.trim() ? input.province.trim() : provinceForCity(cityId),
     lifestyle,
     family,
+    monthlyIncomeNpr: sanitizeOptionalMoney(input.monthlyIncomeNpr),
     monthlyKoreaSpendNpr: clampNumber(input.monthlyKoreaSpendNpr, 40_000, 800_000, base.monthlyKoreaSpendNpr),
     expenses,
   };
@@ -221,6 +225,13 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function sanitizeOptionalMoney(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.round(n));
 }
 
 function lifestyleMultiplier(id: ColLifestyleId): number {
@@ -280,8 +291,11 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
   const location = locationById(plan.cityId, cities);
   const lifestyle = COL_LIFESTYLE_OPTIONS.find((item) => item.id === plan.lifestyle)!;
   const { items, total } = itemsFromExpenses(plan.expenses);
-  const monthlySavings = Math.max(0, plan.monthlyKoreaSpendNpr - total);
-  const savingsPct = plan.monthlyKoreaSpendNpr > 0 ? (monthlySavings / plan.monthlyKoreaSpendNpr) * 100 : 0;
+  const monthlySavings = plan.monthlyIncomeNpr === null ? null : plan.monthlyIncomeNpr - total;
+  const savingsPct =
+    plan.monthlyIncomeNpr && plan.monthlyIncomeNpr > 0 && monthlySavings !== null
+      ? (monthlySavings / plan.monthlyIncomeNpr) * 100
+      : null;
   const readiness = retirementScore(location, total);
 
   const trend = Array.from({ length: 8 }, (_, index) => ({
@@ -297,7 +311,10 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
   });
 
   const koreaSpend = plan.monthlyKoreaSpendNpr;
-  const aiMessage = `Living in ${location.label} with your ${lifestyle.label.toLowerCase()} lifestyle allows you to save NPR ${monthlySavings.toLocaleString("en-IN")} every month compared to your Korea spend model.`;
+  const aiMessage =
+    monthlySavings === null
+      ? `Enter monthly income to calculate your savings in ${location.label}.`
+      : `Living in ${location.label} with your ${lifestyle.label.toLowerCase()} lifestyle leaves NPR ${monthlySavings.toLocaleString("en-IN")} after monthly expenses.`;
 
   return {
     location,

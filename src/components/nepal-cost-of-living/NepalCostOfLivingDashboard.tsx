@@ -342,6 +342,26 @@ function EditPlanSheet({
                 />
               </label>
 
+              <label className="flex flex-col gap-1.5">
+                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>
+                  Monthly Income
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={draft.monthlyIncomeNpr ?? ""}
+                  placeholder="Enter monthly income"
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      monthlyIncomeNpr: event.target.value === "" ? null : Number(event.target.value),
+                    }))
+                  }
+                  className={`${NUMBER_SAFE_CLS} rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none placeholder:text-emerald-100/35`}
+                />
+              </label>
+
               <div className="grid grid-cols-2 gap-2">
                 {COL_LIFESTYLE_OPTIONS.map((option) => (
                   <button
@@ -628,11 +648,17 @@ export function NepalCostOfLivingDashboard() {
   }, []);
 
   const snapshot = useMemo(() => computeColSnapshot(plan), [plan]);
-  const animatedSavings = useCountUpNumber(snapshot.monthlySavings, { durationMs: 900 });
+  const animatedSavings = useCountUpNumber(snapshot.monthlySavings ?? 0, { durationMs: 900 });
   const animatedReadiness = useCountUpNumber(snapshot.readiness, { durationMs: 1100 });
 
   const patchPlanSettings = (patch: Partial<Omit<ColPlanState, "expenses">>) =>
     setPlan((current) => applyPlanSettings(current, patch));
+
+  const patchMonthlyIncome = (raw: string) =>
+    setPlan((current) => ({
+      ...current,
+      monthlyIncomeNpr: raw.trim() === "" ? null : Number(raw),
+    }));
 
   const patchExpense = (categoryId: ColExpenseCategoryId, amount: number) =>
     setPlan((current) => patchExpenseAmount(current, categoryId, amount));
@@ -655,7 +681,20 @@ export function NepalCostOfLivingDashboard() {
     doc.text(`Province: ${plan.province}`, 48, 100);
     doc.text(`Lifestyle: ${snapshot.lifestyle.label}`, 48, 116);
     doc.text(`Monthly total: ${formatNprInteger(snapshot.total)}`, 48, 140);
-    doc.text(`Monthly savings vs Korea model: ${formatNprInteger(snapshot.monthlySavings)}`, 48, 156);
+    doc.text(
+      plan.monthlyIncomeNpr === null
+        ? "Monthly income: Not entered"
+        : `Monthly income: ${formatNprInteger(plan.monthlyIncomeNpr)}`,
+      48,
+      156,
+    );
+    doc.text(
+      snapshot.monthlySavings === null
+        ? "Monthly savings: Enter monthly income"
+        : `Monthly savings: ${formatNprInteger(snapshot.monthlySavings)} (${snapshot.savingsPct?.toFixed(1) ?? "0.0"}%)`,
+      48,
+      172,
+    );
     let y = 188;
     doc.setFont("helvetica", "bold");
     doc.text("Expense breakdown", 48, y);
@@ -680,6 +719,7 @@ export function NepalCostOfLivingDashboard() {
   const dailyAverage = Math.round(snapshot.total / 30);
   const weeklyAverage = Math.round((snapshot.total * 12) / 52);
   const topExpense = snapshot.items.reduce((largest, item) => (item.amount > largest.amount ? item : largest), snapshot.items[0]);
+  const hasMonthlyIncome = plan.monthlyIncomeNpr !== null;
 
   return (
     <div className={`min-h-[100dvh] overflow-x-hidden ${shellBg}`}>
@@ -714,7 +754,7 @@ export function NepalCostOfLivingDashboard() {
 
           <main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
             <div className="flex shrink-0 flex-col gap-3 min-[1000px]:flex-row min-[1000px]:items-start min-[1000px]:justify-between min-[1000px]:gap-4">
-              <div className="min-w-0 min-[1000px]:min-w-[250px]">
+              <div className="min-w-0 min-[1000px]:min-w-[230px]">
                 <h1 className="text-[28px] font-black leading-none tracking-[-0.04em] text-white min-[1000px]:whitespace-nowrap">
                   Nepal Cost of Living
                 </h1>
@@ -722,7 +762,7 @@ export function NepalCostOfLivingDashboard() {
                 <div className="mt-3 h-0.5 w-8 rounded-full bg-emerald-400" />
               </div>
 
-              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-4 min-[1000px]:mt-3 min-[1000px]:w-[570px] min-[1000px]:grid-cols-[112px_112px_112px_1fr]">
+              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-5 min-[1000px]:mt-3 min-[1000px]:w-[590px] min-[1000px]:grid-cols-[98px_98px_98px_120px_1fr]">
                 <label className="flex h-[48px] items-center gap-2 rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3">
                   <SolidIcon icon={MapPin} size={17} />
                   <span className="sr-only">City</span>
@@ -765,9 +805,22 @@ export function NepalCostOfLivingDashboard() {
                     ))}
                   </select>
                 </label>
+                <label className="block h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 py-2">
+                  <span className="block text-[11px] font-semibold text-emerald-50/70">Monthly Income</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1000}
+                    value={plan.monthlyIncomeNpr ?? ""}
+                    placeholder="Enter income"
+                    onChange={(event) => patchMonthlyIncome(event.target.value)}
+                    className={`${NUMBER_SAFE_CLS} w-full bg-transparent text-[12px] font-bold text-white outline-none placeholder:text-emerald-100/35 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                  />
+                </label>
                 <GlassCard className="flex min-h-[64px] flex-col items-center justify-center rounded-lg p-2 text-center min-[1000px]:h-[60px] min-[1000px]:min-h-0" delay={0.02}>
                   <p className="text-[11px] font-bold text-emerald-50/70">Total Monthly Cost</p>
-                  <p className="text-[22px] font-black leading-[1.05] tracking-tight text-white tabular-nums">
+                  <p className="text-[22px] font-black leading-[1.05] tracking-tight text-white tabular-nums min-[1000px]:text-[18px]">
                     {formatNprInteger(snapshot.total)}
                   </p>
                   <p className="mt-0.5 text-[11px] font-bold text-emerald-400">{formatKrwInteger(nprToKrw(snapshot.total, krwPerNpr))}</p>
@@ -803,8 +856,18 @@ export function NepalCostOfLivingDashboard() {
               <DesktopKpiCard
                 icon={Building2}
                 label="Monthly Savings"
-                value={formatNprInteger(Math.round(animatedSavings))}
-                subValue={formatKrwInteger(nprToKrw(Math.round(animatedSavings), krwPerNpr))}
+                value={
+                  hasMonthlyIncome ? (
+                    formatNprInteger(Math.round(animatedSavings))
+                  ) : (
+                    <span className="block text-[13px] leading-tight">Enter Monthly Income</span>
+                  )
+                }
+                subValue={
+                  hasMonthlyIncome && snapshot.savingsPct !== null
+                    ? `Savings Rate ${snapshot.savingsPct.toFixed(1)}%`
+                    : "Savings Rate --"
+                }
               />
             </div>
 
@@ -1033,7 +1096,7 @@ export function NepalCostOfLivingDashboard() {
 
       <NavMenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} />
       <EditPlanSheet
-        key={`${editOpen ? "open" : "closed"}-${plan.cityId}-${plan.province}-${plan.lifestyle}-${plan.family.adults}-${plan.family.children}-${plan.family.parents}-${plan.monthlyKoreaSpendNpr}`}
+        key={`${editOpen ? "open" : "closed"}-${plan.cityId}-${plan.province}-${plan.lifestyle}-${plan.family.adults}-${plan.family.children}-${plan.family.parents}-${plan.monthlyIncomeNpr ?? "none"}-${plan.monthlyKoreaSpendNpr}`}
         open={editOpen}
         plan={plan}
         onClose={() => setEditOpen(false)}
@@ -1044,6 +1107,7 @@ export function NepalCostOfLivingDashboard() {
               province: draft.province,
               lifestyle: draft.lifestyle,
               family: draft.family,
+              monthlyIncomeNpr: draft.monthlyIncomeNpr,
               monthlyKoreaSpendNpr: draft.monthlyKoreaSpendNpr,
             }),
           )
