@@ -64,6 +64,8 @@ const ICON_CLS = "text-[#10B981]";
 const NUMBER_SAFE_CLS =
   "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap tabular-nums [font-variant-numeric:tabular-nums]";
 const LABEL_CLS = "text-[clamp(0.65rem,1.8vw,0.85rem)] max-[389px]:text-[clamp(0.55rem,1.53vw,0.72rem)]";
+const REPORT_BG = "#00120d";
+type ReportExportStatus = "idle" | "loading" | "success" | "error";
 
 function SolidIcon({ icon: Icon, size = 14, className = "" }: { icon: LucideIcon; size?: number; className?: string }) {
   return <Icon size={size} className={`${ICON_CLS} ${className}`} fill={EMERALD} stroke={EMERALD} strokeWidth={1.25} />;
@@ -527,8 +529,11 @@ function downloadBlob(blob: Blob, filename: string) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -537,36 +542,222 @@ async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+function clampColorChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function linearSrgbToChannel(value: number): number {
+  const channel = value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
+  return clampColorChannel(channel * 255);
+}
+
+function parseCssNumber(value: string, percentBase = 1): number {
+  const trimmed = value.trim();
+  if (trimmed.endsWith("%")) return (Number(trimmed.slice(0, -1)) / 100) * percentBase;
+  return Number(trimmed);
+}
+
+function parseCssAlpha(value: string | undefined): number {
+  if (!value) return 1;
+  return Math.max(0, Math.min(1, parseCssNumber(value)));
+}
+
+function oklabToRgba(l: number, a: number, b: number, alpha = 1): string {
+  const lPrime = l + 0.3963377774 * a + 0.2158037573 * b;
+  const mPrime = l - 0.1055613458 * a - 0.0638541728 * b;
+  const sPrime = l - 0.0894841775 * a - 1.291485548 * b;
+  const lCubed = lPrime ** 3;
+  const mCubed = mPrime ** 3;
+  const sCubed = sPrime ** 3;
+  const red = linearSrgbToChannel(4.0767416621 * lCubed - 3.3077115913 * mCubed + 0.2309699292 * sCubed);
+  const green = linearSrgbToChannel(-1.2684380046 * lCubed + 2.6097574011 * mCubed - 0.3413193965 * sCubed);
+  const blue = linearSrgbToChannel(-0.0041960863 * lCubed - 0.7034186147 * mCubed + 1.707614701 * sCubed);
+  return alpha >= 1 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function labToRgba(l: number, a: number, b: number, alpha = 1): string {
+  const fy = (l + 16) / 116;
+  const fx = fy + a / 500;
+  const fz = fy - b / 200;
+  const epsilon = 216 / 24389;
+  const kappa = 24389 / 27;
+  const xr = fx ** 3 > epsilon ? fx ** 3 : (116 * fx - 16) / kappa;
+  const yr = l > kappa * epsilon ? fy ** 3 : l / kappa;
+  const zr = fz ** 3 > epsilon ? fz ** 3 : (116 * fz - 16) / kappa;
+  const d50X = xr * 0.96422;
+  const d50Y = yr;
+  const d50Z = zr * 0.82521;
+  const x = 0.9554734 * d50X - 0.0230985 * d50Y + 0.0632593 * d50Z;
+  const y = -0.0283697 * d50X + 1.0099956 * d50Y + 0.0210414 * d50Z;
+  const z = 0.012314 * d50X - 0.0205077 * d50Y + 1.3303659 * d50Z;
+  const red = linearSrgbToChannel(3.2404542 * x - 1.5371385 * y - 0.4985314 * z);
+  const green = linearSrgbToChannel(-0.969266 * x + 1.8760108 * y + 0.041556 * z);
+  const blue = linearSrgbToChannel(0.0556434 * x - 0.2040259 * y + 1.0572252 * z);
+  return alpha >= 1 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function modernColorToRgba(match: string): string {
+  const fnMatch = match.match(/^([a-z0-9-]+)\((.*)\)$/i);
+  if (!fnMatch) return match;
+  const [, fn, rawBody] = fnMatch;
+  const [rawComponents, rawAlpha] = rawBody.split("/").map((part) => part.trim());
+  const components = rawComponents.split(/\s+/).filter(Boolean);
+  const alpha = parseCssAlpha(rawAlpha);
+
+  if (fn === "oklab" && components.length >= 3) {
+    return oklabToRgba(parseCssNumber(components[0]), parseCssNumber(components[1]), parseCssNumber(components[2]), alpha);
+  }
+
+  if (fn === "oklch" && components.length >= 3) {
+    const l = parseCssNumber(components[0]);
+    const chroma = parseCssNumber(components[1]);
+    const hue = (parseCssNumber(components[2]) * Math.PI) / 180;
+    return oklabToRgba(l, Math.cos(hue) * chroma, Math.sin(hue) * chroma, alpha);
+  }
+
+  if (fn === "lab" && components.length >= 3) {
+    return labToRgba(parseCssNumber(components[0], 100), parseCssNumber(components[1]), parseCssNumber(components[2]), alpha);
+  }
+
+  if (fn === "lch" && components.length >= 3) {
+    const l = parseCssNumber(components[0], 100);
+    const chroma = parseCssNumber(components[1]);
+    const hue = (parseCssNumber(components[2]) * Math.PI) / 180;
+    return labToRgba(l, Math.cos(hue) * chroma, Math.sin(hue) * chroma, alpha);
+  }
+
+  if (fn === "color" && components.length >= 4) {
+    const channels = components.slice(1, 4).map((component) => parseCssNumber(component, 255));
+    const normalized = channels.map((channel) => (channel <= 1 ? channel * 255 : channel));
+    const [red, green, blue] = normalized.map(clampColorChannel);
+    return alpha >= 1 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  }
+
+  return match;
+}
+
+function replaceModernColorFunctions(value: string): string {
+  if (!/(oklab|oklch|lab|lch|color)\(/i.test(value)) return value;
+  return value.replace(/\b(?:oklab|oklch|lab|lch|color)\([^()]+\)/gi, modernColorToRgba);
+}
+
+function sanitizeModernColorsForHtml2Canvas(root: HTMLElement) {
+  const colorProperties = [
+    "background-color",
+    "background-image",
+    "border-bottom-color",
+    "border-left-color",
+    "border-right-color",
+    "border-top-color",
+    "box-shadow",
+    "caret-color",
+    "color",
+    "fill",
+    "outline-color",
+    "stop-color",
+    "stroke",
+    "text-decoration-color",
+    "text-shadow",
+  ];
+  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement | SVGElement>("*"))];
+
+  elements.forEach((element) => {
+    const styles = window.getComputedStyle(element);
+    colorProperties.forEach((property) => {
+      const value = styles.getPropertyValue(property);
+      const sanitized = replaceModernColorFunctions(value);
+      if (sanitized !== value) {
+        (element as HTMLElement).style.setProperty(property, sanitized);
+      }
+    });
+  });
+}
+
 async function captureDashboardReport(element: HTMLElement): Promise<HTMLCanvasElement> {
   await document.fonts?.ready;
   const { default: html2canvas } = await import("html2canvas");
   const rect = element.getBoundingClientRect();
-  const width = Math.ceil(Math.max(element.scrollWidth, rect.width));
-  const height = Math.ceil(Math.max(element.scrollHeight, rect.height));
+  const captureWidth = Math.ceil(rect.width || element.scrollWidth || document.documentElement.clientWidth);
+  const host = document.createElement("div");
+  const clone = element.cloneNode(true) as HTMLElement;
+  const sourceControls = element.querySelectorAll("input, textarea, select");
+  const clonedControls = clone.querySelectorAll("input, textarea, select");
 
-  return html2canvas(element, {
-    backgroundColor: "#00120d",
-    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
-    useCORS: true,
-    allowTaint: false,
-    logging: false,
-    width,
-    height,
-    windowWidth: Math.max(width, document.documentElement.clientWidth),
-    windowHeight: Math.max(height, document.documentElement.clientHeight),
-    scrollX: 0,
-    scrollY: -window.scrollY,
-    onclone: (clonedDocument) => {
-      const clonedFrame = clonedDocument.querySelector("[data-col-report-frame]") as HTMLElement | null;
-      const clonedMain = clonedDocument.querySelector("[data-col-report-main]") as HTMLElement | null;
-      for (const node of [clonedFrame, clonedMain]) {
-        if (!node) continue;
-        node.style.height = "auto";
-        node.style.minHeight = `${height}px`;
-        node.style.overflow = "visible";
-      }
-    },
+  sourceControls.forEach((source, index) => {
+    const target = clonedControls[index];
+    if (!target) return;
+    if (source instanceof HTMLInputElement && target instanceof HTMLInputElement) {
+      target.value = source.value;
+      if (source.checked) target.setAttribute("checked", "");
+    } else if (source instanceof HTMLTextAreaElement && target instanceof HTMLTextAreaElement) {
+      target.value = source.value;
+      target.textContent = source.value;
+    } else if (source instanceof HTMLSelectElement && target instanceof HTMLSelectElement) {
+      target.value = source.value;
+      Array.from(target.options).forEach((option) => {
+        option.selected = option.value === source.value;
+      });
+    }
   });
+
+  host.setAttribute("aria-hidden", "true");
+  host.style.position = "fixed";
+  host.style.left = `-${captureWidth + 32}px`;
+  host.style.top = "0";
+  host.style.width = `${captureWidth}px`;
+  host.style.minHeight = "100vh";
+  host.style.overflow = "visible";
+  host.style.background = REPORT_BG;
+  host.style.pointerEvents = "none";
+  host.style.zIndex = "-1";
+
+  clone.style.width = `${captureWidth}px`;
+  clone.style.maxWidth = `${captureWidth}px`;
+  clone.style.height = "auto";
+  clone.style.minHeight = "0";
+  clone.style.overflow = "visible";
+
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  try {
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
+    const expandableNodes = clone.querySelectorAll<HTMLElement>("[data-col-report-frame], [data-col-report-main], [data-col-report-expand]");
+    expandableNodes.forEach((node) => {
+      node.style.height = "auto";
+      node.style.minHeight = "0";
+      node.style.maxHeight = "none";
+      node.style.overflow = "visible";
+    });
+
+    clone.querySelectorAll<HTMLElement>("[data-html2canvas-ignore='true']").forEach((node) => node.remove());
+    clone.querySelectorAll<HTMLElement>("[data-col-export-label]").forEach((node) => {
+      node.textContent = "Download Report";
+    });
+    sanitizeModernColorsForHtml2Canvas(clone);
+
+    const captureHeight = Math.ceil(Math.max(clone.scrollHeight, clone.offsetHeight, host.scrollHeight));
+    const baseScale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+    const maxCanvasArea = 16_000_000;
+    const scale = Math.max(1.5, Math.min(baseScale, Math.sqrt(maxCanvasArea / Math.max(1, captureWidth * captureHeight))));
+
+    return await html2canvas(clone, {
+      backgroundColor: REPORT_BG,
+      scale,
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: Math.max(captureWidth, document.documentElement.clientWidth),
+      windowHeight: Math.max(captureHeight, document.documentElement.clientHeight),
+      scrollX: 0,
+      scrollY: 0,
+    });
+  } finally {
+    host.remove();
+  }
 }
 
 async function downloadDashboardReport(element: HTMLElement, filenameBase: string): Promise<void> {
@@ -595,12 +786,20 @@ export function NepalCostOfLivingDashboard() {
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
-  const [exportingReport, setExportingReport] = useState(false);
+  const [reportExportStatus, setReportExportStatus] = useState<ReportExportStatus>("idle");
+  const [reportExportMessage, setReportExportMessage] = useState("");
+  const reportStatusTimerRef = useRef<number | null>(null);
   const [krwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setChartsReady(true), 280);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (reportStatusTimerRef.current !== null) window.clearTimeout(reportStatusTimerRef.current);
+    };
   }, []);
 
   const snapshot = useMemo(() => computeColSnapshot(plan), [plan]);
@@ -626,12 +825,23 @@ export function NepalCostOfLivingDashboard() {
   };
 
   const handleExportReport = async () => {
-    if (!reportRef.current || exportingReport) return;
-    setExportingReport(true);
+    if (!reportRef.current || reportExportStatus === "loading") return;
+    if (reportStatusTimerRef.current !== null) window.clearTimeout(reportStatusTimerRef.current);
+    setReportExportStatus("loading");
+    setReportExportMessage("Preparing the complete dashboard report...");
     try {
       await downloadDashboardReport(reportRef.current, "fire-nepal-cost-of-living-report");
+      setReportExportStatus("success");
+      setReportExportMessage("Report downloaded as PNG and PDF.");
+    } catch (error) {
+      console.error("Cost of living report export failed", error);
+      setReportExportStatus("error");
+      setReportExportMessage("Could not download the report. Please try again.");
     } finally {
-      setExportingReport(false);
+      reportStatusTimerRef.current = window.setTimeout(() => {
+        setReportExportStatus("idle");
+        setReportExportMessage("");
+      }, 4500);
     }
   };
 
@@ -657,7 +867,7 @@ export function NepalCostOfLivingDashboard() {
         className={`mx-auto flex min-h-[100dvh] w-full max-w-[1440px] overflow-x-hidden border-x border-transparent min-[1000px]:h-[100dvh] min-[1000px]:border ${frameBorder}`}
       >
         <DesktopSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div data-col-report-expand className="flex min-w-0 flex-1 flex-col">
           <header className="z-30 shrink-0 border-b border-emerald-500/10 bg-[#021510]/94 px-4 py-3 backdrop-blur-xl max-[389px]:px-3 md:px-6 min-[1000px]:hidden">
             <div className="mx-auto flex max-w-[1180px] items-center justify-between">
               <button
@@ -979,16 +1189,27 @@ export function NepalCostOfLivingDashboard() {
                 <button
                   type="button"
                   onClick={() => void handleExportReport()}
-                  disabled={exportingReport}
+                  disabled={reportExportStatus === "loading"}
                   className="mt-1 flex h-[42px] w-full flex-col items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-green-400 text-[14px] font-black text-white shadow-[0_16px_32px_-22px_rgba(34,197,94,0.9)] transition disabled:cursor-wait disabled:opacity-70"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Upload size={16} />
-                    {exportingReport ? "Preparing Report" : "Download Report"}
+                    <span data-col-export-label>{reportExportStatus === "loading" ? "Preparing Report" : "Download Report"}</span>
                   </span>
                   <span className="text-[10px] font-semibold text-emerald-950/70">PDF & PNG</span>
                 </button>
                 {savedToast ? <p className="mt-2 text-center text-[11px] font-bold text-emerald-300">Plan saved{userId ? " to your account" : " locally"}.</p> : null}
+                {reportExportMessage ? (
+                  <p
+                    aria-live="polite"
+                    data-html2canvas-ignore="true"
+                    className={`mt-2 text-center text-[11px] font-bold ${
+                      reportExportStatus === "error" ? "text-red-300" : "text-emerald-300"
+                    }`}
+                  >
+                    {reportExportMessage}
+                  </p>
+                ) : null}
               </GlassCard>
             </div>
             {!hydrated ? (
