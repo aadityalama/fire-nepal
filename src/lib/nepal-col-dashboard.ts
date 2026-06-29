@@ -1,9 +1,12 @@
 import {
+  COST_CATEGORY_FIELDS,
   DEFAULT_NEPAL_COST_CITIES,
+  type CostCategory,
+  type LifestyleCost,
   type NepalCostLocation,
   type NepalCostLocationId,
 } from "@/lib/nepal-cost-data";
-import { locationById, retirementScore } from "@/lib/nepal-cost-of-living";
+import { retirementScore } from "@/lib/nepal-cost-of-living";
 
 export type ColLifestyleId = "budget" | "standard" | "comfortable" | "luxury";
 
@@ -73,30 +76,33 @@ export const COL_EXPENSE_META: Array<{ id: ColExpenseCategoryId; label: string }
   { id: "miscellaneous", label: "Miscellaneous" },
 ];
 
-const CITY_PROVINCES: Record<string, string> = {
-  kathmandu: "Bagmati Province",
-  lalitpur: "Bagmati Province",
-  bhaktapur: "Bagmati Province",
-  pokhara: "Gandaki Province",
-  chitwan: "Bagmati Province",
-  hetauda: "Bagmati Province",
-  butwal: "Lumbini Province",
-  dharan: "Koshi Province",
-  biratnagar: "Koshi Province",
-  itahari: "Koshi Province",
-  janakpur: "Madhesh Province",
-  nepalgunj: "Lumbini Province",
-  dhangadhi: "Sudurpashchim Province",
-  birgunj: "Madhesh Province",
-  tulsipur: "Lumbini Province",
-  surkhet: "Karnali Province",
-  bharatpur: "Bagmati Province",
-  "rural-nepal": "Provincial / Rural",
-};
+const NATIONAL_LOCATION_ID = "nepal-national-average";
+const NATIONAL_PROVINCE = "Nepal";
 
-export function provinceForCity(cityId: string): string {
-  return CITY_PROVINCES[cityId] ?? "Nepal";
+function averageNumber(values: number[]): number {
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length));
 }
+
+function averageCosts(cities: NepalCostLocation[]): LifestyleCost {
+  return Object.fromEntries(
+    COST_CATEGORY_FIELDS.map((category: CostCategory) => [
+      category,
+      averageNumber(cities.map((city) => city.costs[category])),
+    ]),
+  ) as LifestyleCost;
+}
+
+export const NATIONAL_NEPAL_COST_LOCATION: NepalCostLocation = {
+  id: NATIONAL_LOCATION_ID,
+  label: "Nepal National Average",
+  shortLabel: "NPL",
+  healthcareScore: averageNumber(DEFAULT_NEPAL_COST_CITIES.map((city) => city.healthcareScore)),
+  climateScore: averageNumber(DEFAULT_NEPAL_COST_CITIES.map((city) => city.climateScore)),
+  connectivityScore: averageNumber(DEFAULT_NEPAL_COST_CITIES.map((city) => city.connectivityScore)),
+  safetyScore: averageNumber(DEFAULT_NEPAL_COST_CITIES.map((city) => city.safetyScore)),
+  lifestyleNote: "National average across FIRE Nepal's tracked Nepal cost-of-living dataset.",
+  costs: averageCosts(DEFAULT_NEPAL_COST_CITIES),
+};
 
 export function emptyExpenseAmounts(): ColExpenseAmounts {
   return Object.fromEntries(COL_EXPENSE_META.map((meta) => [meta.id, 0])) as ColExpenseAmounts;
@@ -125,18 +131,16 @@ export function itemsFromExpenses(expenses: ColExpenseAmounts): { items: ColExpe
 }
 
 export function defaultColPlan(): ColPlanState {
-  const cityId = "pokhara";
   const lifestyle: ColLifestyleId = "comfortable";
   const family: ColFamilyPlan = { adults: 2, children: 1, parents: 1 };
-  const location = locationById(cityId);
   return {
-    cityId,
-    province: provinceForCity(cityId),
+    cityId: NATIONAL_LOCATION_ID,
+    province: NATIONAL_PROVINCE,
     lifestyle,
     family,
     monthlyIncomeNpr: null,
     monthlyKoreaSpendNpr: 150_000,
-    expenses: computeSuggestedExpenses(location, lifestyle, family),
+    expenses: computeSuggestedExpenses(NATIONAL_NEPAL_COST_LOCATION, lifestyle, family),
   };
 }
 
@@ -153,11 +157,8 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
     children: clampCount(familyRaw?.children, 0, 6, base.family.children),
     parents: clampCount(familyRaw?.parents, 0, 4, base.family.parents),
   };
-  const cityId =
-    typeof input.cityId === "string" && DEFAULT_NEPAL_COST_CITIES.some((city) => city.id === input.cityId)
-      ? input.cityId
-      : base.cityId;
-  const location = locationById(cityId);
+  const cityId = NATIONAL_LOCATION_ID;
+  const location = NATIONAL_NEPAL_COST_LOCATION;
 
   const hasStoredExpenses =
     input.expenses &&
@@ -173,7 +174,7 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
 
   return {
     cityId,
-    province: typeof input.province === "string" && input.province.trim() ? input.province.trim() : provinceForCity(cityId),
+    province: NATIONAL_PROVINCE,
     lifestyle,
     family,
     monthlyIncomeNpr: sanitizeOptionalMoney(input.monthlyIncomeNpr),
@@ -182,22 +183,19 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
   };
 }
 
-/** Recompute category suggestions when city, lifestyle, or family changes. */
+/** Recompute category suggestions when lifestyle or family changes. */
 export function applyPlanSettings(
   current: ColPlanState,
   patch: Partial<Omit<ColPlanState, "expenses">>,
-  cities: NepalCostLocation[] = DEFAULT_NEPAL_COST_CITIES,
 ): ColPlanState {
   const next: ColPlanState = {
     ...current,
     ...patch,
+    cityId: NATIONAL_LOCATION_ID,
+    province: NATIONAL_PROVINCE,
     expenses: current.expenses,
   };
-  if (patch.cityId) {
-    next.province = provinceForCity(patch.cityId);
-  }
-  const location = locationById(next.cityId, cities);
-  next.expenses = computeSuggestedExpenses(location, next.lifestyle, next.family);
+  next.expenses = computeSuggestedExpenses(NATIONAL_NEPAL_COST_LOCATION, next.lifestyle, next.family);
   return next;
 }
 
@@ -247,7 +245,7 @@ function familyScale(family: ColFamilyPlan): number {
   );
 }
 
-/** Starting-point amounts when city / lifestyle / family changes — user can edit afterward. */
+/** Starting-point amounts when lifestyle or family changes — user can edit afterward. */
 export function computeSuggestedExpenses(
   location: NepalCostLocation,
   lifestyle: ColLifestyleId,
@@ -287,8 +285,8 @@ export function computeSuggestedExpenses(
   };
 }
 
-export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation[] = DEFAULT_NEPAL_COST_CITIES) {
-  const location = locationById(plan.cityId, cities);
+export function computeColSnapshot(plan: ColPlanState) {
+  const location = NATIONAL_NEPAL_COST_LOCATION;
   const lifestyle = COL_LIFESTYLE_OPTIONS.find((item) => item.id === plan.lifestyle)!;
   const { items, total } = itemsFromExpenses(plan.expenses);
   const monthlySavings = plan.monthlyIncomeNpr === null ? null : plan.monthlyIncomeNpr - total;
@@ -303,18 +301,11 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
     value: Math.round(total * (1 + index * 0.0045)),
   }));
 
-  const compareCities = ["kathmandu", "pokhara", "chitwan"].map((id) => {
-    const city = locationById(id, cities);
-    const suggested = computeSuggestedExpenses(city, plan.lifestyle, plan.family);
-    const cityTotal = itemsFromExpenses(suggested).total;
-    return { id, label: city.label, total: cityTotal };
-  });
-
   const koreaSpend = plan.monthlyKoreaSpendNpr;
   const aiMessage =
     monthlySavings === null
-      ? `Enter monthly income to calculate your savings in ${location.label}.`
-      : `Living in ${location.label} with your ${lifestyle.label.toLowerCase()} lifestyle leaves NPR ${monthlySavings.toLocaleString("en-IN")} after monthly expenses.`;
+      ? "Enter monthly income to calculate your savings against the Nepal national average."
+      : `Living in Nepal with your ${lifestyle.label.toLowerCase()} lifestyle leaves NPR ${monthlySavings.toLocaleString("en-IN")} after monthly expenses.`;
 
   return {
     location,
@@ -325,7 +316,6 @@ export function computeColSnapshot(plan: ColPlanState, cities: NepalCostLocation
     savingsPct,
     readiness,
     trend,
-    compareCities,
     koreaSpend,
     aiMessage,
     donutData: items

@@ -14,10 +14,8 @@ import {
   GraduationCap,
   HeartPulse,
   Home,
-  MapPin,
   Menu,
   Pencil,
-  RefreshCcw,
   Save,
   Settings,
   Shirt,
@@ -34,7 +32,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cell,
   Line,
@@ -50,13 +48,11 @@ import { formatKrwInteger, formatNprInteger } from "@/components/savings-tracker
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useColPlanState } from "@/hooks/useColPlanState";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
-import { DEFAULT_NEPAL_COST_CITIES } from "@/lib/nepal-cost-data";
 import {
   applyPlanSettings,
   COL_LIFESTYLE_OPTIONS,
   computeColSnapshot,
   patchExpenseAmount,
-  provinceForCity,
   type ColExpenseCategoryId,
   type ColExpenseItem,
   type ColPlanState,
@@ -261,43 +257,6 @@ function EditPlanSheet({
             </div>
 
             <div className="max-h-[70dvh] space-y-3 overflow-y-auto">
-              <label className="flex flex-col gap-1.5">
-                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>City</span>
-                <select
-                  value={draft.cityId}
-                  onChange={(event) => {
-                    const cityId = event.target.value;
-                    setDraft((current) => ({
-                      ...current,
-                      cityId,
-                      province: provinceForCity(cityId),
-                    }));
-                  }}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none"
-                >
-                  {DEFAULT_NEPAL_COST_CITIES.map((city) => (
-                    <option key={city.id} value={city.id} className="bg-[#062018]">
-                      {city.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className={`${LABEL_CLS} font-bold uppercase tracking-[0.14em] text-emerald-200/70`}>Province</span>
-                <select
-                  value={draft.province}
-                  onChange={(event) => setDraft((current) => ({ ...current, province: event.target.value }))}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[clamp(0.85rem,2vw,1rem)] font-bold text-white outline-none"
-                >
-                  {[...new Set(DEFAULT_NEPAL_COST_CITIES.map((city) => provinceForCity(city.id)))].map((province) => (
-                    <option key={province} value={province} className="bg-[#062018]">
-                      {province}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <div className="grid grid-cols-3 gap-2">
                 <Stepper
                   label="Adults"
@@ -389,74 +348,6 @@ function EditPlanSheet({
               >
                 Apply changes
               </button>
-            </div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>
-  );
-}
-
-function CompareCitiesSheet({
-  open,
-  onClose,
-  cities,
-  selectedId,
-  onSelect,
-}: {
-  open: boolean;
-  onClose: () => void;
-  cities: Array<{ id: string; label: string; total: number }>;
-  selectedId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <AnimatePresence>
-      {open ? (
-        <>
-          <motion.button
-            type="button"
-            aria-label="Close compare cities"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[390px] rounded-t-2xl border border-emerald-400/20 bg-gradient-to-b from-[#083026] to-[#021510] p-4 pb-8"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[clamp(1rem,2.6vw,1.2rem)] font-black text-white">Compare Cities</h2>
-              <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/8 text-white">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {cities.map((city) => (
-                <button
-                  key={city.id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(city.id);
-                    onClose();
-                  }}
-                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99] ${
-                    selectedId === city.id
-                      ? "border-emerald-300/50 bg-emerald-500/15"
-                      : "border-white/10 bg-white/5 hover:border-emerald-400/25"
-                  }`}
-                >
-                  <span className="min-w-0 truncate text-[clamp(0.85rem,2vw,1rem)] font-black text-white">{city.label}</span>
-                  <NumericText className="text-[clamp(0.85rem,2vw,1rem)] font-black text-emerald-200">
-                    {formatNprInteger(city.total)}
-                  </NumericText>
-                </button>
-              ))}
             </div>
           </motion.div>
         </>
@@ -631,15 +522,80 @@ function DesktopExpenseRow({
   );
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("PNG export failed"))), "image/png", 1);
+  });
+}
+
+async function captureDashboardReport(element: HTMLElement): Promise<HTMLCanvasElement> {
+  await document.fonts?.ready;
+  const { default: html2canvas } = await import("html2canvas");
+  const rect = element.getBoundingClientRect();
+  const width = Math.ceil(Math.max(element.scrollWidth, rect.width));
+  const height = Math.ceil(Math.max(element.scrollHeight, rect.height));
+
+  return html2canvas(element, {
+    backgroundColor: "#00120d",
+    scale: Math.min(3, Math.max(2, window.devicePixelRatio || 1)),
+    useCORS: true,
+    allowTaint: false,
+    logging: false,
+    width,
+    height,
+    windowWidth: Math.max(width, document.documentElement.clientWidth),
+    windowHeight: Math.max(height, document.documentElement.clientHeight),
+    scrollX: 0,
+    scrollY: -window.scrollY,
+    onclone: (clonedDocument) => {
+      const clonedFrame = clonedDocument.querySelector("[data-col-report-frame]") as HTMLElement | null;
+      const clonedMain = clonedDocument.querySelector("[data-col-report-main]") as HTMLElement | null;
+      for (const node of [clonedFrame, clonedMain]) {
+        if (!node) continue;
+        node.style.height = "auto";
+        node.style.minHeight = `${height}px`;
+        node.style.overflow = "visible";
+      }
+    },
+  });
+}
+
+async function downloadDashboardReport(element: HTMLElement, filenameBase: string): Promise<void> {
+  const canvas = await captureDashboardReport(element);
+  const pngBlob = await canvasToPngBlob(canvas);
+  downloadBlob(pngBlob, `${filenameBase}.png`);
+
+  const { jsPDF } = await import("jspdf");
+  const orientation = canvas.width >= canvas.height ? "landscape" : "portrait";
+  const pdf = new jsPDF({
+    unit: "px",
+    format: [canvas.width, canvas.height],
+    orientation,
+    compress: true,
+  });
+  pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height, undefined, "FAST");
+  pdf.save(`${filenameBase}.pdf`);
+}
+
 export function NepalCostOfLivingDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const { plan, setPlan, hydrated, persistPlan, userId } = useColPlanState();
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [compareOpen, setCompareOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+  const [exportingReport, setExportingReport] = useState(false);
   const [krwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
 
   useEffect(() => {
@@ -669,42 +625,14 @@ export function NepalCostOfLivingDashboard() {
     window.setTimeout(() => setSavedToast(false), 2200);
   };
 
-  const handleExportPdf = async () => {
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("FIRE Nepal — Cost of Living Plan", 48, 56);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text(`City: ${snapshot.location.label}`, 48, 84);
-    doc.text(`Province: ${plan.province}`, 48, 100);
-    doc.text(`Lifestyle: ${snapshot.lifestyle.label}`, 48, 116);
-    doc.text(`Monthly total: ${formatNprInteger(snapshot.total)}`, 48, 140);
-    doc.text(
-      plan.monthlyIncomeNpr === null
-        ? "Monthly income: Not entered"
-        : `Monthly income: ${formatNprInteger(plan.monthlyIncomeNpr)}`,
-      48,
-      156,
-    );
-    doc.text(
-      snapshot.monthlySavings === null
-        ? "Monthly savings: Enter monthly income"
-        : `Monthly savings: ${formatNprInteger(snapshot.monthlySavings)} (${snapshot.savingsPct?.toFixed(1) ?? "0.0"}%)`,
-      48,
-      172,
-    );
-    let y = 188;
-    doc.setFont("helvetica", "bold");
-    doc.text("Expense breakdown", 48, y);
-    y += 18;
-    doc.setFont("helvetica", "normal");
-    snapshot.items.forEach((item) => {
-      doc.text(`${item.label}: ${formatNprInteger(item.amount)} (${item.pct.toFixed(1)}%)`, 48, y);
-      y += 16;
-    });
-    doc.save(`fire-nepal-col-${snapshot.location.label.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+  const handleExportReport = async () => {
+    if (!reportRef.current || exportingReport) return;
+    setExportingReport(true);
+    try {
+      await downloadDashboardReport(reportRef.current, "fire-nepal-cost-of-living-report");
+    } finally {
+      setExportingReport(false);
+    }
   };
 
   const shellBg = light
@@ -724,6 +652,8 @@ export function NepalCostOfLivingDashboard() {
   return (
     <div className={`min-h-[100dvh] overflow-x-hidden ${shellBg}`}>
       <div
+        ref={reportRef}
+        data-col-report-frame
         className={`mx-auto flex min-h-[100dvh] w-full max-w-[1440px] overflow-x-hidden border-x border-transparent min-[1000px]:h-[100dvh] min-[1000px]:border ${frameBorder}`}
       >
         <DesktopSidebar />
@@ -752,7 +682,7 @@ export function NepalCostOfLivingDashboard() {
             </div>
           </header>
 
-          <main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
+          <main data-col-report-main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
             <div className="flex shrink-0 flex-col gap-3 min-[1000px]:flex-row min-[1000px]:items-start min-[1000px]:justify-between min-[1000px]:gap-4">
               <div className="min-w-0 min-[1000px]:min-w-[230px]">
                 <h1 className="text-[28px] font-black leading-none tracking-[-0.04em] text-white min-[1000px]:whitespace-nowrap">
@@ -762,22 +692,7 @@ export function NepalCostOfLivingDashboard() {
                 <div className="mt-3 h-0.5 w-8 rounded-full bg-emerald-400" />
               </div>
 
-              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-5 min-[1000px]:mt-3 min-[1000px]:w-[590px] min-[1000px]:grid-cols-[98px_98px_98px_120px_1fr]">
-                <label className="flex h-[48px] items-center gap-2 rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3">
-                  <SolidIcon icon={MapPin} size={17} />
-                  <span className="sr-only">City</span>
-                  <select
-                    value={plan.cityId}
-                    onChange={(event) => patchPlanSettings({ cityId: event.target.value })}
-                    className="min-w-0 flex-1 bg-transparent text-[13px] font-bold text-white outline-none"
-                  >
-                    {DEFAULT_NEPAL_COST_CITIES.map((city) => (
-                      <option key={city.id} value={city.id} className="bg-[#062018]">
-                        {city.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-4 min-[1000px]:mt-3 min-[1000px]:w-[490px] min-[1000px]:grid-cols-[98px_98px_120px_1fr]">
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
@@ -1035,7 +950,7 @@ export function NepalCostOfLivingDashboard() {
 
               <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-5" delay={0.16}>
                 <h2 className="text-[14px] font-black text-white">Quick Actions</h2>
-                <div className="mt-2 grid grid-cols-3 gap-3">
+                <div className="mt-2 grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setEditOpen(true)}
@@ -1060,27 +975,16 @@ export function NepalCostOfLivingDashboard() {
                       Plan
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompareOpen(true)}
-                    className="grid h-11 place-items-center rounded-lg bg-emerald-950/55 text-center text-[9px] font-semibold leading-tight text-emerald-50/80"
-                  >
-                    <RefreshCcw size={16} />
-                    <span className="text-[9px] leading-tight">
-                      Compare
-                      <br />
-                      Cities
-                    </span>
-                  </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => void handleExportPdf()}
-                  className="mt-1 flex h-[42px] w-full flex-col items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-green-400 text-[14px] font-black text-white shadow-[0_16px_32px_-22px_rgba(34,197,94,0.9)]"
+                  onClick={() => void handleExportReport()}
+                  disabled={exportingReport}
+                  className="mt-1 flex h-[42px] w-full flex-col items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-green-400 text-[14px] font-black text-white shadow-[0_16px_32px_-22px_rgba(34,197,94,0.9)] transition disabled:cursor-wait disabled:opacity-70"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Upload size={16} />
-                    Download Report
+                    {exportingReport ? "Preparing Report" : "Download Report"}
                   </span>
                   <span className="text-[10px] font-semibold text-emerald-950/70">PDF & PNG</span>
                 </button>
@@ -1096,15 +1000,13 @@ export function NepalCostOfLivingDashboard() {
 
       <NavMenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} />
       <EditPlanSheet
-        key={`${editOpen ? "open" : "closed"}-${plan.cityId}-${plan.province}-${plan.lifestyle}-${plan.family.adults}-${plan.family.children}-${plan.family.parents}-${plan.monthlyIncomeNpr ?? "none"}-${plan.monthlyKoreaSpendNpr}`}
+        key={`${editOpen ? "open" : "closed"}-${plan.lifestyle}-${plan.family.adults}-${plan.family.children}-${plan.family.parents}-${plan.monthlyIncomeNpr ?? "none"}-${plan.monthlyKoreaSpendNpr}`}
         open={editOpen}
         plan={plan}
         onClose={() => setEditOpen(false)}
         onSave={(draft) =>
           setPlan((current) =>
             applyPlanSettings(current, {
-              cityId: draft.cityId,
-              province: draft.province,
               lifestyle: draft.lifestyle,
               family: draft.family,
               monthlyIncomeNpr: draft.monthlyIncomeNpr,
@@ -1112,13 +1014,6 @@ export function NepalCostOfLivingDashboard() {
             }),
           )
         }
-      />
-      <CompareCitiesSheet
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        cities={snapshot.compareCities}
-        selectedId={plan.cityId}
-        onSelect={(cityId) => patchPlanSettings({ cityId })}
       />
     </div>
   );
