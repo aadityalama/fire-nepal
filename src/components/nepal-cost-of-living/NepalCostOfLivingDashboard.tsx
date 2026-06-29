@@ -111,6 +111,7 @@ function GlassCard({
 }) {
   return (
     <motion.div
+      data-col-report-card
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay, ease: [0.22, 1, 0.36, 1] }}
@@ -492,7 +493,7 @@ function DesktopExpenseRow({
   };
 
   return (
-    <div className="grid h-[22px] grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/10 px-3 text-[11px] text-emerald-50/85">
+    <div data-col-report-table-row className="grid h-[22px] grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/10 px-3 text-[11px] text-emerald-50/85">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-emerald-500">
           <Icon size={10} className="text-white" fill="currentColor" strokeWidth={1.6} />
@@ -673,8 +674,114 @@ function sanitizeModernColorsForHtml2Canvas(root: HTMLElement) {
   });
 }
 
-async function captureDashboardReport(element: HTMLElement): Promise<HTMLCanvasElement> {
+async function waitForReportRender(element: HTMLElement) {
   await document.fonts?.ready;
+  await Promise.all(
+    Array.from(element.querySelectorAll("img")).map((image) => {
+      if (image.complete) return Promise.resolve();
+      const imageReady =
+        typeof image.decode === "function"
+          ? image.decode().then(() => undefined).catch(() => undefined)
+          : new Promise<void>((resolve) => {
+              image.addEventListener("load", () => resolve(), { once: true });
+              image.addEventListener("error", () => resolve(), { once: true });
+            });
+      return Promise.race([
+        imageReady,
+        new Promise<void>((resolve) => window.setTimeout(resolve, 1_500)),
+      ]);
+    }),
+  );
+
+  const startedAt = Date.now();
+  while (element.querySelectorAll(".recharts-surface").length < 2 && Date.now() - startedAt < 2_500) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+  }
+
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+function appendExportFooter(main: HTMLElement) {
+  const footer = document.createElement("footer");
+  footer.setAttribute("data-col-export-footer", "true");
+  footer.style.marginTop = "30px";
+  footer.style.padding = "18px 16px 22px";
+  footer.style.borderTop = "1px solid rgba(16, 185, 129, 0.28)";
+  footer.style.textAlign = "center";
+  footer.style.color = "rgba(209, 250, 229, 0.68)";
+  footer.style.fontSize = "13px";
+  footer.style.fontWeight = "700";
+  footer.style.lineHeight = "1.55";
+  footer.style.letterSpacing = "0.01em";
+  footer.style.background = REPORT_BG;
+  footer.innerHTML = `
+    <div style="color: rgba(236, 253, 245, 0.78);">Powered by FIRE Nepal</div>
+    <div style="color: rgba(110, 231, 183, 0.78);">https://firenepal.com</div>
+    <div style="color: rgba(209, 250, 229, 0.58);">&copy; 2026 FIRE Nepal. All rights reserved.</div>
+  `;
+  main.appendChild(footer);
+}
+
+function expandCloneForNaturalExportLayout(clone: HTMLElement) {
+  const expandableNodes = clone.querySelectorAll<HTMLElement>(
+    "[data-col-report-frame], [data-col-report-main], [data-col-report-expand], [data-col-report-card]",
+  );
+
+  expandableNodes.forEach((node) => {
+    node.style.height = "auto";
+    node.style.minHeight = "0";
+    node.style.maxHeight = "none";
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("[data-col-report-section]").forEach((node) => {
+    node.style.height = "auto";
+    node.style.minHeight = "0";
+    node.style.maxHeight = "none";
+    node.style.alignItems = "stretch";
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("[data-col-report-table-row]").forEach((node) => {
+    const currentHeight = Math.ceil(node.getBoundingClientRect().height);
+    node.style.height = "auto";
+    node.style.minHeight = `${Math.max(22, currentHeight)}px`;
+    node.style.paddingTop = "4px";
+    node.style.paddingBottom = "4px";
+    node.style.lineHeight = "1.35";
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("[data-col-report-table-header]").forEach((node) => {
+    node.style.height = "auto";
+    node.style.minHeight = "24px";
+    node.style.paddingTop = "5px";
+    node.style.paddingBottom = "5px";
+    node.style.lineHeight = "1.35";
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("[data-col-report-chart]").forEach((node) => {
+    const currentHeight = Math.ceil(node.getBoundingClientRect().height);
+    node.style.height = `${Math.max(100, currentHeight)}px`;
+    node.style.minHeight = `${Math.max(100, currentHeight)}px`;
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("input, select, textarea").forEach((node) => {
+    node.style.lineHeight = window.getComputedStyle(node).lineHeight;
+    node.style.overflow = "visible";
+  });
+
+  clone.querySelectorAll<HTMLElement>("[class*='truncate'], [class*='text-ellipsis']").forEach((node) => {
+    node.style.overflow = "visible";
+    node.style.textOverflow = "clip";
+  });
+}
+
+async function captureDashboardReport(element: HTMLElement): Promise<HTMLCanvasElement> {
+  await waitForReportRender(element);
   const { default: html2canvas } = await import("html2canvas");
   const rect = element.getBoundingClientRect();
   const captureWidth = Math.ceil(rect.width || element.scrollWidth || document.documentElement.clientWidth);
@@ -723,24 +830,18 @@ async function captureDashboardReport(element: HTMLElement): Promise<HTMLCanvasE
   try {
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 
-    const expandableNodes = clone.querySelectorAll<HTMLElement>("[data-col-report-frame], [data-col-report-main], [data-col-report-expand]");
-    expandableNodes.forEach((node) => {
-      node.style.height = "auto";
-      node.style.minHeight = "0";
-      node.style.maxHeight = "none";
-      node.style.overflow = "visible";
-    });
-
     clone.querySelectorAll<HTMLElement>("[data-html2canvas-ignore='true']").forEach((node) => node.remove());
     clone.querySelectorAll<HTMLElement>("[data-col-export-label]").forEach((node) => {
       node.textContent = "Download Report";
     });
+    const clonedMain = clone.querySelector("[data-col-report-main]") as HTMLElement | null;
+    if (clonedMain) appendExportFooter(clonedMain);
+    expandCloneForNaturalExportLayout(clone);
     sanitizeModernColorsForHtml2Canvas(clone);
 
+    await waitForReportRender(clone);
     const captureHeight = Math.ceil(Math.max(clone.scrollHeight, clone.offsetHeight, host.scrollHeight));
-    const baseScale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
-    const maxCanvasArea = 16_000_000;
-    const scale = Math.max(1.5, Math.min(baseScale, Math.sqrt(maxCanvasArea / Math.max(1, captureWidth * captureHeight))));
+    const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
 
     return await html2canvas(clone, {
       backgroundColor: REPORT_BG,
@@ -773,7 +874,7 @@ async function downloadDashboardReport(element: HTMLElement, filenameBase: strin
     orientation,
     compress: true,
   });
-  pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height, undefined, "FAST");
+  pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, canvas.width, canvas.height);
   pdf.save(`${filenameBase}.pdf`);
 }
 
@@ -996,7 +1097,7 @@ export function NepalCostOfLivingDashboard() {
               />
             </div>
 
-            <div className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
+            <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
               <GlassCard className="min-h-0 overflow-hidden rounded-lg p-0 min-[1000px]:col-span-7" delay={0.08}>
                 <div className="flex min-h-10 flex-col items-start gap-2 border-b border-emerald-500/12 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                   <h2 className="text-[15px] font-black uppercase tracking-wide text-white">Monthly Expense Breakdown</h2>
@@ -1009,7 +1110,7 @@ export function NepalCostOfLivingDashboard() {
                     Edit Expenses
                   </button>
                 </div>
-                <div className="grid h-6 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 px-3 text-[10px] font-semibold text-emerald-50/70">
+                <div data-col-report-table-header className="grid h-6 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 px-3 text-[10px] font-semibold text-emerald-50/70">
                   <span>Category</span>
                   <span>Monthly Cost (₹)</span>
                   <span>% of Total</span>
@@ -1026,7 +1127,7 @@ export function NepalCostOfLivingDashboard() {
                     />
                   ))}
                 </div>
-                <div className="grid h-6 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/18 px-3 text-[10px] font-black uppercase text-emerald-50">
+                <div data-col-report-table-row className="grid h-6 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/18 px-3 text-[10px] font-black uppercase text-emerald-50">
                   <div className="flex items-center gap-2">
                     <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500">
                       <BarChart3 size={10} className="text-white" />
@@ -1105,13 +1206,13 @@ export function NepalCostOfLivingDashboard() {
               </div>
             </div>
 
-            <div className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[158px] min-[1000px]:grid-cols-12">
+            <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[158px] min-[1000px]:grid-cols-12">
               <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-7" delay={0.14}>
                 <h2 className="text-[14px] font-black uppercase tracking-wide text-white">Expense Analytics</h2>
                 <div className="mt-1 grid gap-3 md:grid-cols-[150px_150px_1fr] min-[1000px]:h-[120px]">
                   <div>
                     <p className="text-[11px] font-semibold text-emerald-50/75">Category Distribution</p>
-                    <div className="relative mt-1 h-[150px] md:h-[100px]">
+                    <div data-col-report-chart className="relative mt-1 h-[150px] md:h-[100px]">
                       {chartsReady ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -1142,7 +1243,7 @@ export function NepalCostOfLivingDashboard() {
                   <div>
                     <p className="text-[11px] font-black text-white">Monthly Trend</p>
                     <p className="text-[9px] font-semibold text-emerald-50/55">Estimated Monthly Cost (₹)</p>
-                    <div className="h-[150px] md:h-[100px]">
+                    <div data-col-report-chart className="h-[150px] md:h-[100px]">
                       {chartsReady ? (
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={snapshot.trend} margin={{ top: 14, right: 8, left: 4, bottom: 0 }}>
