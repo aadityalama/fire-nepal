@@ -51,7 +51,7 @@ const moneyWrap = "rounded-xl border border-emerald-400/15 bg-black/30 px-2 py-2
 const moneyInput = "min-w-0 flex-1 bg-transparent text-xs font-bold text-emerald-50 outline-none sm:text-sm";
 const mobileMoneyWrap =
   "rounded-[18px] border border-white/[0.08] bg-white/[0.055] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] focus-within:border-emerald-300/45";
-const mobileMoneyInput = "min-w-0 flex-1 bg-transparent text-[13px] font-black text-white outline-none";
+const mobileMoneyInput = "min-w-0 flex-1 bg-transparent text-white outline-none";
 
 type CashflowMetricTile = {
   label: string;

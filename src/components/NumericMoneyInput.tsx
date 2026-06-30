@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 
 export type NumericMoneyVariant = "amount" | "integer" | "percent";
 
@@ -113,6 +113,7 @@ export function NumericMoneyInput({
   "aria-label": ariaLabel,
 }: NumericMoneyInputProps) {
   const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -150,6 +151,9 @@ export function NumericMoneyInput({
 
   function handleFocus() {
     setFocused(true);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    });
     if (value == null || !Number.isFinite(value)) {
       setDraft("");
       return;
@@ -197,12 +201,13 @@ export function NumericMoneyInput({
   }
 
   const control = (
-    <div className={`flex min-w-0 w-full items-center ${wrapperClassName}`}>
+    <div className={`fn-mobile-numeric-control flex min-w-0 w-full items-center ${wrapperClassName}`}>
       {prefix ? (
         <span className={`mr-2 shrink-0 text-sm font-black ${affixPrefixClass}`}>{prefix}</span>
       ) : null}
       <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
         <input
+          ref={inputRef}
           id={label ? id : undefined}
           type="text"
           inputMode={inputMode}
@@ -212,7 +217,7 @@ export function NumericMoneyInput({
           disabled={disabled}
           aria-label={ariaLabel ?? label}
           placeholder={placeholder}
-          className={`block min-w-full w-max max-w-none bg-transparent text-right font-semibold tabular-nums tracking-tight outline-none placeholder:text-slate-500 ${mergedInputClass}`}
+          className={`fn-mobile-numeric-input block min-w-full w-max max-w-none bg-transparent text-right font-semibold tabular-nums tracking-tight outline-none placeholder:text-slate-500 ${mergedInputClass}`}
           value={show}
           onChange={handleChange}
           onFocus={handleFocus}
