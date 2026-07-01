@@ -9,9 +9,13 @@ export const FIRE_CALCULATOR_PANEL_CLASS =
   "glass-card soft-gradient-border hover-lift fire-calculator-panel ring-1 ring-emerald-950/[0.045] transition-[box-shadow,transform,border-color] duration-300 ease-out dark:ring-emerald-500/12 rounded-[1.65rem]";
 
 const FIRE_INPUT_VALUE_CLASS =
-  "min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#FFFFFF] caret-white outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.65)] placeholder:text-white/[0.45]";
-const FIRE_INPUT_AFFIX_CLASS = "text-[#FFFFFF] [text-shadow:0_1px_2px_rgba(0,0,0,0.65)]";
+  "min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#111111] opacity-100 caret-[#111111] outline-none [filter:none] [-webkit-text-fill-color:#111111] [-webkit-text-stroke:0] [text-shadow:none] placeholder:text-[#9CA3AF] placeholder:opacity-100 placeholder:[text-shadow:none]";
+const FIRE_INPUT_CONTAINER_CLASS =
+  "rounded-[20px] border border-[#9ADBC8] bg-[#FFFFFF] px-4 py-3 focus-within:border-emerald-500";
+const FIRE_INPUT_AFFIX_CLASS =
+  "font-semibold text-[#111111] opacity-100 [-webkit-text-fill-color:#111111] [-webkit-text-stroke:0] [text-shadow:none] [filter:none]";
 const FIRE_NUMERIC_INPUT_PROPS = {
+  wrapperClassName: FIRE_INPUT_CONTAINER_CLASS,
   inputClassName: FIRE_INPUT_VALUE_CLASS,
   prefixClassName: FIRE_INPUT_AFFIX_CLASS,
   suffixClassName: FIRE_INPUT_AFFIX_CLASS,
@@ -148,7 +152,7 @@ export function FireCalculatorInputs() {
             <select
               value={legacyMode}
               onChange={(e) => setLegacyMode(e.target.value as "default" | "perpetual" | "spenddown")}
-              className="w-full rounded-2xl border border-white/70 bg-white/90 px-3 py-2.5 text-xs font-black text-[#FFFFFF] outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.65)] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:px-4 sm:py-3 sm:text-sm [&>option]:text-slate-900"
+              className="w-full rounded-[20px] border border-[#9ADBC8] bg-[#FFFFFF] px-3 py-2.5 text-xs font-semibold text-[#111111] opacity-100 outline-none [filter:none] [-webkit-text-fill-color:#111111] [-webkit-text-stroke:0] [text-shadow:none] focus:border-emerald-500 sm:px-4 sm:py-3 sm:text-sm [&>option]:text-[#111111]"
             >
               <option value="default">Default — full inflation-tracked spending</option>
               <option value="perpetual">Preserve — cap monthly draw to SWR × portfolio</option>
