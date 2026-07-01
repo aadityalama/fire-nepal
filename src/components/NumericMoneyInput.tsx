@@ -85,6 +85,8 @@ export type NumericMoneyInputProps = {
   className?: string;
   wrapperClassName?: string;
   inputClassName?: string;
+  prefixClassName?: string;
+  suffixClassName?: string;
   /** Use on dark glass surfaces (e.g. FIRE Nepal wealth dashboards). Keeps labels/affixes light. */
   tone?: "light" | "dark";
   disabled?: boolean;
@@ -108,6 +110,8 @@ export function NumericMoneyInput({
   className,
   wrapperClassName = "rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-sm backdrop-blur transition focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-100",
   inputClassName = "min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none",
+  prefixClassName,
+  suffixClassName,
   tone = "light",
   disabled,
   "aria-label": ariaLabel,
@@ -145,8 +149,8 @@ export function NumericMoneyInput({
   const scaled = autoScaleFont ? dynamicMoneyInputFontClass(show) : "";
   const mergedInputClass = [inputClassName, scaled].filter(Boolean).join(" ");
 
-  const affixPrefixClass = tone === "dark" ? "text-gray-100" : "text-black";
-  const affixSuffixClass = tone === "dark" ? "text-gray-100" : "text-slate-800";
+  const affixPrefixClass = prefixClassName ?? (tone === "dark" ? "text-[#FFFFFF]" : "text-black");
+  const affixSuffixClass = suffixClassName ?? (tone === "dark" ? "text-[#FFFFFF]" : "text-slate-800");
   const labelToneClass = tone === "dark" ? "text-sm font-semibold text-gray-100" : "text-sm font-semibold text-slate-800";
 
   function handleFocus() {

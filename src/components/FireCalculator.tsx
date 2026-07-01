@@ -8,6 +8,15 @@ import { useFireCalculator } from "@/components/FireCalculatorContext";
 export const FIRE_CALCULATOR_PANEL_CLASS =
   "glass-card soft-gradient-border hover-lift fire-calculator-panel ring-1 ring-emerald-950/[0.045] transition-[box-shadow,transform,border-color] duration-300 ease-out dark:ring-emerald-500/12 rounded-[1.65rem]";
 
+const FIRE_INPUT_VALUE_CLASS =
+  "min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#FFFFFF] caret-white outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.65)] placeholder:text-white/[0.45]";
+const FIRE_INPUT_AFFIX_CLASS = "text-[#FFFFFF] [text-shadow:0_1px_2px_rgba(0,0,0,0.65)]";
+const FIRE_NUMERIC_INPUT_PROPS = {
+  inputClassName: FIRE_INPUT_VALUE_CLASS,
+  prefixClassName: FIRE_INPUT_AFFIX_CLASS,
+  suffixClassName: FIRE_INPUT_AFFIX_CLASS,
+};
+
 /** Left column: inputs + drawdown controls (desktop 3-column layout). */
 export function FireCalculatorInputs() {
   const {
@@ -71,6 +80,7 @@ export function FireCalculatorInputs() {
           onChange={setCurrentSavingsNpr}
           placeholder="Enter amount"
           variant="amount"
+          {...FIRE_NUMERIC_INPUT_PROPS}
         />
         <NumericMoneyInput
           label="Monthly savings"
@@ -79,6 +89,7 @@ export function FireCalculatorInputs() {
           onChange={setMonthlySavingsNpr}
           placeholder="Enter amount"
           variant="amount"
+          {...FIRE_NUMERIC_INPUT_PROPS}
         />
         <div className="grid gap-3.5 sm:grid-cols-2 sm:gap-4">
           <NumericMoneyInput
@@ -88,6 +99,7 @@ export function FireCalculatorInputs() {
             suffix="years"
             variant="integer"
             placeholder="Enter age"
+            {...FIRE_NUMERIC_INPUT_PROPS}
           />
           <NumericMoneyInput
             label="Annual return"
@@ -96,6 +108,7 @@ export function FireCalculatorInputs() {
             suffix="%"
             variant="percent"
             placeholder="e.g. 10"
+            {...FIRE_NUMERIC_INPUT_PROPS}
           />
         </div>
         <NumericMoneyInput
@@ -105,6 +118,7 @@ export function FireCalculatorInputs() {
           onChange={setMonthlyExpenseNpr}
           placeholder="Enter amount"
           variant="amount"
+          {...FIRE_NUMERIC_INPUT_PROPS}
         />
 
         <div className="space-y-3 rounded-2xl border border-white/75 bg-gradient-to-br from-white/80 to-emerald-50/35 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_8px_28px_rgba(0,63,47,0.05)] backdrop-blur sm:space-y-4 sm:p-4">
@@ -117,6 +131,7 @@ export function FireCalculatorInputs() {
               suffix="%"
               variant="percent"
               placeholder="e.g. 3"
+              {...FIRE_NUMERIC_INPUT_PROPS}
             />
             <NumericMoneyInput
               label="Safe withdrawal rate (planning)"
@@ -125,6 +140,7 @@ export function FireCalculatorInputs() {
               suffix="% / yr"
               variant="percent"
               placeholder="e.g. 4"
+              {...FIRE_NUMERIC_INPUT_PROPS}
             />
           </div>
           <label className="block">
@@ -132,7 +148,7 @@ export function FireCalculatorInputs() {
             <select
               value={legacyMode}
               onChange={(e) => setLegacyMode(e.target.value as "default" | "perpetual" | "spenddown")}
-              className="w-full rounded-2xl border border-white/70 bg-white/90 px-3 py-2.5 text-xs font-black text-emerald-950 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:px-4 sm:py-3 sm:text-sm"
+              className="w-full rounded-2xl border border-white/70 bg-white/90 px-3 py-2.5 text-xs font-black text-[#FFFFFF] outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.65)] focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 sm:px-4 sm:py-3 sm:text-sm [&>option]:text-slate-900"
             >
               <option value="default">Default — full inflation-tracked spending</option>
               <option value="perpetual">Preserve — cap monthly draw to SWR × portfolio</option>
@@ -151,6 +167,7 @@ export function FireCalculatorInputs() {
               suffix="years"
               variant="integer"
               placeholder="e.g. 92"
+              {...FIRE_NUMERIC_INPUT_PROPS}
             />
           ) : null}
         </div>

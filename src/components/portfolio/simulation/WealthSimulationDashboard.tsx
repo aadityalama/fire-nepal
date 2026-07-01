@@ -51,6 +51,9 @@ function glass(extra: string) {
   ].join(" ");
 }
 
+const WEALTH_SIM_INPUT_CLASS =
+  "mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-[#FFFFFF] caret-white outline-none placeholder:text-white/[0.45] focus:border-cyan-400/35";
+
 function useNarrowViewport(): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -384,7 +387,7 @@ export function WealthSimulationDashboard() {
                 max={80}
                 value={currentAge}
                 onChange={(e) => setCurrentAge(clampNum(Number(e.target.value), 18, 80))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -395,7 +398,7 @@ export function WealthSimulationDashboard() {
                 step={1000}
                 value={Math.round(monthlySpend)}
                 onChange={(e) => setMonthlySpend(Math.max(0, Number(e.target.value) || 0))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -406,7 +409,7 @@ export function WealthSimulationDashboard() {
                 step={1000}
                 value={Math.round(monthlyContribution)}
                 onChange={(e) => setMonthlyContribution(Math.max(0, Number(e.target.value) || 0))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             {cashflowSalaryNpr > 0 ? (
@@ -427,7 +430,7 @@ export function WealthSimulationDashboard() {
                 step={0.1}
                 value={Number((nominalReturn * 100).toFixed(2))}
                 onChange={(e) => setNominalReturn(clampNum((Number(e.target.value) || 0) / 100, 0, 0.25))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -439,7 +442,7 @@ export function WealthSimulationDashboard() {
                 step={0.1}
                 value={Number((inflation * 100).toFixed(2))}
                 onChange={(e) => setInflation(clampNum((Number(e.target.value) || 0) / 100, 0, 0.2))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -451,7 +454,7 @@ export function WealthSimulationDashboard() {
                 step={0.1}
                 value={Number((salaryGrowth * 100).toFixed(2))}
                 onChange={(e) => setSalaryGrowth(clampNum((Number(e.target.value) || 0) / 100, 0, 0.15))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -463,7 +466,7 @@ export function WealthSimulationDashboard() {
                 step={0.1}
                 value={Number((passiveGrowth * 100).toFixed(2))}
                 onChange={(e) => setPassiveGrowth(clampNum((Number(e.target.value) || 0) / 100, 0, 0.15))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <label className="block text-[11px] font-bold text-zinc-400">
@@ -475,7 +478,7 @@ export function WealthSimulationDashboard() {
                 step={0.1}
                 value={Number((swr * 100).toFixed(2))}
                 onChange={(e) => setSwr(clampNum((Number(e.target.value) || 4) / 100, 0.02, 0.08))}
-                className="mt-1.5 min-h-[44px] w-full min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-cyan-400/35"
+                className={WEALTH_SIM_INPUT_CLASS}
               />
             </label>
             <p className="text-[10px] font-medium leading-relaxed text-zinc-500">
