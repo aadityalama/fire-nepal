@@ -4,16 +4,31 @@ import {
   Activity,
   ArrowRight,
   BarChart3,
+  BadgeCheck,
+  Banknote,
+  Bell,
+  Bot,
+  Brain,
   Building2,
   Calculator,
   ChevronRight,
+  CreditCard,
+  FileText,
+  Gem,
+  Home,
   LayoutGrid,
   LineChart,
+  Lock,
+  PiggyBank,
   Plane,
   ReceiptText,
+  Settings,
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
+  UserRound,
+  Users,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -41,6 +56,27 @@ type ToolLauncherItem = {
 };
 
 const PRIMARY_APPS: LauncherItem[] = [
+  {
+    href: "/finance",
+    title: "Finance",
+    body: "Cashflow, expenses, budget & savings",
+    icon: Banknote,
+    accent: "from-emerald-600/30 to-cyan-400/10",
+  },
+  {
+    href: "/investment",
+    title: "Investment",
+    body: "Portfolio, NEPSE, SIP, SWP & assets",
+    icon: TrendingUp,
+    accent: "from-teal-500/30 to-emerald-400/10",
+  },
+  {
+    href: "/fire-planning",
+    title: "FIRE Planning",
+    body: "Calculator, journey & goals",
+    icon: Calculator,
+    accent: "from-lime-400/25 to-emerald-600/15",
+  },
   {
     href: "/fire-biz",
     title: "FIRE Biz",
@@ -70,9 +106,67 @@ const PRIMARY_APPS: LauncherItem[] = [
     icon: Calculator,
     accent: "from-lime-400/25 to-emerald-600/15",
   },
+  {
+    href: "/ai",
+    title: "AI",
+    body: "Advisor, OCR payslip & AI reports",
+    icon: Bot,
+    accent: "from-emerald-500/25 to-lime-400/15",
+  },
+  {
+    href: "/family",
+    title: "Family Hub",
+    body: "Children, education, health & records",
+    icon: Users,
+    accent: "from-sky-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/return-to-nepal",
+    title: "Nepal Return Planner",
+    body: "Return readiness & Nepal life planning",
+    icon: Plane,
+    accent: "from-violet-500/15 to-teal-400/10",
+  },
+  {
+    href: "/korea-pension-dashboard",
+    title: "Korea Finance",
+    body: "Pension, severance & KRW planning",
+    icon: Building2,
+    accent: "from-indigo-500/15 to-emerald-500/10",
+  },
 ];
 
 const POPULAR_TOOLS: ToolLauncherItem[] = [
+  {
+    href: "/portfolio",
+    title: "Portfolio",
+    icon: Target,
+    accent: "from-teal-500/30 to-emerald-400/10",
+  },
+  {
+    href: "/cashflow-dashboard",
+    title: "Cashflow",
+    icon: Wallet,
+    accent: "from-emerald-600/30 to-cyan-400/10",
+  },
+  {
+    href: "/budget",
+    title: "Budget",
+    icon: Banknote,
+    accent: "from-cyan-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/savings-tracker",
+    title: "Savings",
+    icon: PiggyBank,
+    accent: "from-lime-400/20 to-emerald-500/10",
+  },
+  {
+    href: "/#calculator",
+    title: "FIRE Calculator",
+    icon: Calculator,
+    accent: "from-lime-400/25 to-emerald-600/15",
+  },
   {
     href: "/fire-ai",
     title: "FIRE AI",
@@ -98,6 +192,54 @@ const POPULAR_TOOLS: ToolLauncherItem[] = [
     accent: "from-amber-500/15 to-emerald-500/10",
   },
   {
+    href: "/market",
+    title: "NEPSE",
+    icon: BarChart3,
+    accent: "from-blue-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/portfolio/gold",
+    title: "Gold",
+    icon: Gem,
+    accent: "from-yellow-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/portfolio/real-estate",
+    title: "Real Estate",
+    icon: Home,
+    accent: "from-orange-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/cashflow-dashboard",
+    title: "OCR Payslip",
+    icon: FileText,
+    accent: "from-emerald-500/20 to-cyan-400/10",
+  },
+  {
+    href: "/fire-ai/wealth-summary",
+    title: "AI Reports",
+    icon: Brain,
+    accent: "from-emerald-500/25 to-lime-400/15",
+  },
+  {
+    href: "/fire-summary",
+    title: "FIRE Journey",
+    icon: TrendingUp,
+    accent: "from-lime-400/20 to-emerald-500/10",
+  },
+  {
+    href: "/goals",
+    title: "Goals",
+    icon: Target,
+    accent: "from-teal-500/20 to-cyan-400/10",
+  },
+  {
+    href: "/fire-ai/expense-insights",
+    title: "AI Advisor",
+    icon: Sparkles,
+    accent: "from-emerald-500/25 to-lime-400/15",
+  },
+  {
     href: "/emergency-fund",
     title: "Emergency",
     icon: ShieldCheck,
@@ -114,6 +256,45 @@ const POPULAR_TOOLS: ToolLauncherItem[] = [
     title: "Korea Pension",
     icon: Building2,
     accent: "from-indigo-500/15 to-emerald-500/10",
+  },
+];
+
+const ACCOUNT_TOOLS: ToolLauncherItem[] = [
+  {
+    href: "/dashboard/profile",
+    title: "Profile",
+    icon: UserRound,
+    accent: "from-emerald-500/20 to-lime-400/10",
+  },
+  {
+    href: "/dashboard/membership",
+    title: "Membership",
+    icon: BadgeCheck,
+    accent: "from-amber-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/dashboard/security",
+    title: "Security",
+    icon: Lock,
+    accent: "from-sky-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/smart-reminders",
+    title: "Reminders",
+    icon: Bell,
+    accent: "from-violet-500/15 to-teal-400/10",
+  },
+  {
+    href: "/dashboard/settings",
+    title: "Settings",
+    icon: Settings,
+    accent: "from-indigo-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/account",
+    title: "Account",
+    icon: CreditCard,
+    accent: "from-emerald-500/20 to-cyan-400/10",
   },
 ];
 
@@ -281,7 +462,18 @@ export function HubHomePanel() {
         </h2>
         <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4">
           {POPULAR_TOOLS.map((item) => (
-            <CompactToolCard key={item.href} item={item} light={light} />
+            <CompactToolCard key={`${item.href}-${item.title}`} item={item} light={light} />
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="hub-account-tools">
+        <h2 id="hub-account-tools" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
+          Account
+        </h2>
+        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4">
+          {ACCOUNT_TOOLS.map((item) => (
+            <CompactToolCard key={`${item.href}-${item.title}`} item={item} light={light} />
           ))}
         </div>
       </section>

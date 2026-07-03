@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { HubLayoutClient } from "@/components/product/hub/HubLayoutClient";
+import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 
 export const metadata: Metadata = {
   title: "Account | FIRE Nepal",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function AccountLayout({ children }: { children: ReactNode }) {
-  return <HubLayoutClient>{children}</HubLayoutClient>;
+  return <DashboardAccessGuard>{children}</DashboardAccessGuard>;
 }
