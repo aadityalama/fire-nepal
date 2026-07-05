@@ -61,7 +61,7 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Business desk — sales, purchases, stock, and receivables", "/fire-biz", LayoutGrid],
   ["FIRE Summary", "Unified net worth, runway & FIRE %", "/fire-summary", LayoutDashboard],
   ["Cashflow Dashboard", "Income, burn, emergency fund & FIRE speed", "/cashflow-dashboard", Banknote],
-  ["Expense Tracker", "Track roommate & daily expenses", "/expense-dashboard", ReceiptText],
+  ["Expense Tracker", "Track personal daily expenses", "/finance/expense", ReceiptText],
   ["Savings Tracker", "Monthly KRW/NPR savings growth", "#dashboard", PiggyBank],
   ["Reminder Planner", "Bills, visa, SIP, insurance reminders", "#learn", CalendarCheck],
   ["SIP Calculator", "Long term investment growth calculator", "/sip-calculator", BarChart3],

@@ -121,6 +121,8 @@ type Currency = "NPR" | "KRW" | "USD";
 type Tab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics" | "AI Insights" | "History";
 
 type BottomTab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics";
+export type ExpenseDashboardMode = "roommate" | "personal";
+export type ExpenseDashboardView = "dashboard" | "expenses" | "categories" | "receipts" | "recurring" | "analytics" | "reports";
 
 type ExpenseForm = {
   title: string;
@@ -152,6 +154,28 @@ const bottomTabs: Array<{ id: BottomTab; label: string; icon: LucideIcon }> = [
   { id: "Settlement", label: "Settlement", icon: Calculator },
   { id: "Analytics", label: "Analytics", icon: BarChart3 },
 ];
+const personalBottomTabs: Array<{ id: BottomTab; label: string; icon: LucideIcon }> = [
+  { id: "Dashboard", label: "Personal", icon: LayoutDashboard },
+  { id: "Expenses", label: "Expenses", icon: ReceiptText },
+  { id: "Analytics", label: "Analytics", icon: BarChart3 },
+];
+
+function tabForExpenseView(view?: ExpenseDashboardView): Tab {
+  switch (view) {
+    case "expenses":
+    case "receipts":
+    case "recurring":
+      return "Expenses";
+    case "categories":
+    case "analytics":
+      return "Analytics";
+    case "reports":
+      return "History";
+    case "dashboard":
+    default:
+      return "Dashboard";
+  }
+}
 
 function formatRelativeTime(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -676,10 +700,17 @@ function SettlementTransferRowEditor({
   );
 }
 
-export function ExpenseDashboard() {
+export function ExpenseDashboard({
+  mode = "roommate",
+  initialView,
+}: {
+  mode?: ExpenseDashboardMode;
+  initialView?: ExpenseDashboardView;
+}) {
   const { user } = useProductAuth();
+  const personalMode = mode === "personal";
   const [hydrated, setHydrated] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
+  const [activeTab, setActiveTab] = useState<Tab>(() => tabForExpenseView(initialView));
   const [currency, setCurrency] = useState<Currency>("NPR");
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [members, setMembers] = useState<string[]>([]);
@@ -710,6 +741,15 @@ export function ExpenseDashboard() {
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
+
+  useEffect(() => {
+    const nextTab = tabForExpenseView(initialView);
+    if (personalMode && (nextTab === "Members" || nextTab === "Settlement")) {
+      setActiveTab("Dashboard");
+      return;
+    }
+    setActiveTab(nextTab);
+  }, [initialView, personalMode]);
 
   const openExpenseSettings = useCallback(() => {
     setSettingsSheetOpen(true);
@@ -1014,12 +1054,12 @@ export function ExpenseDashboard() {
     accent?: "default" | "receivable" | "payable";
   }> = [
     {
-      label: "Group spend",
+      label: personalMode ? "Personal spend" : "Group spend",
       value: fmt(totalExpense),
       icon: ReceiptText,
     },
     {
-      label: "Top payer",
+      label: personalMode ? "Largest payer" : "Top payer",
       value: highestContributor.total > 0 ? fmt(highestContributor.total) : "—",
       icon: Crown,
     },
@@ -1600,7 +1640,9 @@ export function ExpenseDashboard() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/75">Roommate Expenses</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/75">
+                    {personalMode ? "Personal Expenses" : "Roommate Expenses"}
+                  </p>
                   <p className="mt-1 text-[11px] font-medium text-emerald-100/80">
                     ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)} · {formatRelativeTime(exchangeRate.updatedAt)}
                   </p>
@@ -1620,25 +1662,29 @@ export function ExpenseDashboard() {
                   <p className="text-[10px] font-medium text-emerald-100/70">Total balance</p>
                   <p className="text-[1.75rem] font-black leading-none tabular-nums tracking-tight">{fmt(totalExpense)}</p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
-                    isSettled ? "bg-white/15 text-emerald-50" : "bg-amber-400/25 text-amber-50"
-                  }`}
-                >
-                  {isSettled ? "Settled" : `${transfers.length} due`}
-                </span>
+                {!personalMode ? (
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                      isSettled ? "bg-white/15 text-emerald-50" : "bg-amber-400/25 text-amber-50"
+                    }`}
+                  >
+                    {isSettled ? "Settled" : `${transfers.length} due`}
+                  </span>
+                ) : null}
               </div>
             </motion.section>
 
-            <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}>
-              <CompactGroupMembersRow
-                balances={balances}
-                members={members}
-                profiles={profiles}
-                onOpenProfile={setSelectedMember}
-                onViewAll={() => setActiveTab("Members")}
-              />
-            </motion.div>
+            {!personalMode ? (
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}>
+                <CompactGroupMembersRow
+                  balances={balances}
+                  members={members}
+                  profiles={profiles}
+                  onOpenProfile={setSelectedMember}
+                  onViewAll={() => setActiveTab("Members")}
+                />
+              </motion.div>
+            ) : null}
 
             <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: motionEase } } }}>
               <ExpenseMonthPicker
@@ -1705,7 +1751,7 @@ export function ExpenseDashboard() {
           </div>
         )}
 
-        {activeTab === "Members" && (
+        {!personalMode && activeTab === "Members" && (
           <section className="mb-3 min-w-0 space-y-3 overflow-x-hidden">
             <GroupProfileCard
               loading={!hydrated}
@@ -1764,7 +1810,7 @@ export function ExpenseDashboard() {
           </section>
         )}
 
-        {activeTab === "Settlement" && (
+        {!personalMode && activeTab === "Settlement" && (
           <section className="mb-2">
             <SettlementPanel
               balances={balances}
@@ -1873,11 +1919,13 @@ export function ExpenseDashboard() {
           setActiveTab("Settlement");
         }}
         onScanReceipt={openAddExpenseModal}
+        showTransfer={!personalMode}
         raised={activeTab === "Settlement" || activeTab === "Expenses"}
       />
 
       <ExpenseBottomNav
         activeTab={activeTab}
+        tabs={personalMode ? personalBottomTabs : bottomTabs}
         onChange={(tab) => {
           setActiveTab(tab);
           setSpeedDialOpen(false);
@@ -1889,9 +1937,9 @@ export function ExpenseDashboard() {
           {[
             { label: "Expense settings", icon: Settings, action: openExpenseSettings },
             { label: "Download PDF", icon: Download, action: () => window.print() },
-            { label: "Share summary", icon: Share2, action: () => void handleShareSummary() },
+            ...(!personalMode ? [{ label: "Share summary", icon: Share2, action: () => void handleShareSummary() }] : []),
             { label: "AI Insights", icon: Sparkles, action: () => setActiveTab("AI Insights") },
-            { label: "Full history", icon: History, action: () => setActiveTab("History") },
+            { label: personalMode ? "Reports" : "Full history", icon: History, action: () => setActiveTab("History") },
           ].map((item) => (
             <button
               key={item.label}
@@ -1918,20 +1966,26 @@ export function ExpenseDashboard() {
         subtitle="Currency and display preferences"
       >
         <div className="space-y-3 px-3 pb-4">
-          <p className="text-sm font-semibold leading-relaxed text-slate-600">
-            Group profile (company name, room, logo) is managed on the{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setSettingsSheetOpen(false);
-                setActiveTab("Members");
-              }}
-              className="font-black text-emerald-700 underline-offset-2 hover:underline"
-            >
-              Members
-            </button>{" "}
-            tab.
-          </p>
+          {personalMode ? (
+            <p className="text-sm font-semibold leading-relaxed text-slate-600">
+              Personal expense settings use your dashboard currency and receipt preferences.
+            </p>
+          ) : (
+            <p className="text-sm font-semibold leading-relaxed text-slate-600">
+              Group profile (company name, room, logo) is managed on the{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsSheetOpen(false);
+                  setActiveTab("Members");
+                }}
+                className="font-black text-emerald-700 underline-offset-2 hover:underline"
+              >
+                Members
+              </button>{" "}
+              tab.
+            </p>
+          )}
         </div>
       </ExpenseBottomSheet>
 
@@ -2455,6 +2509,7 @@ function ExpenseFabSpeedDial({
   onAddIncome,
   onAddTransfer,
   onScanReceipt,
+  showTransfer = true,
   raised = false,
 }: {
   open: boolean;
@@ -2464,12 +2519,13 @@ function ExpenseFabSpeedDial({
   onAddIncome: () => void;
   onAddTransfer: () => void;
   onScanReceipt: () => void;
+  showTransfer?: boolean;
   raised?: boolean;
 }) {
   const actions = [
     { label: "Add Expense", icon: ReceiptText, onClick: onAddExpense },
     { label: "Add Income", icon: Wallet, onClick: onAddIncome },
-    { label: "Add Transfer", icon: ArrowRightLeft, onClick: onAddTransfer },
+    ...(showTransfer ? [{ label: "Add Transfer", icon: ArrowRightLeft, onClick: onAddTransfer }] : []),
     { label: "Scan Receipt", icon: Camera, onClick: onScanReceipt },
   ];
 
@@ -2539,12 +2595,14 @@ function ExpenseFabSpeedDial({
 
 function ExpenseBottomNav({
   activeTab,
+  tabs = bottomTabs,
   onChange,
 }: {
   activeTab: Tab;
+  tabs?: Array<{ id: BottomTab; label: string; icon: LucideIcon }>;
   onChange: (tab: BottomTab) => void;
 }) {
-  const resolvedActive = bottomTabs.some((t) => t.id === activeTab) ? (activeTab as BottomTab) : "Dashboard";
+  const resolvedActive = tabs.some((t) => t.id === activeTab) ? (activeTab as BottomTab) : "Dashboard";
 
   return (
     <nav
@@ -2552,7 +2610,7 @@ function ExpenseBottomNav({
       aria-label="Expense dashboard navigation"
     >
       <div className="mx-auto flex max-w-lg items-stretch justify-between gap-0.5">
-        {bottomTabs.map((tab) => {
+        {tabs.map((tab) => {
           const active = resolvedActive === tab.id;
           return (
             <button

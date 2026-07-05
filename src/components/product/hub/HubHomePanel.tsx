@@ -186,7 +186,7 @@ const POPULAR_TOOLS: ToolLauncherItem[] = [
     accent: "from-teal-500/20 to-cyan-400/10",
   },
   {
-    href: "/expense-dashboard",
+    href: "/finance/expense",
     title: "Expense",
     icon: ReceiptText,
     accent: "from-amber-500/15 to-emerald-500/10",
