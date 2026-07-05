@@ -19,6 +19,10 @@ export type ProductAuthSession = {
   accessToken: "mock";
 };
 
+type SaveProductAuthSessionOptions = {
+  persistent?: boolean;
+};
+
 function safeParse(raw: string | null): ProductAuthSession | null {
   if (!raw) return null;
   try {
@@ -32,13 +36,20 @@ function safeParse(raw: string | null): ProductAuthSession | null {
 
 export function loadProductAuthSession(): ProductAuthSession | null {
   if (typeof window === "undefined") return null;
-  return safeParse(window.localStorage.getItem(PRODUCT_AUTH_STORAGE_KEY));
+  return (
+    safeParse(window.localStorage.getItem(PRODUCT_AUTH_STORAGE_KEY)) ??
+    safeParse(window.sessionStorage.getItem(PRODUCT_AUTH_STORAGE_KEY))
+  );
 }
 
-export function saveProductAuthSession(session: ProductAuthSession): void {
+export function saveProductAuthSession(session: ProductAuthSession, options: SaveProductAuthSessionOptions = {}): void {
   if (typeof window === "undefined") return;
+  const persistent = options.persistent !== false;
   try {
-    window.localStorage.setItem(PRODUCT_AUTH_STORAGE_KEY, JSON.stringify(session));
+    const target = persistent ? window.localStorage : window.sessionStorage;
+    const other = persistent ? window.sessionStorage : window.localStorage;
+    target.setItem(PRODUCT_AUTH_STORAGE_KEY, JSON.stringify(session));
+    other.removeItem(PRODUCT_AUTH_STORAGE_KEY);
   } catch {
     /* quota */
   }
@@ -48,6 +59,7 @@ export function clearProductAuthSession(): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(PRODUCT_AUTH_STORAGE_KEY);
+    window.sessionStorage.removeItem(PRODUCT_AUTH_STORAGE_KEY);
   } catch {
     /* */
   }

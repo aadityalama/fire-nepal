@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 
+type LoginPhase = "idle" | "loading" | "signing";
+
 export function AuthModal() {
   const { isOpen, tab, close, open } = useAuthModal();
   const { login, signup, user } = useProductAuth();
@@ -19,6 +21,7 @@ export function AuthModal() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loginPhase, setLoginPhase] = useState<LoginPhase>("idle");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -29,7 +32,14 @@ export function AuthModal() {
     setPassword("");
     setConfirmPassword("");
     setRememberMe(true);
+    setLoginPhase("idle");
   }, [isOpen, tab]);
+
+  useEffect(() => {
+    if (loginPhase !== "loading") return undefined;
+    const timer = window.setTimeout(() => setLoginPhase("signing"), 350);
+    return () => window.clearTimeout(timer);
+  }, [loginPhase]);
 
   useEffect(() => {
     if (user && isOpen) {
@@ -49,18 +59,21 @@ export function AuthModal() {
   const onSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
+      if (busy) return;
       setError(null);
       if (tab === "signup" && password !== confirmPassword) {
         setError("Passwords do not match.");
         return;
       }
       setBusy(true);
+      if (tab === "login") setLoginPhase("loading");
       const r =
         tab === "login"
           ? await login(email, password, rememberMe)
           : await signup(name, email, password, { confirmPassword });
       setBusy(false);
       if (!r.ok) {
+        setLoginPhase("idle");
         setError(r.error ?? "Something went wrong.");
         return;
       }
@@ -73,9 +86,11 @@ export function AuthModal() {
         return;
       }
       close();
+      router.prefetch("/hub");
       router.push("/hub");
+      console.log("[auth] Redirect completed", { next: "/hub" });
     },
-    [tab, login, signup, email, password, name, confirmPassword, rememberMe, close, router],
+    [busy, tab, login, signup, email, password, name, confirmPassword, rememberMe, close, router],
   );
 
   if (!isOpen) return null;
@@ -137,6 +152,7 @@ export function AuthModal() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={busy}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
                 placeholder="Sita Magar"
                 autoComplete="name"
@@ -150,6 +166,7 @@ export function AuthModal() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={busy}
               className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
               placeholder="you@company.com"
               autoComplete="email"
@@ -162,6 +179,7 @@ export function AuthModal() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
               className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
               placeholder={tab === "login" ? "••••••" : "At least 6 characters"}
               autoComplete={tab === "login" ? "current-password" : "new-password"}
@@ -178,6 +196,7 @@ export function AuthModal() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={busy}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
                 placeholder="Repeat password"
                 autoComplete="new-password"
@@ -193,6 +212,7 @@ export function AuthModal() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={busy}
                   className="h-3.5 w-3.5 rounded border-emerald-400/40 bg-black/40 text-emerald-500"
                 />
                 Remember me
@@ -206,10 +226,22 @@ export function AuthModal() {
           <button
             type="submit"
             disabled={busy}
+            aria-busy={busy}
             className="flex w-full min-h-[46px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-2.5 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 transition enabled:hover:-translate-y-0.5 disabled:opacity-50"
           >
-            {busy ? "Please wait…" : tab === "login" ? "Continue" : "Create & verify email"}
-            <ArrowRight size={17} />
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+            ) : null}
+            {tab === "login" && loginPhase === "loading"
+              ? "Loading..."
+              : tab === "login" && loginPhase === "signing"
+                ? "Signing you in..."
+                : busy
+                  ? "Please wait..."
+                  : tab === "login"
+                    ? "Continue"
+                    : "Create & verify email"}
+            {!busy ? <ArrowRight size={17} /> : null}
           </button>
         </form>
 

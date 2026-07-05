@@ -12,6 +12,8 @@ function decodeNext(raw: string | null): string {
   return sanitizeInternalNextPath(raw, DEFAULT_POST_LOGIN_PATH);
 }
 
+type LoginPhase = "idle" | "loading" | "signing";
+
 export function LoginScreen() {
   const { login, user, loading } = useProductAuth();
   const router = useRouter();
@@ -21,25 +23,41 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [loginPhase, setLoginPhase] = useState<LoginPhase>("idle");
+  const busy = loginPhase !== "idle";
 
   useEffect(() => {
     if (loading) return;
-    if (user) router.replace(next);
+    if (!user) return;
+    router.prefetch(next);
+    router.replace(next);
+    console.log("[auth] Redirect completed", { next });
   }, [loading, user, router, next]);
+
+  useEffect(() => {
+    if (loginPhase !== "loading") return undefined;
+    const timer = window.setTimeout(() => setLoginPhase("signing"), 350);
+    return () => window.clearTimeout(timer);
+  }, [loginPhase]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
-    setBusy(true);
+    setLoginPhase("loading");
     const r = await login(email, password, rememberMe);
-    setBusy(false);
     if (!r.ok) {
+      setLoginPhase("idle");
       setError(r.error ?? "Could not sign in.");
       return;
     }
+    setLoginPhase("signing");
+    router.prefetch(next);
     router.replace(next);
+    console.log("[auth] Redirect completed", { next });
   }
+
+  const buttonLabel = loginPhase === "loading" ? "Loading..." : loginPhase === "signing" ? "Signing you in..." : "Continue";
 
   return (
     <AuthGlassShell>
@@ -71,6 +89,7 @@ export function LoginScreen() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={busy}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="you@company.com"
                 required
@@ -83,6 +102,7 @@ export function LoginScreen() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="••••••••"
                 required
@@ -96,6 +116,7 @@ export function LoginScreen() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={busy}
                   className="h-4 w-4 rounded border-emerald-400/40 bg-black/40 text-emerald-500 focus:ring-emerald-500/40"
                 />
                 Remember me
@@ -109,10 +130,14 @@ export function LoginScreen() {
             <button
               type="submit"
               disabled={busy}
+              aria-busy={busy}
               className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-emerald-400/35 disabled:opacity-60"
             >
-              {busy ? "Signing in…" : "Continue"}
-              <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+              {busy ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+              ) : null}
+              {buttonLabel}
+              {!busy ? <ArrowRight size={18} className="transition group-hover:translate-x-0.5" /> : null}
             </button>
           </form>
 

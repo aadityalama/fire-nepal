@@ -1,7 +1,7 @@
 "use client";
 
-import type { User } from "@supabase/supabase-js";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   clearProductAuthSession,
   loadProductAuthSession,
@@ -9,7 +9,11 @@ import {
   type ProductAuthUser,
 } from "@/lib/product-auth-storage";
 import { getPublicSiteOrigin } from "@/lib/public-site-url";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import {
+  getSupabaseAuthRememberMe,
+  getSupabaseBrowserClient,
+  setSupabaseAuthRememberMe,
+} from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { upsertUserProfileFields } from "@/services/user-profile-supabase";
 
@@ -43,7 +47,10 @@ type ProductAuthContextValue = {
   logout: () => Promise<void>;
 };
 
+type LoginResult = { ok: true } | { ok: false; error: string };
+
 const ProductAuthContext = createContext<ProductAuthContextValue | null>(null);
+const LOGIN_TIMEOUT_MS = 12_000;
 
 function mapSupabaseUser(u: User): ProductAuthUser {
   const meta = u.user_metadata as Record<string, unknown> | undefined;
@@ -89,22 +96,80 @@ async function syncLegacySession(): Promise<ProductAuthUser | null> {
   return j.user ?? null;
 }
 
+class AuthRequestTimeoutError extends Error {
+  constructor() {
+    super("Authentication request timed out.");
+    this.name = "AuthRequestTimeoutError";
+  }
+}
+
+function withAuthTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new AuthRequestTimeoutError()), LOGIN_TIMEOUT_MS);
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => window.clearTimeout(timeout));
+  });
+}
+
+function mapAuthError(error: unknown): string {
+  const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "";
+  const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 0;
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const lower = message.toLowerCase();
+
+  if (
+    code === "email_not_confirmed" ||
+    lower.includes("email not confirmed") ||
+    lower.includes("email address is not confirmed")
+  ) {
+    return "Email not verified. Please confirm your email, then try signing in again.";
+  }
+  if (
+    code === "invalid_credentials" ||
+    lower.includes("invalid login credentials") ||
+    lower.includes("invalid email or password")
+  ) {
+    return "Invalid email or password.";
+  }
+  if (
+    error instanceof AuthRequestTimeoutError ||
+    lower.includes("failed to fetch") ||
+    lower.includes("fetch failed") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed") ||
+    (typeof navigator !== "undefined" && navigator.onLine === false)
+  ) {
+    return "Network connection issue. Check your internet connection and try again.";
+  }
+  if (status >= 500 || lower.includes("server") || lower.includes("service unavailable")) {
+    return "Server unavailable. Please try again in a moment.";
+  }
+  return message || "Sign-in failed. Please try again.";
+}
+
 export function ProductAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ProductAuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const loginInFlightRef = useRef<Promise<LoginResult> | null>(null);
   const authMode: "supabase" | "legacy" = isSupabaseConfigured() ? "supabase" : "legacy";
 
   const refreshSession = useCallback(async () => {
     if (isSupabaseConfigured()) {
       try {
         const sb = getSupabaseBrowserClient();
-        const { data, error } = await sb.auth.getUser();
+        const { data, error } = await sb.auth.getSession();
         if (error) throw error;
-        const u = data.user ? mapSupabaseUser(data.user) : null;
+        const u = data.session?.user ? mapSupabaseUser(data.session.user) : null;
         setUser(u);
-        if (u) saveProductAuthSession({ version: 1, user: u, accessToken: "mock" });
-        else clearProductAuthSession();
+        if (u) {
+          saveProductAuthSession(
+            { version: 1, user: u, accessToken: "mock" },
+            { persistent: getSupabaseAuthRememberMe() },
+          );
+        } else clearProductAuthSession();
       } catch {
         setUser(null);
         clearProductAuthSession();
@@ -128,13 +193,17 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       const sb = getSupabaseBrowserClient();
       void (async () => {
         try {
-          const { data, error } = await sb.auth.getUser();
+          const { data, error } = await sb.auth.getSession();
           if (cancelled) return;
           if (error) throw error;
-          const u = data.user ? mapSupabaseUser(data.user) : null;
+          const u = data.session?.user ? mapSupabaseUser(data.session.user) : null;
           setUser(u);
-          if (u) saveProductAuthSession({ version: 1, user: u, accessToken: "mock" });
-          else clearProductAuthSession();
+          if (u) {
+            saveProductAuthSession(
+              { version: 1, user: u, accessToken: "mock" },
+              { persistent: getSupabaseAuthRememberMe() },
+            );
+          } else clearProductAuthSession();
         } catch {
           if (!cancelled) {
             setUser(null);
@@ -149,8 +218,12 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       } = sb.auth.onAuthStateChange((_event, session) => {
         const u = session?.user ? mapSupabaseUser(session.user) : null;
         setUser(u);
-        if (u) saveProductAuthSession({ version: 1, user: u, accessToken: "mock" });
-        else clearProductAuthSession();
+        if (u) {
+          saveProductAuthSession(
+            { version: 1, user: u, accessToken: "mock" },
+            { persistent: getSupabaseAuthRememberMe() },
+          );
+        } else clearProductAuthSession();
       });
       return () => {
         cancelled = true;
@@ -189,58 +262,94 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  const login = useCallback(async (email: string, password: string, rememberMe = false) => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed.includes("@")) return { ok: false as const, error: "Enter a valid email address." };
-    if (password.length < 6) return { ok: false as const, error: "Password must be at least 6 characters." };
+  const login = useCallback(async (email: string, password: string, rememberMe = true): Promise<LoginResult> => {
+    if (loginInFlightRef.current) return loginInFlightRef.current;
 
-    if (isSupabaseConfigured()) {
-      try {
-        const sb = getSupabaseBrowserClient();
-        const { data, error } = await sb.auth.signInWithPassword({ email: trimmed, password });
-        if (error) {
-          const msg = (error.message ?? "").toLowerCase();
-          const code = (error as { code?: string }).code;
-          if (
-            code === "email_not_confirmed" ||
-            msg.includes("email not confirmed") ||
-            msg.includes("email address is not confirmed")
-          ) {
-            return {
-              ok: false as const,
-              error:
-                "Confirm your email before signing in. Open the verification link Supabase sent you, or enter the code on the verify-email page, then try again.",
-            };
+    const loginRequest = (async (): Promise<LoginResult> => {
+      const trimmed = email.trim().toLowerCase();
+      if (!trimmed.includes("@")) return { ok: false, error: "Enter a valid email address." };
+      if (password.length < 6) return { ok: false, error: "Password must be at least 6 characters." };
+
+      if (isSupabaseConfigured()) {
+        try {
+          console.log("[auth] Auth request started", { email: trimmed, rememberMe, mode: "supabase" });
+          setSupabaseAuthRememberMe(rememberMe);
+          const sb = getSupabaseBrowserClient();
+          const { data, error } = await withAuthTimeout(sb.auth.signInWithPassword({ email: trimmed, password }));
+          console.log("[auth] Auth response", {
+            hasUser: Boolean(data.user),
+            hasSession: Boolean(data.session),
+            error: error ? { code: (error as { code?: string }).code, status: error.status, message: error.message } : null,
+          });
+          if (error) {
+            console.error("[auth] Authentication error", error);
+            return { ok: false, error: mapAuthError(error) };
           }
-          return { ok: false as const, error: error.message };
+          let session: Session | null = data.session;
+          if (!session) {
+            const current = await sb.auth.getSession();
+            if (current.error) throw current.error;
+            session = current.data.session;
+          }
+          if (!session) {
+            const refreshed = await sb.auth.refreshSession();
+            if (refreshed.error) throw refreshed.error;
+            session = refreshed.data.session;
+          }
+          const authUser = session?.user ?? data.user;
+          if (!authUser || !session) {
+            console.error("[auth] Authentication error", "Supabase did not create a session.");
+            return { ok: false, error: "Sign-in succeeded but no session was created. Please try again." };
+          }
+          console.log("[auth] Session created", { userId: authUser.id, expiresAt: session.expires_at ?? null });
+          const pu = mapSupabaseUser(authUser);
+          setUser(pu);
+          setLoading(false);
+          saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" }, { persistent: rememberMe });
+          return { ok: true };
+        } catch (e) {
+          console.error("[auth] Authentication error", e);
+          return { ok: false, error: mapAuthError(e) };
         }
-        if (!data.user) return { ok: false as const, error: "Sign-in failed." };
-        const pu = mapSupabaseUser(data.user);
-        setUser(pu);
-        saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" });
-        void rememberMe;
-        return { ok: true as const };
-      } catch (e) {
-        return { ok: false as const, error: e instanceof Error ? e.message : "Sign-in failed." };
       }
-    }
 
-    const r = await fetch("/api/auth/login", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: trimmed, password, rememberMe }),
-    });
-    const j = (await r.json().catch(() => ({}))) as { user?: ProductAuthUser; error?: string };
-    if (!r.ok) {
-      return { ok: false as const, error: j.error ?? "Sign-in failed." };
+      try {
+        console.log("[auth] Auth request started", { email: trimmed, rememberMe, mode: "legacy" });
+        const r = await withAuthTimeout(
+          fetch("/api/auth/login", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: trimmed, password, rememberMe }),
+          }),
+        );
+        const j = (await r.json().catch(() => ({}))) as { user?: ProductAuthUser; error?: string };
+        console.log("[auth] Auth response", { status: r.status, hasUser: Boolean(j.user), error: j.error ?? null });
+        if (!r.ok) {
+          console.error("[auth] Authentication error", j.error ?? r.statusText);
+          return { ok: false, error: j.error ?? "Sign-in failed." };
+        }
+        if (!j.user) {
+          console.error("[auth] Authentication error", "Invalid server response.");
+          return { ok: false, error: "Invalid server response." };
+        }
+        console.log("[auth] Session created", { userId: j.user.id, mode: "legacy" });
+        setUser(j.user);
+        setLoading(false);
+        saveProductAuthSession({ version: 1, user: j.user, accessToken: "mock" }, { persistent: rememberMe });
+        return { ok: true };
+      } catch (e) {
+        console.error("[auth] Authentication error", e);
+        return { ok: false, error: mapAuthError(e) };
+      }
+    })();
+
+    loginInFlightRef.current = loginRequest;
+    try {
+      return await loginRequest;
+    } finally {
+      if (loginInFlightRef.current === loginRequest) loginInFlightRef.current = null;
     }
-    if (!j.user) {
-      return { ok: false as const, error: "Invalid server response." };
-    }
-    setUser(j.user);
-    saveProductAuthSession({ version: 1, user: j.user, accessToken: "mock" });
-    return { ok: true as const };
   }, []);
 
   const signup = useCallback(async (name: string, email: string, password: string, opts: SignupOptions) => {
