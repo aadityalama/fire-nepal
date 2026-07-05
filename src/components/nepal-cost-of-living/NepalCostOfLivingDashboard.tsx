@@ -1003,18 +1003,18 @@ export function NepalCostOfLivingDashboard() {
                 <div className="mt-3 h-0.5 w-8 rounded-full bg-emerald-400" />
               </div>
 
-              <div className="grid w-full grid-cols-1 gap-2 min-[390px]:grid-cols-2 md:grid-cols-4 min-[1000px]:mt-3 min-[1000px]:w-[490px] min-[1000px]:grid-cols-[98px_98px_120px_1fr]">
+              <div className="grid w-full grid-cols-2 gap-2 md:grid-cols-4 min-[1000px]:mt-3 min-[1000px]:w-[490px] min-[1000px]:grid-cols-[98px_98px_120px_1fr]">
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 text-left"
+                  className="h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 text-left max-md:hidden"
                 >
                   <span className="block text-[11px] font-semibold text-emerald-50/70">Family</span>
                   <span className="block text-[12px] font-bold text-white">
                     A{plan.family.adults} · C{plan.family.children} · P{plan.family.parents}
                   </span>
                 </button>
-                <label className="block h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 py-2">
+                <label className="block h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 py-2 max-md:hidden">
                   <span className="block text-[11px] font-semibold text-emerald-50/70">Lifestyle</span>
                   <select
                     value={plan.lifestyle}
@@ -1031,8 +1031,8 @@ export function NepalCostOfLivingDashboard() {
                     ))}
                   </select>
                 </label>
-                <label className="block h-[48px] rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 py-2">
-                  <span className="block text-[11px] font-semibold text-emerald-50/70">Monthly Income</span>
+                <label className="flex h-[76px] flex-col justify-center rounded-lg border border-emerald-500/16 bg-emerald-950/40 px-3 py-2.5 md:block md:h-[48px] md:py-2">
+                  <span className="block text-[11px] font-semibold leading-tight text-emerald-50/70">Monthly Income</span>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -1041,12 +1041,12 @@ export function NepalCostOfLivingDashboard() {
                     value={plan.monthlyIncomeNpr ?? ""}
                     placeholder="Enter income"
                     onChange={(event) => patchMonthlyIncome(event.target.value)}
-                    className={`${NUMBER_SAFE_CLS} w-full bg-transparent text-[12px] font-bold text-white outline-none placeholder:text-emerald-100/35 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                    className={`${NUMBER_SAFE_CLS} mt-1 w-full bg-transparent text-[clamp(1.45rem,6.5vw,1.875rem)] font-extrabold leading-none tracking-tight text-white outline-none placeholder:text-[clamp(0.95rem,4vw,1.15rem)] placeholder:text-emerald-100/35 md:mt-0 md:text-[12px] md:font-bold md:tracking-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                   />
                 </label>
-                <GlassCard className="flex min-h-[64px] flex-col items-center justify-center rounded-lg p-2 text-center min-[1000px]:h-[60px] min-[1000px]:min-h-0" delay={0.02}>
-                  <p className="text-[11px] font-bold text-emerald-50/70">Total Monthly Cost</p>
-                  <p className="text-[22px] font-black leading-[1.05] tracking-tight text-white tabular-nums min-[1000px]:text-[18px]">
+                <GlassCard className="flex h-[76px] min-h-0 flex-col items-center justify-center rounded-lg p-2 text-center md:h-auto md:min-h-[64px] min-[1000px]:h-[60px] min-[1000px]:min-h-0" delay={0.02}>
+                  <p className="text-[11px] font-bold leading-tight text-emerald-50/70">Total Monthly Cost</p>
+                  <p className="text-[clamp(1.35rem,6vw,1.875rem)] font-black leading-[1.05] tracking-tight text-white tabular-nums md:text-[22px] min-[1000px]:text-[18px]">
                     {formatNprInteger(snapshot.total)}
                   </p>
                   <p className="mt-0.5 text-[11px] font-bold text-emerald-400">{formatKrwInteger(nprToKrw(snapshot.total, krwPerNpr))}</p>
