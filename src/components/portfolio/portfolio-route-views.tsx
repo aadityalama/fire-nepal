@@ -69,7 +69,7 @@ export function PortfolioBankingPage() {
 }
 
 export function PortfolioInvestmentsPage() {
-  const { state, krwPerNpr, usdPerNpr, ledgerFx, applyPortfolioMutate, updateInv, addInv, removeInv } =
+  const { state, krwPerNpr, usdPerNpr, ledgerFx, applyPortfolioMutate, updateInv, removeInv } =
     useWealthPortfolio();
   const { snapshot, overlay } = useRealtimeMarket();
   return (
@@ -79,6 +79,12 @@ export function PortfolioInvestmentsPage() {
         title="Investments"
         subtitle="Nepse, global equities, funds, and crypto — live FX where applicable."
       />
+      <InvestmentsPanel
+        ledger={state.ledger}
+        usdPerNpr={usdPerNpr}
+        ledgerFx={ledgerFx}
+        onMutate={applyPortfolioMutate}
+      />
       <InteractivePortfolioTable
         rows={state.investments}
         krwPerNpr={krwPerNpr}
@@ -86,20 +92,7 @@ export function PortfolioInvestmentsPage() {
         liveMarket={snapshot}
         netWorthLiveNpr={overlay?.totalsLive.netWorthNpr ?? null}
         onChange={updateInv}
-        onAdd={addInv}
         onRemove={removeInv}
-      />
-      <InvestmentsPanel
-        rows={state.investments}
-        ledger={state.ledger}
-        krwPerNpr={krwPerNpr}
-        usdPerNpr={usdPerNpr}
-        ledgerFx={ledgerFx}
-        onMutate={applyPortfolioMutate}
-        onChange={updateInv}
-        onAdd={addInv}
-        onRemove={removeInv}
-        hideAddButton
       />
     </div>
   );

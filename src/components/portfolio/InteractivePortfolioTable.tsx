@@ -5,13 +5,11 @@ import {
   ArrowUpAZ,
   Filter,
   Pencil,
-  Plus,
   Search,
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { useCallback, useMemo, useState } from "react";
 import { valueInvestmentRow } from "@/components/portfolio/calculations";
 import { CurrencySelect } from "@/components/portfolio/CurrencySelect";
 import { InvestmentMasterSelector } from "@/components/portfolio/InvestmentMasterSelector";
@@ -94,7 +92,6 @@ export function InteractivePortfolioTable({
   liveMarket = null,
   netWorthLiveNpr = null,
   onChange,
-  onAdd,
   onRemove,
 }: {
   rows: InvestmentRow[];
@@ -103,7 +100,6 @@ export function InteractivePortfolioTable({
   liveMarket?: MarketSnapshot | null;
   netWorthLiveNpr?: number | null;
   onChange: (id: string, patch: Partial<InvestmentRow>) => void;
-  onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -113,10 +109,6 @@ export function InteractivePortfolioTable({
   const [filterOpen, setFilterOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const rowsRef = useRef(rows);
-  useLayoutEffect(() => {
-    rowsRef.current = rows;
-  }, [rows]);
 
   const totalLive = useMemo(() => {
     return rows.reduce((a, r) => a + valueInvestmentRow(r, krwPerNpr, usdPerNpr, liveMarket).liveValueNpr, 0);
@@ -225,15 +217,6 @@ export function InteractivePortfolioTable({
     [sortKey],
   );
 
-  const handleAdd = () => {
-    flushSync(() => {
-      onAdd();
-    });
-    const list = rowsRef.current;
-    const last = list[list.length - 1];
-    if (last) setEditingId(last.id);
-  };
-
   const editingRow = editingId ? rows.find((r) => r.id === editingId) : undefined;
 
   return (
@@ -246,14 +229,6 @@ export function InteractivePortfolioTable({
             CAGR uses purchase date and NPR cost vs mark. SIP est. uses optional monthly contribution + start date.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleAdd}
-          className="hidden min-h-[44px] shrink-0 items-center justify-center gap-1.5 self-start rounded-full border border-cyan-400/30 bg-cyan-500/15 px-4 py-2 text-xs font-black text-cyan-50 transition hover:bg-cyan-500/25 sm:text-sm xl:inline-flex"
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          Add asset
-        </button>
       </div>
 
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
