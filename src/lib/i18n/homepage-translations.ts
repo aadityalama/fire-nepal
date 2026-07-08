@@ -185,7 +185,7 @@ const english: HomepageCopy = {
     kathmanduNepal: "Kathmandu, Nepal",
     badge: "Premium financial platform — built for Nepalis living, working and studying abroad.",
     headline: ["Plan today,", "achieve financial independence,", "and return to Nepal with dignity."],
-    description: "Institutional dashboards, OCR payslips, deterministic simulation, AI coach, and automation intelligence — unified under one emerald glass system.",
+    description: "The complete financial operating system for Nepalis — bringing budgeting, investing, wealth tracking, AI-powered guidance, family financial planning, child education savings, and retirement planning together in one secure platform.",
     startDashboard: "Start dashboard",
     runSimulation: "Run FIRE simulation",
     importPayslip: "Import Korean payslip",
