@@ -8,14 +8,16 @@ import {
   Bot,
   CalendarDays,
   Flame,
+  MoreVertical,
   PiggyBank,
   Plus,
   Save,
   Sparkles,
+  Trash2,
   WalletCards,
   X,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -23,7 +25,7 @@ import { toast } from "sonner";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
-import { createBudgetRecord, fetchBudgetRecords } from "@/lib/budget/budget-api";
+import { createBudgetRecord, deleteBudgetRecord, fetchBudgetRecords, updateBudgetRecord } from "@/lib/budget/budget-api";
 import {
   BUDGET_NOTIFICATION_OPTIONS,
   defaultBudgetNotificationSettings,
@@ -36,7 +38,7 @@ import {
 } from "@/lib/budget/types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryEmoji, type FinanceCategoryId } from "@/lib/finance/categories";
+import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryEmoji, normalizeFinanceCategory, type FinanceCategoryId } from "@/lib/finance/categories";
 
 const BudgetMonthlyTrendChart = dynamic(
   () => import("@/components/budget/BudgetMonthlyTrendChart").then((mod) => mod.BudgetMonthlyTrendChart),
@@ -134,7 +136,17 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-function BudgetCard({ budget, period, index }: { budget: BudgetRecord; period: BudgetPeriod; index: number }) {
+function BudgetCard({
+  budget,
+  period,
+  index,
+  onOpenMenu,
+}: {
+  budget: BudgetRecord;
+  period: BudgetPeriod;
+  index: number;
+  onOpenMenu: (budget: BudgetRecord) => void;
+}) {
   const amount = periodAmount(budget.monthlyBudgetNpr, period);
   const spent = periodAmount(budget.monthlySpentNpr, period);
   const pct = clampPct((spent / amount) * 100);
@@ -145,6 +157,7 @@ function BudgetCard({ budget, period, index }: { budget: BudgetRecord; period: B
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -28, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform"
     >
@@ -158,9 +171,19 @@ function BudgetCard({ budget, period, index }: { budget: BudgetRecord; period: B
             <p className="mt-0.5 text-xs font-bold text-emerald-100/55">{budget.category}</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
-          <p className="mt-0.5 text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
+        <div className="flex shrink-0 items-start gap-1">
+          <div className="text-right">
+            <p className="text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
+            <p className="mt-0.5 text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
+          </div>
+          <button
+            type="button"
+            aria-label={`Budget actions for ${budget.name}`}
+            onClick={() => onOpenMenu(budget)}
+            className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full text-emerald-100/70 transition hover:bg-white/[0.08] active:scale-95"
+          >
+            <MoreVertical size={20} />
+          </button>
         </div>
       </div>
 
@@ -217,26 +240,205 @@ function AnalyticsTile({
   );
 }
 
-function AddBudgetModal({
+function BudgetEmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-[1.75rem] border border-dashed border-emerald-300/25 bg-gradient-to-br from-white/[0.06] via-emerald-400/10 to-lime-300/10 px-6 py-10 text-center backdrop-blur-xl"
+    >
+      <div className="mx-auto grid h-20 w-20 place-items-center rounded-[1.5rem] bg-gradient-to-br from-emerald-300/25 to-lime-300/20 text-4xl shadow-lg shadow-emerald-500/10">
+        🐷
+      </div>
+      <h3 className="mt-5 text-xl font-black tracking-tight text-white">No budgets yet</h3>
+      <p className="mx-auto mt-2 max-w-xs text-sm font-semibold leading-relaxed text-emerald-100/55">
+        Create your first monthly budget to start tracking your finances.
+      </p>
+      <button
+        type="button"
+        onClick={onCreate}
+        className="mt-6 inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 px-6 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/25 active:scale-[0.98]"
+      >
+        <Plus size={20} strokeWidth={2.5} /> Create Budget
+      </button>
+    </motion.div>
+  );
+}
+
+function BudgetActionSheet({
   open,
+  budgetName,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  open: boolean;
+  budgetName: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[#020806]/70 p-0 backdrop-blur-sm sm:p-4">
+      <button type="button" aria-label="Close budget actions" className="absolute inset-0" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 24 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        className="relative w-full max-w-lg overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#04140f] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] shadow-2xl sm:rounded-[1.75rem]"
+      >
+        <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-white/20" />
+        <p className="px-5 pt-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-emerald-100/45">{budgetName}</p>
+        <div className="mt-3 space-y-2 px-3">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-left text-base font-black text-white active:scale-[0.99]"
+          >
+            <span className="text-xl">✏️</span>
+            Edit Budget
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 text-left text-base font-black text-red-200 active:scale-[0.99]"
+          >
+            <span className="text-xl">🗑</span>
+            Delete Budget
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mx-3 mt-3 min-h-[52px] w-[calc(100%-1.5rem)] rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-100/75"
+        >
+          Cancel
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+function DeleteBudgetDialog({
+  open,
+  onClose,
+  onConfirm,
+  deleting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  deleting: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#020806]/80 p-4 backdrop-blur-md sm:items-center">
+      <button type="button" aria-label="Close delete confirmation" className="absolute inset-0" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 12 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="relative w-full max-w-md overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#04140f] p-5 shadow-2xl"
+      >
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-red-500/15 text-2xl">
+          <Trash2 size={24} className="text-red-300" />
+        </div>
+        <h3 className="mt-4 text-center text-xl font-black text-white">Delete Budget?</h3>
+        <p className="mt-2 text-center text-sm font-semibold leading-relaxed text-emerald-100/55">
+          This will permanently remove this budget.
+          <br />
+          This action cannot be undone.
+        </p>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="min-h-[52px] rounded-2xl border border-white/10 bg-white/[0.05] text-sm font-black text-emerald-100/80 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="min-h-[52px] rounded-2xl bg-red-500 text-sm font-black text-white shadow-lg shadow-red-500/25 disabled:opacity-60"
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function budgetFormDefaults(initialBudget?: BudgetRecord | null) {
+  if (!initialBudget) {
+    return {
+      period: "Monthly" as BudgetPeriod,
+      amountInput: "80000",
+      name: "",
+      category: DEFAULT_FINANCE_CATEGORY_ID,
+      enabledAlerts: defaultBudgetNotificationSettings(),
+      gradient: "from-emerald-300 to-lime-300",
+      aiRecommendation: PLACEHOLDER_AI_RECOMMENDATION,
+    };
+  }
+
+  return {
+    period: initialBudget.period,
+    amountInput: String(Math.round(initialBudget.amountNpr)),
+    name: initialBudget.name,
+    category: normalizeFinanceCategory(initialBudget.category),
+    enabledAlerts: { ...defaultBudgetNotificationSettings(), ...initialBudget.notificationSettings },
+    gradient: initialBudget.gradient,
+    aiRecommendation: initialBudget.aiRecommendation ?? PLACEHOLDER_AI_RECOMMENDATION,
+  };
+}
+
+function BudgetFormModal({
+  open,
+  mode,
+  initialBudget,
   onClose,
   onSave,
   saving,
 }: {
   open: boolean;
+  mode: "create" | "edit";
+  initialBudget?: BudgetRecord | null;
   onClose: () => void;
   onSave: (input: CreateBudgetInput) => Promise<void>;
   saving: boolean;
 }) {
-  const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
-  const [amountInput, setAmountInput] = useState("80000");
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<FinanceCategoryId>(DEFAULT_FINANCE_CATEGORY_ID);
-  const [enabledAlerts, setEnabledAlerts] = useState<BudgetNotificationSettings>(() => defaultBudgetNotificationSettings());
+  const defaults = budgetFormDefaults(mode === "edit" ? initialBudget : null);
+  const [period, setPeriod] = useState<BudgetPeriod>(defaults.period);
+  const [amountInput, setAmountInput] = useState(defaults.amountInput);
+  const [name, setName] = useState(defaults.name);
+  const [category, setCategory] = useState<FinanceCategoryId>(defaults.category);
+  const [enabledAlerts, setEnabledAlerts] = useState<BudgetNotificationSettings>(defaults.enabledAlerts);
+  const [gradient] = useState(defaults.gradient);
+  const [aiRecommendation] = useState<BudgetAiRecommendation | null>(defaults.aiRecommendation);
+
+  useEffect(() => {
+    if (!open) return;
+    const next = budgetFormDefaults(mode === "edit" ? initialBudget : null);
+    setPeriod(next.period);
+    setAmountInput(next.amountInput);
+    setName(next.name);
+    setCategory(next.category);
+    setEnabledAlerts(next.enabledAlerts);
+  }, [open, mode, initialBudget]);
 
   if (!open) return null;
 
   const parsedAmount = Number(amountInput.replace(/[^\d]/g, "")) || 0;
+  const isEdit = mode === "edit";
 
   async function handleSave() {
     if (!parsedAmount || saving) return;
@@ -244,17 +446,19 @@ function AddBudgetModal({
       name: name.trim() || category,
       category,
       icon: getFinanceCategoryEmoji(category),
-      gradient: "from-emerald-300 to-lime-300",
+      gradient,
       period,
       amountNpr: parsedAmount,
       notificationSettings: enabledAlerts,
-      aiRecommendation: PLACEHOLDER_AI_RECOMMENDATION,
+      aiRecommendation,
     });
-    setName("");
-    setAmountInput("80000");
-    setPeriod("Monthly");
-    setCategory(DEFAULT_FINANCE_CATEGORY_ID);
-    setEnabledAlerts(defaultBudgetNotificationSettings());
+    if (!isEdit) {
+      setName("");
+      setAmountInput("80000");
+      setPeriod("Monthly");
+      setCategory(DEFAULT_FINANCE_CATEGORY_ID);
+      setEnabledAlerts(defaultBudgetNotificationSettings());
+    }
     onClose();
   }
 
@@ -269,19 +473,19 @@ function AddBudgetModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close add budget"
+            aria-label={isEdit ? "Close edit budget" : "Close add budget"}
             className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06] text-emerald-100 transition active:scale-95"
           >
             <X size={20} />
           </button>
-          <h2 className="text-lg font-black tracking-tight">Add Budget</h2>
+          <h2 className="text-lg font-black tracking-tight">{isEdit ? "Edit Budget" : "Add Budget"}</h2>
           <button
             type="button"
             onClick={() => void handleSave()}
             disabled={saving || !parsedAmount}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Save size={16} /> {saving ? "Saving..." : "Save"}
+            <Save size={16} /> {saving ? (isEdit ? "Updating..." : "Saving...") : isEdit ? "Update Budget" : "Save"}
           </button>
         </header>
 
@@ -350,7 +554,8 @@ function AddBudgetModal({
                 </div>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/18 p-4">
                   <p className="text-sm font-bold leading-relaxed text-emerald-50">
-                    Add budgets or connect spending history to unlock a personalized recommendation. No financial estimate is shown until user data is available.
+                    {aiRecommendation?.message ??
+                      "Add budgets or connect spending history to unlock a personalized recommendation. No financial estimate is shown until user data is available."}
                   </p>
                 </div>
               </div>
@@ -366,12 +571,30 @@ export default function BudgetWorkspacePage() {
   const { user } = useProductAuth();
   const { resolvedTheme } = useFireTheme();
   const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
-  const [addOpen, setAddOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [editingBudget, setEditingBudget] = useState<BudgetRecord | null>(null);
+  const [actionBudget, setActionBudget] = useState<BudgetRecord | null>(null);
+  const [deletingBudget, setDeletingBudget] = useState<BudgetRecord | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [loadingBudgets, setLoadingBudgets] = useState(true);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [deletingBudgetBusy, setDeletingBudgetBusy] = useState(false);
   const light = resolvedTheme === "light";
+
+  const openCreateForm = useCallback(() => {
+    setFormMode("create");
+    setEditingBudget(null);
+    setFormOpen(true);
+  }, []);
+
+  const openEditForm = useCallback((budget: BudgetRecord) => {
+    setFormMode("edit");
+    setEditingBudget(budget);
+    setActionBudget(null);
+    setFormOpen(true);
+  }, []);
 
   const reloadBudgets = useCallback(async () => {
     const records = await fetchBudgetRecords();
@@ -441,6 +664,76 @@ export default function BudgetWorkspacePage() {
     [budgets.length, reloadBudgets],
   );
 
+  const handleUpdateBudget = useCallback(
+    async (input: CreateBudgetInput) => {
+      if (!editingBudget) return;
+
+      const monthlyBudgetNpr = input.period === "Yearly" ? Math.round(input.amountNpr / 12) : Math.round(input.amountNpr);
+      const optimisticRecord: BudgetRecord = {
+        ...editingBudget,
+        name: input.name,
+        icon: input.icon,
+        category: input.category,
+        period: input.period,
+        amountNpr: input.amountNpr,
+        monthlyBudgetNpr,
+        daysRemaining: input.period === "Yearly" ? 365 : editingBudget.daysRemaining,
+        gradient: input.gradient,
+        notificationSettings: input.notificationSettings,
+        aiRecommendation: input.aiRecommendation,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setSavingBudget(true);
+      setBudgets((prev) => sortBudgetRecords(prev.map((item) => (item.id === editingBudget.id ? optimisticRecord : item))));
+
+      try {
+        await updateBudgetRecord(editingBudget.id, input);
+        await reloadBudgets();
+        toast.success("Budget updated successfully");
+        setEditingBudget(null);
+      } catch (error) {
+        await reloadBudgets();
+        toast.error(error instanceof Error ? error.message : "Could not update budget.");
+        throw error;
+      } finally {
+        setSavingBudget(false);
+      }
+    },
+    [editingBudget, reloadBudgets],
+  );
+
+  const handleDeleteBudget = useCallback(async () => {
+    if (!deletingBudget) return;
+
+    const removedId = deletingBudget.id;
+    setDeletingBudgetBusy(true);
+    setBudgets((prev) => prev.filter((item) => item.id !== removedId));
+
+    try {
+      await deleteBudgetRecord(removedId);
+      toast.success("Budget deleted");
+      setDeletingBudget(null);
+      setActionBudget(null);
+    } catch (error) {
+      await reloadBudgets();
+      toast.error(error instanceof Error ? error.message : "Could not delete budget.");
+    } finally {
+      setDeletingBudgetBusy(false);
+    }
+  }, [deletingBudget, reloadBudgets]);
+
+  const handleFormSave = useCallback(
+    async (input: CreateBudgetInput) => {
+      if (formMode === "edit") {
+        await handleUpdateBudget(input);
+        return;
+      }
+      await handleSaveBudget(input);
+    },
+    [formMode, handleSaveBudget, handleUpdateBudget],
+  );
+
   useEffect(() => {
     const id = window.setTimeout(() => setChartsReady(true), 480);
     return () => window.clearTimeout(id);
@@ -490,7 +783,7 @@ export default function BudgetWorkspacePage() {
             </div>
             <button
               type="button"
-              onClick={() => setAddOpen(true)}
+              onClick={openCreateForm}
               aria-label="Add budget"
               className="grid min-h-[48px] min-w-[48px] place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/25 transition active:scale-95"
             >
@@ -561,12 +854,19 @@ export default function BudgetWorkspacePage() {
                     Loading your budgets...
                   </div>
                 ) : budgets.length === 0 ? (
-                  <div className="rounded-[1.55rem] border border-dashed border-white/10 bg-white/[0.04] p-6 text-center">
-                    <p className="text-sm font-black text-white">No budgets yet</p>
-                    <p className="mt-1 text-xs font-semibold text-emerald-100/50">Tap + to create your first budget.</p>
-                  </div>
+                  <BudgetEmptyState onCreate={openCreateForm} />
                 ) : (
-                  budgets.map((budget, index) => <BudgetCard key={budget.id} budget={budget} period={period} index={index} />)
+                  <AnimatePresence mode="popLayout">
+                    {budgets.map((budget, index) => (
+                      <BudgetCard
+                        key={budget.id}
+                        budget={budget}
+                        period={period}
+                        index={index}
+                        onOpenMenu={setActionBudget}
+                      />
+                    ))}
+                  </AnimatePresence>
                 )}
               </div>
             </div>
@@ -652,12 +952,46 @@ export default function BudgetWorkspacePage() {
           </section>
         </div>
 
-        <AddBudgetModal
-          open={addOpen}
-          onClose={() => setAddOpen(false)}
-          onSave={handleSaveBudget}
+        <BudgetFormModal
+          open={formOpen}
+          mode={formMode}
+          initialBudget={editingBudget}
+          onClose={() => {
+            setFormOpen(false);
+            setEditingBudget(null);
+          }}
+          onSave={handleFormSave}
           saving={savingBudget}
         />
+
+        <AnimatePresence>
+          {actionBudget ? (
+            <BudgetActionSheet
+              open
+              budgetName={actionBudget.name}
+              onClose={() => setActionBudget(null)}
+              onEdit={() => openEditForm(actionBudget)}
+              onDelete={() => {
+                setDeletingBudget(actionBudget);
+                setActionBudget(null);
+              }}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {deletingBudget ? (
+            <DeleteBudgetDialog
+              open
+              deleting={deletingBudgetBusy}
+              onClose={() => {
+                if (deletingBudgetBusy) return;
+                setDeletingBudget(null);
+              }}
+              onConfirm={() => void handleDeleteBudget()}
+            />
+          ) : null}
+        </AnimatePresence>
       </main>
     </DashboardAccessGuard>
   );
