@@ -9,7 +9,10 @@ import {
 } from "@/lib/budget/types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createBudgetRecordForUser, listBudgetRecordsForUser } from "@/services/budget-supabase";
+import {
+  deleteBudgetRecordForUser,
+  updateBudgetRecordForUser,
+} from "@/services/budget-supabase";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -68,22 +71,11 @@ function sanitizeCreateInput(raw: unknown): CreateBudgetInput | null {
   };
 }
 
-export async function GET() {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
-  try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
-    if (!data.user) return bad("Please sign in to view your budgets.", 401);
 
-    const budgets = await listBudgetRecordsForUser(sb, data.user.id);
-    return NextResponse.json({ ok: true, budgets });
-  } catch (e) {
-    return bad(e instanceof Error ? e.message : "Server error", 500);
-  }
-}
-
-export async function POST(req: Request) {
-  if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const { id } = await params;
+  if (!id) return bad("Missing budget id");
 
   let raw: unknown;
   try {
@@ -98,11 +90,29 @@ export async function POST(req: Request) {
   try {
     const sb = await createServerSupabaseClient();
     const { data } = await sb.auth.getUser();
-    if (!data.user) return bad("Please sign in to save your budget.", 401);
+    if (!data.user) return bad("Please sign in to update your budget.", 401);
 
-    const budget = await createBudgetRecordForUser(sb, data.user.id, input);
+    const budget = await updateBudgetRecordForUser(sb, data.user.id, id, input);
     return NextResponse.json({ ok: true, budget });
   } catch (e) {
-    return bad(e instanceof Error ? e.message : "Server error", 500);
+    return bad(e instanceof Error ? e.message : "Could not update budget.", 500);
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+
+  const { id } = await params;
+  if (!id) return bad("Missing budget id");
+
+  try {
+    const sb = await createServerSupabaseClient();
+    const { data } = await sb.auth.getUser();
+    if (!data.user) return bad("Please sign in to delete your budget.", 401);
+
+    await deleteBudgetRecordForUser(sb, data.user.id, id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : "Could not delete budget.", 500);
   }
 }
