@@ -12,8 +12,15 @@ export type CashflowSnapshotRow = {
 
 export function hasCashflowData(state: CashflowDashboardState): boolean {
   const income = Object.values(state.income).some((value) => typeof value === "number" && value > 0);
+  const incomeEntries = (state.incomeEntries ?? []).some((entry) => entry.amount > 0);
   const expenses = Object.values(state.expenses).some((value) => typeof value === "number" && value > 0);
-  return income || expenses || Boolean(state.emergencyCashReserve && state.emergencyCashReserve > 0) || Boolean(state.monthlyExpensesOverride && state.monthlyExpensesOverride > 0);
+  return (
+    income ||
+    incomeEntries ||
+    expenses ||
+    Boolean(state.emergencyCashReserve && state.emergencyCashReserve > 0) ||
+    Boolean(state.monthlyExpensesOverride && state.monthlyExpensesOverride > 0)
+  );
 }
 
 export async function loadCashflowFromSupabase(client: Client, userId: string): Promise<CashflowSnapshotRow | null> {

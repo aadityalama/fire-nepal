@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { CashflowDashboard } from "@/components/cashflow/CashflowDashboard";
 
 export const metadata: Metadata = {
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function CashflowDashboardPage() {
-  return <CashflowDashboard />;
+  return (
+    <DashboardAccessGuard>
+      <CashflowDashboard />
+    </DashboardAccessGuard>
+  );
 }

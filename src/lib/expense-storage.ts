@@ -1,6 +1,7 @@
 import type { Expense, RoommateProfile } from "@/lib/expense-utils";
 import { currentMonthKey, expenseMonthKey, type Currency } from "@/lib/expense-utils";
 import type { ExchangeRateSnapshot } from "@/lib/exchange-rate";
+import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import {
   migrateExpenseToMemberIds,
   migrateLegacyMembersToIds,
@@ -154,6 +155,7 @@ export function saveDashboardState(state: DashboardPersistedState) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.dispatchEvent(new Event(EXPENSE_MODULE_SYNC_EVENT));
   } catch {
     console.warn("FIRE Nepal: storage quota reached. Consider removing old receipts.");
   }

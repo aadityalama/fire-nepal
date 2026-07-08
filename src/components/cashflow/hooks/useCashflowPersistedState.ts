@@ -17,7 +17,7 @@ import {
   loadCashflowState,
   sanitizeCashflowState,
 } from "@/components/cashflow/cashflow-storage";
-import type { CashflowDashboardState, ExpenseCategoryKey, IncomeSourceKey } from "@/components/cashflow/types";
+import type { CashflowDashboardState, ExpenseCategoryKey, IncomeEntry, IncomeSourceKey } from "@/components/cashflow/types";
 import { useLocalStorageJsonState } from "@/hooks/useLocalStorageJsonState";
 import { hasCashflowData } from "@/services/cashflow-supabase";
 
@@ -39,6 +39,9 @@ export type UseCashflowPersistedStateResult = {
   metrics: CashflowDerivedMetrics;
   patchIncome: (key: IncomeSourceKey, amount: number | undefined) => void;
   patchExpense: (key: ExpenseCategoryKey, amount: number | undefined) => void;
+  addIncomeEntry: (entry: Omit<IncomeEntry, "id" | "createdAt">) => void;
+  updateIncomeEntry: (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => void;
+  deleteIncomeEntry: (id: string) => void;
 };
 
 /**
@@ -129,5 +132,52 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
     [setState],
   );
 
-  return { state, setState, hydrated, metrics, patchIncome, patchExpense };
+  const addIncomeEntry = useCallback(
+    (entry: Omit<IncomeEntry, "id" | "createdAt">) => {
+      setState((s) => {
+        const nextEntry: IncomeEntry = {
+          ...entry,
+          id: `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+        };
+        return {
+          ...s,
+          incomeEntries: [...(s.incomeEntries ?? []), nextEntry],
+        };
+      });
+    },
+    [setState],
+  );
+
+  const updateIncomeEntry = useCallback(
+    (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => {
+      setState((s) => ({
+        ...s,
+        incomeEntries: (s.incomeEntries ?? []).map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+      }));
+    },
+    [setState],
+  );
+
+  const deleteIncomeEntry = useCallback(
+    (id: string) => {
+      setState((s) => ({
+        ...s,
+        incomeEntries: (s.incomeEntries ?? []).filter((entry) => entry.id !== id),
+      }));
+    },
+    [setState],
+  );
+
+  return {
+    state,
+    setState,
+    hydrated,
+    metrics,
+    patchIncome,
+    patchExpense,
+    addIncomeEntry,
+    updateIncomeEntry,
+    deleteIncomeEntry,
+  };
 }

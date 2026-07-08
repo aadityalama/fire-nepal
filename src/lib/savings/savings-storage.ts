@@ -1,4 +1,5 @@
 import type { SavingsGoal, SavingsTransaction, SavingsWorkspaceState } from "@/lib/savings/savings-types";
+import { SAVINGS_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 
 export const SAVINGS_WORKSPACE_STORAGE_KEY = "fire-nepal-savings-workspace-v1";
 
@@ -44,6 +45,7 @@ export function saveSavingsWorkspaceState(state: SavingsWorkspaceState) {
       goals: sortGoals(state.goals),
     }),
   );
+  window.dispatchEvent(new Event(SAVINGS_MODULE_SYNC_EVENT));
 }
 
 export function createGoalId() {
