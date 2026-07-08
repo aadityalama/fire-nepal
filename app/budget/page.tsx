@@ -1,20 +1,16 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   BarChart3,
   Bell,
   Bot,
-  CalendarDays,
   Flame,
   MoreVertical,
-  PiggyBank,
   Plus,
   Save,
   Sparkles,
   Trash2,
-  WalletCards,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -200,43 +196,6 @@ function BudgetCard({
         </div>
       </div>
     </motion.article>
-  );
-}
-
-function AnalyticsTile({
-  label,
-  value,
-  hint,
-  icon: Icon,
-  light,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  icon: LucideIcon;
-  light: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-[1.35rem] border p-4 backdrop-blur-xl ${
-        light ? "border-emerald-200/70 bg-white/90 shadow-sm" : "border-white/10 bg-white/[0.055]"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/90" : "text-emerald-100/50"}`}>
-          {label}
-        </p>
-        <span
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-            light ? "bg-emerald-100 text-emerald-700" : "bg-emerald-300/12 text-lime-200"
-          }`}
-        >
-          <Icon size={17} />
-        </span>
-      </div>
-      <p className={`mt-3 text-xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>{value}</p>
-      <p className={`mt-1 text-xs font-semibold leading-relaxed ${light ? "text-slate-500" : "text-emerald-100/50"}`}>{hint}</p>
-    </div>
   );
 }
 
@@ -747,9 +706,6 @@ export default function BudgetWorkspacePage() {
     return { totalBudget, totalSpent, remaining, progress };
   }, [budgets, period]);
 
-  const dailyAverage = period === "Yearly" ? totals.totalSpent / 365 : totals.totalSpent / 30;
-  const weeklySpending = dailyAverage * 7;
-
   return (
     <DashboardAccessGuard>
       <main
@@ -763,7 +719,7 @@ export default function BudgetWorkspacePage() {
           <div className="absolute bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto flex w-full max-w-lg flex-col gap-3.5 sm:gap-4 lg:max-w-6xl lg:gap-6">
+        <div className="relative mx-auto flex w-full max-w-lg flex-col gap-3 sm:gap-3.5 lg:max-w-6xl lg:gap-4">
           <header className="flex items-center justify-between gap-3">
             <Link
               href="/finance"
@@ -842,7 +798,22 @@ export default function BudgetWorkspacePage() {
             </div>
           </motion.section>
 
-          <section className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr] lg:gap-5">
+          <section className={`rounded-[1.65rem] border p-4 backdrop-blur-xl ${light ? "border-emerald-200/70 bg-white/90" : "border-white/10 bg-white/[0.055]"}`}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-sm font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Monthly Trend</h2>
+                <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-500" : "text-emerald-100/45"}`}>
+                  Lazy-loaded chart for fast mobile rendering.
+                </p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${light ? "bg-emerald-100 text-emerald-800" : "bg-lime-300/14 text-lime-100"}`}>
+                NPR only
+              </span>
+            </div>
+            <BudgetMonthlyTrendChart ready={chartsReady} />
+          </section>
+
+          <section className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr] lg:gap-4">
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Budget List</h2>
@@ -921,34 +892,6 @@ export default function BudgetWorkspacePage() {
                 </div>
               </section>
             </aside>
-          </section>
-
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Dashboard Analytics</h2>
-              <span className="text-xs font-bold text-emerald-100/45">{period} view</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <AnalyticsTile label="Spent" value={formatNpr(totals.totalSpent)} hint="Current planner usage" icon={WalletCards} light={light} />
-              <AnalyticsTile label="Remaining" value={formatNpr(totals.remaining)} hint="Available for this period" icon={PiggyBank} light={light} />
-              <AnalyticsTile label="Daily Average" value={formatNpr(dailyAverage)} hint="Pace needed to stay aligned" icon={CalendarDays} light={light} />
-              <AnalyticsTile label="Weekly Spending" value={formatNpr(weeklySpending)} hint="Rolling weekly equivalent" icon={Flame} light={light} />
-            </div>
-          </section>
-
-          <section className={`rounded-[1.65rem] border p-4 backdrop-blur-xl ${light ? "border-emerald-200/70 bg-white/90" : "border-white/10 bg-white/[0.055]"}`}>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className={`text-sm font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Monthly Trend</h2>
-                <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-500" : "text-emerald-100/45"}`}>
-                  Lazy-loaded chart for fast mobile rendering.
-                </p>
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-black ${light ? "bg-emerald-100 text-emerald-800" : "bg-lime-300/14 text-lime-100"}`}>
-                NPR only
-              </span>
-            </div>
-            <BudgetMonthlyTrendChart ready={chartsReady} />
           </section>
         </div>
 
