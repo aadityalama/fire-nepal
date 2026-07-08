@@ -269,7 +269,7 @@ export function ExpenseWorkspaceDashboard({
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <Link
-              href="/finance/expense"
+              href="/finance"
               className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl"
             >
               <ArrowLeft size={15} /> Finance
