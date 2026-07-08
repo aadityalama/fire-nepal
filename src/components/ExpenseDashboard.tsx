@@ -51,6 +51,7 @@ import { Bar, Pie } from "react-chartjs-2";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
+import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
 import { GroupProfileCard } from "@/components/GroupProfileCard";
 import { TransactionHistoryPanel } from "@/components/TransactionHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
@@ -106,6 +107,11 @@ import {
   memberNameMap,
   resolveExpensePayerName,
 } from "@/lib/expense-members";
+import {
+  loadExpenseWorkspaceUiState,
+  saveExpenseWorkspaceUiState,
+  type ExpenseWorkspaceMeta,
+} from "@/lib/expense-workspace-ui";
 import {
   currentMonthKey,
   expenseAttributedShares,
@@ -1134,13 +1140,20 @@ export function ExpenseDashboard({
   }
 
   function openAddExpenseModal() {
+    if (personalMode && members.length === 0) {
+      const memberId = generateMemberId();
+      setMembers([memberId]);
+      setProfiles({ [memberId]: createProfile("Me") });
+      setForm(emptyExpenseForm(memberId, [memberId]));
+    } else {
+      setForm(emptyExpenseForm(members[0], members));
+    }
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
-    const entryCur = expenseEntryCurrency(currency);
+    const entryCur = personalMode ? "NPR" : expenseEntryCurrency(currency);
     prevFormEntryCurrency.current = entryCur;
     setAmountInputCurrency(entryCur);
-    setForm(emptyExpenseForm(members[0], members));
     setIsModalOpen(true);
   }
 
@@ -1578,6 +1591,265 @@ export function ExpenseDashboard({
   }, [buildShareSummaryText]);
 
   const selectedProfile = selectedMember ? profiles[selectedMember] ?? createProfile(selectedMember) : null;
+
+  const saveWorkspaceMeta = useCallback((expenseId: number, meta: ExpenseWorkspaceMeta) => {
+    const current = loadExpenseWorkspaceUiState();
+    saveExpenseWorkspaceUiState({
+      ...current,
+      meta: { ...current.meta, [expenseId]: { ...current.meta[expenseId], ...meta } },
+    });
+  }, []);
+
+  const markExpensePaid = useCallback((expenseId: number, paidAt: string) => {
+    const current = loadExpenseWorkspaceUiState();
+    const existing = current.meta[expenseId] ?? {};
+    saveExpenseWorkspaceUiState({
+      ...current,
+      meta: {
+        ...current.meta,
+        [expenseId]: {
+          ...existing,
+          paidAt,
+          paymentHistory: [...(existing.paymentHistory ?? []), { date: paidAt, amount: expenses.find((e) => e.id === expenseId)?.amount ?? 0 }],
+        },
+      },
+    });
+    toast.success("Expense marked as paid");
+  }, [expenses]);
+
+  const duplicateExpense = useCallback((expense: Expense) => {
+    const copy: Expense = {
+      ...expense,
+      id: Date.now(),
+      title: `${expense.title} (Copy)`,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    setExpenses((current) => [copy, ...current]);
+    const current = loadExpenseWorkspaceUiState();
+    const sourceMeta = current.meta[expense.id];
+    if (sourceMeta) {
+      saveExpenseWorkspaceUiState({
+        ...current,
+        meta: { ...current.meta, [copy.id]: { ...sourceMeta, paidAt: undefined } },
+      });
+    }
+    toast.success("Expense duplicated");
+  }, []);
+
+  const submitWorkspaceExpense = useCallback(
+    (payload: {
+      title: string;
+      amountNpr: number;
+      category: string;
+      expenseDate: string;
+      dueDate: string;
+      account: string;
+      paymentMethod: string;
+      repeat: ExpenseWorkspaceMeta["repeat"];
+      notes: string;
+      reminderEnabled: boolean;
+      reminderTiming: ExpenseWorkspaceMeta["reminderTiming"];
+      reminderEmail: boolean;
+    }) => {
+      let payerId = members[0];
+      if (!payerId) {
+        payerId = generateMemberId();
+        setMembers([payerId]);
+        setProfiles({ [payerId]: createProfile("Me") });
+      }
+      const nextExpense: Expense = {
+        id: Date.now(),
+        title: payload.title,
+        amount: payload.amountNpr,
+        payerId,
+        category: payload.category,
+        splitEqually: true,
+        date: payload.expenseDate,
+        notes: payload.notes || undefined,
+        amountCurrency: "NPR",
+      };
+      setExpenses((current) => [nextExpense, ...current]);
+      saveWorkspaceMeta(nextExpense.id, {
+        dueDate: payload.dueDate,
+        account: payload.account,
+        paymentMethod: payload.paymentMethod,
+        repeat: payload.repeat,
+        reminderEnabled: payload.reminderEnabled,
+        reminderTiming: payload.reminderTiming,
+        reminderEmail: payload.reminderEmail,
+        reminderHistory: payload.reminderEnabled
+          ? [{ date: new Date().toISOString().slice(0, 10), type: `Scheduled: ${payload.reminderTiming}` }]
+          : [],
+      });
+      appendActivity({
+        type: "expense_added",
+        monthKey: expenseMonthKey(nextExpense.date),
+        memberId: payerId,
+        title: nextExpense.title,
+        amount: nextExpense.amount,
+        category: normalizeCategory(nextExpense.category),
+        message: `${memberDisplayName(payerId, profiles)} added ${nextExpense.title}`,
+      });
+      void recordTransaction({
+        localExpenseId: nextExpense.id,
+        transactionType: "expense",
+        description: nextExpense.title,
+        category: normalizeCategory(nextExpense.category),
+        amount: nextExpense.amount,
+        currency: "NPR",
+        memberId: payerId,
+        memberName: memberDisplayName(payerId, profiles),
+        transactionDate: nextExpense.date,
+        metadata: { monthKey: expenseMonthKey(nextExpense.date), source: "workspace_add" },
+      });
+      toast.success("Expense saved");
+    },
+    [members, profiles, saveWorkspaceMeta, recordTransaction],
+  );
+
+  if (personalMode && hydrated) {
+    return (
+      <>
+        <ExpenseWorkspaceDashboard
+          expenses={expenses}
+          members={members}
+          profiles={profiles}
+          selectedMonthKey={selectedMonthKey}
+          hydrated={hydrated}
+          onAddExpense={openAddExpenseModal}
+          onEditExpense={openEditExpenseModal}
+          onDeleteExpense={(expense) => setExpenseToDelete(expense)}
+          onDuplicateExpense={duplicateExpense}
+          onSaveWorkspaceMeta={saveWorkspaceMeta}
+          onMarkPaid={markExpensePaid}
+          onOpenLegacyAnalytics={() => setActiveTab("Analytics")}
+          onOpenLegacyHistory={() => setActiveTab("History")}
+          onSubmitWorkspaceExpense={submitWorkspaceExpense}
+        />
+        {isModalOpen ? (
+          <ExpenseBottomSheet
+            open={isModalOpen}
+            onClose={closeExpenseModal}
+            title={editingExpenseId ? "Edit Expense" : "Add Expense"}
+            subtitle="NPR-only personal expense entry"
+          >
+            <div className="px-4 pb-4">
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Expense Name</span>
+                  <input
+                    value={form.title}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
+                    placeholder="Internet Bill"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Amount (NPR)</span>
+                  <div className="flex min-h-[52px] items-center rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3">
+                    <span className="mr-2 font-black text-emerald-700">NPR</span>
+                    <input
+                      value={form.amount}
+                      onChange={(event) => setForm((current) => ({ ...current, amount: sanitizeDecimalTyping(event.target.value) }))}
+                      inputMode="decimal"
+                      className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none"
+                    />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Category</span>
+                  <select
+                    value={form.category}
+                    onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                    className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
+                  >
+                    {categories.map((category) => (
+                      <option key={category}>{category}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Expense Date</span>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                    className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
+                  />
+                </label>
+                <ExpenseReceiptUpload compact value={receiptPreview} onChange={setReceiptPreview} onOcrText={setReceiptOcrText} />
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button type="button" onClick={closeExpenseModal} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
+                  Cancel
+                </button>
+                <button type="button" onClick={saveExpense} className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white">
+                  {editingExpenseId ? "Update" : "Save"}
+                </button>
+              </div>
+            </div>
+          </ExpenseBottomSheet>
+        ) : null}
+        <ExpenseBottomSheet
+          open={expenseToDelete !== null}
+          onClose={() => setExpenseToDelete(null)}
+          title="Delete expense?"
+        >
+          <div className="px-4 pb-2">
+            <p className="text-sm text-slate-500">
+              Remove <span className="font-bold text-emerald-900">{expenseToDelete?.title}</span> and recalculate balances.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button type="button" onClick={() => setExpenseToDelete(null)} className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmDeleteExpense} className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white">
+                Delete
+              </button>
+            </div>
+          </div>
+        </ExpenseBottomSheet>
+        {activeTab === "Analytics" ? (
+          <div className="fixed inset-0 z-40 overflow-y-auto bg-[#f6f8f7] px-4 py-6">
+            <button type="button" onClick={() => setActiveTab("Dashboard")} className="mb-4 text-sm font-black text-emerald-700">
+              ← Back to workspace
+            </button>
+            <ExpenseAiInsightsPanel
+              expenses={expenses}
+              members={members}
+              profiles={profiles}
+              selectedMonthKey={selectedMonthKey}
+              currency="NPR"
+              krwPerNpr={krwPerNpr}
+              exchangeRate={exchangeRate}
+            />
+          </div>
+        ) : null}
+        {activeTab === "History" ? (
+          <div className="fixed inset-0 z-40 overflow-y-auto bg-[#f6f8f7] px-4 py-6">
+            <button type="button" onClick={() => setActiveTab("Dashboard")} className="mb-4 text-sm font-black text-emerald-700">
+              ← Back to workspace
+            </button>
+            <TransactionHistoryPanel
+              userId={user?.id}
+              actorName={actorName}
+              groupProfile={groupProfile}
+              currency="NPR"
+              krwPerNpr={krwPerNpr}
+              members={members}
+              profiles={profiles}
+              expenses={expenses}
+              activities={activities}
+              onEditExpense={openEditExpenseModal}
+              onDeleteExpense={(expense) => {
+                setExpenses((current) => current.filter((e) => e.id !== expense.id));
+              }}
+            />
+          </div>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <main
