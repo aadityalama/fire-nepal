@@ -6,25 +6,14 @@ import {
   BarChart3,
   Bell,
   Bot,
-  Bus,
   CalendarDays,
-  Check,
   Flame,
-  Gamepad2,
-  GraduationCap,
-  HeartPulse,
-  Home,
-  Landmark,
   PiggyBank,
   Plus,
   Save,
-  ShieldAlert,
-  ShoppingBag,
   Sparkles,
-  Utensils,
   WalletCards,
   X,
-  Zap,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -33,6 +22,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import { createBudgetRecord, fetchBudgetRecords } from "@/lib/budget/budget-api";
 import {
   BUDGET_NOTIFICATION_OPTIONS,
@@ -46,31 +36,12 @@ import {
 } from "@/lib/budget/types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryEmoji, type FinanceCategoryId } from "@/lib/finance/categories";
 
 const BudgetMonthlyTrendChart = dynamic(
   () => import("@/components/budget/BudgetMonthlyTrendChart").then((mod) => mod.BudgetMonthlyTrendChart),
   { ssr: false, loading: () => null },
 );
-
-type CategoryOption = {
-  label: string;
-  icon: LucideIcon;
-  emoji: string;
-};
-
-const CATEGORY_OPTIONS: CategoryOption[] = [
-  { label: "Food", icon: Utensils, emoji: "🍔" },
-  { label: "Rent", icon: Home, emoji: "🏠" },
-  { label: "Transport", icon: Bus, emoji: "🚌" },
-  { label: "Health", icon: HeartPulse, emoji: "🩺" },
-  { label: "Shopping", icon: ShoppingBag, emoji: "🛍️" },
-  { label: "Entertainment", icon: Gamepad2, emoji: "🎮" },
-  { label: "Education", icon: GraduationCap, emoji: "🎓" },
-  { label: "Utilities", icon: Zap, emoji: "⚡" },
-  { label: "Investment", icon: Landmark, emoji: "📈" },
-  { label: "Emergency", icon: ShieldAlert, emoji: "🛡️" },
-  { label: "Other", icon: WalletCards, emoji: "💼" },
-];
 
 const PLACEHOLDER_AI_RECOMMENDATION: BudgetAiRecommendation = {
   title: "FIRE AI Recommendation",
@@ -260,12 +231,11 @@ function AddBudgetModal({
   const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
   const [amountInput, setAmountInput] = useState("80000");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("Food");
+  const [category, setCategory] = useState<FinanceCategoryId>(DEFAULT_FINANCE_CATEGORY_ID);
   const [enabledAlerts, setEnabledAlerts] = useState<BudgetNotificationSettings>(() => defaultBudgetNotificationSettings());
 
   if (!open) return null;
 
-  const selectedCategory = CATEGORY_OPTIONS.find((item) => item.label === category) ?? CATEGORY_OPTIONS[0];
   const parsedAmount = Number(amountInput.replace(/[^\d]/g, "")) || 0;
 
   async function handleSave() {
@@ -273,7 +243,7 @@ function AddBudgetModal({
     await onSave({
       name: name.trim() || category,
       category,
-      icon: selectedCategory.emoji,
+      icon: getFinanceCategoryEmoji(category),
       gradient: "from-emerald-300 to-lime-300",
       period,
       amountNpr: parsedAmount,
@@ -283,7 +253,7 @@ function AddBudgetModal({
     setName("");
     setAmountInput("80000");
     setPeriod("Monthly");
-    setCategory("Food");
+    setCategory(DEFAULT_FINANCE_CATEGORY_ID);
     setEnabledAlerts(defaultBudgetNotificationSettings());
     onClose();
   }
@@ -342,28 +312,7 @@ function AddBudgetModal({
               />
             </section>
 
-            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Categories</p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {CATEGORY_OPTIONS.map((item) => {
-                  const active = category === item.label;
-                  return (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={() => setCategory(item.label)}
-                      className={`flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 text-left transition active:scale-[0.98] ${
-                        active ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                      }`}
-                    >
-                      <span className="text-xl">{item.emoji}</span>
-                      <span className="min-w-0 truncate text-sm font-black">{item.label}</span>
-                      {active ? <Check size={15} className="ml-auto shrink-0 text-lime-200" /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+            <FinanceCategoryPicker value={category} onChange={setCategory} />
 
             <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
               <p className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Period</p>

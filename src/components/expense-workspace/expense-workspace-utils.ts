@@ -1,3 +1,4 @@
+import { getFinanceCategoryEmoji, normalizeFinanceCategory } from "@/lib/finance/categories";
 import type { ExpenseWorkspaceMeta, ExpenseWorkspaceNotification } from "@/lib/expense-workspace-ui";
 import type { Expense } from "@/lib/expense-utils";
 
@@ -21,15 +22,6 @@ export type ExpenseStatus = {
   remainingLabel: string;
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  "Food/Mart": "🍔",
-  Rent: "🏠",
-  Electricity: "⚡",
-  Internet: "📶",
-  Remittance: "💸",
-  Other: "💼",
-};
-
 export function formatNpr(amount: number) {
   return `NPR ${Math.round(amount).toLocaleString("en-IN")}`;
 }
@@ -41,7 +33,7 @@ export function formatDisplayDate(iso: string) {
 }
 
 export function categoryIcon(category: string) {
-  return CATEGORY_ICONS[category] ?? "💳";
+  return getFinanceCategoryEmoji(category);
 }
 
 export function getDueDate(expense: Expense, meta?: ExpenseWorkspaceMeta) {
@@ -266,7 +258,8 @@ export function monthSpending(expenses: Expense[], monthKey: string) {
 export function categoryBreakdown(expenses: Expense[]) {
   const map = new Map<string, number>();
   for (const expense of expenses) {
-    map.set(expense.category, (map.get(expense.category) ?? 0) + expense.amount);
+    const category = normalizeFinanceCategory(expense.category);
+    map.set(category, (map.get(category) ?? 0) + expense.amount);
   }
   return [...map.entries()]
     .map(([category, total]) => ({ category, total }))

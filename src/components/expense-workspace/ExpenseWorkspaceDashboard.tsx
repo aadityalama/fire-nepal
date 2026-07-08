@@ -23,6 +23,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
+import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import {
   buildNotifications,
   buildUpcomingBuckets,
@@ -45,6 +46,7 @@ import {
 } from "@/components/expense-workspace/expense-workspace-utils";
 import { generateAiInsights } from "@/lib/expense-ai-insights";
 import { monthlyComparisonData } from "@/lib/expense-analytics";
+import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel, normalizeFinanceCategory } from "@/lib/finance/categories";
 import {
   loadExpenseWorkspaceUiState,
   saveExpenseWorkspaceUiState,
@@ -73,7 +75,6 @@ const FILTERS: ExpenseFilter[] = [
   "Overdue",
 ];
 
-const CATEGORIES = ["Food/Mart", "Rent", "Electricity", "Internet", "Remittance", "Other"];
 const REPEAT_OPTIONS: ExpenseRepeat[] = ["Never", "Weekly", "Monthly", "Yearly"];
 const REMINDER_OPTIONS: ExpenseReminderTiming[] = ["On Due Date", "1 Day Before", "3 Days Before", "7 Days Before", "Custom"];
 const ACCOUNTS = ["Personal", "Savings", "Cash", "Bank"];
@@ -98,7 +99,7 @@ function emptyForm(today: string): WorkspaceForm {
   return {
     title: "",
     amount: "",
-    category: "Food/Mart",
+    category: DEFAULT_FINANCE_CATEGORY_ID,
     account: "Personal",
     paymentMethod: "Bank Transfer",
     expenseDate: today,
@@ -407,7 +408,7 @@ export function ExpenseWorkspaceDashboard({
                           <div className="min-w-0">
                             <h3 className="truncate text-base font-black text-white">{expense.title}</h3>
                             <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/55">
-                              {expense.notes?.trim() || expense.category}
+                              {expense.notes?.trim() || getFinanceCategoryLabel(expense.category)}
                             </p>
                             <p className="mt-1 text-[11px] font-bold text-emerald-100/45">
                               {meta?.account ?? "Personal"} · {meta?.paymentMethod ?? "Bank Transfer"}
@@ -627,7 +628,7 @@ export function ExpenseWorkspaceDashboard({
               onSubmitWorkspaceExpense({
                 title: form.title.trim(),
                 amountNpr,
-                category: form.category,
+                category: normalizeFinanceCategory(form.category),
                 expenseDate: form.expenseDate,
                 dueDate: form.dueDate,
                 account: form.account,
@@ -719,7 +720,7 @@ function ExpenseDetailSheet({
               <div>
                 <p className="text-2xl">{categoryIcon(expense.category)}</p>
                 <h3 className="mt-2 text-xl font-black text-white">{expense.title}</h3>
-                <p className="mt-1 text-sm font-semibold text-emerald-100/55">{expense.category}</p>
+                <p className="mt-1 text-sm font-semibold text-emerald-100/55">{getFinanceCategoryLabel(expense.category)}</p>
               </div>
               <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${STATUS_STYLES[status.tone]}`}>
                 {status.label}
@@ -868,22 +869,11 @@ function ExpenseAddSheet({
                 />
               </div>
             </Field>
-            <Field label="Category">
-              <div className="grid grid-cols-2 gap-2">
-                {CATEGORIES.map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, category }))}
-                    className={`min-h-[48px] rounded-2xl border px-3 text-left text-sm font-black ${
-                      form.category === category ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                    }`}
-                  >
-                    {categoryIcon(category)} {category}
-                  </button>
-                ))}
-              </div>
-            </Field>
+            <FinanceCategoryPicker
+              value={form.category}
+              onChange={(category) => setForm((current) => ({ ...current, category }))}
+              heading="Category"
+            />
             <Field label="Account">
               <div className="grid grid-cols-2 gap-2">
                 {ACCOUNTS.map((account) => (

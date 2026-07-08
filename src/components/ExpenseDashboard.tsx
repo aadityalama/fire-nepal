@@ -52,6 +52,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
+import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import { GroupProfileCard } from "@/components/GroupProfileCard";
 import { TransactionHistoryPanel } from "@/components/TransactionHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
@@ -67,7 +68,8 @@ import {
   nprToKrw,
   parseExpenseAmountInput,
 } from "@/lib/exchange-rate";
-import { monthlyComparisonData, normalizeCategory } from "@/lib/expense-analytics";
+import { monthlyComparisonData, normalizeCategory, EXPENSE_CATEGORIES } from "@/lib/expense-analytics";
+import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel } from "@/lib/finance/categories";
 import {
   FALLBACK_KRW_PER_NPR,
   fallbackExchangeRate,
@@ -152,7 +154,6 @@ type RoommateProfile = {
   notes: string;
 };
 
-const categories = ["Food/Mart", "Rent", "Electricity", "Internet", "Remittance", "Other"];
 const bottomTabs: Array<{ id: BottomTab; label: string; icon: LucideIcon }> = [
   { id: "Dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "Members", label: "Members", icon: UsersRound },
@@ -286,7 +287,7 @@ function emptyExpenseForm(payerId = "", memberList: string[] = []): ExpenseForm 
     title: "",
     amount: "",
     payerId,
-    category: categories[0],
+    category: DEFAULT_FINANCE_CATEGORY_ID,
     splitEqually: true,
     date: new Date().toISOString().slice(0, 10),
     splitAmong: [...memberList],
@@ -395,7 +396,7 @@ function ExpenseCompactCard({
       >
         <p className="truncate text-[13px] font-black leading-tight text-emerald-950">{expense.title}</p>
         <p className="truncate text-[10px] font-semibold leading-snug text-slate-500">
-          {expense.category} · {payer} · {expense.date}
+          {getFinanceCategoryLabel(expense.category)} · {payer} · {expense.date}
         </p>
         <div className="flex items-end justify-between gap-2">
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-700">
@@ -965,7 +966,7 @@ export function ExpenseDashboard({
         title: "",
         amount,
         payerId: form.payerId,
-        category: form.category,
+        category: normalizeCategory(form.category),
         splitEqually: form.splitEqually,
         date: form.date,
         splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
@@ -1023,7 +1024,7 @@ export function ExpenseDashboard({
     { name: "N/A", total: 0 },
   );
 
-  const categoryTotals = categories.map((category) =>
+  const categoryTotals = EXPENSE_CATEGORIES.map((category) =>
     monthExpenses
       .filter((expense) => normalizeCategory(expense.category) === category)
       .reduce((sum, expense) => sum + expense.amount, 0),
@@ -1043,11 +1044,23 @@ export function ExpenseDashboard({
   };
 
   const categoryData = {
-    labels: categories,
+    labels: [...EXPENSE_CATEGORIES],
     datasets: [
       {
         data: categoryTotals.map((amount) => amount * getCurrencyMeta(krwPerNpr)[currency].rate),
-        backgroundColor: ["#007a3d", "#064e3b", "#d6a83e", "#22c55e", "#0f766e", "#94a3b8"],
+        backgroundColor: [
+          "#007a3d",
+          "#064e3b",
+          "#d6a83e",
+          "#22c55e",
+          "#0f766e",
+          "#94a3b8",
+          "#14532d",
+          "#059669",
+          "#047857",
+          "#b45309",
+          "#334155",
+        ],
         borderColor: "#ffffff",
         borderWidth: 3,
       },
@@ -1177,7 +1190,7 @@ export function ExpenseDashboard({
       title: expense.title,
       amount: formatExpenseAmountForInput(expense.amount, entryCur, krwPerNpr),
       payerId: expense.payerId,
-      category: expense.category,
+      category: normalizeCategory(expense.category),
       splitEqually: expense.splitEqually ?? true,
       date: expense.date,
       splitAmong,
@@ -1274,7 +1287,7 @@ export function ExpenseDashboard({
       title: form.title.trim(),
       amount,
       payerId: form.payerId,
-      category: form.category,
+      category: normalizeCategory(form.category),
       splitEqually: form.splitEqually,
       date: form.date,
       receiptImage: receiptPreview,
@@ -1756,18 +1769,10 @@ export function ExpenseDashboard({
                     />
                   </div>
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Category</span>
-                  <select
-                    value={form.category}
-                    onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                    className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
-                  >
-                    {categories.map((category) => (
-                      <option key={category}>{category}</option>
-                    ))}
-                  </select>
-                </label>
+                <FinanceCategoryPicker
+                  value={form.category}
+                  onChange={(category) => setForm((current) => ({ ...current, category }))}
+                />
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Expense Date</span>
                   <input
@@ -2136,7 +2141,7 @@ export function ExpenseDashboard({
             <div className="rounded-xl border border-slate-200/80 bg-white p-3">
               <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">By category</h3>
               <div className="divide-y divide-slate-100">
-                {categories.map((category, index) => (
+                {EXPENSE_CATEGORIES.map((category, index) => (
                   <div key={category} className="flex items-center justify-between py-2.5">
                     <span className="text-sm font-semibold text-emerald-950">{category}</span>
                     <span className="text-sm font-black tabular-nums text-emerald-800">{fmt(categoryTotals[index] ?? 0)}</span>
@@ -2353,20 +2358,12 @@ export function ExpenseDashboard({
                   ))}
                 </select>
               </label>
-              <label>
-                <span className="mb-0.5 block text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
-                  Category
-                </span>
-                <select
+              <div className="sm:col-span-2">
+                <FinanceCategoryPicker
                   value={form.category}
-                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                  className="w-full rounded-xl border border-emerald-100 bg-white px-2.5 py-2 text-sm font-bold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-                >
-                  {categories.map((category) => (
-                    <option key={category}>{category}</option>
-                  ))}
-                </select>
-              </label>
+                  onChange={(category) => setForm((current) => ({ ...current, category }))}
+                />
+              </div>
               <label className="sm:col-span-2 sm:max-w-[12rem]">
                 <span className="mb-0.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
                   <CalendarDays size={12} /> Date
@@ -3424,7 +3421,7 @@ function ProfileModal({
                       <div className="min-w-0">
                         <p className="font-black text-emerald-950">{expense.title}</p>
                         <p className="text-xs font-bold text-slate-500">
-                          {expense.category} · {expense.date}
+                          {getFinanceCategoryLabel(expense.category)} · {expense.date}
                         </p>
                       </div>
                       <ExpenseInlineAmountEditor

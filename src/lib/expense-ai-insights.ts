@@ -1,9 +1,9 @@
 import {
-  EXPENSE_CATEGORIES,
   categoryTotalsForMonth,
   highestSpenderForMonth,
   normalizeCategory,
 } from "@/lib/expense-analytics";
+import { isInvestmentCategory } from "@/lib/finance/categories";
 import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
 import { expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
 import { formatMonthLabel, listMonthKeys } from "@/lib/expense-storage";
@@ -22,6 +22,12 @@ export type AiInsight = {
 function categoryTotal(expenses: Expense[], category: string) {
   return expenses
     .filter((expense) => normalizeCategory(expense.category) === category)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+}
+
+function livingExpenseTotal(expenses: Expense[]) {
+  return expenses
+    .filter((expense) => !isInvestmentCategory(expense.category))
     .reduce((sum, expense) => sum + expense.amount, 0);
 }
 
@@ -45,8 +51,8 @@ export function generateAiInsights(
     ? expenses.filter((expense) => expenseMonthKey(expense.date) === previousMonthKey)
     : [];
 
-  const currentTotal = currentMonth.reduce((sum, expense) => sum + expense.amount, 0);
-  const previousTotal = previousMonth.reduce((sum, expense) => sum + expense.amount, 0);
+  const currentTotal = livingExpenseTotal(currentMonth);
+  const previousTotal = livingExpenseTotal(previousMonth);
   const totalChange = percentChange(currentTotal, previousTotal);
 
   if (previousMonth.length) {
@@ -55,58 +61,74 @@ export function generateAiInsights(
       title: "Monthly spending trend",
       message:
         totalChange >= 0
-          ? `Group spending increased ${totalChange}% vs ${formatMonthLabel(previousMonthKey)}. Review high categories before salary week.`
-          : `Great control — spending decreased ${Math.abs(totalChange)}% compared to last month.`,
+          ? `Living expenses increased ${totalChange}% vs ${formatMonthLabel(previousMonthKey)}. Review high categories before salary week.`
+          : `Great control — living expenses decreased ${Math.abs(totalChange)}% compared to last month.`,
       tone: totalChange > 12 ? "warning" : totalChange < 0 ? "positive" : "neutral",
       metric: formatMoney(currentTotal, currency),
     });
   }
 
-  const foodNow = categoryTotal(currentMonth, "Food/Mart");
-  const foodPrev = categoryTotal(previousMonth, "Food/Mart");
+  const foodNow = categoryTotal(currentMonth, "Food");
+  const foodPrev = categoryTotal(previousMonth, "Food");
   const foodChange = percentChange(foodNow, foodPrev);
   if (foodNow > 0) {
     insights.push({
       id: "food-trend",
-      title: "Food / Mart intelligence",
+      title: "Food intelligence",
       message:
         foodPrev > 0 && foodChange > 5
-          ? `Food expenses increased ${foodChange}% this month — mart runs are trending higher.`
+          ? `Food expenses increased ${foodChange}% this month — grocery runs are trending higher.`
           : foodPrev > 0 && foodChange < -5
             ? `Food spending dropped ${Math.abs(foodChange)}% — strong discipline on groceries.`
-            : "Mart spending trend is stable this month.",
+            : "Food spending trend is stable this month.",
       tone: foodChange > 15 ? "warning" : "info",
       metric: formatMoney(foodNow, currency),
     });
   }
 
-  const electricityNow = categoryTotal(currentMonth, "Electricity");
-  const electricityPrev = categoryTotal(previousMonth, "Electricity");
-  const avgElectricity =
+  const utilitiesNow = categoryTotal(currentMonth, "Utilities");
+  const utilitiesPrev = categoryTotal(previousMonth, "Utilities");
+  const avgUtilities =
     monthKeys.length > 1
       ? expenses
-          .filter((expense) => normalizeCategory(expense.category) === "Electricity")
+          .filter((expense) => normalizeCategory(expense.category) === "Utilities")
           .reduce((sum, expense) => sum + expense.amount, 0) / Math.max(monthKeys.length, 1)
-      : electricityNow;
+      : utilitiesNow;
 
-  if (electricityNow > avgElectricity * 1.08 && electricityNow > 0) {
+  if (utilitiesNow > avgUtilities * 1.08 && utilitiesNow > 0) {
     insights.push({
-      id: "electricity-warning",
-      title: "Utility alert",
-      message: "Electricity spending is higher than your recent average — check heater usage or billing cycle.",
+      id: "utilities-warning",
+      title: "Utilities alert",
+      message: "Utilities spending is higher than your recent average — check electricity, internet, or billing cycle.",
       tone: "warning",
-      metric: formatMoney(electricityNow, currency),
+      metric: formatMoney(utilitiesNow, currency),
     });
-  } else if (electricityPrev > 0) {
-    const elecChange = percentChange(electricityNow, electricityPrev);
+  } else if (utilitiesPrev > 0) {
+    const utilitiesChange = percentChange(utilitiesNow, utilitiesPrev);
     insights.push({
-      id: "electricity-compare",
-      title: "Electricity comparison",
+      id: "utilities-compare",
+      title: "Utilities comparison",
       message:
-        elecChange > 10
-          ? `Electricity is up ${elecChange}% vs last month.`
-          : `Electricity costs are ${elecChange <= 0 ? "under control" : "slightly elevated"} this month.`,
-      tone: elecChange > 10 ? "warning" : "neutral",
+        utilitiesChange > 10
+          ? `Utilities are up ${utilitiesChange}% vs last month.`
+          : `Utility costs are ${utilitiesChange <= 0 ? "under control" : "slightly elevated"} this month.`,
+      tone: utilitiesChange > 10 ? "warning" : "neutral",
+    });
+  }
+
+  const investmentNow = categoryTotal(currentMonth, "Investment");
+  const investmentPrev = categoryTotal(previousMonth, "Investment");
+  if (investmentNow > 0) {
+    const investmentChange = percentChange(investmentNow, investmentPrev);
+    insights.push({
+      id: "investment-allocation",
+      title: "Investment allocation",
+      message:
+        investmentPrev > 0 && investmentChange !== 0
+          ? `Investment contributions are ${investmentChange > 0 ? "up" : "down"} ${Math.abs(investmentChange)}% vs last month — tracked separately from living expenses.`
+          : "Investment contributions are tracked separately from everyday spending.",
+      tone: "positive",
+      metric: formatMoney(investmentNow, currency),
     });
   }
 
@@ -123,13 +145,13 @@ export function generateAiInsights(
     });
   }
 
-  const categoryTotals = categoryTotalsForMonth(currentMonth);
+  const categoryTotals = categoryTotalsForMonth(currentMonth).filter((entry) => !isInvestmentCategory(entry.category));
   const highestCategory = [...categoryTotals].sort((a, b) => b.total - a.total)[0];
   if (highestCategory?.total > 0) {
     insights.push({
       id: "top-category",
       title: "Highest expense category",
-      message: `${highestCategory.category} leads spending at ${formatMoney(highestCategory.total, currency)}. Consider a shared budget cap.`,
+      message: `${highestCategory.category} leads living expenses at ${formatMoney(highestCategory.total, currency)}. Consider a shared budget cap.`,
       tone: "info",
     });
   }
@@ -152,9 +174,9 @@ export function generateAiInsights(
   }
 
   const suggestions: string[] = [];
-  if (foodChange > 12) suggestions.push("Batch mart shopping weekly to reduce impulse buys.");
-  if (categoryTotal(currentMonth, "Remittance") > currentTotal * 0.2) {
-    suggestions.push("Remittance fees are heavy — compare transfer apps for lower FX cost.");
+  if (foodChange > 12) suggestions.push("Batch grocery shopping weekly to reduce impulse buys.");
+  if (categoryTotal(currentMonth, "Emergency") > currentTotal * 0.15) {
+    suggestions.push("Emergency spending is elevated — review one-off costs and rebuild your buffer.");
   }
   if (totalChange > 10) suggestions.push("Enable receipt uploads for every large expense to audit spikes.");
 

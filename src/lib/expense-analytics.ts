@@ -2,32 +2,18 @@ import type { Currency, Expense } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { currencyMeta, expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
 import { formatMonthLabel, listMonthKeys } from "@/lib/expense-storage";
+import {
+  FINANCE_CATEGORY_IDS,
+  normalizeFinanceCategory,
+  type FinanceCategoryId,
+} from "@/lib/finance/categories";
 
-export const EXPENSE_CATEGORIES = [
-  "Food/Mart",
-  "Rent",
-  "Electricity",
-  "Internet",
-  "Remittance",
-  "Other",
-] as const;
+export const EXPENSE_CATEGORIES = FINANCE_CATEGORY_IDS;
 
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
-
-const categoryAliases: Record<string, ExpenseCategory> = {
-  Mart: "Food/Mart",
-  Food: "Food/Mart",
-  Utilities: "Other",
-  "Food/Mart": "Food/Mart",
-  Rent: "Rent",
-  Electricity: "Electricity",
-  Internet: "Internet",
-  Remittance: "Remittance",
-  Other: "Other",
-};
+export type ExpenseCategory = FinanceCategoryId;
 
 export function normalizeCategory(category: string): ExpenseCategory {
-  return categoryAliases[category] ?? "Other";
+  return normalizeFinanceCategory(category);
 }
 
 export function categoryTotalsForMonth(expenses: Expense[]) {

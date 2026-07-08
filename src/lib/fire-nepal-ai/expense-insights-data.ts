@@ -4,6 +4,7 @@ import {
   categoryTotalsForMonth,
   highestSpenderForMonth,
   monthlyComparisonData,
+  normalizeCategory,
 } from "@/lib/expense-analytics";
 import type { DashboardPersistedState } from "@/lib/expense-storage";
 import { currentMonthKey, expenseMonthKey, formatMoney } from "@/lib/expense-utils";
@@ -57,12 +58,12 @@ export function buildExpenseInsightMetrics(
     }
 
     const foodNow = monthExpenses
-      .filter((e) => e.category === "Food/Mart")
+      .filter((e) => normalizeCategory(e.category) === "Food")
       .reduce((s, e) => s + e.amount, 0);
     const prevMonthKey = comparison.monthKeys[currentIdx + 1];
     const foodPrev = prevMonthKey
       ? expenses
-          .filter((e) => expenseMonthKey(e.date) === prevMonthKey && e.category === "Food/Mart")
+          .filter((e) => expenseMonthKey(e.date) === prevMonthKey && normalizeCategory(e.category) === "Food")
           .reduce((s, e) => s + e.amount, 0)
       : 0;
     if (foodNow > 0 && foodPrev > 0) {
@@ -70,19 +71,31 @@ export function buildExpenseInsightMetrics(
       if (foodChange !== 0) {
         metrics.push({
           id: "food-change",
-          label: "Food / Mart",
+          label: "Food",
           value: foodChange > 0 ? `+${foodChange}%` : `${foodChange}%`,
           detail: foodChange > 0 ? "Increased" : "Decreased",
         });
       }
     }
 
+    const investmentNow = monthExpenses
+      .filter((e) => normalizeCategory(e.category) === "Investment")
+      .reduce((s, e) => s + e.amount, 0);
+    if (investmentNow > 0) {
+      metrics.push({
+        id: "investment-total",
+        label: "Investment",
+        value: formatMoney(investmentNow, currency),
+        detail: "Separate from living expenses",
+      });
+    }
+
     const transportNow = monthExpenses
-      .filter((e) => normalizeTransport(e.category))
+      .filter((e) => normalizeCategory(e.category) === "Transport")
       .reduce((s, e) => s + e.amount, 0);
     const transportPrev = prevMonthKey
       ? expenses
-          .filter((e) => expenseMonthKey(e.date) === prevMonthKey && normalizeTransport(e.category))
+          .filter((e) => expenseMonthKey(e.date) === prevMonthKey && normalizeCategory(e.category) === "Transport")
           .reduce((s, e) => s + e.amount, 0)
       : 0;
     if (transportNow > 0 && transportPrev > 0) {
@@ -128,8 +141,4 @@ export function buildExpenseInsightMetrics(
   }
 
   return { metrics, hasData: metrics.length > 0 };
-}
-
-function normalizeTransport(category: string): boolean {
-  return category === "Transport" || category === "Transportation";
 }
