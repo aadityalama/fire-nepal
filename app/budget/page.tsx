@@ -1,25 +1,680 @@
 "use client";
 
-import { Banknote, PiggyBank, ReceiptText, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Bell,
+  Bot,
+  Bus,
+  CalendarDays,
+  Check,
+  Flame,
+  Gamepad2,
+  GraduationCap,
+  HeartPulse,
+  Home,
+  Landmark,
+  PiggyBank,
+  Plus,
+  Save,
+  ShieldAlert,
+  ShoppingBag,
+  Sparkles,
+  Utensils,
+  WalletCards,
+  X,
+  Zap,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
-import { EcosystemWorkspacePanel, type EcosystemWorkspaceItem } from "@/components/product/hub/EcosystemWorkspacePanel";
+import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { useFireTheme } from "@/contexts/FireThemeContext";
 
-const FINANCE_ITEMS: EcosystemWorkspaceItem[] = [
-  { href: "/cashflow-dashboard", label: "Cashflow", description: "Income, burn, savings rate, and runway.", icon: Wallet },
-  { href: "/finance/expense", label: "Expense", description: "Personal expenses, categories, receipts, reports, and analytics.", icon: ReceiptText },
-  { href: "/budget", label: "Budget", description: "Monthly budget workspace for FIRE planning.", icon: Banknote },
-  { href: "/savings-tracker", label: "Savings", description: "Savings targets, glide path, and progress.", icon: PiggyBank },
+const BudgetMonthlyTrendChart = dynamic(
+  () => import("@/components/budget/BudgetMonthlyTrendChart").then((mod) => mod.BudgetMonthlyTrendChart),
+  { ssr: false, loading: () => null },
+);
+
+type BudgetPeriod = "Monthly" | "Yearly";
+
+type BudgetRow = {
+  id: string;
+  name: string;
+  icon: string;
+  category: string;
+  monthlyBudgetNpr: number;
+  monthlySpentNpr: number;
+  daysRemaining: number;
+  gradient: string;
+};
+
+type CategoryOption = {
+  label: string;
+  icon: LucideIcon;
+  emoji: string;
+};
+
+const CATEGORY_OPTIONS: CategoryOption[] = [
+  { label: "Food", icon: Utensils, emoji: "🍔" },
+  { label: "Rent", icon: Home, emoji: "🏠" },
+  { label: "Transport", icon: Bus, emoji: "🚌" },
+  { label: "Health", icon: HeartPulse, emoji: "🩺" },
+  { label: "Shopping", icon: ShoppingBag, emoji: "🛍️" },
+  { label: "Entertainment", icon: Gamepad2, emoji: "🎮" },
+  { label: "Education", icon: GraduationCap, emoji: "🎓" },
+  { label: "Utilities", icon: Zap, emoji: "⚡" },
+  { label: "Investment", icon: Landmark, emoji: "📈" },
+  { label: "Emergency", icon: ShieldAlert, emoji: "🛡️" },
+  { label: "Other", icon: WalletCards, emoji: "💼" },
 ];
 
+const INITIAL_BUDGETS: BudgetRow[] = [
+  {
+    id: "living",
+    name: "Living",
+    icon: "🏠",
+    category: "Rent",
+    monthlyBudgetNpr: 30000,
+    monthlySpentNpr: 21000,
+    daysRemaining: 11,
+    gradient: "from-emerald-400 to-lime-300",
+  },
+  {
+    id: "food",
+    name: "Food",
+    icon: "🍔",
+    category: "Food",
+    monthlyBudgetNpr: 18000,
+    monthlySpentNpr: 12800,
+    daysRemaining: 11,
+    gradient: "from-orange-300 to-amber-200",
+  },
+  {
+    id: "transport",
+    name: "Transport",
+    icon: "🚌",
+    category: "Transport",
+    monthlyBudgetNpr: 8000,
+    monthlySpentNpr: 5200,
+    daysRemaining: 11,
+    gradient: "from-sky-300 to-teal-200",
+  },
+  {
+    id: "savings",
+    name: "Savings",
+    icon: "💰",
+    category: "Investment",
+    monthlyBudgetNpr: 16000,
+    monthlySpentNpr: 9000,
+    daysRemaining: 11,
+    gradient: "from-lime-300 to-emerald-200",
+  },
+  {
+    id: "entertainment",
+    name: "Entertainment",
+    icon: "🎮",
+    category: "Entertainment",
+    monthlyBudgetNpr: 8000,
+    monthlySpentNpr: 4000,
+    daysRemaining: 11,
+    gradient: "from-fuchsia-300 to-violet-200",
+  },
+];
+
+const NOTIFICATION_OPTIONS = ["50% used", "75% used", "90% used", "100% used", "Overspend Alert"] as const;
+
+function formatNpr(amount: number) {
+  return `NPR ${Math.round(amount).toLocaleString("en-IN")}`;
+}
+
+function clampPct(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function periodAmount(monthlyAmount: number, period: BudgetPeriod) {
+  return period === "Yearly" ? monthlyAmount * 12 : monthlyAmount;
+}
+
+function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`flex min-h-[52px] w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] ${
+        checked ? "border-emerald-300/50 bg-emerald-400/15" : "border-white/10 bg-white/[0.04]"
+      }`}
+    >
+      <span className="text-sm font-bold text-emerald-50">{label}</span>
+      <span className={`relative h-8 w-14 rounded-full p-1 transition ${checked ? "bg-emerald-400" : "bg-white/18"}`}>
+        <span
+          className={`block h-6 w-6 rounded-full bg-white shadow-lg transition-transform duration-200 ${
+            checked ? "translate-x-6" : "translate-x-0"
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
+function SegmentedControl({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: BudgetPeriod;
+  onChange: (value: BudgetPeriod) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`grid grid-cols-2 rounded-full bg-emerald-950/70 p-1 ring-1 ring-white/10 ${compact ? "w-full" : "w-full sm:w-64"}`}>
+      {(["Monthly", "Yearly"] as const).map((period) => (
+        <button
+          key={period}
+          type="button"
+          onClick={() => onChange(period)}
+          className={`min-h-[44px] rounded-full px-4 text-sm font-black transition active:scale-[0.98] ${
+            value === period
+              ? "bg-gradient-to-r from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/20"
+              : "text-emerald-100/70"
+          }`}
+        >
+          {period}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ProgressRing({ percent }: { percent: number }) {
+  const pct = clampPct(percent);
+  return (
+    <div
+      className="relative grid h-32 w-32 shrink-0 place-items-center rounded-full sm:h-36 sm:w-36"
+      style={{
+        background: `conic-gradient(rgb(190 242 100) ${pct}%, rgba(255,255,255,0.12) 0)`,
+      }}
+      aria-label={`Budget progress ${pct}%`}
+    >
+      <div className="grid h-[6.55rem] w-[6.55rem] place-items-center rounded-full bg-[#063326] shadow-[inset_0_0_32px_rgba(0,0,0,0.35)] sm:h-[7.45rem] sm:w-[7.45rem]">
+        <div className="text-center">
+          <p className="text-3xl font-black tracking-tighter text-white">{pct}%</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Progress</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BudgetCard({ budget, period, index }: { budget: BudgetRow; period: BudgetPeriod; index: number }) {
+  const amount = periodAmount(budget.monthlyBudgetNpr, period);
+  const spent = periodAmount(budget.monthlySpentNpr, period);
+  const pct = clampPct((spent / amount) * 100);
+  const daysLabel = period === "Yearly" ? `${budget.daysRemaining + 334} days left` : `${budget.daysRemaining} days left`;
+
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${budget.gradient} text-2xl shadow-lg`}>
+            {budget.icon}
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-black text-white">{budget.name}</h3>
+            <p className="mt-0.5 text-xs font-bold text-emerald-100/55">{budget.category}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
+          <p className="mt-0.5 text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-2 flex items-center justify-between text-xs font-black">
+          <span className="text-emerald-100/55">Used {formatNpr(spent)}</span>
+          <span className="text-lime-200">{pct}%</span>
+        </div>
+        <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${budget.gradient} shadow-[0_0_22px_rgba(190,242,100,0.25)] transition-[width] duration-700 ease-out`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
+function AnalyticsTile({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  light,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  icon: LucideIcon;
+  light: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[1.35rem] border p-4 backdrop-blur-xl ${
+        light ? "border-emerald-200/70 bg-white/90 shadow-sm" : "border-white/10 bg-white/[0.055]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/90" : "text-emerald-100/50"}`}>
+          {label}
+        </p>
+        <span
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+            light ? "bg-emerald-100 text-emerald-700" : "bg-emerald-300/12 text-lime-200"
+          }`}
+        >
+          <Icon size={17} />
+        </span>
+      </div>
+      <p className={`mt-3 text-xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>{value}</p>
+      <p className={`mt-1 text-xs font-semibold leading-relaxed ${light ? "text-slate-500" : "text-emerald-100/50"}`}>{hint}</p>
+    </div>
+  );
+}
+
+function AddBudgetModal({
+  open,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (budget: BudgetRow) => void;
+}) {
+  const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
+  const [amountInput, setAmountInput] = useState("80000");
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("Food");
+  const [enabledAlerts, setEnabledAlerts] = useState<Record<string, boolean>>({
+    "50% used": true,
+    "75% used": true,
+    "90% used": true,
+    "100% used": true,
+    "Overspend Alert": true,
+  });
+
+  if (!open) return null;
+
+  const selectedCategory = CATEGORY_OPTIONS.find((item) => item.label === category) ?? CATEGORY_OPTIONS[0];
+  const parsedAmount = Number(amountInput.replace(/[^\d]/g, "")) || 0;
+
+  function handleSave() {
+    if (!parsedAmount) return;
+    onSave({
+      id: `${category}-${Date.now()}`,
+      name: name.trim() || category,
+      icon: selectedCategory.emoji,
+      category,
+      monthlyBudgetNpr: period === "Yearly" ? Math.round(parsedAmount / 12) : parsedAmount,
+      monthlySpentNpr: 0,
+      daysRemaining: period === "Yearly" ? 365 : 30,
+      gradient: "from-emerald-300 to-lime-300",
+    });
+    setName("");
+    setAmountInput("80000");
+    setPeriod("Monthly");
+    setCategory("Food");
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#020806]/85 p-0 text-white backdrop-blur-xl sm:p-5">
+      <motion.div
+        initial={{ opacity: 0, y: 28 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-auto flex h-full max-w-2xl flex-col overflow-hidden bg-[#04140f] shadow-2xl shadow-black/60 sm:rounded-[2rem] sm:border sm:border-emerald-300/15"
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close add budget"
+            className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06] text-emerald-100 transition active:scale-95"
+          >
+            <X size={20} />
+          </button>
+          <h2 className="text-lg font-black tracking-tight">Add Budget</h2>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95"
+          >
+            <Save size={16} /> Save
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+          <div className="space-y-5">
+            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Budget Amount</p>
+              <label className="mt-3 flex min-h-[64px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
+                <span className="mr-2 text-xl font-black text-lime-200">NPR</span>
+                <input
+                  value={amountInput}
+                  onChange={(event) => setAmountInput(event.target.value)}
+                  inputMode="numeric"
+                  className="min-w-0 flex-1 bg-transparent text-3xl font-black tracking-tight text-white outline-none placeholder:text-emerald-100/25"
+                  placeholder="80,000"
+                  aria-label="Budget amount in NPR"
+                />
+              </label>
+            </section>
+
+            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Budget Name</p>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="mt-3 min-h-[54px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none placeholder:text-emerald-100/28 focus:border-emerald-300/45"
+                placeholder="Food, Living, Transport..."
+              />
+            </section>
+
+            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Categories</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {CATEGORY_OPTIONS.map((item) => {
+                  const active = category === item.label;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => setCategory(item.label)}
+                      className={`flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 text-left transition active:scale-[0.98] ${
+                        active ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
+                      }`}
+                    >
+                      <span className="text-xl">{item.emoji}</span>
+                      <span className="min-w-0 truncate text-sm font-black">{item.label}</span>
+                      {active ? <Check size={15} className="ml-auto shrink-0 text-lime-200" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+              <p className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Period</p>
+              <SegmentedControl value={period} onChange={setPeriod} compact />
+            </section>
+
+            <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notifications</p>
+                <Bell size={17} className="text-lime-200" />
+              </div>
+              <div className="space-y-2">
+                {NOTIFICATION_OPTIONS.map((option) => (
+                  <ToggleSwitch
+                    key={option}
+                    label={option}
+                    checked={enabledAlerts[option]}
+                    onChange={() => setEnabledAlerts((prev) => ({ ...prev, [option]: !prev[option] }))}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <section className="relative overflow-hidden rounded-[1.6rem] border border-lime-300/20 bg-gradient-to-br from-emerald-400/18 via-white/[0.06] to-lime-300/10 p-4">
+              <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-lime-300/20 blur-3xl" aria-hidden />
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-10 w-10 place-items-center rounded-2xl bg-lime-300 text-emerald-950">
+                    <Bot size={19} />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-white">🔥 FIRE AI Recommendation</h3>
+                    <p className="text-xs font-semibold text-emerald-100/60">Based on your recent spending patterns.</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/18 p-4">
+                  <p className="text-sm font-bold leading-relaxed text-emerald-50">
+                    Add budgets or connect spending history to unlock a personalized recommendation. No financial estimate is shown until user data is available.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function BudgetWorkspacePage() {
+  const { resolvedTheme } = useFireTheme();
+  const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
+  const [addOpen, setAddOpen] = useState(false);
+  const [chartsReady, setChartsReady] = useState(false);
+  const [budgets, setBudgets] = useState<BudgetRow[]>(INITIAL_BUDGETS);
+  const light = resolvedTheme === "light";
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setChartsReady(true), 480);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const totals = useMemo(() => {
+    const totalBudget = budgets.reduce((sum, item) => sum + periodAmount(item.monthlyBudgetNpr, period), 0);
+    const totalSpent = budgets.reduce((sum, item) => sum + periodAmount(item.monthlySpentNpr, period), 0);
+    const remaining = Math.max(0, totalBudget - totalSpent);
+    const progress = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    return { totalBudget, totalSpent, remaining, progress };
+  }, [budgets, period]);
+
+  const dailyAverage = period === "Yearly" ? totals.totalSpent / 365 : totals.totalSpent / 30;
+  const weeklySpending = dailyAverage * 7;
+
   return (
     <DashboardAccessGuard>
-      <EcosystemWorkspacePanel
-        title="Budget"
-        eyebrow="Finance workspace"
-        description="Use cashflow, expenses, and savings modules together to manage the monthly FIRE budget."
-        items={FINANCE_ITEMS}
-      />
+      <main
+        className={`min-h-screen max-w-[100vw] overflow-x-clip px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.85rem+env(safe-area-inset-top,0px))] text-white sm:px-6 lg:px-8 ${
+          light ? "bg-[#06291f]" : "bg-[#020806]"
+        }`}
+      >
+        <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+          <div className="absolute -left-24 top-8 h-72 w-72 rounded-full bg-emerald-400/18 blur-3xl" />
+          <div className="absolute -right-24 top-52 h-80 w-80 rounded-full bg-lime-300/12 blur-3xl" />
+          <div className="absolute bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-lg flex-col gap-3.5 sm:gap-4 lg:max-w-6xl lg:gap-6">
+          <header className="flex items-center justify-between gap-3">
+            <Link
+              href="/finance"
+              className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-3 text-sm font-black backdrop-blur-xl transition active:scale-[0.98] ${
+                light
+                  ? "border-emerald-200/90 bg-white/95 text-emerald-900"
+                  : "border-white/10 bg-white/[0.06] text-emerald-50"
+              }`}
+            >
+              <ArrowLeft size={17} /> Finance
+            </Link>
+            <div className="min-w-0 flex-1 text-center">
+              <p className={`text-[10px] font-black uppercase tracking-[0.18em] ${light ? "text-emerald-700/80" : "text-emerald-100/45"}`}>
+                FIRE Nepal
+              </p>
+              <h1 className={`truncate text-xl font-black tracking-[-0.04em] ${light ? "text-slate-900" : "text-white"}`}>Budget</h1>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              aria-label="Add budget"
+              className="grid min-h-[48px] min-w-[48px] place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/25 transition active:scale-95"
+            >
+              <Plus size={23} strokeWidth={2.6} />
+            </button>
+          </header>
+
+          <SegmentedControl value={period} onChange={setPeriod} />
+
+          <DashboardSectionHeader
+            accent="emerald"
+            eyebrow={
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${
+                light ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-800" : "border-lime-300/20 bg-lime-300/10 text-lime-100"
+              }`}>
+                <Flame size={12} /> Premium planner
+              </span>
+            }
+            title="Budget command center"
+            subtitle="NPR-only monthly discipline and yearly goals — designed for FIRE Nepal spending decisions."
+          />
+
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className={`relative overflow-hidden rounded-[2rem] border p-4 shadow-[0_28px_90px_-48px_rgba(16,185,129,0.65)] sm:p-6 lg:p-7 ${
+              light
+                ? "border-emerald-200/70 bg-gradient-to-br from-white via-emerald-50/70 to-white"
+                : "border-emerald-200/15 bg-gradient-to-br from-emerald-500/24 via-emerald-950/88 to-[#03110d]"
+            }`}
+          >
+            <div className="pointer-events-none absolute -right-16 -top-12 h-56 w-56 rounded-full bg-lime-300/18 blur-3xl" aria-hidden />
+            <div className="pointer-events-none absolute bottom-0 left-0 h-44 w-44 rounded-full bg-teal-300/10 blur-3xl" aria-hidden />
+            <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Summary</p>
+                <h2 className={`mt-2 text-2xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>Total Budget</h2>
+                <p className={`mt-1 text-3xl font-black tracking-[-0.05em] sm:text-5xl ${light ? "text-emerald-800" : "text-lime-100"}`}>
+                  {formatNpr(totals.totalBudget)}
+                </p>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5">
+                  <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
+                    <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Spent</p>
+                    <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-slate-900" : "text-white"}`}>{formatNpr(totals.totalSpent)}</p>
+                  </div>
+                  <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
+                    <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Remaining</p>
+                    <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-emerald-700" : "text-lime-100"}`}>{formatNpr(totals.remaining)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <ProgressRing percent={totals.progress} />
+            </div>
+          </motion.section>
+
+          <section className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr] lg:gap-5">
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Budget List</h2>
+                <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-black text-lime-100">{budgets.length} active</span>
+              </div>
+              <div className="space-y-3">
+                {budgets.map((budget, index) => (
+                  <BudgetCard key={budget.id} budget={budget} period={period} index={index} />
+                ))}
+              </div>
+            </div>
+
+            <aside className="space-y-3 lg:sticky lg:top-5 lg:self-start">
+              <section className="relative overflow-hidden rounded-[1.65rem] border border-lime-300/20 bg-gradient-to-br from-lime-300/16 via-white/[0.055] to-emerald-500/10 p-4 backdrop-blur-xl">
+                <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-lime-300/18 blur-3xl" aria-hidden />
+                <div className="relative">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-lime-300 text-emerald-950">
+                      <Sparkles size={20} />
+                    </span>
+                    <div>
+                      <h2 className="text-base font-black text-white">🔥 FIRE AI Recommendation</h2>
+                      <p className="text-xs font-semibold text-emerald-100/55">Friendly placeholder</p>
+                    </div>
+                  </div>
+                  <p className={`mt-4 text-sm font-semibold leading-relaxed ${light ? "text-emerald-900/80" : "text-emerald-50/82"}`}>
+                    Add spending history to receive an AI budget recommendation. FIRE Nepal will show recommended monthly budget, potential savings, and confidence only when user data is available.
+                  </p>
+                  <div className={`mt-4 rounded-2xl border p-4 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-black/20"}`}>
+                    <p className={`text-xs font-bold uppercase tracking-[0.14em] ${light ? "text-emerald-700/70" : "text-emerald-100/45"}`}>
+                      Awaiting spending data
+                    </p>
+                    <p className={`mt-2 text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "text-emerald-100/65"}`}>
+                      No financial estimate is shown until your expense history is connected.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[1.65rem] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-xl">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Category Breakdown</h2>
+                  <BarChart3 size={18} className="text-lime-200" />
+                </div>
+                <div className="space-y-3">
+                  {budgets.slice(0, 5).map((budget) => {
+                    const share = totals.totalBudget > 0 ? clampPct((periodAmount(budget.monthlyBudgetNpr, period) / totals.totalBudget) * 100) : 0;
+                    return (
+                      <div key={budget.id}>
+                        <div className="mb-1.5 flex items-center justify-between text-xs font-black">
+                          <span className="text-emerald-50">{budget.icon} {budget.name}</span>
+                          <span className="text-lime-100">{share}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full rounded-full bg-gradient-to-r ${budget.gradient}`} style={{ width: `${share}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </aside>
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Dashboard Analytics</h2>
+              <span className="text-xs font-bold text-emerald-100/45">{period} view</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <AnalyticsTile label="Spent" value={formatNpr(totals.totalSpent)} hint="Current planner usage" icon={WalletCards} light={light} />
+              <AnalyticsTile label="Remaining" value={formatNpr(totals.remaining)} hint="Available for this period" icon={PiggyBank} light={light} />
+              <AnalyticsTile label="Daily Average" value={formatNpr(dailyAverage)} hint="Pace needed to stay aligned" icon={CalendarDays} light={light} />
+              <AnalyticsTile label="Weekly Spending" value={formatNpr(weeklySpending)} hint="Rolling weekly equivalent" icon={Flame} light={light} />
+            </div>
+          </section>
+
+          <section className={`rounded-[1.65rem] border p-4 backdrop-blur-xl ${light ? "border-emerald-200/70 bg-white/90" : "border-white/10 bg-white/[0.055]"}`}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className={`text-sm font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Monthly Trend</h2>
+                <p className={`mt-1 text-xs font-semibold ${light ? "text-slate-500" : "text-emerald-100/45"}`}>
+                  Lazy-loaded chart for fast mobile rendering.
+                </p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${light ? "bg-emerald-100 text-emerald-800" : "bg-lime-300/14 text-lime-100"}`}>
+                NPR only
+              </span>
+            </div>
+            <BudgetMonthlyTrendChart ready={chartsReady} />
+          </section>
+        </div>
+
+        <AddBudgetModal open={addOpen} onClose={() => setAddOpen(false)} onSave={(budget) => setBudgets((prev) => [budget, ...prev])} />
+      </main>
     </DashboardAccessGuard>
   );
 }
