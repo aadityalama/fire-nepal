@@ -1382,6 +1382,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      finance_budget_records: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          category: string;
+          icon: string;
+          gradient: string;
+          period: string;
+          amount_npr: number;
+          monthly_budget_npr: number;
+          monthly_spent_npr: number;
+          days_remaining: number;
+          notification_settings: Json;
+          ai_recommendation: Json | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          category: string;
+          icon?: string;
+          gradient?: string;
+          period: string;
+          amount_npr: number;
+          monthly_budget_npr: number;
+          monthly_spent_npr?: number;
+          days_remaining?: number;
+          notification_settings?: Json;
+          ai_recommendation?: Json | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          category?: string;
+          icon?: string;
+          gradient?: string;
+          period?: string;
+          amount_npr?: number;
+          monthly_budget_npr?: number;
+          monthly_spent_npr?: number;
+          days_remaining?: number;
+          notification_settings?: Json;
+          ai_recommendation?: Json | null;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       fire_ai_admin_settings: {
         Row: {
           id: string;

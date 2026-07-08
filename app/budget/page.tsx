@@ -29,28 +29,28 @@ import {
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { createBudgetRecord, fetchBudgetRecords } from "@/lib/budget/budget-api";
+import {
+  BUDGET_NOTIFICATION_OPTIONS,
+  defaultBudgetNotificationSettings,
+  sortBudgetRecords,
+  type BudgetAiRecommendation,
+  type BudgetNotificationSettings,
+  type BudgetPeriod,
+  type BudgetRecord,
+  type CreateBudgetInput,
+} from "@/lib/budget/types";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
 const BudgetMonthlyTrendChart = dynamic(
   () => import("@/components/budget/BudgetMonthlyTrendChart").then((mod) => mod.BudgetMonthlyTrendChart),
   { ssr: false, loading: () => null },
 );
-
-type BudgetPeriod = "Monthly" | "Yearly";
-
-type BudgetRow = {
-  id: string;
-  name: string;
-  icon: string;
-  category: string;
-  monthlyBudgetNpr: number;
-  monthlySpentNpr: number;
-  daysRemaining: number;
-  gradient: string;
-};
 
 type CategoryOption = {
   label: string;
@@ -72,60 +72,12 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
   { label: "Other", icon: WalletCards, emoji: "💼" },
 ];
 
-const INITIAL_BUDGETS: BudgetRow[] = [
-  {
-    id: "living",
-    name: "Living",
-    icon: "🏠",
-    category: "Rent",
-    monthlyBudgetNpr: 30000,
-    monthlySpentNpr: 21000,
-    daysRemaining: 11,
-    gradient: "from-emerald-400 to-lime-300",
-  },
-  {
-    id: "food",
-    name: "Food",
-    icon: "🍔",
-    category: "Food",
-    monthlyBudgetNpr: 18000,
-    monthlySpentNpr: 12800,
-    daysRemaining: 11,
-    gradient: "from-orange-300 to-amber-200",
-  },
-  {
-    id: "transport",
-    name: "Transport",
-    icon: "🚌",
-    category: "Transport",
-    monthlyBudgetNpr: 8000,
-    monthlySpentNpr: 5200,
-    daysRemaining: 11,
-    gradient: "from-sky-300 to-teal-200",
-  },
-  {
-    id: "savings",
-    name: "Savings",
-    icon: "💰",
-    category: "Investment",
-    monthlyBudgetNpr: 16000,
-    monthlySpentNpr: 9000,
-    daysRemaining: 11,
-    gradient: "from-lime-300 to-emerald-200",
-  },
-  {
-    id: "entertainment",
-    name: "Entertainment",
-    icon: "🎮",
-    category: "Entertainment",
-    monthlyBudgetNpr: 8000,
-    monthlySpentNpr: 4000,
-    daysRemaining: 11,
-    gradient: "from-fuchsia-300 to-violet-200",
-  },
-];
-
-const NOTIFICATION_OPTIONS = ["50% used", "75% used", "90% used", "100% used", "Overspend Alert"] as const;
+const PLACEHOLDER_AI_RECOMMENDATION: BudgetAiRecommendation = {
+  title: "FIRE AI Recommendation",
+  message:
+    "Add budgets or connect spending history to unlock a personalized recommendation. No financial estimate is shown until user data is available.",
+  available: false,
+};
 
 function formatNpr(amount: number) {
   return `NPR ${Math.round(amount).toLocaleString("en-IN")}`;
@@ -211,7 +163,7 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-function BudgetCard({ budget, period, index }: { budget: BudgetRow; period: BudgetPeriod; index: number }) {
+function BudgetCard({ budget, period, index }: { budget: BudgetRecord; period: BudgetPeriod; index: number }) {
   const amount = periodAmount(budget.monthlyBudgetNpr, period);
   const spent = periodAmount(budget.monthlySpentNpr, period);
   const pct = clampPct((spent / amount) * 100);
@@ -298,44 +250,41 @@ function AddBudgetModal({
   open,
   onClose,
   onSave,
+  saving,
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (budget: BudgetRow) => void;
+  onSave: (input: CreateBudgetInput) => Promise<void>;
+  saving: boolean;
 }) {
   const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
   const [amountInput, setAmountInput] = useState("80000");
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Food");
-  const [enabledAlerts, setEnabledAlerts] = useState<Record<string, boolean>>({
-    "50% used": true,
-    "75% used": true,
-    "90% used": true,
-    "100% used": true,
-    "Overspend Alert": true,
-  });
+  const [enabledAlerts, setEnabledAlerts] = useState<BudgetNotificationSettings>(() => defaultBudgetNotificationSettings());
 
   if (!open) return null;
 
   const selectedCategory = CATEGORY_OPTIONS.find((item) => item.label === category) ?? CATEGORY_OPTIONS[0];
   const parsedAmount = Number(amountInput.replace(/[^\d]/g, "")) || 0;
 
-  function handleSave() {
-    if (!parsedAmount) return;
-    onSave({
-      id: `${category}-${Date.now()}`,
+  async function handleSave() {
+    if (!parsedAmount || saving) return;
+    await onSave({
       name: name.trim() || category,
-      icon: selectedCategory.emoji,
       category,
-      monthlyBudgetNpr: period === "Yearly" ? Math.round(parsedAmount / 12) : parsedAmount,
-      monthlySpentNpr: 0,
-      daysRemaining: period === "Yearly" ? 365 : 30,
+      icon: selectedCategory.emoji,
       gradient: "from-emerald-300 to-lime-300",
+      period,
+      amountNpr: parsedAmount,
+      notificationSettings: enabledAlerts,
+      aiRecommendation: PLACEHOLDER_AI_RECOMMENDATION,
     });
     setName("");
     setAmountInput("80000");
     setPeriod("Monthly");
     setCategory("Food");
+    setEnabledAlerts(defaultBudgetNotificationSettings());
     onClose();
   }
 
@@ -358,10 +307,11 @@ function AddBudgetModal({
           <h2 className="text-lg font-black tracking-tight">Add Budget</h2>
           <button
             type="button"
-            onClick={handleSave}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95"
+            onClick={() => void handleSave()}
+            disabled={saving || !parsedAmount}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Save size={16} /> Save
+            <Save size={16} /> {saving ? "Saving..." : "Save"}
           </button>
         </header>
 
@@ -426,7 +376,7 @@ function AddBudgetModal({
                 <Bell size={17} className="text-lime-200" />
               </div>
               <div className="space-y-2">
-                {NOTIFICATION_OPTIONS.map((option) => (
+                {BUDGET_NOTIFICATION_OPTIONS.map((option) => (
                   <ToggleSwitch
                     key={option}
                     label={option}
@@ -464,12 +414,83 @@ function AddBudgetModal({
 }
 
 export default function BudgetWorkspacePage() {
+  const { user } = useProductAuth();
   const { resolvedTheme } = useFireTheme();
   const [period, setPeriod] = useState<BudgetPeriod>("Monthly");
   const [addOpen, setAddOpen] = useState(false);
   const [chartsReady, setChartsReady] = useState(false);
-  const [budgets, setBudgets] = useState<BudgetRow[]>(INITIAL_BUDGETS);
+  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
+  const [loadingBudgets, setLoadingBudgets] = useState(true);
+  const [savingBudget, setSavingBudget] = useState(false);
   const light = resolvedTheme === "light";
+
+  const reloadBudgets = useCallback(async () => {
+    const records = await fetchBudgetRecords();
+    setBudgets(sortBudgetRecords(records));
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setBudgets([]);
+      setLoadingBudgets(false);
+      return;
+    }
+
+    let alive = true;
+    setLoadingBudgets(true);
+    void reloadBudgets()
+      .catch((error) => {
+        if (!alive) return;
+        toast.error(error instanceof Error ? error.message : "Could not load budgets.");
+        setBudgets([]);
+      })
+      .finally(() => {
+        if (alive) setLoadingBudgets(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [user, reloadBudgets]);
+
+  const handleSaveBudget = useCallback(
+    async (input: CreateBudgetInput) => {
+      const optimisticId = `temp-${Date.now()}`;
+      const optimisticRecord: BudgetRecord = {
+        id: optimisticId,
+        name: input.name,
+        icon: input.icon,
+        category: input.category,
+        period: input.period,
+        amountNpr: input.amountNpr,
+        monthlyBudgetNpr: input.period === "Yearly" ? Math.round(input.amountNpr / 12) : input.amountNpr,
+        monthlySpentNpr: 0,
+        daysRemaining: input.period === "Yearly" ? 365 : 30,
+        gradient: input.gradient,
+        notificationSettings: input.notificationSettings,
+        aiRecommendation: input.aiRecommendation,
+        sortOrder: budgets.length,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setSavingBudget(true);
+      setBudgets((prev) => sortBudgetRecords([...prev, optimisticRecord]));
+
+      try {
+        await createBudgetRecord(input);
+        await reloadBudgets();
+        toast.success("Budget saved successfully");
+      } catch (error) {
+        setBudgets((prev) => prev.filter((item) => item.id !== optimisticId));
+        toast.error(error instanceof Error ? error.message : "Could not save budget.");
+        throw error;
+      } finally {
+        setSavingBudget(false);
+      }
+    },
+    [budgets.length, reloadBudgets],
+  );
 
   useEffect(() => {
     const id = window.setTimeout(() => setChartsReady(true), 480);
@@ -586,9 +607,18 @@ export default function BudgetWorkspacePage() {
                 <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-black text-lime-100">{budgets.length} active</span>
               </div>
               <div className="space-y-3">
-                {budgets.map((budget, index) => (
-                  <BudgetCard key={budget.id} budget={budget} period={period} index={index} />
-                ))}
+                {loadingBudgets ? (
+                  <div className="rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-6 text-center text-sm font-semibold text-emerald-100/55">
+                    Loading your budgets...
+                  </div>
+                ) : budgets.length === 0 ? (
+                  <div className="rounded-[1.55rem] border border-dashed border-white/10 bg-white/[0.04] p-6 text-center">
+                    <p className="text-sm font-black text-white">No budgets yet</p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-100/50">Tap + to create your first budget.</p>
+                  </div>
+                ) : (
+                  budgets.map((budget, index) => <BudgetCard key={budget.id} budget={budget} period={period} index={index} />)
+                )}
               </div>
             </div>
 
@@ -673,7 +703,12 @@ export default function BudgetWorkspacePage() {
           </section>
         </div>
 
-        <AddBudgetModal open={addOpen} onClose={() => setAddOpen(false)} onSave={(budget) => setBudgets((prev) => [budget, ...prev])} />
+        <AddBudgetModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onSave={handleSaveBudget}
+          saving={savingBudget}
+        />
       </main>
     </DashboardAccessGuard>
   );
