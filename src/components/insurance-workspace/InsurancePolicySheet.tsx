@@ -15,7 +15,7 @@ import {
   INSURANCE_TYPES,
   PAYMENT_FREQUENCY_LABELS,
 } from "@/lib/insurance/insurance-types";
-import { defaultExpiryDate, todayIso } from "@/lib/insurance/insurance-utils";
+import { defaultExpiryDate, buildPremiumDisplay, todayIso } from "@/lib/insurance/insurance-utils";
 
 type InsurancePolicySheetProps = {
   open: boolean;
@@ -83,6 +83,8 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
     setFamilyText("");
   }, [open, editingPolicy]);
 
+  const premiumPreview = buildPremiumDisplay(form.premiumNpr, form.paymentFrequency);
+
   async function handleSave() {
     if (!form.provider.trim() || form.coverageAmountNpr <= 0 || saving) return;
     const familyMembersCovered = familyText
@@ -130,7 +132,9 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
               </button>
               <div className="text-center">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/45">Insurance</p>
-                <p className="text-sm font-black text-white">{editingPolicy ? "Edit policy" : "Add policy"}</p>
+                <p className="text-sm font-black text-white">
+                  {editingPolicy ? "Policy details" : "Add policy"}
+                </p>
               </div>
               <button
                 type="button"
@@ -145,6 +149,16 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
 
             <div className="flex-1 overflow-y-auto px-4 py-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
               <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
+                {form.premiumNpr > 0 ? (
+                  <section className="rounded-[1.6rem] border border-emerald-300/25 bg-emerald-400/10 p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/50">Premium preview</p>
+                    <p className="mt-2 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
+                      {premiumPreview.label}
+                    </p>
+                    <p className="mt-1 text-2xl font-black tracking-[-0.04em] text-white">{premiumPreview.value}</p>
+                  </section>
+                ) : null}
+
                 <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
                   <FieldLabel>Insurance type</FieldLabel>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

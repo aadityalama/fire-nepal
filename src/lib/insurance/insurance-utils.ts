@@ -88,6 +88,68 @@ export function frequencyLabel(frequency: InsurancePaymentFrequency) {
   return PAYMENT_FREQUENCY_LABELS[frequency];
 }
 
+/** Display label for premium based on saved payment frequency. */
+export function premiumLabel(frequency: InsurancePaymentFrequency): string {
+  switch (frequency) {
+    case "monthly":
+      return "Monthly Premium";
+    case "quarterly":
+      return "Quarterly Premium";
+    case "yearly":
+      return "Yearly Premium";
+    case "one_time":
+      return "One-time Premium";
+    default:
+      return "Premium";
+  }
+}
+
+function premiumPeriodSuffix(frequency: InsurancePaymentFrequency): string | null {
+  switch (frequency) {
+    case "monthly":
+      return "/ month";
+    case "quarterly":
+      return "/ quarter";
+    case "yearly":
+      return "/ year";
+    case "one_time":
+      return null;
+    default:
+      return null;
+  }
+}
+
+/** Format premium using the saved amount and payment frequency (not monthly-normalized). */
+export function formatPremiumDisplay(premiumNpr: number, frequency: InsurancePaymentFrequency): string {
+  const amount = formatRs(Math.max(0, premiumNpr));
+  const suffix = premiumPeriodSuffix(frequency);
+  return suffix ? `${amount} ${suffix}` : amount;
+}
+
+export type PremiumDisplay = {
+  label: string;
+  value: string;
+};
+
+export function buildPremiumDisplay(premiumNpr: number, frequency: InsurancePaymentFrequency): PremiumDisplay {
+  return {
+    label: premiumLabel(frequency),
+    value: formatPremiumDisplay(premiumNpr, frequency),
+  };
+}
+
+/** Summarize what the user is paying across active policies for dashboard hints. */
+export function summarizePoliciesPremiumPaying(policies: InsurancePolicy[]): string {
+  const active = policies.filter((p) => p.status !== "expired" && p.status !== "lapsed");
+  if (active.length === 0) return "No active premiums";
+  if (active.length === 1) {
+    const policy = active[0];
+    return formatPremiumDisplay(policy.premiumNpr, policy.paymentFrequency);
+  }
+  const monthlyEquivalent = sumMonthlyPremiums(active);
+  return `${formatRs(monthlyEquivalent)} / month equivalent`;
+}
+
 export function defaultExpiryDate(monthsAhead = 12): string {
   const d = new Date();
   d.setMonth(d.getMonth() + monthsAhead);

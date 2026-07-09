@@ -5,11 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import type { InsurancePolicy } from "@/lib/insurance/insurance-types";
 import { INSURANCE_TYPE_ICONS } from "@/lib/insurance/insurance-types";
 import {
+  buildPremiumDisplay,
   daysUntil,
   formatDisplayDate,
   formatRs,
-  frequencyLabel,
-  monthlyPremiumNpr,
   statusTone,
   typeLabel,
 } from "@/lib/insurance/insurance-utils";
@@ -35,7 +34,7 @@ export function InsurancePolicyCard({ policy, index, onEdit, onDelete }: Insuran
   const menuRef = useRef<HTMLDivElement>(null);
   const tone = statusTone(policy.status);
   const days = daysUntil(policy.expiryDate);
-  const monthly = monthlyPremiumNpr(policy.premiumNpr, policy.paymentFrequency);
+  const premium = buildPremiumDisplay(policy.premiumNpr, policy.paymentFrequency);
   const isLife = policy.type === "life";
   const isHealth = policy.type === "health";
 
@@ -117,11 +116,8 @@ export function InsurancePolicyCard({ policy, index, onEdit, onDelete }: Insuran
           <p className="mt-1 text-base font-black tracking-[-0.03em] text-white">{formatRs(policy.coverageAmountNpr)}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/15 px-3 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/40">
-            {isLife || isHealth ? "Monthly premium" : "Premium"}
-          </p>
-          <p className="mt-1 text-base font-black tracking-[-0.03em] text-lime-100">{formatRs(monthly)}</p>
-          <p className="mt-0.5 text-[10px] font-semibold text-emerald-100/40">{frequencyLabel(policy.paymentFrequency)}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/40">{premium.label}</p>
+          <p className="mt-1 text-base font-black tracking-[-0.03em] text-lime-100">{premium.value}</p>
         </div>
       </div>
 

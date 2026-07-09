@@ -37,6 +37,7 @@ import {
   formatDisplayDate,
   formatNprCompact,
   formatRs,
+  summarizePoliciesPremiumPaying,
   upcomingRenewals,
 } from "@/lib/insurance/insurance-utils";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -296,9 +297,9 @@ export function InsuranceWorkspaceDashboard() {
             hint={`Have ${formatNprCompact(recommendation.currentLifeCoverageNpr)}`}
           />
           <MetricTile
-            label="Monthly premium"
+            label="Recommended monthly premium"
             value={formatRs(recommendation.recommendedMonthlyPremiumNpr)}
-            hint={`Paying ${formatRs(recommendation.currentMonthlyPremiumNpr)}`}
+            hint={`Paying ${summarizePoliciesPremiumPaying(policies)}`}
           />
           <MetricTile
             label="Coverage gap"
