@@ -4,16 +4,23 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { DEFAULT_RETURN_PLANNER_STATE, RETURN_PLANNER_STORAGE_KEY } from "@/lib/return-to-nepal/default-planner-state";
 import { type PlannerSnapshot, computePlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
+import type { ReturnPlannerLiveBundle } from "@/lib/return-to-nepal/live-inputs";
+import { useReturnPlannerLive } from "@/lib/return-to-nepal/use-return-planner-live";
 import type { ConstructionPhaseId, ReturnToNepalPlannerState, SettlementChecklistId } from "@/lib/return-to-nepal/types";
 import { FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT } from "@/lib/fire-nepal/workspace-data-reset";
 
 type Ctx = {
+  /** User preferences persisted locally (target year, checklist, etc.) */
   state: ReturnToNepalPlannerState;
+  /** Auto-merged state from Income, Portfolio, COL, Savings, SSF, etc. */
+  effectiveState: ReturnToNepalPlannerState;
   snapshot: PlannerSnapshot;
+  live: ReturnPlannerLiveBundle;
   patch: (partial: Partial<ReturnToNepalPlannerState>) => void;
   reset: () => void;
   togglePhase: (id: ConstructionPhaseId) => void;
   toggleSettlement: (id: SettlementChecklistId) => void;
+  resync: () => void;
 };
 
 const ReturnToNepalContext = createContext<Ctx | null>(null);
@@ -32,6 +39,7 @@ function loadState(): ReturnToNepalPlannerState {
 
 export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ReturnToNepalPlannerState>(DEFAULT_RETURN_PLANNER_STATE);
+  const { bundle: live, resync } = useReturnPlannerLive(state);
 
   useEffect(() => {
     setState(loadState());
@@ -43,10 +51,13 @@ export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    const onGlobal = () => setState(loadState());
+    const onGlobal = () => {
+      setState(loadState());
+      resync();
+    };
     window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
     return () => window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
-  }, []);
+  }, [resync]);
 
   const patch = useCallback((partial: Partial<ReturnToNepalPlannerState>) => {
     setState((s) => ({ ...s, ...partial }));
@@ -72,11 +83,22 @@ export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const snapshot = useMemo(() => computePlannerSnapshot(state), [state]);
+  const effectiveState = live.effectiveState;
+  const snapshot = useMemo(() => computePlannerSnapshot(effectiveState), [effectiveState]);
 
   const value = useMemo(
-    () => ({ state, snapshot, patch, reset, togglePhase, toggleSettlement }),
-    [state, snapshot, patch, reset, togglePhase, toggleSettlement],
+    () => ({
+      state,
+      effectiveState,
+      snapshot,
+      live,
+      patch,
+      reset,
+      togglePhase,
+      toggleSettlement,
+      resync,
+    }),
+    [state, effectiveState, snapshot, live, patch, reset, togglePhase, toggleSettlement, resync],
   );
 
   return <ReturnToNepalContext.Provider value={value}>{children}</ReturnToNepalContext.Provider>;
