@@ -1436,6 +1436,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      finance_insurance_policies: {
+        Row: {
+          id: string;
+          user_id: string;
+          insurance_type: string;
+          provider: string;
+          coverage_amount_npr: number;
+          premium_npr: number;
+          payment_frequency: string;
+          start_date: string | null;
+          expiry_date: string | null;
+          nominee: string | null;
+          family_members_covered: Json;
+          notes: string | null;
+          document_data_url: string | null;
+          document_file_name: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          insurance_type: string;
+          provider: string;
+          coverage_amount_npr?: number;
+          premium_npr?: number;
+          payment_frequency?: string;
+          start_date?: string | null;
+          expiry_date?: string | null;
+          nominee?: string | null;
+          family_members_covered?: Json;
+          notes?: string | null;
+          document_data_url?: string | null;
+          document_file_name?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          insurance_type?: string;
+          provider?: string;
+          coverage_amount_npr?: number;
+          premium_npr?: number;
+          payment_frequency?: string;
+          start_date?: string | null;
+          expiry_date?: string | null;
+          nominee?: string | null;
+          family_members_covered?: Json;
+          notes?: string | null;
+          document_data_url?: string | null;
+          document_file_name?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       fire_ai_admin_settings: {
         Row: {
           id: string;

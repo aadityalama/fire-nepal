@@ -246,6 +246,12 @@ const POPULAR_TOOLS: ToolLauncherItem[] = [
     accent: "from-sky-500/15 to-emerald-500/10",
   },
   {
+    href: "/insurance",
+    title: "Insurance",
+    icon: ShieldCheck,
+    accent: "from-emerald-500/20 to-sky-400/10",
+  },
+  {
     href: "/return-to-nepal",
     title: "Return",
     icon: Plane,

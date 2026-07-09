@@ -214,9 +214,17 @@ export function computePlannerSnapshot(state: ReturnToNepalPlannerState): Planne
     ((schoolOk ? 1 : 0) + (healthOk ? 1 : 0) + (relocateOk ? 1 : 0) + (state.parentSupportMonthlyNpr > 0 ? 1 : 0)) /
     4;
   const settlementDone = state.settlementChecklist?.length ?? 0;
-  const settlementFactor = settlementDone / 6;
+  const settlementTotal = 8;
+  const settlementFactor = settlementDone / settlementTotal;
+  const insuranceReady =
+    (state.settlementChecklist?.includes("healthInsurance") ? 1 : 0) +
+    (state.settlementChecklist?.includes("lifeInsurance") ? 1 : 0);
+  const insuranceFactor = insuranceReady / 2;
   const familyRelocationScore = clamp(
-    checklistScore * 38 + settlementFactor * 22 + clamp(emergencyReserveMonths / (state.emergencyMonthsTarget || 6), 0, 1) * 40,
+    checklistScore * 34 +
+      settlementFactor * 20 +
+      insuranceFactor * 8 +
+      clamp(emergencyReserveMonths / (state.emergencyMonthsTarget || 6), 0, 1) * 38,
     0,
     100,
   );
@@ -251,7 +259,13 @@ export function computePlannerSnapshot(state: ReturnToNepalPlannerState): Planne
   const yieldPct = state.expectedRentalYieldPct / 100;
   const businessPassiveMonthlyHintNpr = Math.round((state.businessCapitalNpr * yieldPct) / 12);
 
-  const returnReadinessPct = clamp(retirementReadinessPct * 0.92 + (emergencyStatusLabel === "elite" ? 8 : 0), 0, 100);
+  const returnReadinessPct = clamp(
+    retirementReadinessPct * 0.86 +
+      (emergencyStatusLabel === "elite" ? 6 : emergencyStatusLabel === "solid" ? 3 : 0) +
+      insuranceFactor * 8,
+    0,
+    100,
+  );
 
   const fiPassiveNeed = totalMonthlyNeedFuture * 12;
   const fiYearsFromPassive =

@@ -23,6 +23,8 @@ export type ConstructionPhaseId = "land" | "foundation" | "structure" | "roof" |
 export type SettlementChecklistId =
   | "schoolAdmissions"
   | "healthNepal"
+  | "healthInsurance"
+  | "lifeInsurance"
   | "housingNepal"
   | "nprBanking"
   | "spouseTransition"
@@ -121,8 +123,32 @@ export const CONSTRUCTION_PHASES: { id: ConstructionPhaseId; label: string }[] =
 export const SETTLEMENT_CHECKLIST_ITEMS: { id: SettlementChecklistId; label: string }[] = [
   { id: "schoolAdmissions", label: "Children — school admissions plan" },
   { id: "healthNepal", label: "Healthcare — Nepal coverage mapped" },
+  { id: "healthInsurance", label: "Health Insurance — active FIRE cover" },
+  { id: "lifeInsurance", label: "Life Insurance — family protection locked" },
   { id: "housingNepal", label: "Housing — interim + long-term locked" },
   { id: "nprBanking", label: "Banking — NPR accounts & remittance rails" },
   { id: "spouseTransition", label: "Spouse — career / visa transition" },
   { id: "migrationDocs", label: "Documents — migration & property file" },
+];
+
+/** Return OS readiness pillars — Insurance feeds Health + Life automatically. */
+export type ReturnReadinessPillarId =
+  | "emergencyFund"
+  | "nepalSsf"
+  | "investment"
+  | "healthInsurance"
+  | "lifeInsurance"
+  | "passiveIncome"
+  | "houseFund"
+  | "businessCapital";
+
+export const RETURN_READINESS_PILLARS: { id: ReturnReadinessPillarId; label: string }[] = [
+  { id: "emergencyFund", label: "Emergency Fund" },
+  { id: "nepalSsf", label: "Nepal SSF" },
+  { id: "investment", label: "Investment" },
+  { id: "healthInsurance", label: "Health Insurance" },
+  { id: "lifeInsurance", label: "Life Insurance" },
+  { id: "passiveIncome", label: "Passive Income" },
+  { id: "houseFund", label: "House Fund" },
+  { id: "businessCapital", label: "Business Capital" },
 ];

@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   CalendarClock,
+  Check,
   Coins,
   Heart,
   Home,
@@ -14,14 +15,22 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { formatKrwInteger, formatNprInteger } from "@/components/savings-tracker/savings-currency";
 import { ReturnToNepalCharts } from "@/components/return-to-nepal/ReturnToNepalCharts";
 import { ReturnToNepalChrome } from "@/components/return-to-nepal/ReturnToNepalChrome";
 import { ReturnPlannerNumericInput } from "@/components/return-to-nepal/ReturnPlannerNumericInput";
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
+import { computeWealthTotals } from "@/components/portfolio/calculations";
+import { loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { useReturnToNepalPlanner } from "@/contexts/ReturnToNepalContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { INSURANCE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
+import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
+import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 import {
   budgetOverrunRisk,
   computeAutoNationalPensionMaturityKrw,
@@ -29,6 +38,10 @@ import {
   computeNepalMonthlyCol,
   phaseCompletionRatio,
 } from "@/lib/return-to-nepal/planner-engine";
+import {
+  computeReturnReadinessPillars,
+  syncInsuranceSettlementFlags,
+} from "@/lib/return-to-nepal/return-readiness-pillars";
 import {
   CONSTRUCTION_PHASES,
   LIFESTYLE_LABELS,
@@ -153,13 +166,44 @@ function SectionTitle({
 export function ReturnToNepalPlannerDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const { user } = useProductAuth();
   const { state, snapshot, patch, reset, togglePhase, toggleSettlement } = useReturnToNepalPlanner();
+  const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
   const [chartsReady, setChartsReady] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setChartsReady(true), 520);
     return () => window.clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs);
+    const same =
+      synced.length === state.settlementChecklist.length &&
+      synced.every((id) => state.settlementChecklist.includes(id));
+    if (!same) patch({ settlementChecklist: synced });
+  }, [insuranceInputs, insuranceTick, patch, state.settlementChecklist]);
+
+  useEffect(() => {
+    const onInsurance = () => {
+      const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs);
+      patch({ settlementChecklist: synced });
+    };
+    window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
+    return () => window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
+  }, [insuranceInputs, patch, state.settlementChecklist]);
+
+  const investableNpr = useMemo(() => {
+    void insuranceTick;
+    const portfolio = loadWealthPortfolioState(user?.id);
+    return computeWealthTotals(portfolio, FALLBACK_KRW_PER_NPR, FALLBACK_USD_PER_NPR).investableNpr;
+  }, [insuranceTick, user?.id]);
+
+  const readinessPillars = useMemo(
+    () => computeReturnReadinessPillars(state, snapshot, insuranceInputs, investableNpr),
+    [state, snapshot, insuranceInputs, investableNpr],
+  );
+  const readinessDoneCount = readinessPillars.filter((pillar) => pillar.done).length;
 
   const sg = (extra = "") =>
     `wealth-glass scroll-mt-28 p-4 sm:p-5 lg:p-6 ${light ? "ring-1 ring-slate-900/[0.04] shadow-[0_16px_48px_-24px_rgba(15,23,42,0.08)]" : "ring-1 ring-white/[0.06]"} ${extra}`;
@@ -654,15 +698,62 @@ export function ReturnToNepalPlannerDashboard() {
             </Field>
           </div>
           <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-700" : "fn-txt-muted"}`}>
+                Return readiness
+              </p>
+              <span className={`text-[11px] font-black ${light ? "text-teal-700" : "text-teal-200"}`}>
+                {readinessDoneCount}/{readinessPillars.length}
+              </span>
+            </div>
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {readinessPillars.map((pillar) => {
+                const insurancePillar = pillar.id === "healthInsurance" || pillar.id === "lifeInsurance";
+                const body = (
+                  <div
+                    className={`flex min-h-[88px] flex-col justify-between rounded-xl border px-3 py-2.5 text-left ${
+                      pillar.done
+                        ? light
+                          ? "border-emerald-400/40 bg-emerald-500/12"
+                          : "border-emerald-400/35 bg-emerald-500/12"
+                        : light
+                          ? "border-slate-200/90 bg-white/90"
+                          : "border-white/[0.12] bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-[11px] font-black leading-snug ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
+                        {pillar.label}
+                      </p>
+                      {pillar.done ? <Check size={14} className={light ? "text-emerald-700" : "text-lime-300"} /> : null}
+                    </div>
+                    <p className={`mt-2 text-[10px] font-semibold ${light ? "text-slate-600" : "fn-txt-muted"}`}>
+                      {pillar.detail}
+                    </p>
+                  </div>
+                );
+                return insurancePillar ? (
+                  <Link key={pillar.id} href="/insurance" className="block transition active:scale-[0.99]">
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={pillar.id}>{body}</div>
+                );
+              })}
+            </div>
             <p className={`text-[11px] font-bold uppercase tracking-[0.12em] ${light ? "text-teal-700" : "fn-txt-muted"}`}>Settlement checklist</p>
             <div className="mt-2 flex flex-col gap-2">
               {SETTLEMENT_CHECKLIST_ITEMS.map((row) => {
                 const done = state.settlementChecklist.includes(row.id);
+                const insuranceLocked = row.id === "healthInsurance" || row.id === "lifeInsurance";
                 return (
                   <button
                     key={row.id}
                     type="button"
-                    onClick={() => toggleSettlement(row.id)}
+                    onClick={() => {
+                      if (insuranceLocked) return;
+                      toggleSettlement(row.id);
+                    }}
                     className={`flex min-h-[48px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm font-bold transition sm:px-4 ${
                       done
                         ? light
@@ -671,9 +762,16 @@ export function ReturnToNepalPlannerDashboard() {
                         : light
                           ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-200"
                           : "border-white/[0.12] bg-white/[0.06] fn-txt-secondary hover:border-[rgba(79,255,209,0.3)]"
-                    }`}
+                    } ${insuranceLocked ? "cursor-default opacity-95" : ""}`}
                   >
-                    <span>{row.label}</span>
+                    <span>
+                      {row.label}
+                      {insuranceLocked ? (
+                        <span className={`ml-2 text-[10px] font-bold uppercase tracking-wide ${light ? "text-teal-600" : "fn-txt-muted"}`}>
+                          via Insurance
+                        </span>
+                      ) : null}
+                    </span>
                     <span className={`shrink-0 text-[11px] font-bold uppercase tracking-wide ${light ? "text-teal-600" : "fn-txt-muted"}`}>{done ? "Done" : "Todo"}</span>
                   </button>
                 );
