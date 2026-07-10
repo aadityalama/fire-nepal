@@ -83,6 +83,11 @@ export function SmartWealthDashboard() {
         accent: "rose" as const,
       },
       {
+        label: "Total investment",
+        value: formatMoney(displayTotals.totalInvestmentNpr, "NPR"),
+        hint: "All listed holdings · matches workspace",
+      },
+      {
         label: "Investable wealth",
         value: formatMoney(displayTotals.investableNpr, "NPR"),
         hint: overlay ? "Liquid + listed book (live quotes when mapped)" : "Liquid + investments",

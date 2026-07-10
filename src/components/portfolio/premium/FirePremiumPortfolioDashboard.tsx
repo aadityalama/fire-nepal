@@ -151,10 +151,11 @@ export function FirePremiumPortfolioDashboard() {
         </section>
 
         {/* Executive strip: dense secondary context (display-only; totals from context) */}
-        <div className="mt-4 grid grid-cols-2 gap-3 rounded-[20px] border border-white/[0.14] bg-gradient-to-br from-[#0f1f2d]/88 to-[#071018]/82 p-4 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06] backdrop-blur-lg sm:grid-cols-4 sm:gap-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 rounded-[20px] border border-white/[0.14] bg-gradient-to-br from-[#0f1f2d]/88 to-[#071018]/82 p-4 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.06] backdrop-blur-lg sm:grid-cols-5 sm:gap-4">
           {(
             [
               { name: "Total assets", primary: formatNpr(hydrated ? totals.totalAssetsNpr : 0), sub: "Gross stack" },
+              { name: "Total investment", primary: formatNpr(hydrated ? totals.totalInvestmentNpr : 0), sub: "All listed holdings" },
               { name: "Liabilities", primary: formatNpr(hydrated ? totals.liabilitiesNpr : 0), sub: "Debt" },
               { name: "Investable", primary: formatNpr(hydrated ? totals.investableNpr : 0), sub: "Liquid + listed" },
               { name: "FIRE readiness score", primary: `${fireScore}`, sub: "/ 100 · composite" },

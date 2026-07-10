@@ -12,6 +12,7 @@ export function BottomSummaryStrip() {
   const savingsRate = summary.savingsRatePct;
   const items = [
     { label: "Total assets", value: formatNpr(hydrated ? totals.totalAssetsNpr : 0) },
+    { label: "Total investment", value: formatNpr(hydrated ? totals.totalInvestmentNpr : 0), hint: "Listed holdings" },
     { label: "Liabilities", value: formatNpr(hydrated ? totals.liabilitiesNpr : 0), accent: "rose" as const },
     { label: "Net worth", value: formatNpr(hydrated ? totals.netWorthNpr : 0), hint: "After debt" },
     {

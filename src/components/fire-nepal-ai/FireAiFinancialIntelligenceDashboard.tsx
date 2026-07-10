@@ -255,7 +255,8 @@ export function FireAiFinancialIntelligenceDashboard({
           {hasWealth ? (
             <DetailList>
               <DetailRow label="Investable assets" value={valueOrDash(summary.totalInvestableAssetsNpr)} />
-              <DetailRow label="Investments" value={valueOrDash(summary.investmentsLiveNpr)} />
+              <DetailRow label="Total investment" value={valueOrDash(summary.totalInvestmentNpr)} />
+              <DetailRow label="Investments (listed)" value={valueOrDash(summary.investmentsLiveNpr)} />
               <DetailRow label="Retirement" value={valueOrDash(summary.retirementWealthNpr)} />
               <DetailRow label="Liabilities" value={valueOrDash(summary.liabilitiesNpr)} />
               <Link href="/portfolio" className="mt-1 text-xs font-black text-emerald-600 hover:underline">

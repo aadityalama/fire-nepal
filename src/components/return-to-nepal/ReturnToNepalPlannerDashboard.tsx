@@ -18,15 +18,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { computeWealthTotals, netWorthMonthOverMonthPercent } from "@/components/portfolio/calculations";
-import { loadWealthPortfolioState } from "@/components/portfolio/storage";
+import { netWorthMonthOverMonthPercent } from "@/components/portfolio/calculations";
 import { formatNprInteger, formatPct } from "@/components/savings-tracker/savings-currency";
 import { useReturnToNepalPlanner } from "@/contexts/ReturnToNepalContext";
-import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { INSURANCE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
-import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
-import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 import {
   computeReturnAiInsights,
   computeSaveMoreBoost,
@@ -41,6 +37,7 @@ import {
   type ReturnReadinessScore,
 } from "@/lib/return-to-nepal/return-readiness-scores";
 import { syncInsuranceSettlementFlags } from "@/lib/return-to-nepal/return-readiness-pillars";
+import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 
@@ -128,9 +125,10 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 }
 
 export function ReturnToNepalPlannerDashboard() {
-  const { user } = useProductAuth();
   const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
+  const { summary, portfolio } = useUnifiedFireSummary();
+  const wealth = summary.wealthTotals;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -148,31 +146,23 @@ export function ReturnToNepalPlannerDashboard() {
     return () => window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
   }, [insuranceInputs, patch, state.settlementChecklist]);
 
-  const portfolio = useMemo(() => {
-    void insuranceTick;
-    return loadWealthPortfolioState(user?.id);
-  }, [insuranceTick, user?.id]);
-
-  const wealth = useMemo(
-    () => computeWealthTotals(portfolio, FALLBACK_KRW_PER_NPR, FALLBACK_USD_PER_NPR),
-    [portfolio],
-  );
-
   const nwMomPct = useMemo(
     () => netWorthMonthOverMonthPercent(portfolio.netWorthHistory ?? []),
     [portfolio.netWorthHistory],
   );
 
+  const investmentTotalNpr = wealth.totalInvestmentNpr;
+
   const readinessScores = useMemo(
-    () => computeReturnReadinessScores(effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr],
+    () => computeReturnReadinessScores(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
   );
 
   const readinessPct = useMemo(() => aggregateReadinessPct(readinessScores), [readinessScores]);
 
   const checklist = useMemo(
-    () => computeReturnChecklist(effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr],
+    () => computeReturnChecklist(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
   );
 
   const roadmap = useMemo(() => {
@@ -181,13 +171,13 @@ export function ReturnToNepalPlannerDashboard() {
   }, [snapshot]);
 
   const scenarios = useMemo(
-    () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, wealth.investableNpr, wealth.liabilitiesNpr],
+    () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
   );
 
   const aiInsights = useMemo(
-    () => computeReturnAiInsights(effectiveState, snapshot, readinessPct, wealth.investableNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, readinessPct, wealth.investableNpr, wealth.liabilitiesNpr],
+    () => computeReturnAiInsights(effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr),
+    [effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr],
   );
 
   const primaryInsight = aiInsights.find((i) => i.id === "save-more") ?? aiInsights[0];

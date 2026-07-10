@@ -10,25 +10,12 @@ import {
   type PanInfo,
 } from "framer-motion";
 import { Check, Clock } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ReturnToNepalHeroBackground } from "@/components/return-to-nepal/ReturnToNepalHeroBackground";
 import {
   computeReturnDaysRemaining,
   formatReturnCountdownRemaining,
 } from "@/lib/return-to-nepal/return-ai-engine";
-
-const HimalayanBackground = dynamic(() => import("./ReturnToNepalHeroBackground"), {
-  ssr: false,
-  loading: () => (
-    <div
-      className="absolute inset-0"
-      style={{
-        background:
-          "linear-gradient(180deg, #0c2e24 0%, #041a14 40%, #000805 100%)",
-      }}
-    />
-  ),
-});
 
 const FLIGHT_PATH = "M 48 168 Q 180 52, 310 88 T 520 42";
 const SLIDE_INTERVAL_MS = 5000;
@@ -62,7 +49,7 @@ function CountUpPct({ value }: { value: number }) {
   }, [motionVal, reduced, value]);
 
   return (
-    <motion.span className="text-[clamp(3rem,10vw,4.5rem)] font-black tabular-nums tracking-[-0.04em] text-white">
+    <motion.span className="text-[clamp(3rem,10vw,4.5rem)] font-black tabular-nums tracking-[-0.04em] text-white [text-shadow:0_2px_20px_rgba(0,0,0,0.5)]">
       {display}
     </motion.span>
   );
@@ -97,7 +84,7 @@ function HeroFlightAnimation() {
 
   return (
     <svg
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="pointer-events-none absolute inset-0 z-[3] h-full w-full"
       viewBox="0 0 560 220"
       preserveAspectRatio="xMidYMid slice"
       aria-hidden
@@ -200,7 +187,7 @@ function HeroCloudLayer() {
   );
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+    <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden" aria-hidden>
       {clouds.map((c, i) => (
         <motion.div
           key={i}
@@ -315,7 +302,6 @@ export function ReturnToNepalHero({
   saveMonthsEarlier,
 }: ReturnToNepalHeroProps) {
   const reduced = useReducedMotion();
-  const [bgReady, setBgReady] = useState(false);
   const [slideIndex, setSlideIndex] = useState(0);
 
   const countdownRemaining = formatReturnCountdownRemaining(targetYear);
@@ -364,11 +350,6 @@ export function ReturnToNepalHero({
   );
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => setBgReady(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  useEffect(() => {
     if (reduced) return;
     const timer = setInterval(() => {
       setSlideIndex((i) => (i + 1) % slides.length);
@@ -383,26 +364,29 @@ export function ReturnToNepalHero({
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="relative mb-5 h-[min(380px,88vw)] min-h-[320px] max-h-[380px] overflow-hidden rounded-[32px] border border-white/10 sm:mb-6 sm:h-[min(520px,72vh)] sm:min-h-[420px] sm:max-h-[520px]"
     >
-      {/* Background layers */}
-      {bgReady ? <HimalayanBackground /> : null}
+      {/* Layer 0 — Himalayan scene (cover / center) */}
+      <ReturnToNepalHeroBackground />
+
+      {/* Layer 1 — subtle readability overlay (mountains remain visible) */}
       <div
-        className="absolute inset-0"
+        className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            "linear-gradient(135deg, rgba(0,8,5,0.5) 0%, rgba(0,20,14,0.72) 45%, rgba(0,8,5,0.88) 100%)",
+            "linear-gradient(105deg, rgba(0,8,5,0.42) 0%, rgba(0,12,9,0.28) 42%, rgba(0,8,5,0.52) 100%)",
         }}
       />
       <div
-        className="absolute inset-0 backdrop-blur-[2px]"
+        className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            "radial-gradient(ellipse at 75% 15%, rgba(16,185,129,0.22) 0%, transparent 50%), radial-gradient(ellipse at 20% 80%, rgba(6,78,59,0.35) 0%, transparent 55%)",
+            "radial-gradient(ellipse 90% 70% at 72% 22%, rgba(16,185,129,0.14) 0%, transparent 58%)",
         }}
       />
+
       <HeroCloudLayer />
       <HeroFlightAnimation />
 
-      {/* Glass content overlay */}
+      {/* Layer 10 — content */}
       <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-7">
         <div className="grid flex-1 gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-8">
           {/* Left */}
@@ -410,7 +394,7 @@ export function ReturnToNepalHero({
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300/75">
               Recommended Retirement Date
             </p>
-            <p className="mt-2 text-[clamp(1.65rem,5.5vw,2.6rem)] font-black tracking-[-0.03em] text-emerald-300">
+            <p className="mt-2 text-[clamp(1.65rem,5.5vw,2.6rem)] font-black tracking-[-0.03em] text-emerald-300 [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]">
               {recommendedDate}
             </p>
             <span className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3.5 py-2 text-[clamp(0.75rem,2.5vw,0.8rem)] font-bold text-white/90 backdrop-blur-md">

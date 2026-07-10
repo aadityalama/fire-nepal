@@ -154,7 +154,7 @@ export function UnifiedFireDashboard() {
         <CashflowInsetCard className="mb-5 border-cyan-400/15">
             <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-200/55">Global metrics</p>
             <p className="mt-1 text-[11px] font-semibold text-emerald-200/55">
-              Investments (live): {formatMoney(summary.investmentsLiveNpr, "NPR")} · Liabilities:{" "}
+              Total investment: {formatMoney(summary.totalInvestmentNpr, "NPR")} · Liabilities:{" "}
               {formatMoney(summary.liabilitiesNpr, "NPR")}
             </p>
             <div className="mt-3">

@@ -147,6 +147,7 @@ export function FireDashboardMetrics({
 
   const cards = [
     { label: "Net worth", value: `NPR ${fmtNpr(totals.netWorthNpr)}`, hint: "Assets − liabilities" },
+    { label: "Total investment", value: `NPR ${fmtNpr(totals.totalInvestmentNpr)}`, hint: "All listed holdings" },
     { label: "Portfolio value", value: `NPR ${fmtNpr(totals.totalAssetsNpr)}`, hint: "Total assets (NPR)" },
     { label: "FIRE progress", value: fmtPct(fireProgress), hint: "Vs your goal (NPR)" },
     { label: "FIRE readiness", value: `${fireScore}`, hint: "Composite 0–100" },

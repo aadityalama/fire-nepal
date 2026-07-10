@@ -23,6 +23,7 @@ export type ReturnPlannerLiveBundle = {
   monthlyIncomeNpr: number;
   monthlyExpenseNpr: number;
   investableNpr: number;
+  totalInvestmentNpr: number;
   passiveMonthlyNpr: number;
   nepalColMonthlyNpr: number;
   dataSources: string[];
@@ -216,6 +217,7 @@ export function buildEffectiveReturnPlannerState(
     monthlyIncomeNpr,
     monthlyExpenseNpr,
     investableNpr: wealth.investableNpr,
+    totalInvestmentNpr: wealth.totalInvestmentNpr,
     passiveMonthlyNpr,
     nepalColMonthlyNpr: colSnap.total > 0 ? colSnap.total : 0,
     dataSources,

@@ -33,11 +33,11 @@ export async function buildWealthSummaryContext(userId: string): Promise<string 
     `Net worth: ${formatNpr(totals.netWorthNpr)}.`,
     `Total assets: ${formatNpr(totals.totalAssetsNpr)}; liabilities/debt: ${formatNpr(totals.liabilitiesNpr)}.`,
     `Cash and fixed deposits: ${formatNpr(totals.liquidNpr + totals.fixedDepositsPrincipalNpr)} (cash ${formatNpr(totals.liquidNpr)}, FD principal ${formatNpr(totals.fixedDepositsPrincipalNpr)}).`,
-    `Investments: ${formatNpr(totals.investmentsLiveNpr)}; retirement assets: ${formatNpr(totals.retirementNpr)}; real estate: ${formatNpr(totals.realEstateNpr)}; metals: ${formatNpr(totals.metalsNpr)}; vehicles: ${formatNpr(totals.vehiclesNpr)}.`,
+    `Investments: ${formatNpr(totals.totalInvestmentNpr)} (listed total); retirement assets: ${formatNpr(totals.retirementNpr)}; real estate: ${formatNpr(totals.realEstateNpr)}; metals: ${formatNpr(totals.metalsNpr)}; vehicles: ${formatNpr(totals.vehiclesNpr)}.`,
     `Investable assets: ${formatNpr(totals.investableNpr)}; investment P/L: ${formatNpr(totals.investmentsPnlNpr)}.`,
     `Asset allocation:\n${[
       allocationLine("Cash + FD", totals.liquidNpr + totals.fixedDepositsPrincipalNpr, totalAssets),
-      allocationLine("Investments", totals.investmentsLiveNpr, totalAssets),
+      allocationLine("Investments", totals.totalInvestmentNpr, totalAssets),
       allocationLine("Retirement", totals.retirementNpr, totalAssets),
       allocationLine("Real estate", totals.realEstateNpr, totalAssets),
       allocationLine("Metals", totals.metalsNpr, totalAssets),

@@ -16,6 +16,8 @@ export type UnifiedFireSummary = {
   totalInvestableAssetsNpr: number;
   retirementWealthNpr: number;
   investmentsLiveNpr: number;
+  /** Same as listed investments total — matches Investment workspace. */
+  totalInvestmentNpr: number;
   liabilitiesNpr: number;
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -64,6 +66,7 @@ export function computeUnifiedFireSummary(
     totalInvestableAssetsNpr: wealthTotals.investableNpr,
     retirementWealthNpr: wealthTotals.retirementNpr,
     investmentsLiveNpr: wealthTotals.investmentsLiveNpr,
+    totalInvestmentNpr: wealthTotals.totalInvestmentNpr,
     liabilitiesNpr: wealthTotals.liabilitiesNpr,
     monthlyIncome,
     monthlyExpenses,

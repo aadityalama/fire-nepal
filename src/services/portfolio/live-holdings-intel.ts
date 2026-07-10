@@ -1,4 +1,4 @@
-import { valueInvestmentRow } from "@/components/portfolio/calculations";
+import { valueInvestmentRow, sumListedInvestmentsNpr } from "@/services/portfolio/investment-aggregation";
 import type { InvestmentRow } from "@/components/portfolio/types";
 import { getInstrumentByKey } from "@/lib/investment-market/catalog";
 import { estimateSipIrrAnnualPct } from "@/services/portfolio/sip-irr";
@@ -56,12 +56,11 @@ export function buildHoldingRealtimeMetrics(
   live: MarketSnapshot | null,
   netWorthLiveNpr: number,
 ): HoldingRealtimeMetrics[] {
-  let investmentsLivePool = 0;
   const marks = rows.map((row) => ({
     row,
     v: valueInvestmentRow(row, krwPerNpr, usdPerNpr, live),
   }));
-  for (const { v } of marks) investmentsLivePool += v.liveValueNpr;
+  const investmentsLivePool = sumListedInvestmentsNpr(rows, krwPerNpr, usdPerNpr, live).liveNpr;
 
   const nw = Math.max(netWorthLiveNpr, 1e-9);
 

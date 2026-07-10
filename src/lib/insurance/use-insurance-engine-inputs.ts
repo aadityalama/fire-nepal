@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
-import { computeWealthTotals } from "@/components/portfolio/calculations";
-import { loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   EXPENSE_MODULE_SYNC_EVENT,
@@ -11,11 +9,9 @@ import {
   SAVINGS_MODULE_SYNC_EVENT,
 } from "@/lib/cashflow/live-sync-events";
 import { computeCashflowLiveMetrics } from "@/lib/cashflow/cashflow-live-metrics";
-import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { loadPremiumProfileStore } from "@/lib/fire-premium-profile";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
-import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
 import { DEFAULT_RETURN_PLANNER_STATE, RETURN_PLANNER_STORAGE_KEY } from "@/lib/return-to-nepal/default-planner-state";
 import { computePlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
@@ -74,8 +70,7 @@ export function useInsuranceEngineInputs(): {
     void tick;
     const cashflow = loadCashflowState(uid);
     const live = computeCashflowLiveMetrics(cashflow);
-    const portfolio = loadWealthPortfolioState(uid);
-    const wealth = computeWealthTotals(portfolio, FALLBACK_KRW_PER_NPR, FALLBACK_USD_PER_NPR);
+    const wealth = summary.wealthTotals;
     const onboarding = loadProductOnboarding();
     const ssf = loadSsfPensionWorkspace();
     const returnState = loadReturnPlannerState();

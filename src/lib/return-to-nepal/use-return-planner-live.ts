@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
-import { computeWealthTotals } from "@/components/portfolio/calculations";
+import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
@@ -10,7 +10,7 @@ import {
   INSURANCE_MODULE_SYNC_EVENT,
   SAVINGS_MODULE_SYNC_EVENT,
 } from "@/lib/cashflow/live-sync-events";
-import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
+import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { loadColPlanDocument } from "@/lib/nepal-col-storage";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
@@ -18,8 +18,6 @@ import { buildEffectiveReturnPlannerState, type ReturnPlannerLiveBundle } from "
 import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import { loadSsfPensionWorkspace } from "@/lib/ssf-pension/storage";
-import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
-import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 
 /**
  * Live Return Planner inputs — auto-merges Income, Expenses, Portfolio, COL, Savings, SSF, etc.
@@ -61,12 +59,12 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     void tick;
     const pf = portfolio ?? loadWealthPortfolioState(uid);
     const cf = cashflow ?? loadCashflowState(uid);
-    const krwPerNpr = FALLBACK_KRW_PER_NPR;
-    const wealth = computeWealthTotals(pf, krwPerNpr, FALLBACK_USD_PER_NPR);
+    const wealth = summary.wealthTotals;
     const colPlan = loadColPlanDocument(uid).plan;
     const savings = loadSavingsWorkspaceState();
     const ssf = loadSsfPensionWorkspace();
     const onboarding = loadProductOnboarding();
+    const krwPerNpr = FALLBACK_KRW_PER_NPR;
 
     return buildEffectiveReturnPlannerState(stored, {
       portfolio: pf,

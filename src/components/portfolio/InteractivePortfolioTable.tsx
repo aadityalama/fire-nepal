@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { valueInvestmentRow } from "@/components/portfolio/calculations";
+import { valueInvestmentRow, sumListedInvestmentsNpr } from "@/services/portfolio/investment-aggregation";
 import { CurrencySelect } from "@/components/portfolio/CurrencySelect";
 import { InvestmentMasterSelector } from "@/components/portfolio/InvestmentMasterSelector";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
@@ -110,9 +110,11 @@ export function InteractivePortfolioTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const totalLive = useMemo(() => {
-    return rows.reduce((a, r) => a + valueInvestmentRow(r, krwPerNpr, usdPerNpr, liveMarket).liveValueNpr, 0);
-  }, [rows, krwPerNpr, usdPerNpr, liveMarket]);
+  const investmentTotals = useMemo(
+    () => sumListedInvestmentsNpr(rows, krwPerNpr, usdPerNpr, liveMarket),
+    [rows, krwPerNpr, usdPerNpr, liveMarket],
+  );
+  const totalLive = investmentTotals.liveNpr;
 
   const liveMetricsById = useMemo(() => {
     const nw = netWorthLiveNpr != null && netWorthLiveNpr > 0 ? netWorthLiveNpr : Math.max(totalLive, 1e-9);
@@ -227,6 +229,13 @@ export function InteractivePortfolioTable({
           <p className="mt-0.5 max-w-xl text-xs font-bold leading-snug text-emerald-200/65 sm:text-sm">
             Search, filter by sleeve, sort by category or performance. Live day % and FIRE % need the realtime feed;
             CAGR uses purchase date and NPR cost vs mark. SIP est. uses optional monthly contribution + start date.
+          </p>
+        </div>
+        <div className="shrink-0 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-right">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/55">Total investment</p>
+          <p className="mt-1 text-lg font-black tabular-nums text-white sm:text-xl">{formatMoney(totalLive, "NPR")}</p>
+          <p className="mt-0.5 text-[10px] font-semibold text-emerald-200/45">
+            {rows.length} holding{rows.length === 1 ? "" : "s"} · all categories
           </p>
         </div>
       </div>

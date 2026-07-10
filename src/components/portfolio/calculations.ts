@@ -1,5 +1,4 @@
 import { aggregateFdMonthlyInterestNpr, sumFixedDepositPrincipalNpr } from "@/components/portfolio/banking-fd";
-import { mockLiveMultiplier } from "@/components/portfolio/mock-prices";
 import type {
   GlobalRetirementAssetRow,
   InvestmentRow,
@@ -10,19 +9,17 @@ import type {
   VehicleRow,
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
-import { resolveLiveUnitNpr } from "@/lib/investment-market/quotes";
 import { fallbackMetalRatesFromUsdAnchors, nprPerTolaFromGram } from "@/lib/market/bullion-estimate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, type PortfolioDisplayCurrency } from "@/lib/portfolio-convert";
 import { metalsNprPerGramFromSnapshot } from "@/services/market/metal-convert";
-import { resolveLiveUnitNprFromSnapshot } from "@/services/portfolio/market-quotes";
+import {
+  aggregateInvestmentTotals,
+} from "@/services/portfolio/investment-aggregation";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import type { MarketSnapshot } from "@/types/market";
 
-export type InvestmentValuation = {
-  costNpr: number;
-  liveValueNpr: number;
-  pnlNpr: number;
-};
+export type { InvestmentValuation } from "@/services/portfolio/investment-aggregation";
+export { valueInvestmentRow, sumListedInvestmentsNpr as sumInvestmentsNpr } from "@/services/portfolio/investment-aggregation";
 
 export function lineToNpr(
   amount: number | undefined,
@@ -39,63 +36,6 @@ export function sumSimpleLinesNpr(
   usdPerNpr: number,
 ): number {
   return lines.reduce((a, l) => a + lineToNpr(l.amount, l.currency, krwPerNpr, usdPerNpr), 0);
-}
-
-export function valueInvestmentRow(
-  row: InvestmentRow,
-  krwPerNpr: number,
-  usdPerNpr: number,
-  liveMarket?: MarketSnapshot | null,
-): InvestmentValuation {
-  const qty = row.quantity ?? 0;
-  const buy = row.buyPrice ?? 0;
-  if (qty <= 0) return { costNpr: 0, liveValueNpr: 0, pnlNpr: 0 };
-
-  if (liveMarket) {
-    const apiLive = resolveLiveUnitNprFromSnapshot(row, liveMarket, krwPerNpr, usdPerNpr);
-    if (apiLive != null && Number.isFinite(apiLive) && buy > 0) {
-      const unitBuyNpr = lineToNpr(buy, row.currency, krwPerNpr, usdPerNpr);
-      const costNpr = qty * unitBuyNpr;
-      const liveValueNpr = qty * apiLive;
-      return { costNpr, liveValueNpr, pnlNpr: liveValueNpr - costNpr };
-    }
-  }
-
-  const masterLive = resolveLiveUnitNpr(row.instrumentKey, usdPerNpr);
-  if (masterLive != null && Number.isFinite(masterLive) && buy > 0) {
-    const unitBuyNpr = lineToNpr(buy, row.currency, krwPerNpr, usdPerNpr);
-    const costNpr = qty * unitBuyNpr;
-    const liveValueNpr = qty * masterLive;
-    return { costNpr, liveValueNpr, pnlNpr: liveValueNpr - costNpr };
-  }
-
-  if (buy <= 0) return { costNpr: 0, liveValueNpr: 0, pnlNpr: 0 };
-
-  const unitBuyNpr = lineToNpr(buy, row.currency, krwPerNpr, usdPerNpr);
-  const costNpr = qty * unitBuyNpr;
-  /** When a live snapshot is active, avoid deterministic mock drift — hold at cost if no quote. */
-  const mult = liveMarket ? 1 : mockLiveMultiplier(row.id, row.kind);
-  const liveUnitNpr = unitBuyNpr * mult;
-  const liveValueNpr = qty * liveUnitNpr;
-  return { costNpr, liveValueNpr, pnlNpr: liveValueNpr - costNpr };
-}
-
-export function sumInvestmentsNpr(
-  rows: InvestmentRow[],
-  krwPerNpr: number,
-  usdPerNpr: number,
-  liveMarket?: MarketSnapshot | null,
-): { liveNpr: number; costNpr: number; pnlNpr: number; byKind: Record<string, number> } {
-  const byKind: Record<string, number> = {};
-  let liveNpr = 0;
-  let costNpr = 0;
-  for (const r of rows) {
-    const v = valueInvestmentRow(r, krwPerNpr, usdPerNpr, liveMarket);
-    liveNpr += v.liveValueNpr;
-    costNpr += v.costNpr;
-    byKind[r.kind] = (byKind[r.kind] ?? 0) + v.liveValueNpr;
-  }
-  return { liveNpr, costNpr, pnlNpr: liveNpr - costNpr, byKind };
 }
 
 export function sumMetalsNpr(
@@ -190,6 +130,8 @@ export type WealthTotals = {
   investmentsCostNpr: number;
   investmentsPnlNpr: number;
   investmentByKindNpr: Record<string, number>;
+  /** Listed investments + active fixed deposits — canonical total across dashboards. */
+  totalInvestmentNpr: number;
   metalsNpr: number;
   realEstateNpr: number;
   vehiclesNpr: number;
@@ -229,7 +171,17 @@ export function computeWealthTotals(
   const fdRows = s.fixedDeposits ?? [];
   const fixedDepositsPrincipalNpr = sumFixedDepositPrincipalNpr(fdRows, krwPerNpr, usdPerNpr);
   const fixedDepositsEstimatedMonthlyIncomeNpr = aggregateFdMonthlyInterestNpr(fdRows, krwPerNpr, usdPerNpr);
-  const inv = sumInvestmentsNpr(s.investments, krwPerNpr, usdPerNpr, liveMarket);
+  const investmentAgg = aggregateInvestmentTotals(s.investments, fdRows, {
+    krwPerNpr,
+    usdPerNpr,
+    liveMarket,
+  });
+  const inv = {
+    liveNpr: investmentAgg.listedLiveNpr,
+    costNpr: investmentAgg.listedCostNpr,
+    pnlNpr: investmentAgg.listedPnlNpr,
+    byKind: investmentAgg.byKindNpr,
+  };
   const metalsNpr = sumMetalsNpr(s.metals, metalGramRates, usdPerNpr);
   const realEstateNpr = sumRealEstateNpr(s.realEstate, krwPerNpr, usdPerNpr);
   const vehiclesNpr = sumVehiclesNpr(s.vehicles, krwPerNpr, usdPerNpr);
@@ -254,6 +206,7 @@ export function computeWealthTotals(
     investmentsCostNpr: inv.costNpr,
     investmentsPnlNpr: inv.pnlNpr,
     investmentByKindNpr: inv.byKind,
+    totalInvestmentNpr: investmentAgg.totalInvestmentNpr,
     metalsNpr,
     realEstateNpr,
     vehiclesNpr,

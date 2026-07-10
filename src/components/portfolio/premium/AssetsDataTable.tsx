@@ -3,7 +3,8 @@
 import { Download, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { lineToNpr, resolveMetalGramRatesForUi, valueInvestmentRow } from "@/components/portfolio/calculations";
+import { lineToNpr, resolveMetalGramRatesForUi } from "@/components/portfolio/calculations";
+import { valueInvestmentRow } from "@/services/portfolio/investment-aggregation";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
 import { formatNpr } from "@/data/fire-premium-dashboard";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
