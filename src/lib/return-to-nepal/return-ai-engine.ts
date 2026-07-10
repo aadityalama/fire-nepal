@@ -193,3 +193,36 @@ export function recommendedReturnMonthYear(targetYear: number): string {
   const d = new Date(targetYear, 2, 1);
   return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+
+export function formatReturnCountdownRemaining(targetYear: number, now = new Date()): string {
+  const target = new Date(targetYear, 2, 1);
+  const months =
+    (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
+  if (months <= 0) return "Ready now";
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  if (years > 0 && rem > 0) {
+    return `${years} Year${years === 1 ? "" : "s"} ${rem} Month${rem === 1 ? "" : "s"} Remaining`;
+  }
+  if (years > 0) return `${years} Year${years === 1 ? "" : "s"} Remaining`;
+  return `${rem} Month${rem === 1 ? "" : "s"} Remaining`;
+}
+
+export function computeReturnDaysRemaining(targetYear: number, now = new Date()): number {
+  const target = new Date(targetYear, 2, 1);
+  const ms = target.getTime() - now.getTime();
+  if (ms <= 0) return 0;
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+export function computeSaveMoreBoost(
+  state: ReturnToNepalPlannerState,
+  snapshot: PlannerSnapshot,
+  boostNpr = 20_000,
+): { boostNpr: number; monthsEarlier: number } {
+  const boostKrw = Math.round(boostNpr / Math.max(state.nprPerKrw, 0.08));
+  const boosted = { ...state, monthlySavingsKrw: state.monthlySavingsKrw + boostKrw };
+  const boostedSnap = computePlannerSnapshot(boosted);
+  const monthsEarlier = Math.max(0, Math.round((snapshot.yearsToReturn - boostedSnap.yearsToReturn) * 12));
+  return { boostNpr, monthsEarlier };
+}

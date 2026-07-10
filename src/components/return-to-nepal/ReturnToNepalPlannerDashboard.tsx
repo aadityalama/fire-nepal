@@ -1,13 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Bell,
   Brain,
   Check,
   ChevronRight,
-  Clock,
   Flag,
   GraduationCap,
   Home,
@@ -31,8 +29,8 @@ import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-i
 import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 import {
   computeReturnAiInsights,
+  computeSaveMoreBoost,
   computeWhatIfScenarios,
-  formatReturnCountdown,
   recommendedReturnMonthYear,
 } from "@/lib/return-to-nepal/return-ai-engine";
 import { computeReturnChecklist, type ChecklistStatus } from "@/lib/return-to-nepal/return-checklist";
@@ -43,6 +41,7 @@ import {
   type ReturnReadinessScore,
 } from "@/lib/return-to-nepal/return-readiness-scores";
 import { syncInsuranceSettlementFlags } from "@/lib/return-to-nepal/return-readiness-pillars";
+import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 
 const PAGE_BG = "#000805";
@@ -128,41 +127,6 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
   }
 }
 
-function HeroFlightPath() {
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-80" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" aria-hidden>
-      <defs>
-        <linearGradient id="rtn-flight" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#34d399" stopOpacity="0" />
-          <stop offset="50%" stopColor="#34d399" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#6ee7b7" stopOpacity="0.4" />
-        </linearGradient>
-      </defs>
-      <motion.path
-        d="M 20 140 Q 120 60, 220 90 T 380 50"
-        fill="none"
-        stroke="url(#rtn-flight)"
-        strokeWidth="2"
-        strokeDasharray="6 8"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: 1 }}
-        transition={{ duration: 2.2, ease: "easeInOut" }}
-      />
-      <motion.circle
-        r="5"
-        fill="#ffffff"
-        initial={{ opacity: 0 }}
-        animate={{
-          opacity: [0.4, 1, 1, 0.4],
-          cx: [20, 120, 220, 300, 360, 20],
-          cy: [140, 70, 90, 60, 50, 140],
-        }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-      />
-    </svg>
-  );
-}
-
 export function ReturnToNepalPlannerDashboard() {
   const { user } = useProductAuth();
   const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
@@ -227,8 +191,11 @@ export function ReturnToNepalPlannerDashboard() {
   );
 
   const primaryInsight = aiInsights.find((i) => i.id === "save-more") ?? aiInsights[0];
+  const saveMoreBoost = useMemo(
+    () => computeSaveMoreBoost(effectiveState, snapshot),
+    [effectiveState, snapshot],
+  );
   const recommendedDate = recommendedReturnMonthYear(snapshot.estimatedReturnYear);
-  const countdown = formatReturnCountdown(snapshot.estimatedReturnYear);
   const cityLabel = effectiveState.city.charAt(0).toUpperCase() + effectiveState.city.slice(1);
   const householdLabel = `Family of ${effectiveState.adults + effectiveState.children}`;
 
@@ -289,58 +256,13 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
         </header>
 
-        {/* Hero */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
-          className="relative mb-5 overflow-hidden rounded-[1.5rem] border border-white/10 sm:mb-6 sm:rounded-[1.75rem]"
-        >
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage:
-                "linear-gradient(135deg, rgba(0,8,5,0.55) 0%, rgba(0,8,5,0.75) 45%, rgba(0,8,5,0.92) 100%), radial-gradient(ellipse at 70% 20%, rgba(16,185,129,0.25) 0%, transparent 55%), linear-gradient(180deg, #0c2e24 0%, #041a14 40%, #000805 100%)",
-            }}
-          />
-          <HeroFlightPath />
-          <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-300/70">Recommended Return Date</p>
-              <p className="mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-black tracking-tight text-emerald-300">{recommendedDate}</p>
-              <span className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-bold text-white/90 backdrop-blur-md">
-                <Clock size={14} className="text-emerald-400" />
-                {countdown}
-              </span>
-              <p className="mt-4 max-w-md text-sm font-semibold leading-relaxed text-white/55">
-                Based on your income, savings, investments, pension, expenses and Nepal cost of living.
-              </p>
-            </div>
-            <div className="flex flex-col items-start lg:items-end">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-100/45">Return Readiness</p>
-              <p className="mt-1 text-5xl font-black tabular-nums tracking-tight text-white sm:text-6xl">{readinessPct}%</p>
-              <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-emerald-300">
-                <Check size={16} strokeWidth={3} />
-                {readinessPct >= 70 ? "You are on the right track!" : "Building momentum — keep saving."}
-              </p>
-              <div className="mt-4 w-full max-w-xs">
-                <div className="mb-1 flex justify-between text-[10px] font-bold text-white/40">
-                  <span>0%</span>
-                  <span>50%</span>
-                  <span>100%</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-300"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${readinessPct}%` }}
-                    transition={{ duration: 1.2, ease: "easeOut", delay: 0.2 }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.section>
+        <ReturnToNepalHero
+          recommendedDate={recommendedDate}
+          targetYear={snapshot.estimatedReturnYear}
+          readinessPct={readinessPct}
+          saveBoostNpr={saveMoreBoost.boostNpr}
+          saveMonthsEarlier={saveMoreBoost.monthsEarlier}
+        />
 
         {/* KPI strip */}
         <div className="-mx-4 mb-5 flex gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
