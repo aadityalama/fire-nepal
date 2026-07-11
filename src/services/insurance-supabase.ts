@@ -16,7 +16,7 @@ function mapInsuranceError(error: { message?: string; code?: string } | null | u
     lower.includes("finance_insurance_policies") &&
     (lower.includes("does not exist") || lower.includes("schema cache") || error?.code === "42P01" || error?.code === "PGRST205")
   ) {
-    return "Insurance storage is being set up. Please try again in a minute.";
+    return "Insurance cloud sync is unavailable. Your local insurance workspace is still available.";
   }
   if (lower.includes("permission denied") || error?.code === "42501") {
     return "You do not have permission to save this policy.";

@@ -77,10 +77,10 @@ export function SavingsWorkspaceDashboard() {
 
     async function hydrate() {
       const local = loadSavingsWorkspaceState();
+      if (!cancelled) setState(local);
 
       if (!user?.id) {
         if (!cancelled) {
-          setState(local);
           setHydrated(true);
         }
         return;
@@ -105,7 +105,7 @@ export function SavingsWorkspaceDashboard() {
           console.error("[savings-workspace] hydrate failed", error);
         }
         if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Could not load savings from Supabase.");
+          setState(local);
         }
       } finally {
         if (!cancelled) setHydrated(true);
@@ -134,13 +134,24 @@ export function SavingsWorkspaceDashboard() {
   const persistState = useCallback(
     async (next: SavingsWorkspaceState) => {
       if (!user?.id) {
-        throw new Error("Please sign in to save your savings workspace.");
+        setState(next);
+        saveSavingsWorkspaceState(next);
+        return next;
       }
-      const saved = await saveSavingsWorkspaceToCloud(next);
-      const fresh = (await fetchSavingsWorkspace()) ?? saved;
-      setState(fresh);
-      saveSavingsWorkspaceState(fresh);
-      return fresh;
+      try {
+        const saved = await saveSavingsWorkspaceToCloud(next);
+        const fresh = (await fetchSavingsWorkspace()) ?? saved;
+        setState(fresh);
+        saveSavingsWorkspaceState(fresh);
+        return fresh;
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[savings-workspace] cloud save failed; keeping local state", error);
+        }
+        setState(next);
+        saveSavingsWorkspaceState(next);
+        return next;
+      }
     },
     [user?.id],
   );

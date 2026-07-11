@@ -25,7 +25,7 @@ import {
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
 import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine";
-import { loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
+import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
 import {
@@ -55,6 +55,33 @@ function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
     ...policy,
     status: derivePolicyStatus(policy.expiryDate),
   }));
+}
+
+function createLocalPolicy(
+  input: InsurancePolicyFormInput,
+  sortOrder: number,
+  existing?: InsurancePolicy,
+): InsurancePolicy {
+  const now = new Date().toISOString();
+  return {
+    id: existing?.id ?? createPolicyId(),
+    type: input.type,
+    provider: input.provider.trim() || "Unknown provider",
+    coverageAmountNpr: Math.max(0, Math.round(input.coverageAmountNpr)),
+    premiumNpr: Math.max(0, Math.round(input.premiumNpr)),
+    paymentFrequency: input.paymentFrequency,
+    startDate: input.startDate,
+    expiryDate: input.expiryDate,
+    nominee: input.nominee.trim(),
+    familyMembersCovered: input.familyMembersCovered,
+    notes: input.notes.trim(),
+    documentDataUrl: input.documentDataUrl,
+    documentFileName: input.documentFileName,
+    status: derivePolicyStatus(input.expiryDate),
+    sortOrder: existing?.sortOrder ?? sortOrder,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
 }
 
 export function InsuranceWorkspaceDashboard() {
@@ -91,7 +118,6 @@ export function InsuranceWorkspaceDashboard() {
           }
           if (!cancelled) {
             setCloudReady(false);
-            toast.error(error instanceof Error ? error.message : "Could not load insurance policies from Supabase.");
           }
         }
       }
@@ -117,11 +143,10 @@ export function InsuranceWorkspaceDashboard() {
   );
   const renewals = useMemo(() => upcomingRenewals(policies, 90), [policies]);
 
-  const persistLocal = useCallback((updater: (current: InsuranceWorkspaceState) => InsuranceWorkspaceState) => {
-    setState((current) => {
-      const next = updater(current);
-      return { ...next, policies: withDerivedStatus(next.policies) };
-    });
+  const persistLocalState = useCallback((next: InsuranceWorkspaceState) => {
+    const normalized = { version: 1 as const, policies: withDerivedStatus(next.policies) };
+    setState(normalized);
+    saveInsuranceWorkspaceState(normalized);
   }, []);
 
   const reloadPoliciesFromCloud = useCallback(async () => {
@@ -135,23 +160,46 @@ export function InsuranceWorkspaceDashboard() {
   const handleSavePolicy = useCallback(
     async (input: InsurancePolicyFormInput, editingId?: string) => {
       setSaving(true);
-      const now = new Date().toISOString();
 
       try {
-        if (!cloudReady || !isSupabaseConfigured() || !user?.id) {
-          throw new Error("Please sign in and wait for insurance storage to load before saving.");
+        if (cloudReady && isSupabaseConfigured() && user?.id) {
+          try {
+            if (editingId) {
+              await updateInsurancePolicy(editingId, input);
+              await reloadPoliciesFromCloud();
+              toast.success("Policy updated");
+            } else {
+              await createInsurancePolicy(input);
+              await reloadPoliciesFromCloud();
+              toast.success("Policy saved");
+            }
+            setSheetOpen(false);
+            setEditingPolicy(null);
+            recalculate();
+            return;
+          } catch (error) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[insurance-workspace] cloud save failed; keeping local state", error);
+            }
+            setCloudReady(false);
+          }
         }
 
         if (editingId) {
-          await updateInsurancePolicy(editingId, input);
-          await reloadPoliciesFromCloud();
+          const existing = state.policies.find((policy) => policy.id === editingId);
+          const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
+          persistLocalState({
+            version: 1,
+            policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
+          });
           toast.success("Policy updated");
         } else {
-          await createInsurancePolicy(input);
-          await reloadPoliciesFromCloud();
+          persistLocalState({
+            version: 1,
+            policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
+          });
           toast.success("Policy saved");
         }
-
         setSheetOpen(false);
         setEditingPolicy(null);
         recalculate();
@@ -162,24 +210,37 @@ export function InsuranceWorkspaceDashboard() {
         setSaving(false);
       }
     },
-    [cloudReady, recalculate, reloadPoliciesFromCloud, user?.id],
+    [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
   );
 
   const handleDeletePolicy = useCallback(
     async (policy: InsurancePolicy) => {
       try {
-        if (!cloudReady || !isSupabaseConfigured() || !user?.id) {
-          throw new Error("Please sign in and wait for insurance storage to load before deleting.");
+        if (cloudReady && isSupabaseConfigured() && user?.id) {
+          try {
+            await deleteInsurancePolicy(policy.id);
+            await reloadPoliciesFromCloud();
+            toast.success("Policy deleted");
+            recalculate();
+            return;
+          } catch (error) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[insurance-workspace] cloud delete failed; keeping local state", error);
+            }
+            setCloudReady(false);
+          }
         }
-        await deleteInsurancePolicy(policy.id);
-        await reloadPoliciesFromCloud();
+        persistLocalState({
+          version: 1,
+          policies: state.policies.filter((item) => item.id !== policy.id),
+        });
         toast.success("Policy deleted");
         recalculate();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not delete policy.");
       }
     },
-    [cloudReady, recalculate, reloadPoliciesFromCloud, user?.id],
+    [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
   );
 
   const riskStyles =
