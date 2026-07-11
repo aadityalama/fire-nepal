@@ -15,6 +15,7 @@ import {
   CreditCard,
   FileText,
   Gem,
+  HandCoins,
   Home,
   LayoutGrid,
   LineChart,
@@ -45,6 +46,7 @@ type LauncherItem = {
   body: string;
   icon: LucideIcon;
   accent: string;
+  badge?: string;
   testId?: string;
 };
 
@@ -133,6 +135,14 @@ const PRIMARY_APPS: LauncherItem[] = [
     body: "Pension, severance & KRW planning",
     icon: Building2,
     accent: "from-indigo-500/15 to-emerald-500/10",
+  },
+  {
+    href: "/group-expenses",
+    title: "Group Expenses",
+    body: "Shared bills, roommates & settlements",
+    icon: HandCoins,
+    accent: "from-emerald-500/35 to-lime-300/15",
+    badge: "NEW",
   },
 ];
 
@@ -324,11 +334,24 @@ function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boole
         >
           <item.icon size={22} strokeWidth={2.1} />
         </span>
-        <ChevronRight
-          size={18}
-          className={`shrink-0 opacity-60 transition group-active:translate-x-0.5 ${light ? "text-emerald-700" : "text-lime-300"}`}
-          aria-hidden
-        />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {item.badge ? (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${
+                light
+                  ? "border-emerald-200/80 bg-emerald-50/90 text-emerald-700"
+                  : "border-emerald-300/25 bg-emerald-400/10 text-lime-200"
+              }`}
+            >
+              {item.badge}
+            </span>
+          ) : null}
+          <ChevronRight
+            size={18}
+            className={`shrink-0 opacity-60 transition group-active:translate-x-0.5 ${light ? "text-emerald-700" : "text-lime-300"}`}
+            aria-hidden
+          />
+        </div>
       </div>
       <div className="relative z-10 mt-3 min-w-0">
         <h2 className={`text-base font-black leading-tight sm:text-lg ${light ? "text-slate-900" : "text-white"}`}>{item.title}</h2>
