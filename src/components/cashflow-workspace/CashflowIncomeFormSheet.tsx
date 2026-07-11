@@ -73,13 +73,15 @@ export function CashflowIncomeFormSheet({
   setForm,
   onClose,
   onSave,
+  saving = false,
 }: {
   open: boolean;
   editingId: string | null;
   form: IncomeFormState;
   setForm: Dispatch<SetStateAction<IncomeFormState>>;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
+  saving?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -196,11 +198,12 @@ export function CashflowIncomeFormSheet({
             <div className="border-t border-white/10 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
               <button
                 type="button"
-                onClick={onSave}
+                onClick={() => void onSave()}
+                disabled={saving}
                 className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/25 active:scale-[0.99]"
               >
                 <Save size={18} />
-                Save
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </motion.div>

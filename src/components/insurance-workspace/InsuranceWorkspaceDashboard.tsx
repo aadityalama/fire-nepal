@@ -25,11 +25,7 @@ import {
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
 import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine";
-import {
-  createPolicyId,
-  loadInsuranceWorkspaceState,
-  saveInsuranceWorkspaceState,
-} from "@/lib/insurance/insurance-storage";
+import { loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
 import {
@@ -83,16 +79,20 @@ export function InsuranceWorkspaceDashboard() {
       if (isSupabaseConfigured() && user?.id) {
         try {
           const remote = await fetchInsurancePolicies();
-          if (!cancelled && remote.length > 0) {
+          if (!cancelled) {
             const next = { version: 1 as const, policies: withDerivedStatus(remote) };
             setState(next);
             saveInsuranceWorkspaceState(next);
             setCloudReady(true);
-          } else if (!cancelled) {
-            setCloudReady(true);
           }
-        } catch {
-          if (!cancelled) setCloudReady(false);
+        } catch (error) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[insurance-workspace] hydrate failed", error);
+          }
+          if (!cancelled) {
+            setCloudReady(false);
+            toast.error(error instanceof Error ? error.message : "Could not load insurance policies from Supabase.");
+          }
         }
       }
 
@@ -124,56 +124,31 @@ export function InsuranceWorkspaceDashboard() {
     });
   }, []);
 
+  const reloadPoliciesFromCloud = useCallback(async () => {
+    const remote = await fetchInsurancePolicies();
+    const next = { version: 1 as const, policies: withDerivedStatus(remote) };
+    setState(next);
+    saveInsuranceWorkspaceState(next);
+    return next;
+  }, []);
+
   const handleSavePolicy = useCallback(
     async (input: InsurancePolicyFormInput, editingId?: string) => {
       setSaving(true);
       const now = new Date().toISOString();
 
       try {
-        if (cloudReady && isSupabaseConfigured() && user?.id) {
-          if (editingId) {
-            const updated = await updateInsurancePolicy(editingId, input);
-            persistLocal((current) => ({
-              ...current,
-              policies: current.policies.map((policy) => (policy.id === editingId ? updated : policy)),
-            }));
-            toast.success("Policy updated");
-          } else {
-            const created = await createInsurancePolicy(input);
-            persistLocal((current) => ({
-              ...current,
-              policies: [...current.policies, created],
-            }));
-            toast.success("Policy saved");
-          }
-        } else if (editingId) {
-          persistLocal((current) => ({
-            ...current,
-            policies: current.policies.map((policy) =>
-              policy.id === editingId
-                ? {
-                    ...policy,
-                    ...input,
-                    status: derivePolicyStatus(input.expiryDate),
-                    updatedAt: now,
-                  }
-                : policy,
-            ),
-          }));
+        if (!cloudReady || !isSupabaseConfigured() || !user?.id) {
+          throw new Error("Please sign in and wait for insurance storage to load before saving.");
+        }
+
+        if (editingId) {
+          await updateInsurancePolicy(editingId, input);
+          await reloadPoliciesFromCloud();
           toast.success("Policy updated");
         } else {
-          const created: InsurancePolicy = {
-            id: createPolicyId(),
-            ...input,
-            status: derivePolicyStatus(input.expiryDate),
-            sortOrder: policies.length,
-            createdAt: now,
-            updatedAt: now,
-          };
-          persistLocal((current) => ({
-            ...current,
-            policies: [...current.policies, created],
-          }));
+          await createInsurancePolicy(input);
+          await reloadPoliciesFromCloud();
           toast.success("Policy saved");
         }
 
@@ -187,26 +162,24 @@ export function InsuranceWorkspaceDashboard() {
         setSaving(false);
       }
     },
-    [cloudReady, persistLocal, policies.length, recalculate, user?.id],
+    [cloudReady, recalculate, reloadPoliciesFromCloud, user?.id],
   );
 
   const handleDeletePolicy = useCallback(
     async (policy: InsurancePolicy) => {
       try {
-        if (cloudReady && isSupabaseConfigured() && user?.id) {
-          await deleteInsurancePolicy(policy.id);
+        if (!cloudReady || !isSupabaseConfigured() || !user?.id) {
+          throw new Error("Please sign in and wait for insurance storage to load before deleting.");
         }
-        persistLocal((current) => ({
-          ...current,
-          policies: current.policies.filter((item) => item.id !== policy.id),
-        }));
+        await deleteInsurancePolicy(policy.id);
+        await reloadPoliciesFromCloud();
         toast.success("Policy deleted");
         recalculate();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not delete policy.");
       }
     },
-    [cloudReady, persistLocal, recalculate, user?.id],
+    [cloudReady, recalculate, reloadPoliciesFromCloud, user?.id],
   );
 
   const riskStyles =

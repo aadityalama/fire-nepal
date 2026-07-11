@@ -12,6 +12,7 @@ import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  GroupExpenseHistoryError,
   groupExpensePayerName,
   groupExpenseRowToExpense,
   listGroupExpenses,
@@ -47,6 +48,7 @@ export function GroupActivityPanel({
 }: GroupActivityPanelProps) {
   const [rows, setRows] = useState<GroupExpenseRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const cursorRef = useRef<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -67,9 +69,15 @@ export function GroupActivityPanel({
         setRows((current) => (reset ? result.rows : [...current, ...result.rows]));
         cursorRef.current = result.nextCursor;
         setHasMore(Boolean(result.nextCursor));
+        setLoadError(null);
       } catch (error) {
         console.error("Group activity load failed", error);
-        toast.error("Unable to load group expenses. Please try again.");
+        const message =
+          error instanceof GroupExpenseHistoryError || error instanceof Error
+            ? error.message
+            : "Unable to load group expenses. Please try again.";
+        setLoadError(message);
+        toast.error(message);
       } finally {
         setLoading(false);
       }
@@ -85,7 +93,10 @@ export function GroupActivityPanel({
         const client = getSupabaseBrowserClient();
         await syncLocalExpensesToGroupExpenses(client, userId, expenses);
         await loadPage(true);
-      } catch {
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[group-expenses] local sync failed", error);
+        }
         await loadPage(true);
       }
     })();
@@ -207,7 +218,20 @@ export function GroupActivityPanel({
 
       <div className="rounded-xl border border-slate-200/80 bg-white p-4">
         <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Shared Expenses</h3>
-        {displayRows.length === 0 ? (
+        {loadError ? (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-6 text-center">
+            <ReceiptText className="mx-auto mb-2 text-red-600" size={28} />
+            <p className="text-sm font-black text-red-700">Could not load group expense history</p>
+            <p className="mx-auto mt-2 max-w-md text-xs font-semibold leading-relaxed text-red-600">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void loadPage(true)}
+              className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white"
+            >
+              Retry
+            </button>
+          </div>
+        ) : displayRows.length === 0 ? (
           <div className="py-8 text-center">
             <ReceiptText className="mx-auto mb-2 text-emerald-600" size={28} />
             <p className="text-sm font-bold text-slate-500">No group expenses yet</p>

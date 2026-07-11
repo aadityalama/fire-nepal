@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type {
   BusinessProfileRow,
   CreditReminderRow,
@@ -121,6 +122,29 @@ const EMPTY_SUMMARY: FireBizDashboardSummary = {
 
 const FireBizContext = createContext<FireBizContextValue | null>(null);
 
+async function loadFireBizRequired<T>(label: string, promise: Promise<T>): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`[fire-biz] failed to load ${label}`, error);
+    }
+    const message = error instanceof Error ? error.message : `Could not load FIRE Biz ${label}.`;
+    throw new Error(`Could not load FIRE Biz ${label}: ${message}`);
+  }
+}
+
+async function loadFireBizOptional<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`[fire-biz] optional load failed: ${label}`, error);
+    }
+    return fallback;
+  }
+}
+
 export function FireBizProvider({ children }: { children: ReactNode }) {
   const { user } = useProductAuth();
   const [locale, setLocale] = useState<FireBizLocale>("en");
@@ -164,17 +188,17 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
         categoriesData,
         ordersData,
       ] = await Promise.all([
-        loadFireBizDashboardSummary(client, uid).catch(() => EMPTY_SUMMARY),
-        loadBusinessProfile(client, uid).catch(() => null),
-        loadCustomers(client, uid).catch(() => []),
-        loadSuppliers(client, uid).catch(() => []),
-        loadSales(client, uid).catch(() => []),
-        loadPurchases(client, uid).catch(() => []),
-        loadInventoryItems(client, uid).catch(() => []),
-        loadBizTransactions(client, uid).catch(() => []),
-        loadCreditReminders(client, uid).catch(() => []),
-        loadExpenseCategories(client, uid).catch(() => []),
-        loadPurchaseOrders(client, uid).catch(() => []),
+        loadFireBizRequired("dashboard summary", loadFireBizDashboardSummary(client, uid)),
+        loadFireBizOptional("business profile", loadBusinessProfile(client, uid), null),
+        loadFireBizRequired("customers", loadCustomers(client, uid)),
+        loadFireBizRequired("suppliers", loadSuppliers(client, uid)),
+        loadFireBizRequired("sales history", loadSales(client, uid)),
+        loadFireBizRequired("purchase history", loadPurchases(client, uid)),
+        loadFireBizRequired("inventory history", loadInventoryItems(client, uid)),
+        loadFireBizRequired("transaction history", loadBizTransactions(client, uid)),
+        loadFireBizOptional("credit reminders", loadCreditReminders(client, uid), []),
+        loadFireBizOptional("expense categories", loadExpenseCategories(client, uid), []),
+        loadFireBizRequired("purchase orders", loadPurchaseOrders(client, uid)),
       ]);
       setSummary(summaryData);
       setProfile(profileData);
@@ -187,6 +211,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       setCreditReminders(remindersData);
       setExpenseCategories(categoriesData);
       setPurchaseOrders(ordersData);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load FIRE Biz history.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

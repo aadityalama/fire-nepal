@@ -97,7 +97,7 @@ export function TransactionDetailModal({
     setSaving(true);
     try {
       const client = getSupabaseBrowserClient();
-      await updateExpenseTransaction(
+      const updated = await updateExpenseTransaction(
         client,
         userId,
         transaction!.id,
@@ -108,11 +108,12 @@ export function TransactionDetailModal({
         },
         actorName,
       );
+      if (!updated) throw new Error("Transaction was not updated.");
       toast.success("Transaction updated");
       setEditing(false);
       onUpdated();
-    } catch {
-      toast.error("Could not update transaction");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update transaction");
     } finally {
       setSaving(false);
     }
@@ -125,13 +126,13 @@ export function TransactionDetailModal({
     try {
       const client = getSupabaseBrowserClient();
       const ok = await softDeleteExpenseTransaction(client, userId, transaction!.id, actorName);
-      if (!ok) throw new Error("delete failed");
+      if (!ok) throw new Error("Transaction was not deleted.");
       if (linkedExpense) onDeleteExpense(linkedExpense);
       toast.success("Transaction deleted");
       onUpdated();
       onClose();
-    } catch {
-      toast.error("Could not delete transaction");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete transaction");
     } finally {
       setSaving(false);
     }

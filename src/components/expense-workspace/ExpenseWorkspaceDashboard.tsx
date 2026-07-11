@@ -158,7 +158,7 @@ export type ExpenseWorkspaceDashboardProps = {
     reminderEnabled: boolean;
     reminderTiming: ExpenseReminderTiming;
     reminderEmail: boolean;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 export function ExpenseWorkspaceDashboard({
@@ -625,22 +625,29 @@ export function ExpenseWorkspaceDashboard({
             onSave={() => {
               const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
               if (!form.title.trim() || !amountNpr) return;
-              onSubmitWorkspaceExpense({
-                title: form.title.trim(),
-                amountNpr,
-                category: normalizeFinanceCategory(form.category),
-                expenseDate: form.expenseDate,
-                dueDate: form.dueDate,
-                account: form.account,
-                paymentMethod: form.paymentMethod,
-                repeat: form.repeat,
-                notes: form.notes,
-                reminderEnabled: form.reminderEnabled,
-                reminderTiming: form.reminderTiming,
-                reminderEmail: form.reminderEmail,
-              });
-              setAddOpen(false);
-              setForm(emptyForm(todayIso));
+              void Promise.resolve(
+                onSubmitWorkspaceExpense({
+                  title: form.title.trim(),
+                  amountNpr,
+                  category: normalizeFinanceCategory(form.category),
+                  expenseDate: form.expenseDate,
+                  dueDate: form.dueDate,
+                  account: form.account,
+                  paymentMethod: form.paymentMethod,
+                  repeat: form.repeat,
+                  notes: form.notes,
+                  reminderEnabled: form.reminderEnabled,
+                  reminderTiming: form.reminderTiming,
+                  reminderEmail: form.reminderEmail,
+                }),
+              )
+                .then(() => {
+                  setAddOpen(false);
+                  setForm(emptyForm(todayIso));
+                })
+                .catch(() => {
+                  /* Parent shows the Supabase error toast. */
+                });
             }}
           />
         ) : null}

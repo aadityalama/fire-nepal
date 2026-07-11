@@ -36,6 +36,7 @@ import {
   type TransactionHistorySummary,
 } from "@/lib/transaction-history-types";
 import {
+  ExpenseTransactionHistoryError,
   listAllExpenseTransactionsForExport,
   listExpenseTransactions,
   syncLocalDataToTransactions,
@@ -73,6 +74,7 @@ export function TransactionHistoryPanel({
   const cursorRef = useRef<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState<ExpenseTransactionRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -94,9 +96,15 @@ export function TransactionHistoryPanel({
         setRows((current) => (reset ? result.rows : [...current, ...result.rows]));
         cursorRef.current = result.nextCursor;
         setHasMore(Boolean(result.nextCursor));
+        setLoadError(null);
       } catch (error) {
         console.error("Transaction history load failed", error);
-        toast.error("Unable to load transaction history. Please try again.");
+        const message =
+          error instanceof ExpenseTransactionHistoryError || error instanceof Error
+            ? error.message
+            : "Unable to load transaction history. Please try again.";
+        setLoadError(message);
+        toast.error(message);
       } finally {
         setLoading(false);
       }
@@ -180,7 +188,7 @@ export function TransactionHistoryPanel({
       toast.success("Export ready");
     } catch (error) {
       console.error("Transaction history export failed", error);
-      toast.error("Unable to export transaction history. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Unable to export transaction history. Please try again.");
     } finally {
       setExporting(false);
     }
@@ -362,6 +370,19 @@ export function TransactionHistoryPanel({
           <p className="mt-1 text-sm font-bold text-slate-500">
             Your transactions will be stored permanently in Supabase once you sign in.
           </p>
+        </div>
+      ) : loadError ? (
+        <div className="rounded-[1.5rem] border border-red-100 bg-red-50 p-6 text-center">
+          <CalendarDays className="mx-auto text-red-600" />
+          <p className="mt-3 font-black text-red-800">Could not load transaction history</p>
+          <p className="mx-auto mt-2 max-w-xl text-xs font-semibold leading-relaxed text-red-600">{loadError}</p>
+          <button
+            type="button"
+            onClick={refresh}
+            className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white"
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <section className="glass-card overflow-hidden rounded-[1.5rem]">

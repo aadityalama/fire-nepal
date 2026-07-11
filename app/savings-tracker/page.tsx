@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { SavingsTrackerDashboard } from "@/components/savings-tracker/SavingsTrackerDashboard";
 
 export const metadata: Metadata = {
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function SavingsTrackerPage() {
-  return <SavingsTrackerDashboard />;
+  return (
+    <DashboardAccessGuard>
+      <SavingsTrackerDashboard />
+    </DashboardAccessGuard>
+  );
 }

@@ -76,7 +76,7 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
   ]);
 
   if (banks.error || inv.error || metals.error || re.error || veh.error || liab.error || ret.error || ext.error) {
-    console.error("[portfolio-supabase] load error", {
+    const errorBundle = {
       banks: banks.error,
       inv: inv.error,
       metals: metals.error,
@@ -85,8 +85,16 @@ export async function loadWealthPortfolioFromSupabase(client: Client, userId: st
       liab: liab.error,
       ret: ret.error,
       ext: ext.error,
-    });
-    return null;
+    };
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[portfolio-supabase] load error", errorBundle);
+    }
+    const firstError = banks.error ?? inv.error ?? metals.error ?? re.error ?? veh.error ?? liab.error ?? ret.error ?? ext.error;
+    throw new PortfolioSupabaseError(
+      formatSupabaseError(firstError, "Could not load portfolio transaction history."),
+      "loadWealthPortfolioFromSupabase",
+      firstError,
+    );
   }
 
   const liquidCash: SimpleMoneyLine[] = [];

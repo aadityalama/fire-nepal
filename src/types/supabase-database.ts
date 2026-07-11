@@ -1582,6 +1582,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      finance_savings_workspace: {
+        Row: {
+          user_id: string;
+          state: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          state?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          state?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       finance_insurance_policies: {
         Row: {
           id: string;

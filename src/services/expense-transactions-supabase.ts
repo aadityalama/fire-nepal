@@ -31,9 +31,18 @@ function formatSupabaseError(error: unknown, fallback: string): string {
   if (!error) return fallback;
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && "message" in error && typeof error.message === "string") {
-    return error.message;
+    const supabaseError = error as { message?: string; code?: string; details?: string; hint?: string };
+    const parts = [supabaseError.message, supabaseError.details, supabaseError.hint].filter(Boolean);
+    return supabaseError.code ? `${parts.join(" ")} (${supabaseError.code})` : parts.join(" ");
   }
   return fallback;
+}
+
+function throwHistoryError(context: string, error: unknown, fallback: string): never {
+  if (process.env.NODE_ENV !== "production") {
+    console.error(`[expense-transactions] ${context}`, error);
+  }
+  throw new ExpenseTransactionHistoryError(formatSupabaseError(error, fallback), context, error);
 }
 
 export type ExpenseTransactionInput = {
@@ -168,7 +177,9 @@ export async function updateExpenseTransaction(
     .eq("workspace_id", workspace.id)
     .maybeSingle();
 
-  if (!before) return null;
+  if (!before) {
+    throwHistoryError("expense-transaction-update-before", null, "Transaction was not found or is not accessible.");
+  }
 
   const patch: Database["public"]["Tables"]["expense_transactions"]["Update"] = {};
   if (input.transactionType) patch.transaction_type = input.transactionType;
@@ -192,8 +203,7 @@ export async function updateExpenseTransaction(
     .single();
 
   if (error || !data) {
-    console.warn("[expense-transactions] update failed", error);
-    return null;
+    throwHistoryError("expense-transaction-update", error, "Could not update transaction.");
   }
 
   await appendAudit(client, workspace.id, userId, transactionId, "updated", { before, after: data }, actorName);
@@ -207,7 +217,9 @@ export async function softDeleteExpenseTransaction(
   actorName?: string | null,
 ): Promise<boolean> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-delete");
-  if (!workspace) return false;
+  if (!workspace) {
+    throwHistoryError("expense-transaction-delete-workspace", null, "Workspace was not found for this transaction.");
+  }
 
   const { data: before } = await client
     .from("expense_transactions")
@@ -216,7 +228,9 @@ export async function softDeleteExpenseTransaction(
     .eq("workspace_id", workspace.id)
     .maybeSingle();
 
-  if (!before) return false;
+  if (!before) {
+    throwHistoryError("expense-transaction-delete-before", null, "Transaction was not found or is not accessible.");
+  }
 
   const deletedAt = new Date().toISOString();
   const { error } = await client
@@ -226,8 +240,7 @@ export async function softDeleteExpenseTransaction(
     .eq("workspace_id", workspace.id);
 
   if (error) {
-    console.warn("[expense-transactions] soft delete failed", error);
-    return false;
+    throwHistoryError("expense-transaction-delete", error, "Could not delete transaction.");
   }
 
   await appendAudit(client, workspace.id, userId, transactionId, "deleted", { before, deleted_at: deletedAt }, actorName);
@@ -287,18 +300,18 @@ export async function listExpenseTransactions(
   if (filters.transactionType !== "all") {
     query = query.eq("transaction_type", filters.transactionType as ExpenseTransactionType);
   }
-  if (options?.cursor) {
-    query = query.lt("created_at", options.cursor);
-  }
+  if (options?.cursor) query = query.lt("created_at", options.cursor);
 
   const { data, error } = await query;
   if (error) {
-    console.error("[expense-transactions] list failed", {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[expense-transactions] list failed", {
       context: "expense-transaction-list",
       workspaceId: workspace.id,
       filters,
       error,
-    });
+      });
+    }
     throw new ExpenseTransactionHistoryError(
       formatSupabaseError(error, "Could not load expense transactions."),
       "expense-transaction-list",

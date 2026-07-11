@@ -23,17 +23,22 @@ export function loadSavingsWorkspaceState(): SavingsWorkspaceState {
   try {
     const raw = window.localStorage.getItem(SAVINGS_WORKSPACE_STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
-    const parsed = JSON.parse(raw) as SavingsWorkspaceState;
-    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.goals)) return DEFAULT_STATE;
-    return {
-      version: 1,
-      goals: sortGoals(parsed.goals),
-      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
-      balanceHidden: Boolean(parsed.balanceHidden),
-    };
+    return sanitizeSavingsWorkspaceState(JSON.parse(raw));
   } catch {
     return DEFAULT_STATE;
   }
+}
+
+export function sanitizeSavingsWorkspaceState(input: unknown): SavingsWorkspaceState {
+  if (!input || typeof input !== "object") return DEFAULT_STATE;
+  const parsed = input as Partial<SavingsWorkspaceState>;
+  if (parsed.version !== 1 || !Array.isArray(parsed.goals)) return DEFAULT_STATE;
+  return {
+    version: 1,
+    goals: sortGoals(parsed.goals),
+    transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+    balanceHidden: Boolean(parsed.balanceHidden),
+  };
 }
 
 export function saveSavingsWorkspaceState(state: SavingsWorkspaceState) {

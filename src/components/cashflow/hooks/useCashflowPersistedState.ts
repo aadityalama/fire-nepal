@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
+import { toast } from "sonner";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import {
   coverageMonths,
@@ -39,9 +40,9 @@ export type UseCashflowPersistedStateResult = {
   metrics: CashflowDerivedMetrics;
   patchIncome: (key: IncomeSourceKey, amount: number | undefined) => void;
   patchExpense: (key: ExpenseCategoryKey, amount: number | undefined) => void;
-  addIncomeEntry: (entry: Omit<IncomeEntry, "id" | "createdAt">) => void;
-  updateIncomeEntry: (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => void;
-  deleteIncomeEntry: (id: string) => void;
+  addIncomeEntry: (entry: Omit<IncomeEntry, "id" | "createdAt">) => Promise<void>;
+  updateIncomeEntry: (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => Promise<void>;
+  deleteIncomeEntry: (id: string) => Promise<void>;
 };
 
 /**
@@ -70,10 +71,13 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
       .then((res) => res.json() as Promise<{ ok: boolean; snapshot?: { state: CashflowDashboardState } | null }>)
       .then((json) => {
         if (!alive || !json.ok || !json.snapshot?.state) return;
-        setState((current) => (hasCashflowData(current) ? current : sanitizeCashflowState(json.snapshot?.state)));
+        setState(sanitizeCashflowState(json.snapshot.state));
       })
-      .catch(() => {
-        /* Cloud sync is best-effort; local cashflow remains source for UI. */
+      .catch((error) => {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[cashflow] cloud hydrate failed", error);
+        }
+        toast.error(error instanceof Error ? error.message : "Could not load cashflow history from Supabase.");
       });
     return () => {
       alive = false;
@@ -90,8 +94,17 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ state }),
         signal: controller.signal,
-      }).catch(() => {
-        /* Keep local data even if cloud sync is unavailable. */
+      })
+        .then(async (res) => {
+          if (!res.ok && process.env.NODE_ENV !== "production") {
+            const json = (await res.json().catch(() => null)) as { error?: string } | null;
+            console.error("[cashflow] background sync failed", json?.error ?? res.statusText);
+          }
+        })
+        .catch((error) => {
+          if (error?.name !== "AbortError" && process.env.NODE_ENV !== "production") {
+            console.error("[cashflow] background sync failed", error);
+          }
       });
     }, 700);
     return () => {
@@ -132,41 +145,68 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
     [setState],
   );
 
+  const persistCashflowState = useCallback(
+    async (next: CashflowDashboardState) => {
+      if (!userId) throw new Error("Please sign in to save cashflow.");
+      const saveResponse = await fetch("/api/cashflow", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: next }),
+      });
+      const saveJson = (await saveResponse.json()) as { ok: boolean; error?: string };
+      if (!saveResponse.ok || !saveJson.ok) {
+        throw new Error(saveJson.error ?? "Could not save cashflow.");
+      }
+
+      const loadResponse = await fetch("/api/cashflow", { credentials: "include", cache: "no-store" });
+      const loadJson = (await loadResponse.json()) as {
+        ok: boolean;
+        snapshot?: { state: CashflowDashboardState } | null;
+        error?: string;
+      };
+      if (!loadResponse.ok || !loadJson.ok || !loadJson.snapshot?.state) {
+        throw new Error(loadJson.error ?? "Cashflow saved, but could not reload it.");
+      }
+
+      setState(sanitizeCashflowState(loadJson.snapshot.state));
+    },
+    [setState, userId],
+  );
+
   const addIncomeEntry = useCallback(
-    (entry: Omit<IncomeEntry, "id" | "createdAt">) => {
-      setState((s) => {
-        const nextEntry: IncomeEntry = {
-          ...entry,
-          id: `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: new Date().toISOString(),
-        };
-        return {
-          ...s,
-          incomeEntries: [...(s.incomeEntries ?? []), nextEntry],
-        };
+    async (entry: Omit<IncomeEntry, "id" | "createdAt">) => {
+      const nextEntry: IncomeEntry = {
+        ...entry,
+        id: `income-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+      };
+      await persistCashflowState({
+        ...state,
+        incomeEntries: [...(state.incomeEntries ?? []), nextEntry],
       });
     },
-    [setState],
+    [persistCashflowState, state],
   );
 
   const updateIncomeEntry = useCallback(
-    (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => {
-      setState((s) => ({
-        ...s,
-        incomeEntries: (s.incomeEntries ?? []).map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
-      }));
+    async (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => {
+      await persistCashflowState({
+        ...state,
+        incomeEntries: (state.incomeEntries ?? []).map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+      });
     },
-    [setState],
+    [persistCashflowState, state],
   );
 
   const deleteIncomeEntry = useCallback(
-    (id: string) => {
-      setState((s) => ({
-        ...s,
-        incomeEntries: (s.incomeEntries ?? []).filter((entry) => entry.id !== id),
-      }));
+    async (id: string) => {
+      await persistCashflowState({
+        ...state,
+        incomeEntries: (state.incomeEntries ?? []).filter((entry) => entry.id !== id),
+      });
     },
-    [setState],
+    [persistCashflowState, state],
   );
 
   return {

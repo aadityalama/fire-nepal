@@ -57,9 +57,9 @@ type CashflowWorkspaceDashboardProps = {
   state: CashflowDashboardState;
   live: CashflowLiveMetrics;
   hydrated: boolean;
-  onAddIncome: (entry: Omit<IncomeEntry, "id" | "createdAt">) => void;
-  onUpdateIncome: (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => void;
-  onDeleteIncome: (id: string) => void;
+  onAddIncome: (entry: Omit<IncomeEntry, "id" | "createdAt">) => Promise<void>;
+  onUpdateIncome: (id: string, patch: Partial<Omit<IncomeEntry, "id" | "createdAt">>) => Promise<void>;
+  onDeleteIncome: (id: string) => Promise<void>;
 };
 
 const glassCardClassName = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
@@ -234,6 +234,7 @@ export function CashflowWorkspaceDashboard({
   const [deleteTarget, setDeleteTarget] = useState<IncomeEntry | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<CashflowIncomeTypeId | "all">("all");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const id = window.setTimeout(() => setChartsReady(true), 480);
@@ -283,28 +284,42 @@ export function CashflowWorkspaceDashboard({
     setFormOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const parsed = parseIncomeForm(form);
     if (!parsed) {
       toast.error("Enter a valid income name and amount.");
       return;
     }
-    if (editingId) {
-      onUpdateIncome(editingId, parsed);
-      toast.success("Income updated.");
-    } else {
-      onAddIncome(parsed);
-      toast.success("Income saved.");
+    setSaving(true);
+    try {
+      if (editingId) {
+        await onUpdateIncome(editingId, parsed);
+        toast.success("Income updated.");
+      } else {
+        await onAddIncome(parsed);
+        toast.success("Income saved.");
+      }
+      setFormOpen(false);
+      setEditingId(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save income.");
+    } finally {
+      setSaving(false);
     }
-    setFormOpen(false);
-    setEditingId(null);
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteTarget) return;
-    onDeleteIncome(deleteTarget.id);
-    toast.success("Income deleted.");
-    setDeleteTarget(null);
+    setSaving(true);
+    try {
+      await onDeleteIncome(deleteTarget.id);
+      toast.success("Income deleted.");
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete income.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -512,6 +527,7 @@ export function CashflowWorkspaceDashboard({
           setEditingId(null);
         }}
         onSave={handleSave}
+        saving={saving}
       />
 
       <AnimatePresence>
@@ -540,8 +556,8 @@ export function CashflowWorkspaceDashboard({
                 <button type="button" onClick={() => setDeleteTarget(null)} className="min-h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-50">
                   Cancel
                 </button>
-                <button type="button" onClick={confirmDelete} className="min-h-[48px] rounded-2xl bg-rose-500 text-sm font-black text-white">
-                  Delete
+                <button type="button" onClick={() => void confirmDelete()} disabled={saving} className="min-h-[48px] rounded-2xl bg-rose-500 text-sm font-black text-white disabled:opacity-60">
+                  {saving ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </motion.div>

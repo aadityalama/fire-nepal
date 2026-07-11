@@ -19,6 +19,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SavingsGoalCard } from "@/components/savings-workspace/SavingsGoalCard";
 import { SavingsGoalSheet } from "@/components/savings-workspace/SavingsGoalSheet";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { fetchSavingsWorkspace, saveSavingsWorkspaceToCloud } from "@/lib/savings/savings-api";
 import {
   appendSavingsTransaction,
   createGoalId,
@@ -63,6 +65,7 @@ function SummaryCard({
 }
 
 export function SavingsWorkspaceDashboard() {
+  const { user } = useProductAuth();
   const [state, setState] = useState<SavingsWorkspaceState>(() => loadSavingsWorkspaceState());
   const [hydrated, setHydrated] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -70,9 +73,46 @@ export function SavingsWorkspaceDashboard() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setState(loadSavingsWorkspaceState());
-    setHydrated(true);
-  }, []);
+    let cancelled = false;
+
+    async function hydrate() {
+      const local = loadSavingsWorkspaceState();
+      if (!cancelled) setState(local);
+
+      if (!user?.id) {
+        if (!cancelled) setHydrated(true);
+        return;
+      }
+
+      try {
+        const remote = await fetchSavingsWorkspace();
+        if (cancelled) return;
+        if (remote) {
+          setState(remote);
+          saveSavingsWorkspaceState(remote);
+        } else if (local.goals.length > 0 || local.transactions.length > 0) {
+          const saved = await saveSavingsWorkspaceToCloud(local);
+          if (cancelled) return;
+          setState(saved);
+          saveSavingsWorkspaceState(saved);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[savings-workspace] hydrate failed", error);
+        }
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "Could not load savings from Supabase.");
+        }
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    }
+
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -87,9 +127,19 @@ export function SavingsWorkspaceDashboard() {
     [state.transactions],
   );
 
-  const persistState = useCallback((updater: (current: SavingsWorkspaceState) => SavingsWorkspaceState) => {
-    setState((current) => updater(current));
-  }, []);
+  const persistState = useCallback(
+    async (next: SavingsWorkspaceState) => {
+      if (!user?.id) {
+        throw new Error("Please sign in to save your savings workspace.");
+      }
+      const saved = await saveSavingsWorkspaceToCloud(next);
+      const fresh = (await fetchSavingsWorkspace()) ?? saved;
+      setState(fresh);
+      saveSavingsWorkspaceState(fresh);
+      return fresh;
+    },
+    [user?.id],
+  );
 
   const handleSaveGoal = useCallback(
     async (input: SavingsGoalFormInput, editingId?: string) => {
@@ -102,10 +152,10 @@ export function SavingsWorkspaceDashboard() {
 
       try {
         if (editingId) {
-          persistState((current) => ({
-            ...current,
+          const nextState: SavingsWorkspaceState = {
+            ...state,
             goals: sortGoalsStable(
-              current.goals.map((goal) =>
+              state.goals.map((goal) =>
                 goal.id === editingId
                   ? {
                       ...goal,
@@ -116,7 +166,8 @@ export function SavingsWorkspaceDashboard() {
                   : goal,
               ),
             ),
-          }));
+          };
+          await persistState(nextState);
           toast.success("Goal updated successfully");
         } else {
           const newGoal: SavingsGoal = {
@@ -128,22 +179,20 @@ export function SavingsWorkspaceDashboard() {
             createdAt: now,
             updatedAt: now,
           };
-          persistState((current) => {
-            let next: SavingsWorkspaceState = {
-              ...current,
-              goals: sortGoalsStable([...current.goals, newGoal]),
-            };
-            if (input.savedAmountNpr > 0) {
-              next = appendSavingsTransaction(next, {
-                goalId: newGoal.id,
-                goalName: newGoal.name,
-                amountNpr: input.savedAmountNpr,
-                date: now.slice(0, 10),
-                source: "Initial deposit",
-              });
-            }
-            return next;
-          });
+          let nextState: SavingsWorkspaceState = {
+            ...state,
+            goals: sortGoalsStable([...state.goals, newGoal]),
+          };
+          if (input.savedAmountNpr > 0) {
+            nextState = appendSavingsTransaction(nextState, {
+              goalId: newGoal.id,
+              goalName: newGoal.name,
+              amountNpr: input.savedAmountNpr,
+              date: now.slice(0, 10),
+              source: "Initial deposit",
+            });
+          }
+          await persistState(nextState);
           toast.success("Goal saved successfully");
         }
         setSheetOpen(false);
@@ -155,47 +204,59 @@ export function SavingsWorkspaceDashboard() {
         setSaving(false);
       }
     },
-    [goals.length, persistState],
+    [goals.length, persistState, state],
   );
 
   const handlePauseGoal = useCallback(
-    (goal: SavingsGoal) => {
-      persistState((current) => ({
-        ...current,
-        goals: current.goals.map((item) =>
-          item.id === goal.id
-            ? { ...item, status: item.status === "paused" ? "active" : "paused", updatedAt: new Date().toISOString() }
-            : item,
-        ),
-      }));
-      toast.message(goal.status === "paused" ? "Goal resumed" : "Goal paused");
+    async (goal: SavingsGoal) => {
+      try {
+        await persistState({
+          ...state,
+          goals: state.goals.map((item) =>
+            item.id === goal.id
+              ? { ...item, status: item.status === "paused" ? "active" : "paused", updatedAt: new Date().toISOString() }
+              : item,
+          ),
+        });
+        toast.message(goal.status === "paused" ? "Goal resumed" : "Goal paused");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save goal status.");
+      }
     },
-    [persistState],
+    [persistState, state],
   );
 
   const handleCompleteGoal = useCallback(
-    (goal: SavingsGoal) => {
-      persistState((current) => ({
-        ...current,
-        goals: current.goals.map((item) =>
-          item.id === goal.id ? { ...item, status: "completed", updatedAt: new Date().toISOString() } : item,
-        ),
-      }));
-      toast.success(`${goal.name} marked completed`);
+    async (goal: SavingsGoal) => {
+      try {
+        await persistState({
+          ...state,
+          goals: state.goals.map((item) =>
+            item.id === goal.id ? { ...item, status: "completed", updatedAt: new Date().toISOString() } : item,
+          ),
+        });
+        toast.success(`${goal.name} marked completed`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not complete goal.");
+      }
     },
-    [persistState],
+    [persistState, state],
   );
 
   const handleDeleteGoal = useCallback(
-    (goal: SavingsGoal) => {
-      persistState((current) => ({
-        ...current,
-        goals: current.goals.filter((item) => item.id !== goal.id),
-        transactions: current.transactions.filter((txn) => txn.goalId !== goal.id),
-      }));
-      toast.success("Goal deleted");
+    async (goal: SavingsGoal) => {
+      try {
+        await persistState({
+          ...state,
+          goals: state.goals.filter((item) => item.id !== goal.id),
+          transactions: state.transactions.filter((txn) => txn.goalId !== goal.id),
+        });
+        toast.success("Goal deleted");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not delete goal.");
+      }
     },
-    [persistState],
+    [persistState, state],
   );
 
   return (
@@ -227,7 +288,11 @@ export function SavingsWorkspaceDashboard() {
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Total Savings</p>
                 <button
                   type="button"
-                  onClick={() => persistState((current) => ({ ...current, balanceHidden: !current.balanceHidden }))}
+                  onClick={() => {
+                    void persistState({ ...state, balanceHidden: !state.balanceHidden }).catch((error) => {
+                      toast.error(error instanceof Error ? error.message : "Could not save display preference.");
+                    });
+                  }}
                   className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.08] text-emerald-100"
                   aria-label={state.balanceHidden ? "Show balance" : "Hide balance"}
                 >

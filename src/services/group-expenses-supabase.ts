@@ -7,6 +7,17 @@ import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
 
 type Client = SupabaseClient<Database>;
 
+export class GroupExpenseHistoryError extends Error {
+  constructor(
+    message: string,
+    public readonly context: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "GroupExpenseHistoryError";
+  }
+}
+
 export type GroupExpenseRow = Database["public"]["Tables"]["group_expenses"]["Row"] & {
   amount: number;
   split_percentages: Record<string, number>;
@@ -19,6 +30,17 @@ export type SettlementRow = Database["public"]["Tables"]["settlements"]["Row"] &
 
 const GROUP_EXPENSE_COLUMNS =
   "id,workspace_id,user_id,local_expense_id,title,amount,payer_member_id,category,split_equally,expense_date,split_among,split_percentages,amount_currency,receipt_image_url,notes,deleted_at,created_at,updated_at" as const;
+
+function formatGroupExpenseError(error: unknown, fallback: string): string {
+  if (!error) return fallback;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object") {
+    const e = error as { message?: string; code?: string; details?: string; hint?: string };
+    const parts = [e.message, e.details, e.hint].filter(Boolean);
+    if (parts.length > 0) return e.code ? `${parts.join(" ")} (${e.code})` : parts.join(" ");
+  }
+  return fallback;
+}
 
 function rowToGroupExpense(row: Database["public"]["Tables"]["group_expenses"]["Row"]): GroupExpenseRow {
   return {
@@ -172,8 +194,14 @@ export async function listGroupExpenses(
 
   const { data, error } = await query;
   if (error || !data) {
-    console.warn("[group-expenses] list failed", error);
-    return { rows: [], nextCursor: null };
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[group-expenses] list failed", { workspaceId: workspace.id, error });
+    }
+    throw new GroupExpenseHistoryError(
+      formatGroupExpenseError(error, "Could not load group expense history."),
+      "group-expense-list",
+      error,
+    );
   }
 
   const hasMore = data.length > limit;

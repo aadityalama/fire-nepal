@@ -997,43 +997,54 @@ export function ExpenseDashboard({
       input: Parameters<typeof insertExpenseTransaction>[2],
       options?: { upsertLocalId?: boolean },
     ) => {
-      if (!personalMode || !user?.id || !isSupabaseConfigured()) return;
-      try {
-        const client = getSupabaseBrowserClient();
-        if (options?.upsertLocalId && input.localExpenseId != null) {
-          await upsertExpenseTransactionByLocalId(client, user.id, input, actorName);
-        } else {
-          await insertExpenseTransaction(client, user.id, input, actorName);
+      if (!personalMode) return null;
+      if (!user?.id) throw new Error("Please sign in to save expenses.");
+      if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for expense saving.");
+      const client = getSupabaseBrowserClient();
+      const row =
+        options?.upsertLocalId && input.localExpenseId != null
+          ? await upsertExpenseTransactionByLocalId(client, user.id, input, actorName)
+          : await insertExpenseTransaction(client, user.id, input, actorName);
+      if (!row) {
+        const error = new Error("Could not save expense to Supabase. Check RLS permissions and try again.");
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[expense-dashboard] transaction persist failed", error);
         }
-      } catch (error) {
-        console.warn("[expense-dashboard] transaction persist failed", error);
+        throw error;
       }
+      return row;
     },
     [personalMode, user?.id, actorName],
   );
 
   const persistGroupExpense = useCallback(
     async (expense: Expense) => {
-      if (personalMode || !user?.id || !isSupabaseConfigured()) return;
-      try {
-        const client = getSupabaseBrowserClient();
-        await upsertGroupExpenseByLocalId(client, user.id, {
-          localExpenseId: expense.id,
-          title: expense.title,
-          amount: expense.amount,
-          payerMemberId: expense.payerId,
-          category: normalizeExpenseCategory(expense.category),
-          splitEqually: expense.splitEqually !== false,
-          expenseDate: expense.date,
-          splitAmong: expense.splitAmong,
-          splitPercentages: expense.splitPercentages,
-          amountCurrency: expense.amountCurrency,
-          receiptImageUrl: expense.receiptImage,
-          notes: expense.notes,
-        });
-      } catch (error) {
-        console.warn("[group-expenses] persist failed", error);
+      if (personalMode) return null;
+      if (!user?.id) throw new Error("Please sign in to save group expenses.");
+      if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
+      const client = getSupabaseBrowserClient();
+      const row = await upsertGroupExpenseByLocalId(client, user.id, {
+        localExpenseId: expense.id,
+        title: expense.title,
+        amount: expense.amount,
+        payerMemberId: expense.payerId,
+        category: normalizeExpenseCategory(expense.category),
+        splitEqually: expense.splitEqually !== false,
+        expenseDate: expense.date,
+        splitAmong: expense.splitAmong,
+        splitPercentages: expense.splitPercentages,
+        amountCurrency: expense.amountCurrency,
+        receiptImageUrl: expense.receiptImage,
+        notes: expense.notes,
+      });
+      if (!row) {
+        const error = new Error("Could not save group expense to Supabase. Check RLS permissions and try again.");
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[group-expenses] persist failed", error);
+        }
+        throw error;
       }
+      return row;
     },
     [personalMode, user?.id, normalizeExpenseCategory],
   );
@@ -1379,7 +1390,7 @@ export function ExpenseDashboard({
     [selectedMonthKey],
   );
 
-  function saveExpense() {
+  async function saveExpense() {
     const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
     if (!form.title.trim() || amount === null || !form.payerId) return;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
@@ -1401,6 +1412,31 @@ export function ExpenseDashboard({
 
     const monthKey = expenseMonthKey(nextExpense.date);
 
+    try {
+      if (personalMode) {
+        await recordTransaction(
+          {
+            localExpenseId: nextExpense.id,
+            transactionType: "expense",
+            description: nextExpense.title,
+            category: normalizeExpenseCategory(nextExpense.category),
+            amount: nextExpense.amount,
+            currency: nextExpense.amountCurrency ?? "NPR",
+            memberId: nextExpense.payerId,
+            memberName: memberDisplayName(nextExpense.payerId, profiles),
+            transactionDate: nextExpense.date,
+            metadata: { monthKey, source: editingExpenseId ? "expense_edit" : "expense_add" },
+          },
+          { upsertLocalId: true },
+        );
+      } else {
+        await persistGroupExpense(nextExpense);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save expense.");
+      return;
+    }
+
     if (editingExpenseId) {
       setExpenses((current) =>
         current.map((expense) =>
@@ -1418,25 +1454,7 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} updated ${nextExpense.title}`,
       });
-      if (personalMode) {
-        void recordTransaction(
-          {
-            localExpenseId: nextExpense.id,
-            transactionType: "expense",
-            description: nextExpense.title,
-            category: normalizeExpenseCategory(nextExpense.category),
-            amount: nextExpense.amount,
-            currency: nextExpense.amountCurrency ?? "NPR",
-            memberId: nextExpense.payerId,
-            memberName: memberDisplayName(nextExpense.payerId, profiles),
-            transactionDate: nextExpense.date,
-            metadata: { monthKey, source: "expense_edit" },
-          },
-          { upsertLocalId: true },
-        );
-      } else {
-        void persistGroupExpense(nextExpense);
-      }
+      toast.success("Expense updated");
     } else {
       setExpenses((current) => [nextExpense, ...current]);
       appendActivity({
@@ -1448,25 +1466,7 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} added ${nextExpense.title}`,
       });
-      if (personalMode) {
-        void recordTransaction(
-          {
-            localExpenseId: nextExpense.id,
-            transactionType: "expense",
-            description: nextExpense.title,
-            category: normalizeExpenseCategory(nextExpense.category),
-            amount: nextExpense.amount,
-            currency: nextExpense.amountCurrency ?? "NPR",
-            memberId: nextExpense.payerId,
-            memberName: memberDisplayName(nextExpense.payerId, profiles),
-            transactionDate: nextExpense.date,
-            metadata: { monthKey, source: "expense_add" },
-          },
-          { upsertLocalId: true },
-        );
-      } else {
-        void persistGroupExpense(nextExpense);
-      }
+      toast.success("Expense saved");
     }
 
     if (!monthKeys.includes(monthKey)) {
@@ -1476,9 +1476,35 @@ export function ExpenseDashboard({
     closeExpenseModal();
   }
 
-  function confirmDeleteExpense() {
+  async function confirmDeleteExpense() {
     if (!expenseToDelete) return;
     const deleted = expenseToDelete;
+    try {
+      if (personalMode) {
+        await recordTransaction({
+          transactionType: "adjustment",
+          description: `Deleted: ${deleted.title}`,
+          category: normalizeExpenseCategory(deleted.category),
+          amount: deleted.amount,
+          currency: deleted.amountCurrency ?? "NPR",
+          memberId: deleted.payerId,
+          memberName: memberDisplayName(deleted.payerId, profiles),
+          transactionDate: deleted.date,
+          metadata: { localExpenseId: deleted.id, source: "expense_delete" },
+        });
+        if (user?.id && isSupabaseConfigured()) {
+          await softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
+        }
+      } else {
+        if (!user?.id) throw new Error("Please sign in to delete group expenses.");
+        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
+        const ok = await softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
+        if (!ok) throw new Error("Could not delete group expense from Supabase.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete expense.");
+      return;
+    }
     setExpenses((current) => current.filter((expense) => expense.id !== expenseToDelete.id));
     appendActivity({
       type: "expense_deleted",
@@ -1488,25 +1514,8 @@ export function ExpenseDashboard({
       category: normalizeExpenseCategory(deleted.category),
       message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
     });
-    if (personalMode) {
-      void recordTransaction({
-        transactionType: "adjustment",
-        description: `Deleted: ${deleted.title}`,
-        category: normalizeExpenseCategory(deleted.category),
-        amount: deleted.amount,
-        currency: deleted.amountCurrency ?? "NPR",
-        memberId: deleted.payerId,
-        memberName: memberDisplayName(deleted.payerId, profiles),
-        transactionDate: deleted.date,
-        metadata: { localExpenseId: deleted.id, source: "expense_delete" },
-      });
-      if (user?.id && isSupabaseConfigured()) {
-        void softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
-      }
-    } else if (user?.id && isSupabaseConfigured()) {
-      void softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
-    }
     setExpenseToDelete(null);
+    toast.success("Expense deleted");
   }
 
   const settlementMarkedComplete = useMemo(
@@ -1787,7 +1796,7 @@ export function ExpenseDashboard({
   }, []);
 
   const submitWorkspaceExpense = useCallback(
-    (payload: {
+    async (payload: {
       title: string;
       amountNpr: number;
       category: string;
@@ -1818,6 +1827,26 @@ export function ExpenseDashboard({
         notes: payload.notes || undefined,
         amountCurrency: "NPR",
       };
+      try {
+        await recordTransaction(
+          {
+            localExpenseId: nextExpense.id,
+            transactionType: "expense",
+            description: nextExpense.title,
+            category: normalizeExpenseCategory(nextExpense.category),
+            amount: nextExpense.amount,
+            currency: "NPR",
+            memberId: payerId,
+            memberName: memberDisplayName(payerId, profiles),
+            transactionDate: nextExpense.date,
+            metadata: { monthKey: expenseMonthKey(nextExpense.date), source: "workspace_add" },
+          },
+          { upsertLocalId: true },
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save expense.");
+        throw error;
+      }
       setExpenses((current) => [nextExpense, ...current]);
       saveWorkspaceMeta(nextExpense.id, {
         dueDate: payload.dueDate,
@@ -1839,18 +1868,6 @@ export function ExpenseDashboard({
         amount: nextExpense.amount,
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(payerId, profiles)} added ${nextExpense.title}`,
-      });
-      void recordTransaction({
-        localExpenseId: nextExpense.id,
-        transactionType: "expense",
-        description: nextExpense.title,
-        category: normalizeExpenseCategory(nextExpense.category),
-        amount: nextExpense.amount,
-        currency: "NPR",
-        memberId: payerId,
-        memberName: memberDisplayName(payerId, profiles),
-        transactionDate: nextExpense.date,
-        metadata: { monthKey: expenseMonthKey(nextExpense.date), source: "workspace_add" },
       });
       toast.success("Expense saved");
     },
