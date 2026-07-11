@@ -25,3 +25,5 @@ create policy finance_savings_workspace_update
   on public.finance_savings_workspace for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+notify pgrst, 'reload schema';

@@ -77,10 +77,12 @@ export function SavingsWorkspaceDashboard() {
 
     async function hydrate() {
       const local = loadSavingsWorkspaceState();
-      if (!cancelled) setState(local);
 
       if (!user?.id) {
-        if (!cancelled) setHydrated(true);
+        if (!cancelled) {
+          setState(local);
+          setHydrated(true);
+        }
         return;
       }
 
@@ -95,6 +97,8 @@ export function SavingsWorkspaceDashboard() {
           if (cancelled) return;
           setState(saved);
           saveSavingsWorkspaceState(saved);
+        } else {
+          setState(local);
         }
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {

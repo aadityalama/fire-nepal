@@ -13,7 +13,7 @@ function mapSavingsError(error: { message?: string; code?: string } | null | und
     lower.includes("finance_savings_workspace") &&
     (lower.includes("does not exist") || lower.includes("schema cache") || error?.code === "42P01" || error?.code === "PGRST205")
   ) {
-    return "Savings storage is being set up. Please try again in a minute.";
+    return "Savings database table is missing in production. Apply the finance_savings_workspace migration and reload the Supabase schema cache.";
   }
   if (lower.includes("permission denied") || error?.code === "42501") {
     return "You do not have permission to save this savings workspace.";
