@@ -27,6 +27,7 @@ import {
   loadSavingsWorkspaceState,
   saveSavingsWorkspaceState,
 } from "@/lib/savings/savings-storage";
+import { mergeDurableRecords } from "@/lib/persistence/permanent-data-policy";
 import {
   buildSavingsAiInsight,
   computeDashboardSummary,
@@ -38,6 +39,15 @@ import {
 import type { SavingsGoal, SavingsGoalFormInput, SavingsWorkspaceState } from "@/lib/savings/savings-types";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
+
+function mergeSavingsWorkspaceState(local: SavingsWorkspaceState, remote: SavingsWorkspaceState): SavingsWorkspaceState {
+  return {
+    version: 1,
+    goals: sortGoalsStable(mergeDurableRecords(local.goals, remote.goals)),
+    transactions: mergeDurableRecords(local.transactions, remote.transactions).slice(0, 100),
+    balanceHidden: remote.balanceHidden || local.balanceHidden,
+  };
+}
 
 function SummaryCard({
   label,
@@ -90,8 +100,16 @@ export function SavingsWorkspaceDashboard() {
         const remote = await fetchSavingsWorkspace();
         if (cancelled) return;
         if (remote) {
-          setState(remote);
-          saveSavingsWorkspaceState(remote);
+          const merged = mergeSavingsWorkspaceState(local, remote);
+          setState(merged);
+          saveSavingsWorkspaceState(merged);
+          if (JSON.stringify(merged) !== JSON.stringify(remote)) {
+            void saveSavingsWorkspaceToCloud(merged).catch((error) => {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("[savings-workspace] background merge sync failed", error);
+              }
+            });
+          }
         } else if (local.goals.length > 0 || local.transactions.length > 0) {
           const saved = await saveSavingsWorkspaceToCloud(local);
           if (cancelled) return;
@@ -140,9 +158,17 @@ export function SavingsWorkspaceDashboard() {
       }
       try {
         const saved = await saveSavingsWorkspaceToCloud(next);
-        const fresh = (await fetchSavingsWorkspace()) ?? saved;
+        const remote = (await fetchSavingsWorkspace()) ?? saved;
+        const fresh = mergeSavingsWorkspaceState(next, remote);
         setState(fresh);
         saveSavingsWorkspaceState(fresh);
+        if (JSON.stringify(fresh) !== JSON.stringify(remote)) {
+          void saveSavingsWorkspaceToCloud(fresh).catch((error) => {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[savings-workspace] background merge sync failed", error);
+            }
+          });
+        }
         return fresh;
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
