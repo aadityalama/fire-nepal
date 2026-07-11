@@ -76,3 +76,20 @@ test("Savings cloud hydrate merges local and remote state instead of replacing l
   assert.match(source, /mergeDurableRecords\(local\.goals, remote\.goals\)/);
   assert.match(source, /mergeDurableRecords\(local\.transactions, remote\.transactions\)/);
 });
+
+test("Group expense local backfill is guarded by existing remote rows", () => {
+  const source = read("src/services/group-expenses-supabase.ts");
+  const syncBody = source.slice(source.indexOf("export async function syncLocalExpensesToGroupExpenses"));
+  assert.match(syncBody, /select\("id", \{ count: "exact", head: true \}\)/);
+  assert.match(syncBody, /if \(\(count \?\? 0\) > 0\) return;/);
+});
+
+test("Budget and Insurance delete handlers soft-delete instead of hard-delete", () => {
+  for (const file of ["src/services/budget-supabase.ts", "src/services/insurance-supabase.ts"]) {
+    const source = read(file);
+    const deleteBody = source.slice(source.indexOf("export async function delete"));
+    assert.doesNotMatch(deleteBody, /\.delete\(/);
+    assert.match(deleteBody, /deleted_at/);
+    assert.match(deleteBody, /updated_at/);
+  }
+});

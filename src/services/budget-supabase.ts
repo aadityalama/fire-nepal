@@ -6,7 +6,7 @@ import type { Database } from "@/types/supabase-database";
 type Client = SupabaseClient<Database>;
 
 const BUDGET_COLUMNS =
-  "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,created_at,updated_at" as const;
+  "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,deleted_at,created_at,updated_at" as const;
 
 function mapBudgetError(error: { message?: string; code?: string } | null | undefined, fallback: string) {
   const message = error?.message ?? fallback;
@@ -36,6 +36,7 @@ export async function listBudgetRecordsForUser(client: Client, userId: string): 
     .from("finance_budget_records")
     .select(BUDGET_COLUMNS)
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true })
     .order("name", { ascending: true });
@@ -55,7 +56,8 @@ export async function createBudgetRecordForUser(
   const { count, error: countError } = await client
     .from("finance_budget_records")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("deleted_at", null);
 
   if (countError) {
     throw new Error(mapBudgetError(countError, "Could not prepare budget save."));
@@ -113,16 +115,19 @@ export async function updateBudgetRecordForUser(
 }
 
 export async function deleteBudgetRecordForUser(client: Client, userId: string, budgetId: string): Promise<void> {
-  const { error, count } = await client
+  const { error, data } = await client
     .from("finance_budget_records")
-    .delete({ count: "exact" })
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", budgetId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     throw new Error(mapBudgetError(error, "Could not delete budget."));
   }
-  if (!count) {
+  if (!data) {
     throw new Error("Budget not found.");
   }
 }

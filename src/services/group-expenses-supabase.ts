@@ -216,6 +216,23 @@ export async function syncLocalExpensesToGroupExpenses(
   userId: string,
   expenses: Expense[],
 ): Promise<void> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-expense-sync");
+  if (!workspace) return;
+
+  const { count, error } = await client
+    .from("group_expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspace.id)
+    .is("deleted_at", null);
+
+  if (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[group-expenses] sync guard failed", { workspaceId: workspace.id, error });
+    }
+    return;
+  }
+  if ((count ?? 0) > 0) return;
+
   for (const expense of expenses) {
     await upsertGroupExpenseByLocalId(client, userId, {
       localExpenseId: expense.id,

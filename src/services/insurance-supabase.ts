@@ -6,7 +6,7 @@ import type { Database } from "@/types/supabase-database";
 type Client = SupabaseClient<Database>;
 
 const INSURANCE_COLUMNS =
-  "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,nominee,family_members_covered,notes,document_data_url,document_file_name,sort_order,created_at,updated_at" as const;
+  "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,nominee,family_members_covered,notes,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
 
 function mapInsuranceError(error: { message?: string; code?: string } | null | undefined, fallback: string) {
   const message = error?.message ?? fallback;
@@ -40,6 +40,7 @@ export async function listInsurancePoliciesForUser(client: Client, userId: strin
     .from("finance_insurance_policies")
     .select(INSURANCE_COLUMNS)
     .eq("user_id", userId)
+    .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -58,7 +59,8 @@ export async function createInsurancePolicyForUser(
   const { count, error: countError } = await client
     .from("finance_insurance_policies")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("deleted_at", null);
 
   if (countError) {
     throw new Error(mapInsuranceError(countError, "Could not prepare insurance save."));
@@ -110,8 +112,18 @@ export async function updateInsurancePolicyForUser(
 }
 
 export async function deleteInsurancePolicyForUser(client: Client, userId: string, policyId: string): Promise<void> {
-  const { error } = await client.from("finance_insurance_policies").delete().eq("id", policyId).eq("user_id", userId);
+  const { error, data } = await client
+    .from("finance_insurance_policies")
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", policyId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
   if (error) {
     throw new Error(mapInsuranceError(error, "Could not delete insurance policy."));
+  }
+  if (!data) {
+    throw new Error("Insurance policy not found.");
   }
 }

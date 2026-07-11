@@ -1544,6 +1544,7 @@ export type Database = {
           notification_settings: Json;
           ai_recommendation: Json | null;
           sort_order: number;
+          deleted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1562,6 +1563,7 @@ export type Database = {
           notification_settings?: Json;
           ai_recommendation?: Json | null;
           sort_order?: number;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1578,6 +1580,7 @@ export type Database = {
           notification_settings?: Json;
           ai_recommendation?: Json | null;
           sort_order?: number;
+          deleted_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1618,6 +1621,7 @@ export type Database = {
           document_data_url: string | null;
           document_file_name: string | null;
           sort_order: number;
+          deleted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1637,6 +1641,7 @@ export type Database = {
           document_data_url?: string | null;
           document_file_name?: string | null;
           sort_order?: number;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1654,6 +1659,7 @@ export type Database = {
           document_data_url?: string | null;
           document_file_name?: string | null;
           sort_order?: number;
+          deleted_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
