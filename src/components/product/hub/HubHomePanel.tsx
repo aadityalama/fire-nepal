@@ -7,21 +7,23 @@ import {
   BadgeCheck,
   Banknote,
   Bell,
-  Bot,
   Brain,
   Building2,
   Calculator,
   ChevronRight,
   CreditCard,
+  Crown,
   FileText,
   Gem,
   HandCoins,
   Home,
+  Landmark,
   LayoutGrid,
   LineChart,
   Lock,
   PiggyBank,
   Plane,
+  Play,
   ReceiptText,
   Settings,
   ShieldCheck,
@@ -36,9 +38,12 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
+
+type MembershipSectionId = "free" | "premium" | "elite";
 
 type LauncherItem = {
   href: string;
@@ -50,6 +55,10 @@ type LauncherItem = {
   testId?: string;
 };
 
+type MembershipLauncherItem = LauncherItem & {
+  plan: MembershipSectionId;
+};
+
 type ToolLauncherItem = {
   href: string;
   title: string;
@@ -57,221 +66,338 @@ type ToolLauncherItem = {
   accent: string;
 };
 
-const PRIMARY_APPS: LauncherItem[] = [
+const MEMBERSHIP_APP_SECTIONS: Array<{
+  id: MembershipSectionId;
+  title: string;
+  subtitle: string;
+  icon: LucideIcon;
+  tone: "free" | "premium" | "elite";
+  apps: MembershipLauncherItem[];
+}> = [
   {
-    href: "/finance",
-    title: "Finance",
-    body: "Cashflow, expenses, budget & savings",
-    icon: Banknote,
-    accent: "from-emerald-600/30 to-cyan-400/10",
-  },
-  {
-    href: "/investment",
-    title: "Investment",
-    body: "Portfolio, NEPSE, SIP, SWP & assets",
-    icon: TrendingUp,
-    accent: "from-teal-500/30 to-emerald-400/10",
-  },
-  {
-    href: "/fire-planning",
-    title: "FIRE Planning",
-    body: "Calculator, journey & goals",
-    icon: Calculator,
-    accent: "from-lime-400/25 to-emerald-600/15",
-  },
-  {
-    href: "/fire-biz",
-    title: "FIRE Biz",
-    body: "Sales, stock, customers & receivables",
-    icon: LayoutGrid,
-    accent: "from-emerald-500/35 to-lime-300/15",
-    testId: "hub-fire-biz-card",
-  },
-  {
-    href: "/portfolio",
-    title: "Portfolio",
-    body: "Net worth, assets & wealth analytics",
-    icon: Target,
-    accent: "from-teal-500/30 to-emerald-400/10",
-  },
-  {
-    href: "/cashflow-dashboard",
-    title: "Cashflow",
-    body: "Income, burn, savings rate & runway",
-    icon: Wallet,
-    accent: "from-emerald-600/30 to-cyan-400/10",
-  },
-  {
-    href: "/#calculator",
-    title: "FIRE Calculator",
-    body: "Retirement projection & FI timeline",
-    icon: Calculator,
-    accent: "from-lime-400/25 to-emerald-600/15",
-  },
-  {
-    href: "/ai",
-    title: "AI",
-    body: "Advisor, OCR payslip & AI reports",
-    icon: Bot,
-    accent: "from-emerald-500/25 to-lime-400/15",
-  },
-  {
-    href: "/family",
-    title: "Family Hub",
-    body: "Children, education, health & records",
-    icon: Users,
-    accent: "from-sky-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/return-to-nepal",
-    title: "Nepal Return Planner",
-    body: "Return readiness & Nepal life planning",
-    icon: Plane,
-    accent: "from-violet-500/15 to-teal-400/10",
-  },
-  {
-    href: "/korea-pension-dashboard",
-    title: "Korea Finance",
-    body: "Pension, severance & KRW planning",
-    icon: Building2,
-    accent: "from-indigo-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/group-expenses",
-    title: "Group Expenses",
-    body: "Shared bills, roommates & settlements",
-    icon: HandCoins,
-    accent: "from-emerald-500/35 to-lime-300/15",
-    badge: "NEW",
-  },
-];
-
-const POPULAR_TOOLS: ToolLauncherItem[] = [
-  {
-    href: "/portfolio",
-    title: "Portfolio",
-    icon: Target,
-    accent: "from-teal-500/30 to-emerald-400/10",
-  },
-  {
-    href: "/cashflow-dashboard",
-    title: "Cashflow",
-    icon: Wallet,
-    accent: "from-emerald-600/30 to-cyan-400/10",
-  },
-  {
-    href: "/budget",
-    title: "Budget",
-    icon: Banknote,
-    accent: "from-cyan-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/savings-tracker",
-    title: "Savings",
-    icon: PiggyBank,
-    accent: "from-lime-400/20 to-emerald-500/10",
-  },
-  {
-    href: "/#calculator",
-    title: "FIRE Calculator",
-    icon: Calculator,
-    accent: "from-lime-400/25 to-emerald-600/15",
-  },
-  {
-    href: "/fire-ai",
-    title: "FIRE AI",
+    id: "free",
+    title: "Free",
+    subtitle: "Core finance tools for everyone.",
     icon: Sparkles,
-    accent: "from-emerald-500/25 to-lime-400/15",
+    tone: "free",
+    apps: [
+      {
+        href: "/finance",
+        title: "Finance",
+        body: "Cashflow, expenses, budget & savings",
+        icon: Banknote,
+        accent: "from-emerald-600/30 to-cyan-400/10",
+        plan: "free",
+      },
+      {
+        href: "/cashflow-dashboard",
+        title: "Cashflow",
+        body: "Income, burn, savings rate & runway",
+        icon: Wallet,
+        accent: "from-emerald-600/30 to-cyan-400/10",
+        plan: "free",
+      },
+      {
+        href: "/budget",
+        title: "Budget",
+        body: "Plan spending, income & monthly targets",
+        icon: Banknote,
+        accent: "from-cyan-500/15 to-emerald-500/10",
+        plan: "free",
+      },
+      {
+        href: "/savings-tracker",
+        title: "Savings",
+        body: "Monthly KRW/NPR savings growth",
+        icon: PiggyBank,
+        accent: "from-lime-400/20 to-emerald-500/10",
+        plan: "free",
+      },
+      {
+        href: "/expense-dashboard?finance=personal",
+        title: "Expense",
+        body: "Track personal daily expenses",
+        icon: ReceiptText,
+        accent: "from-amber-500/15 to-emerald-500/10",
+        plan: "free",
+      },
+      {
+        href: "/group-expenses",
+        title: "Group Expenses",
+        body: "Shared bills, roommates & settlements",
+        icon: HandCoins,
+        accent: "from-emerald-500/35 to-lime-300/15",
+        badge: "NEW",
+        plan: "free",
+      },
+      {
+        href: "/#calculator",
+        title: "FIRE Calculator (Basic)",
+        body: "Retirement projection & FI timeline",
+        icon: Calculator,
+        accent: "from-lime-400/25 to-emerald-600/15",
+        plan: "free",
+      },
+      {
+        href: "/sip-calculator",
+        title: "SIP Calculator",
+        body: "Monthly investing growth calculator",
+        icon: BarChart3,
+        accent: "from-emerald-500/20 to-lime-400/10",
+        plan: "free",
+      },
+      {
+        href: "/swp-calculator",
+        title: "SWP Calculator",
+        body: "Inflation-aware withdrawal & runway",
+        icon: LineChart,
+        accent: "from-teal-500/20 to-cyan-400/10",
+        plan: "free",
+      },
+      {
+        href: "/loan-calculator",
+        title: "Loan EMI Calculator",
+        body: "EMI for Nepal return",
+        icon: Landmark,
+        accent: "from-sky-500/15 to-emerald-500/10",
+        plan: "free",
+      },
+      {
+        href: "/inflation-calculator",
+        title: "Inflation Calculator",
+        body: "Future value in NPR",
+        icon: TrendingUp,
+        accent: "from-orange-500/15 to-emerald-500/10",
+        plan: "free",
+      },
+      {
+        href: "/remittance-calculator",
+        title: "Remittance Calculator",
+        body: "Compare fees and timing",
+        icon: CreditCard,
+        accent: "from-emerald-500/20 to-cyan-400/10",
+        plan: "free",
+      },
+      {
+        href: "/cost-of-living",
+        title: "Cost of Living Calculator",
+        body: "Nepal monthly expense planning",
+        icon: Home,
+        accent: "from-violet-500/15 to-teal-400/10",
+        plan: "free",
+      },
+      {
+        href: "/#learn",
+        title: "Blogs",
+        body: "Money guides for Nepalis abroad",
+        icon: FileText,
+        accent: "from-emerald-500/20 to-lime-400/10",
+        plan: "free",
+      },
+      {
+        href: "/#learn",
+        title: "Videos",
+        body: "Latest FIRE Nepal video lessons",
+        icon: Play,
+        accent: "from-amber-500/15 to-emerald-500/10",
+        plan: "free",
+      },
+    ],
   },
   {
-    href: "/sip-calculator",
-    title: "SIP",
-    icon: BarChart3,
-    accent: "from-emerald-500/20 to-lime-400/10",
-  },
-  {
-    href: "/swp-calculator",
-    title: "SWP",
-    icon: LineChart,
-    accent: "from-teal-500/20 to-cyan-400/10",
-  },
-  {
-    href: "/expense-dashboard?finance=personal",
-    title: "Expense",
-    icon: ReceiptText,
-    accent: "from-amber-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/market",
-    title: "NEPSE",
-    icon: BarChart3,
-    accent: "from-blue-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/portfolio/gold",
-    title: "Gold",
+    id: "premium",
+    title: "Premium",
+    subtitle: "Advanced investing, planning & analytics.",
     icon: Gem,
-    accent: "from-yellow-500/15 to-emerald-500/10",
+    tone: "premium",
+    apps: [
+      {
+        href: "/portfolio",
+        title: "Portfolio",
+        body: "Net worth, assets & wealth analytics",
+        icon: Target,
+        accent: "from-teal-500/30 to-emerald-400/10",
+        plan: "premium",
+      },
+      {
+        href: "/investment",
+        title: "Investment",
+        body: "Portfolio, NEPSE, SIP, SWP & assets",
+        icon: TrendingUp,
+        accent: "from-teal-500/30 to-emerald-400/10",
+        plan: "premium",
+      },
+      {
+        href: "/fire-planning",
+        title: "FIRE Planning",
+        body: "Calculator, journey & goals",
+        icon: Calculator,
+        accent: "from-lime-400/25 to-emerald-600/15",
+        plan: "premium",
+      },
+      {
+        href: "/market",
+        title: "NEPSE",
+        body: "Market data, watchlists & investing context",
+        icon: BarChart3,
+        accent: "from-blue-500/15 to-emerald-500/10",
+        plan: "premium",
+      },
+      {
+        href: "/portfolio/gold",
+        title: "Gold",
+        body: "Gold allocation & wealth tracking",
+        icon: Gem,
+        accent: "from-yellow-500/15 to-emerald-500/10",
+        plan: "premium",
+      },
+      {
+        href: "/portfolio/real-estate",
+        title: "Real Estate",
+        body: "Property assets & real estate analytics",
+        icon: Home,
+        accent: "from-orange-500/15 to-emerald-500/10",
+        plan: "premium",
+      },
+      {
+        href: "/cashflow-dashboard",
+        title: "OCR Payslip",
+        body: "Salary slip import & cashflow sync",
+        icon: FileText,
+        accent: "from-emerald-500/20 to-cyan-400/10",
+        plan: "premium",
+      },
+      {
+        href: "/fire-ai/wealth-summary",
+        title: "AI Reports",
+        body: "Wealth summary and AI financial reports",
+        icon: Brain,
+        accent: "from-emerald-500/25 to-lime-400/15",
+        plan: "premium",
+      },
+      {
+        href: "/fire-summary",
+        title: "FIRE Journey",
+        body: "Unified net worth, runway & FIRE progress",
+        icon: TrendingUp,
+        accent: "from-lime-400/20 to-emerald-500/10",
+        plan: "premium",
+      },
+      {
+        href: "/goals",
+        title: "Goals",
+        body: "Plan and track major money goals",
+        icon: Target,
+        accent: "from-teal-500/20 to-cyan-400/10",
+        plan: "premium",
+      },
+      {
+        href: "/korea-pension-dashboard",
+        title: "Korea Finance",
+        body: "Pension, severance & KRW planning",
+        icon: Building2,
+        accent: "from-indigo-500/15 to-emerald-500/10",
+        plan: "premium",
+      },
+    ],
   },
   {
-    href: "/portfolio/real-estate",
-    title: "Real Estate",
-    icon: Home,
-    accent: "from-orange-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/cashflow-dashboard",
-    title: "OCR Payslip",
-    icon: FileText,
-    accent: "from-emerald-500/20 to-cyan-400/10",
-  },
-  {
-    href: "/fire-ai/wealth-summary",
-    title: "AI Reports",
-    icon: Brain,
-    accent: "from-emerald-500/25 to-lime-400/15",
-  },
-  {
-    href: "/fire-summary",
-    title: "FIRE Journey",
-    icon: TrendingUp,
-    accent: "from-lime-400/20 to-emerald-500/10",
-  },
-  {
-    href: "/goals",
-    title: "Goals",
-    icon: Target,
-    accent: "from-teal-500/20 to-cyan-400/10",
-  },
-  {
-    href: "/fire-ai/expense-insights",
-    title: "AI Advisor",
-    icon: Sparkles,
-    accent: "from-emerald-500/25 to-lime-400/15",
-  },
-  {
-    href: "/emergency-fund",
-    title: "Emergency",
-    icon: ShieldCheck,
-    accent: "from-sky-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/insurance",
-    title: "Insurance",
-    icon: ShieldCheck,
-    accent: "from-emerald-500/20 to-sky-400/10",
-  },
-  {
-    href: "/return-to-nepal",
-    title: "Return",
-    icon: Plane,
-    accent: "from-violet-500/15 to-teal-400/10",
-  },
-  {
-    href: "/korea-pension-dashboard",
-    title: "Korea Pension",
-    icon: Building2,
-    accent: "from-indigo-500/15 to-emerald-500/10",
+    id: "elite",
+    title: "Elite",
+    subtitle: "Professional AI, Business & Wealth Suite.",
+    icon: Crown,
+    tone: "elite",
+    apps: [
+      {
+        href: "/fire-biz",
+        title: "FIRE Biz",
+        body: "Sales, stock, customers & receivables",
+        icon: LayoutGrid,
+        accent: "from-emerald-500/35 to-lime-300/15",
+        testId: "hub-fire-biz-card",
+        plan: "elite",
+      },
+      {
+        href: "/fire-ai",
+        title: "FIRE AI",
+        body: "AI chat, guidance & smart finance tools",
+        icon: Sparkles,
+        accent: "from-emerald-500/25 to-lime-400/15",
+        plan: "elite",
+      },
+      {
+        href: "/fire-ai/expense-insights",
+        title: "AI Advisor",
+        body: "Personal finance insights and next steps",
+        icon: Sparkles,
+        accent: "from-emerald-500/25 to-lime-400/15",
+        plan: "elite",
+      },
+      {
+        href: "/family",
+        title: "Family Hub",
+        body: "Children, education, health & records",
+        icon: Users,
+        accent: "from-sky-500/15 to-emerald-500/10",
+        plan: "elite",
+      },
+      {
+        href: "/return-to-nepal",
+        title: "Nepal Return Planner",
+        body: "Return readiness & Nepal life planning",
+        icon: Plane,
+        accent: "from-violet-500/15 to-teal-400/10",
+        plan: "elite",
+      },
+      {
+        href: "/korea-pension-dashboard",
+        title: "Korea Pension",
+        body: "Korea NPS, severance & retirement checks",
+        icon: Building2,
+        accent: "from-indigo-500/15 to-emerald-500/10",
+        plan: "elite",
+      },
+      {
+        href: "/emergency-fund",
+        title: "Emergency",
+        body: "Safety fund progress tracker",
+        icon: ShieldCheck,
+        accent: "from-sky-500/15 to-emerald-500/10",
+        plan: "elite",
+      },
+      {
+        href: "/insurance",
+        title: "Insurance",
+        body: "Protection planning and coverage tracking",
+        icon: ShieldCheck,
+        accent: "from-emerald-500/20 to-sky-400/10",
+        plan: "elite",
+      },
+      {
+        href: "/portfolio/ai-insights",
+        title: "AI Wealth Dashboard",
+        body: "Elite wealth intelligence dashboard",
+        icon: Brain,
+        accent: "from-emerald-500/25 to-lime-400/15",
+        plan: "elite",
+      },
+      {
+        href: "/fire-biz/reports",
+        title: "Business Finance Suite",
+        body: "Profit, tax, purchases and business reports",
+        icon: LayoutGrid,
+        accent: "from-emerald-500/35 to-lime-300/15",
+        plan: "elite",
+      },
+      {
+        href: "/dashboard/membership",
+        title: "Private Advisory Tools",
+        body: "Elite advisory workflow and strategic tools",
+        icon: Crown,
+        accent: "from-amber-500/20 to-yellow-300/10",
+        plan: "elite",
+      },
+    ],
   },
 ];
 
@@ -314,16 +440,37 @@ const ACCOUNT_TOOLS: ToolLauncherItem[] = [
   },
 ];
 
-function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boolean }) {
+function PrimaryLauncherCard({
+  item,
+  light,
+  locked,
+  lockBadge,
+}: {
+  item: LauncherItem;
+  light: boolean;
+  locked?: boolean;
+  lockBadge?: "Premium" | "Elite";
+}) {
+  const href = locked ? "/dashboard/membership" : item.href;
+  const lockBadgeClass =
+    lockBadge === "Elite"
+      ? light
+        ? "border-amber-300/70 bg-amber-50/95 text-amber-800"
+        : "border-amber-300/35 bg-amber-400/15 text-amber-100"
+      : light
+        ? "border-emerald-200/80 bg-emerald-50/90 text-emerald-700"
+        : "border-emerald-300/25 bg-emerald-400/10 text-lime-200";
+
   return (
     <Link
-      href={item.href}
+      href={href}
       data-testid={item.testId}
       className={`group relative flex min-h-[112px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border p-4 transition duration-200 active:scale-[0.98] sm:min-h-[120px] sm:p-5 ${
         light
           ? "border-emerald-200/80 bg-white/95 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.12)] hover:border-emerald-400/50"
           : "border-emerald-400/15 bg-emerald-950/35 shadow-[0_20px_60px_rgba(0,0,0,0.35)] hover:border-emerald-300/35"
-      }`}
+      } ${locked ? "opacity-75 hover:opacity-90" : ""}`}
+      aria-label={locked && lockBadge ? `${item.title} requires ${lockBadge}. Upgrade membership.` : undefined}
     >
       <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${item.accent} opacity-90`} aria-hidden />
       <div className="relative z-10 flex items-start justify-between gap-2">
@@ -335,7 +482,12 @@ function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boole
           <item.icon size={22} strokeWidth={2.1} />
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
-          {item.badge ? (
+          {locked && lockBadge ? (
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${lockBadgeClass}`}>
+              <Lock size={11} strokeWidth={2.5} aria-hidden />
+              {lockBadge}
+            </span>
+          ) : item.badge ? (
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${
                 light
@@ -346,11 +498,15 @@ function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boole
               {item.badge}
             </span>
           ) : null}
-          <ChevronRight
-            size={18}
-            className={`shrink-0 opacity-60 transition group-active:translate-x-0.5 ${light ? "text-emerald-700" : "text-lime-300"}`}
-            aria-hidden
-          />
+          {locked ? (
+            <Lock size={18} className={`shrink-0 opacity-70 ${lockBadge === "Elite" ? "text-amber-400" : light ? "text-emerald-700" : "text-lime-300"}`} aria-hidden />
+          ) : (
+            <ChevronRight
+              size={18}
+              className={`shrink-0 opacity-60 transition group-active:translate-x-0.5 ${light ? "text-emerald-700" : "text-lime-300"}`}
+              aria-hidden
+            />
+          )}
         </div>
       </div>
       <div className="relative z-10 mt-3 min-w-0">
@@ -360,6 +516,61 @@ function PrimaryLauncherCard({ item, light }: { item: LauncherItem; light: boole
         </p>
       </div>
     </Link>
+  );
+}
+
+function MembershipSectionHeader({
+  section,
+  light,
+}: {
+  section: (typeof MEMBERSHIP_APP_SECTIONS)[number];
+  light: boolean;
+}) {
+  const Icon = section.icon;
+  const toneClass =
+    section.tone === "elite"
+      ? light
+        ? "border-amber-300/60 bg-gradient-to-r from-amber-50 via-yellow-50/80 to-white text-amber-800"
+        : "border-amber-400/35 bg-gradient-to-r from-amber-500/15 via-yellow-400/10 to-transparent text-amber-100"
+      : section.tone === "premium"
+        ? light
+          ? "border-emerald-300/60 bg-gradient-to-r from-emerald-50 via-lime-50/80 to-white text-emerald-800"
+          : "border-emerald-400/35 bg-gradient-to-r from-emerald-500/15 via-lime-400/10 to-transparent text-emerald-100"
+        : light
+          ? "border-emerald-200/80 bg-gradient-to-r from-emerald-50 via-white to-white text-emerald-800"
+          : "border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-[#04140f] to-transparent text-emerald-100";
+  const iconClass =
+    section.tone === "elite"
+      ? light
+        ? "border-amber-300/70 bg-amber-100 text-amber-700"
+        : "border-amber-300/35 bg-amber-400/15 text-amber-300 drop-shadow-[0_0_10px_rgba(251,191,36,0.35)]"
+      : section.tone === "premium"
+        ? light
+          ? "border-emerald-300/70 bg-emerald-100 text-emerald-700"
+          : "border-emerald-300/35 bg-emerald-400/15 text-emerald-300"
+        : light
+          ? "border-emerald-200/80 bg-emerald-50 text-emerald-700"
+          : "border-white/10 bg-black/30 text-lime-200";
+
+  return (
+    <div className={`rounded-2xl border px-4 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.12)] sm:px-5 ${toneClass}`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${iconClass}`}>
+          <Icon size={22} strokeWidth={2.2} />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-xl font-black tracking-tight sm:text-2xl">{section.title}</h3>
+          <p className={`mt-1 text-xs font-semibold sm:text-sm ${light ? "text-slate-600" : "text-emerald-100/65"}`}>{section.subtitle}</p>
+        </div>
+      </div>
+      <div
+        className={`mt-4 h-px ${
+          section.tone === "elite"
+            ? "bg-gradient-to-r from-amber-400/55 via-amber-300/20 to-transparent"
+            : "bg-gradient-to-r from-emerald-400/55 via-lime-300/20 to-transparent"
+        }`}
+      />
+    </div>
   );
 }
 
@@ -395,6 +606,7 @@ function CompactToolCard({ item, light }: { item: ToolLauncherItem; light: boole
 export function HubHomePanel() {
   const onboarding = useMemo(() => loadProductOnboarding(), []);
   const { isAdmin } = useProductAuth();
+  const { tier } = useFireMembership();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const fireBiz = FIRE_BIZ_I18N.en.hubPromo;
@@ -473,27 +685,32 @@ export function HubHomePanel() {
         </div>
       ) : null}
 
-      <section aria-labelledby="hub-primary-apps">
+      <section aria-labelledby="hub-primary-apps" className="space-y-5">
         <h2 id="hub-primary-apps" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
           Main apps
         </h2>
-        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {PRIMARY_APPS.map((item) => (
-            <PrimaryLauncherCard key={item.href} item={item} light={light} />
-          ))}
-        </div>
-        <p className={`sr-only`}>{fireBiz.description}</p>
-      </section>
+        {MEMBERSHIP_APP_SECTIONS.map((section) => (
+          <div key={section.id} className="space-y-3.5 sm:space-y-4">
+            <MembershipSectionHeader section={section} light={light} />
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+              {section.apps.map((item) => {
+                const locked = item.plan === "elite" ? tier !== "elite" : item.plan === "premium" ? tier === "free" : false;
+                const lockBadge = item.plan === "elite" ? "Elite" : item.plan === "premium" ? "Premium" : undefined;
 
-      <section aria-labelledby="hub-popular-tools">
-        <h2 id="hub-popular-tools" className={`text-xs font-black uppercase tracking-[0.18em] ${eyebrowCls}`}>
-          Popular tools
-        </h2>
-        <div className="mt-2.5 grid grid-cols-2 gap-3 sm:gap-4">
-          {POPULAR_TOOLS.map((item) => (
-            <CompactToolCard key={`${item.href}-${item.title}`} item={item} light={light} />
+                return (
+                  <PrimaryLauncherCard
+                    key={`${section.id}-${item.title}-${item.href}`}
+                    item={item}
+                    light={light}
+                    locked={locked}
+                    lockBadge={locked ? lockBadge : undefined}
+                  />
+                );
+              })}
+            </div>
+          </div>
           ))}
-        </div>
+        <p className={`sr-only`}>{fireBiz.description}</p>
       </section>
 
       <section aria-labelledby="hub-account-tools">
