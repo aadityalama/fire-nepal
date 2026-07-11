@@ -360,6 +360,47 @@ export async function deleteCustomer(client: Client, userId: string, id: string)
   await client.from("customers").delete().eq("id", id).eq("user_id", userId);
 }
 
+export type SupplierInput = Omit<Database["public"]["Tables"]["suppliers"]["Insert"], "user_id"> & { id?: string };
+
+export async function upsertSupplier(client: Client, userId: string, input: SupplierInput): Promise<SupplierRow | null> {
+  const opening = Number(input.opening_balance ?? 0);
+  if (input.id) {
+    const patch: Database["public"]["Tables"]["suppliers"]["Update"] = {
+      name: input.name,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      address: input.address ?? null,
+      opening_balance: opening,
+      balance: input.balance ?? opening,
+      notes: input.notes ?? null,
+      business_profile_id: input.business_profile_id,
+    };
+    const { data } = await client.from("suppliers").update(patch).eq("id", input.id).eq("user_id", userId).select("*").single();
+    return data;
+  }
+  const { id: _id, ...rest } = input;
+  const { data } = await client
+    .from("suppliers")
+    .insert({
+      user_id: userId,
+      name: rest.name,
+      phone: rest.phone ?? null,
+      email: rest.email ?? null,
+      address: rest.address ?? null,
+      opening_balance: opening,
+      balance: rest.balance ?? opening,
+      notes: rest.notes ?? null,
+      business_profile_id: rest.business_profile_id ?? null,
+    })
+    .select("*")
+    .single();
+  return data;
+}
+
+export async function deleteSupplier(client: Client, userId: string, id: string): Promise<void> {
+  await client.from("suppliers").delete().eq("id", id).eq("user_id", userId);
+}
+
 export type SaleInput = Omit<Database["public"]["Tables"]["sales"]["Insert"], "user_id"> & { id?: string };
 
 export async function loadPurchaseById(client: Client, userId: string, id: string): Promise<PurchaseRow | null> {

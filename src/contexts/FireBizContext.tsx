@@ -30,6 +30,7 @@ import {
   deletePurchase,
   deletePurchaseOrder,
   deleteSale,
+  deleteSupplier,
   ensureDefaultExpenseCategories,
   loadBizTransactions,
   loadBusinessProfile,
@@ -52,6 +53,7 @@ import {
   upsertPurchase,
   upsertPurchaseOrder,
   upsertSale,
+  upsertSupplier,
   upsertBusinessProfile,
   type BizTransactionInput,
   type CustomerInput,
@@ -59,6 +61,7 @@ import {
   type PurchaseInput,
   type PurchaseOrderInput,
   type SaleInput,
+  type SupplierInput,
 } from "@/services/fire-biz-supabase";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 
@@ -98,6 +101,8 @@ type FireBizContextValue = {
   deletePurchaseOrder: (id: string) => Promise<void>;
   saveCustomer: (input: CustomerInput) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
+  saveSupplier: (input: SupplierInput) => Promise<void>;
+  deleteSupplier: (id: string) => Promise<void>;
   saveSale: (input: SaleInput) => Promise<void>;
   deleteSale: (id: string) => Promise<void>;
   savePurchase: (input: PurchaseInput) => Promise<void>;
@@ -344,6 +349,30 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
     [user, refresh],
   );
 
+  const handleSaveSupplier = useCallback(
+    async (input: SupplierInput) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      const saved = await upsertSupplier(client, user.id, input);
+      if (saved) {
+        setSuppliers((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
+        void refresh();
+      }
+    },
+    [user, refresh],
+  );
+
+  const handleDeleteSupplier = useCallback(
+    async (id: string) => {
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const client = getSupabaseBrowserClient();
+      await deleteSupplier(client, user.id, id);
+      setSuppliers((prev) => prev.filter((s) => s.id !== id));
+      void refresh();
+    },
+    [user, refresh],
+  );
+
   const handleSaveSale = useCallback(
     async (input: SaleInput) => {
       if (!user?.id || !isSupabaseConfigured()) return;
@@ -475,6 +504,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       deletePurchaseOrder: handleDeletePurchaseOrder,
       saveCustomer: handleSaveCustomer,
       deleteCustomer: handleDeleteCustomer,
+      saveSupplier: handleSaveSupplier,
+      deleteSupplier: handleDeleteSupplier,
       saveSale: handleSaveSale,
       deleteSale: handleDeleteSale,
       savePurchase: handleSavePurchase,
@@ -509,6 +540,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       handleDeletePurchaseOrder,
       handleSaveCustomer,
       handleDeleteCustomer,
+      handleSaveSupplier,
+      handleDeleteSupplier,
       handleSaveSale,
       handleDeleteSale,
       handleSavePurchase,

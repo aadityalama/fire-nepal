@@ -128,6 +128,102 @@ export function FireBizCustomerFormPage({ editId }: FormProps) {
   );
 }
 
+export function FireBizSupplierFormPage({ editId }: FormProps) {
+  const copy = useFireBizCopy();
+  const f = copy.suppliers;
+  const { suppliers, saveSupplier, deleteSupplier } = useFireBiz();
+  const router = useRouter();
+  const existing = useMemo(() => (editId ? suppliers.find((s) => s.id === editId) : null), [suppliers, editId]);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(!editId);
+
+  useEffect(() => {
+    if (!existing) return;
+    setName(existing.name);
+    setPhone(existing.phone ?? "");
+    setEmail(existing.email ?? "");
+    setAddress(existing.address ?? "");
+    setOpeningBalance(String(existing.opening_balance));
+    setNotes(existing.notes ?? "");
+    setLoaded(true);
+  }, [existing]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error(f.invalidName);
+      return;
+    }
+    setSaving(true);
+    try {
+      const opening = Number(openingBalance) || 0;
+      await saveSupplier({
+        id: editId,
+        name: name.trim(),
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        address: address.trim() || null,
+        opening_balance: opening,
+        balance: editId ? undefined : opening,
+        notes: notes.trim() || null,
+      });
+      toast.success(editId ? f.updated : f.added);
+      router.push("/fire-biz/suppliers");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDelete() {
+    if (!editId || !window.confirm(f.confirmDelete)) return;
+    void deleteSupplier(editId).then(() => {
+      toast.success(f.deleted);
+      router.push("/fire-biz/suppliers");
+    });
+  }
+
+  if (editId && !loaded) {
+    return (
+      <FireBizFormShell title={f.editTitle} backHref="/fire-biz/suppliers">
+        <p className="text-sm font-semibold text-emerald-200/60">{copy.common.loading}</p>
+      </FireBizFormShell>
+    );
+  }
+
+  return (
+    <FireBizFormShell
+      title={editId ? f.editTitle : f.addTitle}
+      backHref="/fire-biz/suppliers"
+      onDelete={editId ? handleDelete : undefined}
+      deleteLabel={f.delete}
+    >
+      <form className="grid gap-4" onSubmit={(e) => void handleSubmit(e)}>
+        <FireBizInput label={f.name} value={name} onChange={setName} placeholder={f.namePlaceholder} />
+        <FireBizInput label={f.phone} value={phone} onChange={setPhone} type="tel" />
+        <FireBizInput label={f.email} value={email} onChange={setEmail} type="email" />
+        <FireBizInput label={f.address} value={address} onChange={setAddress} />
+        <FireBizInput label={f.openingBalance} value={openingBalance} onChange={setOpeningBalance} type="number" />
+        <FireBizInput label={f.notes} value={notes} onChange={setNotes} />
+        <div className="flex flex-wrap gap-2 pt-2">
+          <FireBizPrimaryButton type="submit" disabled={saving}>
+            {saving ? copy.common.loading : editId ? f.saveEdit : f.save}
+          </FireBizPrimaryButton>
+          <FireBizSecondaryButton type="button" onClick={() => router.push("/fire-biz/suppliers")}>
+            {copy.common.cancel}
+          </FireBizSecondaryButton>
+        </div>
+      </form>
+    </FireBizFormShell>
+  );
+}
+
 export function FireBizSaleFormPage({ editId }: FormProps) {
   const copy = useFireBizCopy();
   const f = copy.sales;

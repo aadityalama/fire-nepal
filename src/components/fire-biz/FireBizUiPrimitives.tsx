@@ -381,7 +381,7 @@ export function FireBizPrimaryLinkButton({ href, children }: { href: string; chi
   return (
     <Link
       href={href}
-      className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
+      className={`relative z-10 inline-flex min-h-[44px] cursor-pointer touch-manipulation items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
         light
           ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg shadow-emerald-500/20"
           : "bg-gradient-to-r from-emerald-500/90 to-lime-400/90 text-emerald-950 shadow-lg shadow-emerald-500/20"

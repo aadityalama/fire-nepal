@@ -201,7 +201,7 @@ export function FireBizSuppliersPage() {
     <div className="space-y-6">
       <DashboardSectionHeader eyebrow={copy.moduleName} title={s.title} subtitle={s.subtitle} />
       <FireBizPageActions>
-        <FireBizPrimaryLinkButton href="/fire-biz/suppliers">{s.addSupplier}</FireBizPrimaryLinkButton>
+        <FireBizPrimaryLinkButton href="/fire-biz/suppliers/new">{s.addSupplier}</FireBizPrimaryLinkButton>
       </FireBizPageActions>
       <FireBizGlassCard title={s.title} icon={ShoppingCart}>
         {loading ? (
