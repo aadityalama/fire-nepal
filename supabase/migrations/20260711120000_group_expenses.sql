@@ -82,6 +82,11 @@ create table if not exists public.settlements (
 create index if not exists settlements_workspace_month_idx
   on public.settlements (workspace_id, month_key desc, created_at desc);
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.group_members to authenticated;
+grant select, insert, update, delete on public.group_expenses to authenticated;
+grant select, insert, update, delete on public.settlements to authenticated;
+
 -- RLS
 alter table public.group_members enable row level security;
 alter table public.group_expenses enable row level security;
@@ -97,7 +102,8 @@ create policy group_members_insert on public.group_members for insert
 
 drop policy if exists group_members_update on public.group_members;
 create policy group_members_update on public.group_members for update
-  using (exists (select 1 from public.workspaces w where w.id = group_members.workspace_id and w.user_id = auth.uid()));
+  using (exists (select 1 from public.workspaces w where w.id = group_members.workspace_id and w.user_id = auth.uid()))
+  with check (auth.uid() = user_id and exists (select 1 from public.workspaces w where w.id = group_members.workspace_id and w.user_id = auth.uid()));
 
 drop policy if exists group_members_delete on public.group_members;
 create policy group_members_delete on public.group_members for delete
@@ -113,7 +119,8 @@ create policy group_expenses_insert on public.group_expenses for insert
 
 drop policy if exists group_expenses_update on public.group_expenses;
 create policy group_expenses_update on public.group_expenses for update
-  using (exists (select 1 from public.workspaces w where w.id = group_expenses.workspace_id and w.user_id = auth.uid()));
+  using (exists (select 1 from public.workspaces w where w.id = group_expenses.workspace_id and w.user_id = auth.uid()))
+  with check (auth.uid() = user_id and exists (select 1 from public.workspaces w where w.id = group_expenses.workspace_id and w.user_id = auth.uid()));
 
 drop policy if exists group_expenses_delete on public.group_expenses;
 create policy group_expenses_delete on public.group_expenses for delete
@@ -129,7 +136,8 @@ create policy settlements_insert on public.settlements for insert
 
 drop policy if exists settlements_update on public.settlements;
 create policy settlements_update on public.settlements for update
-  using (exists (select 1 from public.workspaces w where w.id = settlements.workspace_id and w.user_id = auth.uid()));
+  using (exists (select 1 from public.workspaces w where w.id = settlements.workspace_id and w.user_id = auth.uid()))
+  with check (auth.uid() = user_id and exists (select 1 from public.workspaces w where w.id = settlements.workspace_id and w.user_id = auth.uid()));
 
 drop policy if exists settlements_delete on public.settlements;
 create policy settlements_delete on public.settlements for delete
