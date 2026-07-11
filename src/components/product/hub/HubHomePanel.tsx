@@ -10,7 +10,6 @@ import {
   Brain,
   Building2,
   Calculator,
-  ChevronRight,
   CreditCard,
   Crown,
   FileText,
@@ -42,18 +41,9 @@ import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
+import { MainAppCard, type LauncherItem } from "@/components/product/hub/MainAppCard";
 
 type MembershipSectionId = "free" | "premium" | "elite";
-
-type LauncherItem = {
-  href: string;
-  title: string;
-  body: string;
-  icon: LucideIcon;
-  accent: string;
-  badge?: string;
-  testId?: string;
-};
 
 type MembershipLauncherItem = LauncherItem & {
   plan: MembershipSectionId;
@@ -440,85 +430,6 @@ const ACCOUNT_TOOLS: ToolLauncherItem[] = [
   },
 ];
 
-function PrimaryLauncherCard({
-  item,
-  light,
-  locked,
-  lockBadge,
-}: {
-  item: LauncherItem;
-  light: boolean;
-  locked?: boolean;
-  lockBadge?: "Premium" | "Elite";
-}) {
-  const href = locked ? "/dashboard/membership" : item.href;
-  const lockBadgeClass =
-    lockBadge === "Elite"
-      ? light
-        ? "border-amber-300/70 bg-amber-50/95 text-amber-800"
-        : "border-amber-300/35 bg-amber-400/15 text-amber-100"
-      : light
-        ? "border-emerald-200/80 bg-emerald-50/90 text-emerald-700"
-        : "border-emerald-300/25 bg-emerald-400/10 text-lime-200";
-
-  return (
-    <Link
-      href={href}
-      data-testid={item.testId}
-      className={`group relative flex min-h-[112px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border p-4 transition duration-200 active:scale-[0.98] sm:min-h-[120px] sm:p-5 ${
-        light
-          ? "border-emerald-200/80 bg-white/95 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.12)] hover:border-emerald-400/50"
-          : "border-emerald-400/15 bg-emerald-950/35 shadow-[0_20px_60px_rgba(0,0,0,0.35)] hover:border-emerald-300/35"
-      } ${locked ? "opacity-75 hover:opacity-90" : ""}`}
-      aria-label={locked && lockBadge ? `${item.title} requires ${lockBadge}. Upgrade membership.` : undefined}
-    >
-      <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${item.accent} opacity-90`} aria-hidden />
-      <div className="relative z-10 flex items-start justify-between gap-2">
-        <span
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${
-            light ? "border-emerald-200/80 bg-emerald-50 text-emerald-700" : "border-white/10 bg-black/30 text-lime-200"
-          }`}
-        >
-          <item.icon size={22} strokeWidth={2.1} />
-        </span>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {locked && lockBadge ? (
-            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${lockBadgeClass}`}>
-              <Lock size={11} strokeWidth={2.5} aria-hidden />
-              {lockBadge}
-            </span>
-          ) : item.badge ? (
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${
-                light
-                  ? "border-emerald-200/80 bg-emerald-50/90 text-emerald-700"
-                  : "border-emerald-300/25 bg-emerald-400/10 text-lime-200"
-              }`}
-            >
-              {item.badge}
-            </span>
-          ) : null}
-          {locked ? (
-            <Lock size={18} className={`shrink-0 opacity-70 ${lockBadge === "Elite" ? "text-amber-400" : light ? "text-emerald-700" : "text-lime-300"}`} aria-hidden />
-          ) : (
-            <ChevronRight
-              size={18}
-              className={`shrink-0 opacity-60 transition group-active:translate-x-0.5 ${light ? "text-emerald-700" : "text-lime-300"}`}
-              aria-hidden
-            />
-          )}
-        </div>
-      </div>
-      <div className="relative z-10 mt-3 min-w-0">
-        <h2 className={`text-base font-black leading-tight sm:text-lg ${light ? "text-slate-900" : "text-white"}`}>{item.title}</h2>
-        <p className={`mt-1 line-clamp-2 text-xs font-semibold leading-snug sm:text-sm ${light ? "text-slate-600" : "text-emerald-100/70"}`}>
-          {item.body}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
 function MembershipSectionHeader({
   section,
   light,
@@ -698,7 +609,7 @@ export function HubHomePanel() {
                 const lockBadge = item.plan === "elite" ? "Elite" : item.plan === "premium" ? "Premium" : undefined;
 
                 return (
-                  <PrimaryLauncherCard
+                  <MainAppCard
                     key={`${section.id}-${item.title}-${item.href}`}
                     item={item}
                     light={light}

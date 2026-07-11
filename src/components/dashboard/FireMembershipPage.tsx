@@ -1,6 +1,33 @@
 "use client";
 
-import { BadgeCheck, Check, Crown, Gem, Info, Sparkles } from "lucide-react";
+import {
+  BadgeCheck,
+  Banknote,
+  BarChart3,
+  Brain,
+  Building2,
+  Calculator,
+  Check,
+  CreditCard,
+  Crown,
+  FileText,
+  Gem,
+  HandCoins,
+  Home,
+  Info,
+  Landmark,
+  LayoutGrid,
+  LineChart,
+  PiggyBank,
+  Plane,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -8,6 +35,7 @@ import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
 import { MembershipPaymentSuccessDialog } from "@/components/membership/MembershipPaymentSuccessDialog";
+import { MainAppCard, type LauncherItem, type MainAppCardState } from "@/components/product/hub/MainAppCard";
 import {
   deriveFireNepalId,
   membershipActiveIso,
@@ -70,6 +98,308 @@ const PRICING = {
     },
   },
 } as const;
+
+type MembershipAppPlan = FireMembershipTier;
+
+type MembershipPlanAppSection = {
+  plan: MembershipAppPlan;
+  header: string;
+  badge: string;
+  subtitle: string;
+  topLabel?: string;
+  appCount: string;
+  footerLines: string[];
+  apps: LauncherItem[];
+};
+
+const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
+  {
+    plan: "free",
+    header: "🪄 Free",
+    badge: "FREE",
+    subtitle: "Everything you need to start your FIRE journey.",
+    appCount: "9+ Apps Included",
+    footerLines: ["9+ Apps Included", "Perfect for getting started"],
+    apps: [
+      {
+        href: "/finance",
+        title: "Finance",
+        body: "Cashflow, expenses, budget & savings",
+        icon: Banknote,
+        accent: "from-emerald-600/30 to-cyan-400/10",
+      },
+      {
+        href: "/budget",
+        title: "Budget",
+        body: "Plan spending, income & monthly targets",
+        icon: Banknote,
+        accent: "from-cyan-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/savings-tracker",
+        title: "Savings",
+        body: "Monthly KRW/NPR savings growth",
+        icon: PiggyBank,
+        accent: "from-lime-400/20 to-emerald-500/10",
+      },
+      {
+        href: "/expense-dashboard?finance=personal",
+        title: "Expense",
+        body: "Track personal daily expenses",
+        icon: ReceiptText,
+        accent: "from-amber-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/group-expenses",
+        title: "Group Expenses",
+        body: "Shared bills, roommates & settlements",
+        icon: HandCoins,
+        accent: "from-emerald-500/35 to-lime-300/15",
+        badge: "NEW",
+      },
+      {
+        href: "/loan-calculator",
+        title: "Loan EMI Calculator",
+        body: "EMI for Nepal return",
+        icon: Landmark,
+        accent: "from-sky-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/inflation-calculator",
+        title: "Inflation Calculator",
+        body: "Future value in NPR",
+        icon: TrendingUp,
+        accent: "from-orange-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/remittance-calculator",
+        title: "Remittance Calculator",
+        body: "Compare fees and timing",
+        icon: CreditCard,
+        accent: "from-emerald-500/20 to-cyan-400/10",
+      },
+      {
+        href: "/cost-of-living",
+        title: "Cost of Living Calculator",
+        body: "Nepal monthly expense planning",
+        icon: Home,
+        accent: "from-violet-500/15 to-teal-400/10",
+      },
+    ],
+  },
+  {
+    plan: "premium",
+    header: "💎 Premium",
+    badge: "MOST POPULAR",
+    subtitle: "Everything in Free plus powerful investment and planning tools.",
+    topLabel: "Everything in Free +",
+    appCount: "25+ Apps Included",
+    footerLines: ["25+ Apps Included"],
+    apps: [
+      {
+        href: "/investment",
+        title: "Investment",
+        body: "Portfolio, NEPSE, SIP, SWP & assets",
+        icon: TrendingUp,
+        accent: "from-teal-500/30 to-emerald-400/10",
+      },
+      {
+        href: "/portfolio",
+        title: "Portfolio",
+        body: "Net worth, assets & wealth analytics",
+        icon: Target,
+        accent: "from-teal-500/30 to-emerald-400/10",
+      },
+      {
+        href: "/market",
+        title: "NEPSE",
+        body: "Market data, watchlists & investing context",
+        icon: BarChart3,
+        accent: "from-blue-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/sip-calculator",
+        title: "SIP",
+        body: "Monthly investing growth calculator",
+        icon: BarChart3,
+        accent: "from-emerald-500/20 to-lime-400/10",
+      },
+      {
+        href: "/swp-calculator",
+        title: "SWP",
+        body: "Inflation-aware withdrawal & runway",
+        icon: LineChart,
+        accent: "from-teal-500/20 to-cyan-400/10",
+      },
+      {
+        href: "/fire-planning",
+        title: "FIRE Calculator",
+        body: "Retirement projection & FI timeline",
+        icon: Calculator,
+        accent: "from-lime-400/25 to-emerald-600/15",
+      },
+      {
+        href: "/fire-ai",
+        title: "FIRE AI",
+        body: "AI chat, guidance & smart finance tools",
+        icon: Sparkles,
+        accent: "from-emerald-500/25 to-lime-400/15",
+      },
+      {
+        href: "/cashflow-dashboard",
+        title: "OCR Payslip",
+        body: "Salary slip import & cashflow sync",
+        icon: FileText,
+        accent: "from-emerald-500/20 to-cyan-400/10",
+      },
+      {
+        href: "/fire-ai/wealth-summary",
+        title: "AI Reports",
+        body: "Wealth summary and AI financial reports",
+        icon: Brain,
+        accent: "from-emerald-500/25 to-lime-400/15",
+      },
+      {
+        href: "/fire-summary",
+        title: "FIRE Journey",
+        body: "Unified net worth, runway & FIRE progress",
+        icon: TrendingUp,
+        accent: "from-lime-400/20 to-emerald-500/10",
+      },
+      {
+        href: "/goals",
+        title: "Goals",
+        body: "Plan and track major money goals",
+        icon: Target,
+        accent: "from-teal-500/20 to-cyan-400/10",
+      },
+      {
+        href: "/fire-ai/expense-insights",
+        title: "AI Advisor",
+        body: "Personal finance insights and next steps",
+        icon: Sparkles,
+        accent: "from-emerald-500/25 to-lime-400/15",
+      },
+      {
+        href: "/emergency-fund",
+        title: "Emergency Fund",
+        body: "Safety fund progress tracker",
+        icon: ShieldCheck,
+        accent: "from-sky-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/insurance",
+        title: "Insurance Planner",
+        body: "Protection planning and coverage tracking",
+        icon: ShieldCheck,
+        accent: "from-emerald-500/20 to-sky-400/10",
+      },
+      {
+        href: "/return-to-nepal",
+        title: "Nepal Return Planner",
+        body: "Return readiness & Nepal life planning",
+        icon: Plane,
+        accent: "from-violet-500/15 to-teal-400/10",
+      },
+      {
+        href: "/korea-pension-dashboard",
+        title: "Korea Finance",
+        body: "Pension, severance & KRW planning",
+        icon: Building2,
+        accent: "from-indigo-500/15 to-emerald-500/10",
+      },
+    ],
+  },
+  {
+    plan: "elite",
+    header: "👑 Elite",
+    badge: "ELITE",
+    subtitle: "Everything in Premium plus advanced wealth intelligence.",
+    topLabel: "Everything in Premium +",
+    appCount: "40+ Apps Included",
+    footerLines: ["40+ Apps Included"],
+    apps: [
+      {
+        href: "/fire-biz",
+        title: "FIRE Biz",
+        body: "Sales, stock, customers & receivables",
+        icon: LayoutGrid,
+        accent: "from-emerald-500/35 to-lime-300/15",
+        testId: "hub-fire-biz-card",
+      },
+      {
+        href: "/portfolio/real-estate",
+        title: "Real Estate",
+        body: "Property assets & real estate analytics",
+        icon: Home,
+        accent: "from-orange-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/portfolio/gold",
+        title: "Gold",
+        body: "Gold allocation & wealth tracking",
+        icon: Gem,
+        accent: "from-yellow-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/fire-biz/reports",
+        title: "Business Finance",
+        body: "Profit, tax, purchases and business reports",
+        icon: LayoutGrid,
+        accent: "from-emerald-500/35 to-lime-300/15",
+      },
+      {
+        href: "/portfolio/ai-insights",
+        title: "Wealth Dashboard",
+        body: "Elite wealth intelligence dashboard",
+        icon: Wallet,
+        accent: "from-emerald-500/25 to-lime-400/15",
+      },
+      {
+        href: "/family",
+        title: "Family Wealth Planning",
+        body: "Family assets, planning and records",
+        icon: Users,
+        accent: "from-sky-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/family",
+        title: "Child Education Planner",
+        body: "Education fund tracking and timeline",
+        icon: PiggyBank,
+        accent: "from-cyan-500/15 to-emerald-500/10",
+      },
+      {
+        href: "/portfolio/ai-insights",
+        title: "AI Portfolio Allocation",
+        body: "Allocation intelligence and risk signals",
+        icon: Brain,
+        accent: "from-emerald-500/25 to-lime-400/15",
+      },
+      {
+        href: "/dashboard/membership",
+        title: "Private Advisory",
+        body: "Elite advisory workflow and strategic tools",
+        icon: Crown,
+        accent: "from-amber-500/20 to-yellow-300/10",
+      },
+      {
+        href: "/fire-ai/wealth-summary",
+        title: "Advanced Reports",
+        body: "Deeper wealth reports and exports",
+        icon: FileText,
+        accent: "from-amber-500/20 to-emerald-500/10",
+      },
+      {
+        href: "/fire-ai",
+        title: "Strategy Lab",
+        body: "Scenario planning and AI strategy",
+        icon: Sparkles,
+        accent: "from-amber-500/20 to-yellow-300/10",
+      },
+    ],
+  },
+];
 
 function useFounderWindowCountdown() {
   const [now, setNow] = useState(() => Date.now());
@@ -169,6 +499,147 @@ function CellIcon({ on, tone = "emerald" }: { on: CompareCell; tone?: "emerald" 
       />
     );
   return <span className="text-zinc-600">—</span>;
+}
+
+const TIER_ORDER: Record<FireMembershipTier, number> = {
+  free: 0,
+  premium: 1,
+  elite: 2,
+};
+
+function tierIncludes(current: FireMembershipTier, required: FireMembershipTier) {
+  return TIER_ORDER[current] >= TIER_ORDER[required];
+}
+
+function planCardState(currentTier: FireMembershipTier, plan: FireMembershipTier): MainAppCardState {
+  if (tierIncludes(currentTier, plan)) return "included";
+  return plan === "elite" ? "eliteLocked" : "premiumLocked";
+}
+
+function MembershipAppPlanSection({
+  section,
+  tier,
+  onSelectTier,
+}: {
+  section: MembershipPlanAppSection;
+  tier: FireMembershipTier;
+  onSelectTier: (tier: FireMembershipTier) => void;
+}) {
+  const isFree = section.plan === "free";
+  const isPremium = section.plan === "premium";
+  const isElite = section.plan === "elite";
+  const current = tier === section.plan;
+  const included = tierIncludes(tier, section.plan);
+  const cardState = planCardState(tier, section.plan);
+  const lockBadge = cardState === "eliteLocked" ? "Elite" : cardState === "premiumLocked" ? "Premium" : undefined;
+  const ctaLabel = current
+    ? "Current Plan"
+    : section.plan === "free"
+      ? "Use Free"
+      : section.plan === "premium"
+        ? "Upgrade to Premium"
+        : "Upgrade to Elite";
+  const sectionChrome = isElite
+    ? "border-amber-400/35 bg-gradient-to-br from-amber-500/[0.14] via-[#08140f] to-[#030806] shadow-[0_0_46px_rgba(245,158,11,0.13),0_28px_90px_rgba(0,0,0,0.55)] ring-1 ring-amber-400/20"
+    : isPremium
+      ? "border-emerald-400/35 bg-gradient-to-br from-emerald-500/[0.14] via-[#04140f] to-[#020807] shadow-[0_28px_90px_rgba(16,185,129,0.12)]"
+      : "border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] via-[#04140f] to-[#020807]";
+  const badgeChrome = isElite
+    ? "border-amber-400/45 bg-amber-500/18 text-amber-100"
+    : isPremium
+      ? "border-lime-400/45 bg-lime-400/15 text-lime-100"
+      : "border-emerald-400/35 bg-emerald-500/15 text-emerald-100";
+  const ctaChrome = isElite
+    ? current
+      ? "border-amber-400/45 bg-amber-500/20 text-amber-50"
+      : "border-amber-500/35 bg-gradient-to-r from-amber-400 to-yellow-300 text-emerald-950 shadow-[0_18px_42px_rgba(245,158,11,0.22)] hover:brightness-110"
+    : current
+      ? "border-emerald-400/45 bg-emerald-500/20 text-emerald-50"
+      : "border-emerald-400/30 bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg hover:brightness-110";
+
+  return (
+    <section
+      className={`animate-fade-up relative isolate overflow-hidden rounded-[1.75rem] border p-5 transition-all duration-300 sm:p-6 lg:p-7 ${sectionChrome}`}
+      aria-labelledby={`membership-${section.plan}-apps`}
+    >
+      {isPremium ? (
+        <div
+          className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-[linear-gradient(105deg,transparent_0%,rgba(190,242,100,0.08)_45%,rgba(52,211,153,0.11)_55%,transparent_100%)] animate-[ai-wi-shimmer_7.5s_ease-in-out_infinite]"
+          aria-hidden
+        />
+      ) : null}
+      {isElite ? (
+        <div className="pointer-events-none absolute inset-0 rounded-[1.75rem] ring-1 ring-inset ring-amber-300/20" aria-hidden />
+      ) : null}
+      <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 id={`membership-${section.plan}-apps`} className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+              {section.header}
+            </h2>
+            <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${badgeChrome}`}>
+              {section.badge}
+            </span>
+          </div>
+          <p className={`mt-2 max-w-2xl text-sm font-semibold leading-relaxed ${isElite ? "text-amber-50/78" : "text-emerald-100/70"}`}>
+            {section.subtitle}
+          </p>
+        </div>
+        <div className={`rounded-2xl border px-4 py-3 text-right ${isElite ? "border-amber-400/25 bg-amber-500/[0.08]" : "border-emerald-400/20 bg-black/25"}`}>
+          <p className={`text-[10px] font-black uppercase tracking-[0.18em] ${isElite ? "text-amber-200/75" : "text-emerald-200/70"}`}>
+            Included Apps
+          </p>
+          <p className={`mt-1 text-lg font-black ${isElite ? "text-amber-50" : "text-white"}`}>{section.appCount}</p>
+        </div>
+      </div>
+
+      {section.topLabel ? (
+        <div className="relative z-10 my-5 flex items-center gap-3">
+          <span className={`h-px flex-1 ${isElite ? "bg-gradient-to-r from-amber-400/45 to-transparent" : "bg-gradient-to-r from-emerald-400/45 to-transparent"}`} />
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${badgeChrome}`}>
+            {section.topLabel}
+          </span>
+          <span className={`h-px flex-1 ${isElite ? "bg-gradient-to-l from-amber-400/45 to-transparent" : "bg-gradient-to-l from-emerald-400/45 to-transparent"}`} />
+        </div>
+      ) : (
+        <div className={`relative z-10 my-5 h-px ${isElite ? "bg-gradient-to-r from-amber-400/45 via-amber-300/10 to-transparent" : "bg-gradient-to-r from-emerald-400/45 via-lime-300/10 to-transparent"}`} />
+      )}
+
+      <div className="relative z-10 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+        {section.apps.map((item) => (
+          <MainAppCard
+            key={`${section.plan}-${item.title}-${item.href}`}
+            item={item}
+            light={false}
+            locked={!included}
+            lockBadge={lockBadge}
+            state={cardState}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 mt-5 flex flex-col gap-4 border-t border-white/[0.07] pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          {section.footerLines.map((line) => (
+            <span
+              key={line}
+              className={`inline-flex items-center gap-2 text-sm font-black ${isElite ? "text-amber-100" : "text-emerald-100"}`}
+            >
+              <Check size={16} strokeWidth={3} className={isElite ? "text-amber-300" : "text-lime-300"} aria-hidden />
+              {line}
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelectTier(section.plan)}
+          className={`inline-flex min-h-[48px] touch-manipulation items-center justify-center rounded-xl border px-5 py-3 text-sm font-black transition active:scale-[0.98] ${ctaChrome}`}
+        >
+          {ctaLabel}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 type MyRequestRow = {
@@ -687,6 +1158,23 @@ export function FireMembershipPage() {
           </p>
         </div>
       </div>
+
+      <section className="space-y-5" aria-labelledby="membership-apps-by-plan">
+        <div className="flex flex-col gap-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300/60">Main Apps</p>
+          <h2 id="membership-apps-by-plan" className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+            Pick the plan that unlocks your next workspace
+          </h2>
+          <p className="max-w-2xl text-sm font-medium leading-relaxed text-emerald-100/55">
+            The same FIRE Nepal app cards from your Home hub, grouped by Free, Premium, and Elite access.
+          </p>
+        </div>
+        <div className="space-y-6 sm:space-y-8">
+          {MEMBERSHIP_APP_SHOWCASE.map((section) => (
+            <MembershipAppPlanSection key={section.plan} section={section} tier={tier} onSelectTier={onSelectTier} />
+          ))}
+        </div>
+      </section>
 
       <section id="membership-request-status" className="scroll-mt-28">
         <MembershipMyRequestsPanel />
