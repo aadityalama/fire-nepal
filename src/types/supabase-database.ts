@@ -64,6 +64,152 @@ export type Database = {
         };
         Relationships: [];
       };
+      group_members: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          local_member_id: string;
+          name: string;
+          avatar_url: string | null;
+          phone: string | null;
+          kakao_id: string | null;
+          bank_name: string | null;
+          account_number: string | null;
+          emergency_contact: string | null;
+          notes: string | null;
+          sort_order: number;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          local_member_id: string;
+          name: string;
+          avatar_url?: string | null;
+          phone?: string | null;
+          kakao_id?: string | null;
+          bank_name?: string | null;
+          account_number?: string | null;
+          emergency_contact?: string | null;
+          notes?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          avatar_url?: string | null;
+          phone?: string | null;
+          kakao_id?: string | null;
+          bank_name?: string | null;
+          account_number?: string | null;
+          emergency_contact?: string | null;
+          notes?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      group_expenses: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          local_expense_id: number | null;
+          title: string;
+          amount: number;
+          payer_member_id: string;
+          category: string;
+          split_equally: boolean;
+          expense_date: string;
+          split_among: string[];
+          split_percentages: Json;
+          amount_currency: string;
+          receipt_image_url: string | null;
+          notes: string | null;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          local_expense_id?: number | null;
+          title: string;
+          amount?: number;
+          payer_member_id: string;
+          category: string;
+          split_equally?: boolean;
+          expense_date?: string;
+          split_among?: string[];
+          split_percentages?: Json;
+          amount_currency?: string;
+          receipt_image_url?: string | null;
+          notes?: string | null;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          local_expense_id?: number | null;
+          title?: string;
+          amount?: number;
+          payer_member_id?: string;
+          category?: string;
+          split_equally?: boolean;
+          expense_date?: string;
+          split_among?: string[];
+          split_percentages?: Json;
+          amount_currency?: string;
+          receipt_image_url?: string | null;
+          notes?: string | null;
+          deleted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      settlements: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          month_key: string;
+          from_member_id: string | null;
+          to_member_id: string | null;
+          amount: number;
+          settlement_type: "transfer" | "complete" | "override";
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          month_key: string;
+          from_member_id?: string | null;
+          to_member_id?: string | null;
+          amount?: number;
+          settlement_type: "transfer" | "complete" | "override";
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          month_key?: string;
+          from_member_id?: string | null;
+          to_member_id?: string | null;
+          amount?: number;
+          settlement_type?: "transfer" | "complete" | "override";
+          metadata?: Json;
+        };
+        Relationships: [];
+      };
       expense_transactions: {
         Row: {
           id: string;

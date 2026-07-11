@@ -75,7 +75,7 @@ export function normalizeSettlementSetting(value?: string | null): string {
   return value?.trim() ?? "";
 }
 
-const DEFAULT_SETTLEMENT_TITLE = "Roommate Settlement Summary";
+const DEFAULT_SETTLEMENT_TITLE = "Group Settlement Summary";
 
 export function buildSettlementReportHeader(location: SettlementLocationInput): string {
   const profile: GroupProfile = {

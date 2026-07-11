@@ -54,7 +54,7 @@ const tools: Array<[string, string, string, LucideIcon]> = [
   ["Korea Pension + Severance", "Salary slip OCR, pension & severance", "/korea-pension-dashboard", Building2],
   ["Loan Calculator", "EMI for Nepal return", "/loan-calculator", Landmark],
   ["Inflation Calculator", "Future value in NPR", "/inflation-calculator", TrendingUp],
-  ["खर्च हिसाब खाता", "Roommate food & room expense settlement", "/expense-dashboard", Calculator],
+  ["खर्च हिसाब खाता", "Shared group expense settlement", "/expense-dashboard", Calculator],
 ];
 
 const fireTools: Array<[string, string, string, LucideIcon]> = [
@@ -89,7 +89,7 @@ const operatingSystemCards: Array<[string, string, string, LucideIcon]> = [
   ["Retirement Readiness", "82% ready for Nepal return", "FIRE score updates live", ShieldCheck],
   ["Goal Tracking", "Kathmandu corpus target", "रु 2.41Cr target mapped", BarChart3],
   ["Emergency Planner", "7.8 months protected", "Safety fund on track", WalletCards],
-  ["Shared Room Finance", "Roommate expenses settled", "Open expense dashboard", UsersRound],
+  ["Shared Group Expenses", "Group expenses settled", "Open Group Expenses", UsersRound],
 ];
 
 const smartInsights: Array<[string, string, LucideIcon]> = [
@@ -208,7 +208,7 @@ function FinancialOperatingSystem() {
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-emerald-50/82 sm:text-[1.05rem] sm:leading-relaxed">
               One emotionally motivating dashboard for savings, FIRE readiness, emergency safety,
-              AI recommendations, live currency, and roommate finance tracking.
+              AI recommendations, live currency, and group expense tracking.
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">

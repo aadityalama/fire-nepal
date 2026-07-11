@@ -219,7 +219,7 @@ const english: HomepageCopy = {
       { title: "Korea Pension + Severance", body: "Salary slip OCR, pension & severance", href: "/korea-pension-dashboard" },
       { title: "Loan Calculator", body: "EMI for Nepal return", href: "/loan-calculator" },
       { title: "Inflation Calculator", body: "Future value in NPR", href: "/inflation-calculator" },
-      { title: "खर्च हिसाब खाता", body: "Roommate food & room expense settlement", href: "/expense-dashboard" },
+      { title: "खर्च हिसाब खाता", body: "Shared group expense settlement", href: "/expense-dashboard" },
     ],
     fireTools: [
       { title: "Global Intelligence", body: "Live FX, NEPSE, KOSPI, metals & FIRE risk", href: "/global-financial-intelligence" },
@@ -268,7 +268,7 @@ const english: HomepageCopy = {
       { title: "Retirement Readiness", value: "82% ready for Nepal return", detail: "FIRE score updates live" },
       { title: "Goal Tracking", value: "Kathmandu corpus target", detail: "रु 2.41Cr target mapped" },
       { title: "Emergency Planner", value: "7.8 months protected", detail: "Safety fund on track" },
-      { title: "Shared Room Finance", value: "Roommate expenses settled", detail: "Open expense dashboard" },
+      { title: "Shared Group Expenses", value: "Group expenses settled", detail: "Open Group Expenses" },
     ],
     smartInsights: [
       { title: "AI Recommendation", insight: "Increase monthly savings by ₩180K to reach FIRE 14 months earlier." },
@@ -277,7 +277,7 @@ const english: HomepageCopy = {
     ],
     osBadge: "FIRE Nepal OS",
     osTitle: "Your premium financial operating system for Nepalis worldwide.",
-    osBody: "One emotionally motivating dashboard for savings, FIRE readiness, emergency safety, AI recommendations, live currency, and roommate finance tracking.",
+    osBody: "One emotionally motivating dashboard for savings, FIRE readiness, emergency safety, AI recommendations, live currency, and group expense tracking.",
     osStats: [
       { label: "Monthly savings", value: "₩1.2M" },
       { label: "Nepal target", value: "रु 2.41Cr" },

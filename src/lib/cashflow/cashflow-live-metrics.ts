@@ -1,6 +1,6 @@
 import type { CashflowDashboardState } from "@/components/cashflow/types";
 import { currentMonthKey, sumIncome } from "@/components/cashflow/cashflow-metrics";
-import { loadDashboardState } from "@/lib/expense-storage";
+import { loadPersonalExpenseState } from "@/lib/personal-expense-storage";
 import { sumExpensesForMonth } from "@/components/cashflow/cashflow-metrics";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import { computeDashboardSummary } from "@/lib/savings/savings-utils";
@@ -35,7 +35,7 @@ export function readTotalSavingsFromModule(): number {
 
 export function readMonthlyExpenseFromModule(monthKey = currentMonthKey()): number {
   if (typeof window === "undefined") return 0;
-  const expenseState = loadDashboardState();
+  const expenseState = loadPersonalExpenseState();
   return sumExpensesForMonth(expenseState?.expenses ?? [], monthKey);
 }
 

@@ -53,6 +53,8 @@ import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
+import { GroupActivityPanel } from "@/components/group-expenses/GroupActivityPanel";
+import { GroupCategoryPicker } from "@/components/group-expenses/GroupCategoryPicker";
 import { GroupProfileCard } from "@/components/GroupProfileCard";
 import { TransactionHistoryPanel } from "@/components/TransactionHistoryPanel";
 import { ExpenseMonthPicker } from "@/components/ExpenseMonthPicker";
@@ -68,7 +70,24 @@ import {
   nprToKrw,
   parseExpenseAmountInput,
 } from "@/lib/exchange-rate";
-import { monthlyComparisonData, normalizeCategory, EXPENSE_CATEGORIES } from "@/lib/expense-analytics";
+import { monthlyComparisonData, normalizeCategory as normalizePersonalCategory, EXPENSE_CATEGORIES } from "@/lib/expense-analytics";
+import {
+  groupMonthlyComparisonData,
+  normalizeGroupExpenseCategory,
+  GROUP_EXPENSE_CATEGORIES,
+} from "@/lib/group-expenses/analytics";
+import {
+  DEFAULT_GROUP_EXPENSE_CATEGORY_ID,
+  getGroupCategoryLabel,
+} from "@/lib/group-expenses/categories";
+import {
+  createGroupActivity,
+  filterGroupExpensesByMonth,
+  listGroupMonthKeys,
+  loadGroupExpenseState,
+  saveGroupExpenseState,
+  type GroupTimelineActivity,
+} from "@/lib/group-expenses/storage";
 import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel } from "@/lib/finance/categories";
 import {
   FALLBACK_KRW_PER_NPR,
@@ -81,10 +100,12 @@ import {
   filterExpensesByMonth,
   formatMonthLabel,
   listMonthKeys,
-  loadDashboardState,
-  saveDashboardState,
   type TimelineActivity,
 } from "@/lib/expense-storage";
+import {
+  loadPersonalExpenseState,
+  savePersonalExpenseState,
+} from "@/lib/personal-expense-storage";
 import { emptyGroupProfile, type GroupProfile } from "@/lib/group-profile";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
 import {
@@ -103,6 +124,11 @@ import {
   softDeleteExpenseTransactionByLocalId,
   upsertExpenseTransactionByLocalId,
 } from "@/services/expense-transactions-supabase";
+import {
+  recordSettlement,
+  softDeleteGroupExpenseByLocalId,
+  upsertGroupExpenseByLocalId,
+} from "@/services/group-expenses-supabase";
 import {
   generateMemberId,
   memberDisplayName,
@@ -129,7 +155,7 @@ type Currency = "NPR" | "KRW" | "USD";
 type Tab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics" | "AI Insights" | "History";
 
 type BottomTab = "Dashboard" | "Members" | "Expenses" | "Settlement" | "Analytics";
-export type ExpenseDashboardMode = "roommate" | "personal";
+export type ExpenseDashboardMode = "group" | "personal";
 export type ExpenseDashboardView = "dashboard" | "expenses" | "categories" | "receipts" | "recurring" | "analytics" | "reports";
 
 type ExpenseForm = {
@@ -282,12 +308,12 @@ function getCurrencyMeta(krwPerNpr: number) {
   };
 }
 
-function emptyExpenseForm(payerId = "", memberList: string[] = []): ExpenseForm {
+function emptyExpenseForm(payerId = "", memberList: string[] = [], personalMode = false): ExpenseForm {
   return {
     title: "",
     amount: "",
     payerId,
-    category: DEFAULT_FINANCE_CATEGORY_ID,
+    category: personalMode ? DEFAULT_FINANCE_CATEGORY_ID : DEFAULT_GROUP_EXPENSE_CATEGORY_ID,
     splitEqually: true,
     date: new Date().toISOString().slice(0, 10),
     splitAmong: [...memberList],
@@ -708,7 +734,7 @@ function SettlementTransferRowEditor({
 }
 
 export function ExpenseDashboard({
-  mode = "roommate",
+  mode = "group",
   initialView,
 }: {
   mode?: ExpenseDashboardMode;
@@ -716,6 +742,9 @@ export function ExpenseDashboard({
 }) {
   const { user } = useProductAuth();
   const personalMode = mode === "personal";
+  const normalizeExpenseCategory = personalMode ? normalizePersonalCategory : normalizeGroupExpenseCategory;
+  const expenseCategoryIds = personalMode ? EXPENSE_CATEGORIES : GROUP_EXPENSE_CATEGORIES;
+  const getCategoryLabel = personalMode ? getFinanceCategoryLabel : getGroupCategoryLabel;
   const [hydrated, setHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>(() => tabForExpenseView(initialView));
   const [currency, setCurrency] = useState<Currency>("NPR");
@@ -813,29 +842,41 @@ export function ExpenseDashboard({
   );
 
   useEffect(() => {
-    const stored = loadDashboardState();
-    if (stored) {
-      setExpenses(stored.expenses);
-      setMembers(stored.members);
-      setProfiles(stored.profiles);
-      setActivities(stored.activities ?? []);
-      if (stored.exchangeRate) setExchangeRate(stored.exchangeRate);
-      if (stored.settlementTransferOverrides) {
-        setSettlementOverrides(stored.settlementTransferOverrides);
+    if (personalMode) {
+      const stored = loadPersonalExpenseState();
+      if (stored) {
+        setExpenses(stored.expenses);
+        setMembers(stored.members);
+        setProfiles(stored.profiles);
+        setActivities(stored.activities ?? []);
+        if (stored.exchangeRate) setExchangeRate(stored.exchangeRate);
+        if (stored.displayCurrency) setCurrency(stored.displayCurrency);
       }
-      if (stored.displayCurrency) setCurrency(stored.displayCurrency);
-      if (stored.companyName || stored.roomNumber || stored.companyType || stored.description || stored.logoUrl) {
-        setGroupProfile({
-          companyName: stored.companyName ?? "",
-          roomNumber: stored.roomNumber ?? "",
-          companyType: stored.companyType ?? "",
-          description: stored.description ?? "",
-          logoUrl: stored.logoUrl ?? "",
-        });
+    } else {
+      const stored = loadGroupExpenseState();
+      if (stored) {
+        setExpenses(stored.expenses);
+        setMembers(stored.members);
+        setProfiles(stored.profiles);
+        setActivities(stored.activities ?? []);
+        if (stored.exchangeRate) setExchangeRate(stored.exchangeRate);
+        if (stored.settlementTransferOverrides) {
+          setSettlementOverrides(stored.settlementTransferOverrides);
+        }
+        if (stored.displayCurrency) setCurrency(stored.displayCurrency);
+        if (stored.companyName || stored.roomNumber || stored.companyType || stored.description || stored.logoUrl) {
+          setGroupProfile({
+            companyName: stored.companyName ?? "",
+            roomNumber: stored.roomNumber ?? "",
+            companyType: stored.companyType ?? "",
+            description: stored.description ?? "",
+            logoUrl: stored.logoUrl ?? "",
+          });
+        }
       }
     }
     setHydrated(true);
-  }, []);
+  }, [personalMode]);
 
   useEffect(() => {
     if (!hydrated || !user?.id || !isSupabaseConfigured()) return;
@@ -873,22 +914,34 @@ export function ExpenseDashboard({
       skipNextSave.current = false;
       return;
     }
-    saveDashboardState({
-      version: 3,
-      expenses,
-      members,
-      profiles,
-      activities,
-      exchangeRate,
-      displayCurrency: currency,
-      settlementTransferOverrides: settlementOverrides,
-      companyName: groupProfile.companyName,
-      roomNumber: groupProfile.roomNumber,
-      companyType: groupProfile.companyType,
-      description: groupProfile.description,
-      logoUrl: groupProfile.logoUrl,
-    });
-  }, [hydrated, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, groupProfile]);
+    if (personalMode) {
+      savePersonalExpenseState({
+        version: 1,
+        expenses,
+        members,
+        profiles,
+        activities: activities as TimelineActivity[],
+        exchangeRate,
+        displayCurrency: currency,
+      });
+    } else {
+      saveGroupExpenseState({
+        version: 1,
+        expenses,
+        members,
+        profiles,
+        activities: activities as GroupTimelineActivity[],
+        exchangeRate,
+        displayCurrency: currency,
+        settlementTransferOverrides: settlementOverrides,
+        companyName: groupProfile.companyName,
+        roomNumber: groupProfile.roomNumber,
+        companyType: groupProfile.companyType,
+        description: groupProfile.description,
+        logoUrl: groupProfile.logoUrl,
+      });
+    }
+  }, [hydrated, personalMode, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, groupProfile]);
 
   useEffect(() => {
     if (!members.length) return;
@@ -920,15 +973,22 @@ export function ExpenseDashboard({
     setAmountInputCurrency(nextCur);
   }, [currency, isModalOpen, editingExpenseId, krwPerNpr]);
 
-  const monthKeys = useMemo(() => listMonthKeys(expenses), [expenses]);
+  const monthKeys = useMemo(
+    () => (personalMode ? listMonthKeys(expenses) : listGroupMonthKeys(expenses)),
+    [expenses, personalMode],
+  );
   const monthExpenses = useMemo(
-    () => filterExpensesByMonth(expenses, selectedMonthKey),
-    [expenses, selectedMonthKey],
+    () =>
+      personalMode
+        ? filterExpensesByMonth(expenses, selectedMonthKey)
+        : filterGroupExpensesByMonth(expenses, selectedMonthKey),
+    [expenses, selectedMonthKey, personalMode],
   );
 
   const appendActivity = useCallback((activity: Omit<TimelineActivity, "id" | "timestamp">) => {
-    setActivities((current) => [createActivity(activity), ...current]);
-  }, []);
+    const created = personalMode ? createActivity(activity) : createGroupActivity(activity);
+    setActivities((current) => [created, ...current]);
+  }, [personalMode]);
 
   const actorName = user?.name ?? "Member";
 
@@ -937,7 +997,7 @@ export function ExpenseDashboard({
       input: Parameters<typeof insertExpenseTransaction>[2],
       options?: { upsertLocalId?: boolean },
     ) => {
-      if (!user?.id || !isSupabaseConfigured()) return;
+      if (!personalMode || !user?.id || !isSupabaseConfigured()) return;
       try {
         const client = getSupabaseBrowserClient();
         if (options?.upsertLocalId && input.localExpenseId != null) {
@@ -949,7 +1009,33 @@ export function ExpenseDashboard({
         console.warn("[expense-dashboard] transaction persist failed", error);
       }
     },
-    [user?.id, actorName],
+    [personalMode, user?.id, actorName],
+  );
+
+  const persistGroupExpense = useCallback(
+    async (expense: Expense) => {
+      if (personalMode || !user?.id || !isSupabaseConfigured()) return;
+      try {
+        const client = getSupabaseBrowserClient();
+        await upsertGroupExpenseByLocalId(client, user.id, {
+          localExpenseId: expense.id,
+          title: expense.title,
+          amount: expense.amount,
+          payerMemberId: expense.payerId,
+          category: normalizeExpenseCategory(expense.category),
+          splitEqually: expense.splitEqually !== false,
+          expenseDate: expense.date,
+          splitAmong: expense.splitAmong,
+          splitPercentages: expense.splitPercentages,
+          amountCurrency: expense.amountCurrency,
+          receiptImageUrl: expense.receiptImage,
+          notes: expense.notes,
+        });
+      } catch (error) {
+        console.warn("[group-expenses] persist failed", error);
+      }
+    },
+    [personalMode, user?.id, normalizeExpenseCategory],
   );
 
   const { balances, equalSplitAmount, memberExpectedShare, paidByMember, totalExpense, transfers: rawTransfers } =
@@ -966,7 +1052,7 @@ export function ExpenseDashboard({
         title: "",
         amount,
         payerId: form.payerId,
-        category: normalizeCategory(form.category),
+        category: normalizeExpenseCategory(form.category),
         splitEqually: form.splitEqually,
         date: form.date,
         splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
@@ -1024,13 +1110,15 @@ export function ExpenseDashboard({
     { name: "N/A", total: 0 },
   );
 
-  const categoryTotals = EXPENSE_CATEGORIES.map((category) =>
+  const categoryTotals = expenseCategoryIds.map((category) =>
     monthExpenses
-      .filter((expense) => normalizeCategory(expense.category) === category)
+      .filter((expense) => normalizeExpenseCategory(expense.category) === category)
       .reduce((sum, expense) => sum + expense.amount, 0),
   );
 
-  const monthlyComparison = monthlyComparisonData(expenses, currency, 6, krwPerNpr);
+  const monthlyComparison = personalMode
+    ? monthlyComparisonData(expenses, currency, 6, krwPerNpr)
+    : groupMonthlyComparisonData(expenses, currency, 6, krwPerNpr);
   const monthlyData = {
     labels: monthlyComparison.labels,
     datasets: [
@@ -1044,7 +1132,7 @@ export function ExpenseDashboard({
   };
 
   const categoryData = {
-    labels: [...EXPENSE_CATEGORIES],
+    labels: [...expenseCategoryIds],
     datasets: [
       {
         data: categoryTotals.map((amount) => amount * getCurrencyMeta(krwPerNpr)[currency].rate),
@@ -1157,9 +1245,9 @@ export function ExpenseDashboard({
       const memberId = generateMemberId();
       setMembers([memberId]);
       setProfiles({ [memberId]: createProfile("Me") });
-      setForm(emptyExpenseForm(memberId, [memberId]));
+      setForm(emptyExpenseForm(memberId, [memberId], true));
     } else {
-      setForm(emptyExpenseForm(members[0], members));
+      setForm(emptyExpenseForm(members[0], members, personalMode));
     }
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
@@ -1190,7 +1278,7 @@ export function ExpenseDashboard({
       title: expense.title,
       amount: formatExpenseAmountForInput(expense.amount, entryCur, krwPerNpr),
       payerId: expense.payerId,
-      category: normalizeCategory(expense.category),
+      category: normalizeExpenseCategory(expense.category),
       splitEqually: expense.splitEqually ?? true,
       date: expense.date,
       splitAmong,
@@ -1206,7 +1294,7 @@ export function ExpenseDashboard({
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
-    setForm(emptyExpenseForm(members[0], members));
+    setForm(emptyExpenseForm(members[0], members, personalMode));
   }
 
   function saveExpenseAmount(id: number, amountNpr: number) {
@@ -1222,24 +1310,28 @@ export function ExpenseDashboard({
         memberId: snapshot.payerId,
         title: snapshot.title,
         amount: amountNpr,
-        category: normalizeCategory(snapshot.category),
+        category: normalizeExpenseCategory(snapshot.category),
         message: `${memberDisplayName(snapshot.payerId, profiles)} updated amount for ${snapshot.title}`,
       });
-      void recordTransaction(
-        {
-          localExpenseId: snapshot.id,
-          transactionType: "adjustment",
-          description: `Amount adjusted for ${snapshot.title}`,
-          category: normalizeCategory(snapshot.category),
-          amount: amountNpr,
-          currency: snapshot.amountCurrency ?? "NPR",
-          memberId: snapshot.payerId,
-          memberName: memberDisplayName(snapshot.payerId, profiles),
-          transactionDate: snapshot.date,
-          metadata: { source: "amount_edit", expenseId: snapshot.id },
-        },
-        { upsertLocalId: true },
-      );
+      if (personalMode) {
+        void recordTransaction(
+          {
+            localExpenseId: snapshot.id,
+            transactionType: "adjustment",
+            description: `Amount adjusted for ${snapshot.title}`,
+            category: normalizeExpenseCategory(snapshot.category),
+            amount: amountNpr,
+            currency: snapshot.amountCurrency ?? "NPR",
+            memberId: snapshot.payerId,
+            memberName: memberDisplayName(snapshot.payerId, profiles),
+            transactionDate: snapshot.date,
+            metadata: { source: "amount_edit", expenseId: snapshot.id },
+          },
+          { upsertLocalId: true },
+        );
+      } else {
+        void persistGroupExpense({ ...snapshot, amount: amountNpr });
+      }
     }
   }
 
@@ -1250,18 +1342,29 @@ export function ExpenseDashboard({
         ...prev,
         [selectedMonthKey]: { ...(prev[selectedMonthKey] ?? {}), [key]: npr },
       }));
-      void recordTransaction({
-        transactionType: "transfer",
-        description: `${memberDisplayName(from, profiles)} → ${memberDisplayName(to, profiles)}`,
-        amount: npr,
-        currency: "NPR",
-        memberId: from,
-        memberName: memberDisplayName(from, profiles),
-        transactionDate: new Date().toISOString().slice(0, 10),
-        metadata: { monthKey: selectedMonthKey, transferTo: to, source: "override" },
-      });
+      if (personalMode) {
+        void recordTransaction({
+          transactionType: "transfer",
+          description: `${memberDisplayName(from, profiles)} → ${memberDisplayName(to, profiles)}`,
+          amount: npr,
+          currency: "NPR",
+          memberId: from,
+          memberName: memberDisplayName(from, profiles),
+          transactionDate: new Date().toISOString().slice(0, 10),
+          metadata: { monthKey: selectedMonthKey, transferTo: to, source: "override" },
+        });
+      } else if (user?.id && isSupabaseConfigured()) {
+        void recordSettlement(getSupabaseBrowserClient(), user.id, {
+          monthKey: selectedMonthKey,
+          fromMemberId: from,
+          toMemberId: to,
+          amount: npr,
+          settlementType: "override",
+          metadata: { source: "override" },
+        });
+      }
     },
-    [selectedMonthKey, profiles, recordTransaction],
+    [selectedMonthKey, profiles, recordTransaction, personalMode, user?.id],
   );
 
   const resetTransferOverride = useCallback(
@@ -1287,7 +1390,7 @@ export function ExpenseDashboard({
       title: form.title.trim(),
       amount,
       payerId: form.payerId,
-      category: normalizeCategory(form.category),
+      category: normalizeExpenseCategory(form.category),
       splitEqually: form.splitEqually,
       date: form.date,
       receiptImage: receiptPreview,
@@ -1312,24 +1415,28 @@ export function ExpenseDashboard({
         memberId: nextExpense.payerId,
         title: nextExpense.title,
         amount: nextExpense.amount,
-        category: normalizeCategory(nextExpense.category),
+        category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} updated ${nextExpense.title}`,
       });
-      void recordTransaction(
-        {
-          localExpenseId: nextExpense.id,
-          transactionType: "expense",
-          description: nextExpense.title,
-          category: normalizeCategory(nextExpense.category),
-          amount: nextExpense.amount,
-          currency: nextExpense.amountCurrency ?? "NPR",
-          memberId: nextExpense.payerId,
-          memberName: memberDisplayName(nextExpense.payerId, profiles),
-          transactionDate: nextExpense.date,
-          metadata: { monthKey, source: "expense_edit" },
-        },
-        { upsertLocalId: true },
-      );
+      if (personalMode) {
+        void recordTransaction(
+          {
+            localExpenseId: nextExpense.id,
+            transactionType: "expense",
+            description: nextExpense.title,
+            category: normalizeExpenseCategory(nextExpense.category),
+            amount: nextExpense.amount,
+            currency: nextExpense.amountCurrency ?? "NPR",
+            memberId: nextExpense.payerId,
+            memberName: memberDisplayName(nextExpense.payerId, profiles),
+            transactionDate: nextExpense.date,
+            metadata: { monthKey, source: "expense_edit" },
+          },
+          { upsertLocalId: true },
+        );
+      } else {
+        void persistGroupExpense(nextExpense);
+      }
     } else {
       setExpenses((current) => [nextExpense, ...current]);
       appendActivity({
@@ -1338,24 +1445,28 @@ export function ExpenseDashboard({
         memberId: nextExpense.payerId,
         title: nextExpense.title,
         amount: nextExpense.amount,
-        category: normalizeCategory(nextExpense.category),
+        category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} added ${nextExpense.title}`,
       });
-      void recordTransaction(
-        {
-          localExpenseId: nextExpense.id,
-          transactionType: "expense",
-          description: nextExpense.title,
-          category: normalizeCategory(nextExpense.category),
-          amount: nextExpense.amount,
-          currency: nextExpense.amountCurrency ?? "NPR",
-          memberId: nextExpense.payerId,
-          memberName: memberDisplayName(nextExpense.payerId, profiles),
-          transactionDate: nextExpense.date,
-          metadata: { monthKey, source: "expense_add" },
-        },
-        { upsertLocalId: true },
-      );
+      if (personalMode) {
+        void recordTransaction(
+          {
+            localExpenseId: nextExpense.id,
+            transactionType: "expense",
+            description: nextExpense.title,
+            category: normalizeExpenseCategory(nextExpense.category),
+            amount: nextExpense.amount,
+            currency: nextExpense.amountCurrency ?? "NPR",
+            memberId: nextExpense.payerId,
+            memberName: memberDisplayName(nextExpense.payerId, profiles),
+            transactionDate: nextExpense.date,
+            metadata: { monthKey, source: "expense_add" },
+          },
+          { upsertLocalId: true },
+        );
+      } else {
+        void persistGroupExpense(nextExpense);
+      }
     }
 
     if (!monthKeys.includes(monthKey)) {
@@ -1374,22 +1485,26 @@ export function ExpenseDashboard({
       monthKey: expenseMonthKey(deleted.date),
       memberId: deleted.payerId,
       title: deleted.title,
-      category: normalizeCategory(deleted.category),
+      category: normalizeExpenseCategory(deleted.category),
       message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
     });
-    void recordTransaction({
-      transactionType: "adjustment",
-      description: `Deleted: ${deleted.title}`,
-      category: normalizeCategory(deleted.category),
-      amount: deleted.amount,
-      currency: deleted.amountCurrency ?? "NPR",
-      memberId: deleted.payerId,
-      memberName: memberDisplayName(deleted.payerId, profiles),
-      transactionDate: deleted.date,
-      metadata: { localExpenseId: deleted.id, source: "expense_delete" },
-    });
-    if (user?.id && isSupabaseConfigured()) {
-      void softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
+    if (personalMode) {
+      void recordTransaction({
+        transactionType: "adjustment",
+        description: `Deleted: ${deleted.title}`,
+        category: normalizeExpenseCategory(deleted.category),
+        amount: deleted.amount,
+        currency: deleted.amountCurrency ?? "NPR",
+        memberId: deleted.payerId,
+        memberName: memberDisplayName(deleted.payerId, profiles),
+        transactionDate: deleted.date,
+        metadata: { localExpenseId: deleted.id, source: "expense_delete" },
+      });
+      if (user?.id && isSupabaseConfigured()) {
+        void softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
+      }
+    } else if (user?.id && isSupabaseConfigured()) {
+      void softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
     }
     setExpenseToDelete(null);
   }
@@ -1432,24 +1547,44 @@ export function ExpenseDashboard({
     console.log("[settlement-complete] persisting activity", activity);
     appendActivity(activity);
 
-    void recordTransaction({
-      transactionType: "settlement",
-      description: activity.message,
-      amount: 0,
-      transactionDate: new Date().toISOString().slice(0, 10),
-      metadata: { monthKey: selectedMonthKey, transferCount: transfers.length },
-    });
-    for (const transfer of transfers) {
+    if (personalMode) {
       void recordTransaction({
-        transactionType: "transfer",
-        description: `${memberDisplayName(transfer.from, profiles)} → ${memberDisplayName(transfer.to, profiles)}`,
-        amount: transfer.amount,
-        currency: "NPR",
-        memberId: transfer.from,
-        memberName: memberDisplayName(transfer.from, profiles),
+        transactionType: "settlement",
+        description: activity.message,
+        amount: 0,
         transactionDate: new Date().toISOString().slice(0, 10),
-        metadata: { monthKey: selectedMonthKey, transferTo: transfer.to, source: "settlement_complete" },
+        metadata: { monthKey: selectedMonthKey, transferCount: transfers.length },
       });
+      for (const transfer of transfers) {
+        void recordTransaction({
+          transactionType: "transfer",
+          description: `${memberDisplayName(transfer.from, profiles)} → ${memberDisplayName(transfer.to, profiles)}`,
+          amount: transfer.amount,
+          currency: "NPR",
+          memberId: transfer.from,
+          memberName: memberDisplayName(transfer.from, profiles),
+          transactionDate: new Date().toISOString().slice(0, 10),
+          metadata: { monthKey: selectedMonthKey, transferTo: transfer.to, source: "settlement_complete" },
+        });
+      }
+    } else if (user?.id && isSupabaseConfigured()) {
+      const client = getSupabaseBrowserClient();
+      void recordSettlement(client, user.id, {
+        monthKey: selectedMonthKey,
+        amount: 0,
+        settlementType: "complete",
+        metadata: { transferCount: transfers.length },
+      });
+      for (const transfer of transfers) {
+        void recordSettlement(client, user.id, {
+          monthKey: selectedMonthKey,
+          fromMemberId: transfer.from,
+          toMemberId: transfer.to,
+          amount: transfer.amount,
+          settlementType: "transfer",
+          metadata: { source: "settlement_complete" },
+        });
+      }
     }
 
     console.log("[settlement-complete] updating UI — celebration + toast");
@@ -1460,6 +1595,8 @@ export function ExpenseDashboard({
     monthExpenses.length,
     profiles,
     recordTransaction,
+    user?.id,
+    personalMode,
     selectedMonthKey,
     settlementMarkedComplete,
     transfers,
@@ -1588,7 +1725,7 @@ export function ExpenseDashboard({
     if (!isDesktopShareUi() && typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "Roommate Expense Summary",
+          title: "Group Expense Summary",
           text,
           url: pageUrl,
         });
@@ -1700,14 +1837,14 @@ export function ExpenseDashboard({
         memberId: payerId,
         title: nextExpense.title,
         amount: nextExpense.amount,
-        category: normalizeCategory(nextExpense.category),
+        category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(payerId, profiles)} added ${nextExpense.title}`,
       });
       void recordTransaction({
         localExpenseId: nextExpense.id,
         transactionType: "expense",
         description: nextExpense.title,
-        category: normalizeCategory(nextExpense.category),
+        category: normalizeExpenseCategory(nextExpense.category),
         amount: nextExpense.amount,
         currency: "NPR",
         memberId: payerId,
@@ -1918,7 +2055,7 @@ export function ExpenseDashboard({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/75">
-                    {personalMode ? "Personal Expenses" : "Roommate Expenses"}
+                    {personalMode ? "Personal Expenses" : "Group Expenses"}
                   </p>
                   <p className="mt-1 text-[11px] font-medium text-emerald-100/80">
                     ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)} · {formatRelativeTime(exchangeRate.updatedAt)}
@@ -2141,7 +2278,7 @@ export function ExpenseDashboard({
             <div className="rounded-xl border border-slate-200/80 bg-white p-3">
               <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">By category</h3>
               <div className="divide-y divide-slate-100">
-                {EXPENSE_CATEGORIES.map((category, index) => (
+                {expenseCategoryIds.map((category, index) => (
                   <div key={category} className="flex items-center justify-between py-2.5">
                     <span className="text-sm font-semibold text-emerald-950">{category}</span>
                     <span className="text-sm font-black tabular-nums text-emerald-800">{fmt(categoryTotals[index] ?? 0)}</span>
@@ -2164,7 +2301,24 @@ export function ExpenseDashboard({
           />
         )}
 
-        {activeTab === "History" && (
+        {activeTab === "History" && !personalMode ? (
+          <GroupActivityPanel
+            userId={user?.id}
+            groupProfile={groupProfile}
+            currency={currency}
+            krwPerNpr={krwPerNpr}
+            members={members}
+            profiles={profiles}
+            expenses={expenses}
+            activities={activities as GroupTimelineActivity[]}
+            onEditExpense={openEditExpenseModal}
+            onDeleteExpense={(expense) => {
+              setExpenses((current) => current.filter((e) => e.id !== expense.id));
+            }}
+          />
+        ) : null}
+
+        {activeTab === "History" && personalMode ? (
           <TransactionHistoryPanel
             userId={user?.id}
             actorName={actorName}
@@ -2180,7 +2334,7 @@ export function ExpenseDashboard({
               setExpenses((current) => current.filter((e) => e.id !== expense.id));
             }}
           />
-        )}
+        ) : null}
       </div>
 
       <SettlementCelebration show={showCelebration} onComplete={() => setShowCelebration(false)} />
@@ -2359,10 +2513,17 @@ export function ExpenseDashboard({
                 </select>
               </label>
               <div className="sm:col-span-2">
-                <FinanceCategoryPicker
-                  value={form.category}
-                  onChange={(category) => setForm((current) => ({ ...current, category }))}
-                />
+                {personalMode ? (
+                  <FinanceCategoryPicker
+                    value={form.category}
+                    onChange={(category) => setForm((current) => ({ ...current, category }))}
+                  />
+                ) : (
+                  <GroupCategoryPicker
+                    value={form.category}
+                    onChange={(category) => setForm((current) => ({ ...current, category }))}
+                  />
+                )}
               </div>
               <label className="sm:col-span-2 sm:max-w-[12rem]">
                 <span className="mb-0.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-wide text-slate-500 sm:text-xs">
@@ -2977,7 +3138,7 @@ function GroupMembers({
       ) : members.length === 0 ? (
         <div className="mb-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center">
           <UsersRound className="mx-auto mb-2 text-emerald-600" size={22} aria-hidden />
-          <p className="text-sm font-black text-emerald-950">No roommates yet</p>
+          <p className="text-sm font-black text-emerald-950">No members yet</p>
           <p className="mt-1 text-xs font-medium text-slate-600">
             Add your first member below to start tracking shared expenses.
           </p>
@@ -3081,8 +3242,8 @@ function GroupMembers({
           className={`min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-100 bg-white font-bold text-emerald-950 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 ${
             compact ? "px-3 py-2 text-sm" : "rounded-2xl px-4 py-3 text-sm"
           }`}
-          placeholder="Add roommate"
-          aria-label="New roommate name"
+          placeholder="Add member"
+          aria-label="New group member name"
           disabled={loading}
         />
         <button

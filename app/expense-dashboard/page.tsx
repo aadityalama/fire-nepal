@@ -20,5 +20,5 @@ export default async function ExpenseDashboardPage({
     ? (sp.view as ExpenseDashboardView)
     : undefined;
 
-  return <ExpenseDashboard mode={sp.finance === "personal" ? "personal" : "roommate"} initialView={initialView} />;
+  return <ExpenseDashboard mode={sp.finance === "personal" ? "personal" : "group"} initialView={initialView} />;
 }

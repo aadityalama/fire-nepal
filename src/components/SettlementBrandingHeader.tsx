@@ -4,7 +4,7 @@ import { Building2 } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { groupLogoInitials } from "@/lib/group-profile-logo";
 
-const DEFAULT_TITLE = "Roommate Settlement Summary";
+const DEFAULT_TITLE = "Group Settlement Summary";
 
 export type SettlementBrandingHeaderProps = {
   companyName?: string;
