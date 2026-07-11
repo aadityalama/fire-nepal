@@ -121,6 +121,7 @@ import {
 } from "@/services/expense-workspace-supabase";
 import {
   insertExpenseTransaction,
+  listPersistedPersonalExpenses,
   softDeleteExpenseTransactionByLocalId,
   upsertExpenseTransactionByLocalId,
 } from "@/services/expense-transactions-supabase";
@@ -148,6 +149,7 @@ import {
   getSettlement,
   type Expense,
 } from "@/lib/expense-utils";
+import type { ExpenseTransactionRow } from "@/lib/transaction-history-types";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -363,6 +365,53 @@ function createProfile(name: string): RoommateProfile {
     emergencyContact: "+977 98X-XXX-XXXX",
     notes: "New roommate profile. Add bank and contact details for faster settlement.",
   };
+}
+
+function expenseFromTransactionRow(row: ExpenseTransactionRow): Expense {
+  const metadata = row.metadata ?? {};
+  const amountCurrency =
+    row.currency === "KRW" || metadata.amountCurrency === "KRW"
+      ? "KRW"
+      : "NPR";
+  const payerId = row.member_id || "personal-user";
+
+  return {
+    id: row.local_expense_id ?? new Date(row.created_at).getTime(),
+    title: row.description,
+    amount: row.amount,
+    payerId,
+    category: row.category ?? DEFAULT_FINANCE_CATEGORY_ID,
+    splitEqually: true,
+    date: row.transaction_date,
+    notes: typeof metadata.notes === "string" ? metadata.notes : undefined,
+    amountCurrency,
+  };
+}
+
+function deriveProfilesFromPersonalTransactions(
+  rows: ExpenseTransactionRow[],
+  currentProfiles: Record<string, RoommateProfile>,
+): { members: string[]; profiles: Record<string, RoommateProfile> } {
+  const ordered = new Set<string>();
+  const profiles = { ...currentProfiles };
+
+  for (const row of rows) {
+    const memberId = row.member_id || "personal-user";
+    ordered.add(memberId);
+    if (!profiles[memberId]) {
+      profiles[memberId] = createProfile(row.member_name || row.created_by_name || "Me");
+    } else if (row.member_name && profiles[memberId].name !== row.member_name) {
+      profiles[memberId] = { ...profiles[memberId], name: row.member_name };
+    }
+  }
+
+  if (ordered.size === 0) {
+    const fallbackId = Object.keys(currentProfiles)[0] ?? "personal-user";
+    ordered.add(fallbackId);
+    if (!profiles[fallbackId]) profiles[fallbackId] = createProfile("Me");
+  }
+
+  return { members: Array.from(ordered), profiles };
 }
 
 function formatMoney(amount: number, currency: Currency, krwPerNpr = FALLBACK_KRW_PER_NPR) {
@@ -903,6 +952,32 @@ export function ExpenseDashboard({
       cancelled = true;
     };
   }, [hydrated, user?.id]);
+
+  useEffect(() => {
+    if (!hydrated || !personalMode || !user?.id || !isSupabaseConfigured()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const client = getSupabaseBrowserClient();
+        const rows = await listPersistedPersonalExpenses(client, user.id);
+        if (cancelled || rows.length === 0) return;
+
+        const remoteExpenses = rows.map(expenseFromTransactionRow);
+        const remoteMembers = Array.from(new Set(rows.map((row) => row.member_id || "personal-user")));
+        setExpenses(remoteExpenses);
+        setMembers(remoteMembers.length > 0 ? remoteMembers : ["personal-user"]);
+        setProfiles((current) => deriveProfilesFromPersonalTransactions(rows, current).profiles);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[expense-dashboard] personal expense hydrate failed", error);
+        }
+        toast.error(error instanceof Error ? error.message : "Could not load saved expenses from Supabase.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, personalMode, user?.id]);
 
   useEffect(() => {
     void fetchLiveExchangeRate().then(setExchangeRate);

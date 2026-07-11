@@ -377,6 +377,39 @@ export async function listAllExpenseTransactionsForExport(
   return { rows: all, summary };
 }
 
+export async function listPersistedPersonalExpenses(
+  client: Client,
+  userId: string,
+): Promise<ExpenseTransactionRow[]> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-personal-expense-load");
+  if (!workspace) return [];
+
+  const { data, error } = await client
+    .from("expense_transactions")
+    .select(TRANSACTION_COLUMNS)
+    .eq("workspace_id", workspace.id)
+    .eq("transaction_type", "expense")
+    .is("deleted_at", null)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[expense-transactions] personal expense load failed", {
+        workspaceId: workspace.id,
+        error,
+      });
+    }
+    throw new ExpenseTransactionHistoryError(
+      formatSupabaseError(error, "Could not load saved expenses from Supabase."),
+      "expense-transaction-personal-expense-load",
+      error,
+    );
+  }
+
+  return (data ?? []).map(rowToTransaction);
+}
+
 export async function getTransactionAuditLog(
   client: Client,
   userId: string,
