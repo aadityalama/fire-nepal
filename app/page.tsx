@@ -29,6 +29,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { Viewport } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FireDashboardSection } from "@/components/FireDashboardSection";
@@ -38,9 +39,12 @@ import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSect
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { HomeTopInfoBar } from "@/components/smart-nepal-info/HomeTopInfoBar";
-import { buildHomepageMetadata } from "@/lib/brand/site-seo";
+import { FIRE_NEPAL_THEME_COLOR, buildHomepageMetadata } from "@/lib/brand/site-seo";
 
 export const metadata = buildHomepageMetadata();
+export const viewport: Viewport = {
+  themeColor: FIRE_NEPAL_THEME_COLOR,
+};
 
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],

@@ -19,6 +19,10 @@ export const FIRE_NEPAL_BRAND = {
   ],
 } as const;
 
+const HOMEPAGE_CANONICAL_URL = "https://www.firenepal.com";
+const HOMEPAGE_TITLE = "FIRE Nepal | Financial Independence, Retire Early for Nepalis Worldwide";
+export const FIRE_NEPAL_THEME_COLOR = "#059669";
+
 export function getSiteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "") || "https://firenepal.com";
 }
@@ -117,8 +121,8 @@ function buildTwitterTags({
 
 /** Homepage-only metadata — explicit title, description, OG and Twitter (no layout template suffix). */
 export function buildHomepageMetadata(): Metadata {
-  const origin = getSiteOrigin();
-  const title = `${FIRE_NEPAL_BRAND.name} | ${FIRE_NEPAL_BRAND.tagline}`;
+  const origin = HOMEPAGE_CANONICAL_URL;
+  const title = HOMEPAGE_TITLE;
   const description = FIRE_NEPAL_BRAND.description;
 
   return {
@@ -133,6 +137,25 @@ export function buildHomepageMetadata(): Metadata {
     },
     openGraph: buildOpenGraphTags({ origin, title, description }),
     twitter: buildTwitterTags({ title, description, origin }),
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
+    appleWebApp: {
+      capable: true,
+      title: FIRE_NEPAL_BRAND.name,
+      statusBarStyle: "default",
+    },
+    other: {
+      "apple-mobile-web-app-capable": "yes",
+    },
   };
 }
 
