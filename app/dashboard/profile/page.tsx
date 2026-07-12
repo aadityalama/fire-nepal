@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { FirePremiumProfilePage } from "@/components/dashboard/FirePremiumProfilePage";
+import { FireMyProfilePage } from "@/components/dashboard/FireMyProfilePage";
 
 export const metadata: Metadata = {
-  title: "Profile | FIRE Nepal Dashboard",
-  description: "Edit your FIRE Nepal member profile and view live wealth widgets.",
+  title: "My Profile | FIRE Nepal Dashboard",
+  description: "Manage your FIRE Nepal personal account information, profile details, membership, and settings.",
 };
 
 export default function DashboardProfilePage() {
-  return <FirePremiumProfilePage />;
+  return <FireMyProfilePage />;
 }

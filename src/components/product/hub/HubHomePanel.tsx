@@ -394,7 +394,7 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
 const ACCOUNT_TOOLS: ToolLauncherItem[] = [
   {
     href: "/dashboard/profile",
-    title: "Profile",
+    title: "My Profile",
     icon: UserRound,
     accent: "from-emerald-500/20 to-lime-400/10",
   },

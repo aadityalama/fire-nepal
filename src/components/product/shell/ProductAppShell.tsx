@@ -35,7 +35,7 @@ const BASE_NAV = [
 
 const MORE_LINKS = [
   { href: "/account", label: "Account", icon: Wallet },
-  { href: "/dashboard/profile", label: "Profile", icon: Users },
+  { href: "/dashboard/profile", label: "My Profile", icon: Users },
   { href: "/smart-reminders", label: "Reminders", icon: Bell },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

@@ -74,14 +74,14 @@ export function FamilyModuleShell({ children }: { children: ReactNode }) {
           <div className="flex shrink-0 items-center gap-2">
             <SmartRemindersHeaderBell />
             <Link
-              href="/dashboard/profile"
+              href="/dashboard"
               className={`hidden rounded-xl border px-3 py-2 text-xs font-black transition sm:inline-flex ${
                 light
                   ? "border-emerald-200/70 bg-emerald-50/90 text-emerald-900 hover:bg-emerald-100"
                   : "border-emerald-500/20 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20"
               }`}
             >
-              Member dashboard
+              Dashboard
             </Link>
             <FireThemeToggle variant="header" />
             <UserMenuDropdown variant={light ? "light" : "dark"} />

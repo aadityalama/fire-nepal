@@ -30,7 +30,8 @@ import { hasActivePaidMembership } from "@/lib/fire-membership";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/dashboard/profile", label: "Profile", icon: UserRound },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/dashboard/profile", label: "My Profile", icon: UserRound },
   { href: "/portfolio", label: "Wealth dashboard", icon: Briefcase },
   { href: "/family", label: "Family Hub", icon: UsersRound },
   { href: "/smart-reminders", label: "Reminders", icon: Bell },
@@ -55,6 +56,7 @@ const FAMILY_MODULE_PATHS = [
 
 function navActive(href: string, pathname: string | null): boolean {
   if (!pathname) return false;
+  if (href === "/dashboard") return pathname === href;
   if (href === "/family") {
     return FAMILY_MODULE_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   }

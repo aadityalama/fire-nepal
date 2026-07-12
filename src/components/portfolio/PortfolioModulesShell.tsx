@@ -68,7 +68,7 @@ function SidebarAccountFooter({ light }: { light: boolean }) {
           light ? "text-slate-800 hover:bg-slate-100" : "text-gray-100 hover:bg-white/[0.05] hover:text-white"
         }`}
       >
-        Profile
+        My Profile
       </Link>
       <button
         type="button"

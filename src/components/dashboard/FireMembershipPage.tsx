@@ -880,7 +880,7 @@ export function FireMembershipPage() {
               href="/dashboard/profile"
               className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg transition hover:-translate-y-0.5"
             >
-              Profile workspace
+              My Profile
             </Link>
           </div>
         </div>
