@@ -22,6 +22,25 @@ export const FIRE_NEPAL_BRAND = {
 const HOMEPAGE_CANONICAL_URL = "https://www.firenepal.com";
 const HOMEPAGE_TITLE = "FIRE Nepal | Financial Independence, Retire Early for Nepalis Worldwide";
 export const FIRE_NEPAL_THEME_COLOR = "#059669";
+const STRUCTURED_DATA_DESCRIPTION =
+  "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide, helping users achieve Financial Independence, Retire Early (FIRE) and confidently plan their return to Nepal.";
+const WEB_APPLICATION_DESCRIPTION =
+  "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide helping users achieve Financial Independence, Retire Early (FIRE).";
+const FIRE_NEPAL_CORE_FEATURES = [
+  "Financial Independence (FIRE)",
+  "Expense Tracking",
+  "Budget Management",
+  "Savings Tracking",
+  "Net Worth Tracking",
+  "Portfolio Tracking",
+  "Wealth Analytics",
+  "FIRE Progress Tracking",
+  "Nepal Return Planning",
+  "Remittance Management",
+  "FIRE Biz",
+  "Family Hub",
+  "Child Education Tracker",
+] as const;
 
 export function getSiteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "") || "https://firenepal.com";
@@ -160,53 +179,55 @@ export function buildHomepageMetadata(): Metadata {
 }
 
 export function buildOrganizationJsonLd() {
-  const origin = getSiteOrigin();
+  const origin = HOMEPAGE_CANONICAL_URL;
 
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
+    "@id": `${origin}/#organization`,
     name: FIRE_NEPAL_BRAND.name,
     url: origin,
     logo: `${origin}/logo.png`,
-    description: FIRE_NEPAL_BRAND.description,
+    description: STRUCTURED_DATA_DESCRIPTION,
     slogan: FIRE_NEPAL_BRAND.platformLine,
     areaServed: "Worldwide",
     audience: {
       "@type": "Audience",
-      audienceType: "Nepalis living, working and studying abroad",
+      audienceType: "Nepalis Worldwide",
     },
   };
 }
 
 export function buildWebSiteJsonLd() {
-  const origin = getSiteOrigin();
+  const origin = HOMEPAGE_CANONICAL_URL;
 
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
+    "@id": `${origin}/#website`,
     name: FIRE_NEPAL_BRAND.name,
+    alternateName: "FIRE Nepal App",
     url: origin,
-    description: FIRE_NEPAL_BRAND.description,
     inLanguage: ["en", "ne", "ko", "ja"],
     publisher: {
-      "@type": "Organization",
-      name: FIRE_NEPAL_BRAND.name,
-      url: origin,
+      "@id": `${origin}/#organization`,
     },
   };
 }
 
 export function buildSoftwareApplicationJsonLd() {
-  const origin = getSiteOrigin();
+  const origin = HOMEPAGE_CANONICAL_URL;
 
   return {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
+    "@type": "WebApplication",
+    "@id": `${origin}/#webapplication`,
     name: FIRE_NEPAL_BRAND.name,
     applicationCategory: "FinanceApplication",
     operatingSystem: "Web",
     url: origin,
-    description: FIRE_NEPAL_BRAND.description,
+    description: WEB_APPLICATION_DESCRIPTION,
+    featureList: [...FIRE_NEPAL_CORE_FEATURES],
     offers: {
       "@type": "Offer",
       price: "0",
@@ -214,7 +235,62 @@ export function buildSoftwareApplicationJsonLd() {
     },
     audience: {
       "@type": "Audience",
-      audienceType: "Nepalis abroad",
+      audienceType: "Nepalis Worldwide",
     },
+    publisher: {
+      "@id": `${origin}/#organization`,
+    },
+  };
+}
+
+export function buildFaqPageJsonLd() {
+  const origin = HOMEPAGE_CANONICAL_URL;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${origin}/#faq`,
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "What is FIRE Nepal?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "FIRE Nepal is an all-in-one financial platform for Nepalis worldwide to plan wealth, FIRE progress, and a confident return to Nepal.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Who is FIRE Nepal for?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "FIRE Nepal is for Nepalis living in Nepal or abroad who want to manage money, track wealth, and plan long-term financial freedom.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What is Financial Independence, Retire Early (FIRE)?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "FIRE is a financial strategy focused on building enough assets and passive income to gain freedom from mandatory work earlier in life.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How does FIRE Nepal help users plan their return to Nepal?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "FIRE Nepal helps users model savings, net worth, expenses, remittance, and Nepal return readiness in one financial workspace.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "What financial tools are available inside FIRE Nepal?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "FIRE Nepal includes tools for FIRE planning, expense tracking, budgeting, savings, portfolio tracking, wealth analytics, remittance, FIRE Biz, Family Hub, and child education planning.",
+        },
+      },
+    ],
   };
 }
