@@ -13,7 +13,7 @@ export type Database = {
           country: string | null;
           country_of_work: string | null;
           preferred_currency: string;
-          fire_goal_amount: number | null;
+          fire_goal: number | null;
           monthly_investment: number | null;
           risk_profile: string | null;
           created_at: string;
@@ -28,7 +28,7 @@ export type Database = {
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;
-          fire_goal_amount?: number | null;
+          fire_goal?: number | null;
           monthly_investment?: number | null;
           risk_profile?: string | null;
           created_at?: string;
@@ -42,7 +42,7 @@ export type Database = {
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;
-          fire_goal_amount?: number | null;
+          fire_goal?: number | null;
           monthly_investment?: number | null;
           risk_profile?: string | null;
           updated_at?: string;

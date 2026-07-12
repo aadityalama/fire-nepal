@@ -51,7 +51,7 @@ export function mapUserProfileToPremiumFields(
     country: row.country ?? fallback.country,
     countryOfWork: row.country_of_work ?? fallback.countryOfWork,
     preferredCurrency: currencyOrDefault(row.preferred_currency),
-    fireGoalAmount: Number(row.fire_goal_amount ?? fallback.fireGoalAmount),
+    fireGoalAmount: Number(row.fire_goal ?? fallback.fireGoalAmount),
     monthlyInvestment: Number(row.monthly_investment ?? fallback.monthlyInvestment),
     riskProfile: riskOrDefault(row.risk_profile),
   };
@@ -81,7 +81,7 @@ export async function upsertPremiumUserProfile(
       country: fields.country.trim() || null,
       country_of_work: fields.countryOfWork.trim() || null,
       preferred_currency: fields.preferredCurrency,
-      fire_goal_amount: fields.fireGoalAmount || null,
+      fire_goal: fields.fireGoalAmount || null,
       monthly_investment: fields.monthlyInvestment || null,
       risk_profile: fields.riskProfile,
       updated_at: new Date().toISOString(),
