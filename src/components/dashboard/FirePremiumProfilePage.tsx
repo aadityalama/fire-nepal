@@ -8,8 +8,8 @@ import { FireDashboardMetrics } from "@/components/dashboard/FireDashboardMetric
 import { EliteBloombergStrip } from "@/components/membership/EliteBloombergStrip";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCanonicalFireNepalId } from "@/hooks/useCanonicalFireNepalId";
 import {
-  deriveFireNepalId,
   formatPremiumPhoneDisplay,
   getPremiumProfileForUser,
   membershipExpiryIso,
@@ -32,6 +32,7 @@ const RISKS: { id: RiskProfile; label: string }[] = [
 export function FirePremiumProfilePage() {
   const { user } = useProductAuth();
   const { tier } = useFireMembership();
+  const { fireNepalId } = useCanonicalFireNepalId(user);
   const [profile, setProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -68,7 +69,7 @@ export function FirePremiumProfilePage() {
     );
   }
 
-  const fnId = deriveFireNepalId(user);
+  const fnId = fireNepalId ?? "Not assigned";
   const expiry = membershipExpiryIso(user);
   const verified = user.emailVerified === true;
   const dialPresets = PHONE_DIAL_PRESETS.map((p) => p.value);

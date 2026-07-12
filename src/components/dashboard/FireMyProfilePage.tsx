@@ -31,7 +31,6 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   displayAvatar,
   displayName,
-  deriveFireNepalId,
   formatPremiumPhoneDisplay,
   getPremiumProfileForUser,
   membershipExpiryIso,
@@ -206,6 +205,7 @@ export function FireMyProfilePage() {
   const avatar = displayAvatar(user, profile);
   const name = displayName(user, profile);
   const benefits = TIER_CATALOG[tier].bullets;
+  const fireNepalId = profile.fireNepalId || "Not assigned";
 
   const fieldClass =
     "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 placeholder:text-zinc-600 focus:ring-2";
@@ -259,7 +259,7 @@ export function FireMyProfilePage() {
                     </span>
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-zinc-100 sm:text-xs">
                       <UserRound size={14} className="shrink-0" strokeWidth={2.5} />
-                      {deriveFireNepalId(user)}
+                      {fireNepalId}
                     </span>
                   </div>
                 </div>
@@ -569,7 +569,7 @@ export function FireMyProfilePage() {
                 {remainingDays < 30 ? <ShieldCheck size={24} className="shrink-0" aria-hidden /> : null}
               </div>
             </div>
-            <ProfileValueCard icon={<Hash size={16} />} label="FIRE Nepal ID" value={deriveFireNepalId(user)} />
+            <ProfileValueCard icon={<Hash size={16} />} label="FIRE Nepal ID" value={fireNepalId} />
             <ProfileValueCard icon={<CalendarDays size={16} />} label="Joined Date" value={joinedLabel} />
             <ProfileValueCard icon={<Timer size={16} />} label="Expiry Date" value={expiryLabel} />
           </div>

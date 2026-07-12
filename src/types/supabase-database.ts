@@ -6,6 +6,7 @@ export type Database = {
       user_profiles: {
         Row: {
           id: string;
+          fire_nepal_id: string | null;
           display_name: string | null;
           avatar_url: string | null;
           phone_dial_code: string | null;
@@ -21,6 +22,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          fire_nepal_id?: string;
           display_name?: string | null;
           avatar_url?: string | null;
           phone_dial_code?: string | null;
@@ -35,6 +37,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          fire_nepal_id?: string;
           display_name?: string | null;
           avatar_url?: string | null;
           phone_dial_code?: string | null;

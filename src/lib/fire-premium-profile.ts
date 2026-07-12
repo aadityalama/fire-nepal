@@ -10,6 +10,8 @@ export const PREMIUM_PROFILE_STORAGE_KEY = "fire-nepal-premium-profile-v1";
 export type RiskProfile = "conservative" | "balanced" | "growth" | "aggressive";
 
 export type PremiumMemberProfileFields = {
+  /** Canonical member ID assigned by Supabase. UI must not derive or reformat it. */
+  fireNepalId: string;
   /** Overrides display name in dashboard when set. */
   fullName: string;
   avatarDataUrl: string | null;
@@ -44,6 +46,7 @@ export type PremiumProfileStore = {
 
 function defaultFields(user: ProductAuthUser): PremiumMemberProfileFields {
   return {
+    fireNepalId: "",
     fullName: user.name,
     avatarDataUrl: user.avatarUrl ?? null,
     phoneDialCode: "+977",
@@ -145,21 +148,6 @@ export function savePremiumProfileFull(userId: string, fields: PremiumMemberProf
   const store = loadPremiumProfileStore();
   store.byUserId[userId] = fields;
   savePremiumProfileStore(store);
-}
-
-/** Deterministic 1…999_999 from user id (FIRE Nepal member serial). */
-export function stableSerialFromUserId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) {
-    h = (Math.imul(31, h) + id.charCodeAt(i)) >>> 0;
-  }
-  return (h % 999_999) + 1;
-}
-
-export function deriveFireNepalId(user: ProductAuthUser): string {
-  const year = new Date(user.createdAt).getFullYear();
-  const n = stableSerialFromUserId(user.id);
-  return `FN-${year}-${String(n).padStart(6, "0")}`;
 }
 
 export function membershipActiveIso(user: ProductAuthUser): string {

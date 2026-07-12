@@ -30,6 +30,12 @@ export async function fetchUserProfile(client: Client, userId: string) {
   return data;
 }
 
+export async function fetchCanonicalFireNepalId(client: Client, userId: string): Promise<string | null> {
+  const { data, error } = await client.from("user_profiles").select("fire_nepal_id").eq("id", userId).maybeSingle();
+  if (error) return null;
+  return data?.fire_nepal_id?.trim() || null;
+}
+
 function currencyOrDefault(value: string | null | undefined): PremiumMemberProfileFields["preferredCurrency"] {
   return CURRENCIES.has(value ?? "") ? (value as PremiumMemberProfileFields["preferredCurrency"]) : "NPR";
 }
@@ -44,6 +50,7 @@ export function mapUserProfileToPremiumFields(
 ): PremiumMemberProfileFields {
   if (!row) return fallback;
   return {
+    fireNepalId: row.fire_nepal_id ?? fallback.fireNepalId,
     fullName: row.display_name ?? fallback.fullName,
     avatarDataUrl: row.avatar_url ?? fallback.avatarDataUrl,
     phoneDialCode: row.phone_dial_code ?? fallback.phoneDialCode,
@@ -74,6 +81,7 @@ export async function upsertPremiumUserProfile(
   const { error } = await client.from("user_profiles").upsert(
     {
       id: userId,
+      fire_nepal_id: fields.fireNepalId || undefined,
       display_name: fields.fullName.trim() || null,
       avatar_url: fields.avatarDataUrl,
       phone_dial_code: fields.phoneDialCode,
