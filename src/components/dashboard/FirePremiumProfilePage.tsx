@@ -8,16 +8,14 @@ import { FireDashboardMetrics } from "@/components/dashboard/FireDashboardMetric
 import { EliteBloombergStrip } from "@/components/membership/EliteBloombergStrip";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useCanonicalFireNepalId } from "@/hooks/useCanonicalFireNepalId";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   formatPremiumPhoneDisplay,
-  getPremiumProfileForUser,
   membershipExpiryIso,
   normalizePhoneNationalDigits,
   PHONE_DIAL_PRESETS,
   type PremiumMemberProfileFields,
   type RiskProfile,
-  savePremiumProfileFull,
   validatePremiumPhone,
 } from "@/lib/fire-premium-profile";
 import { TIER_DISPLAY } from "@/lib/fire-membership";
@@ -32,36 +30,39 @@ const RISKS: { id: RiskProfile; label: string }[] = [
 export function FirePremiumProfilePage() {
   const { user } = useProductAuth();
   const { tier } = useFireMembership();
-  const { fireNepalId } = useCanonicalFireNepalId(user);
-  const [profile, setProfile] = useState<PremiumMemberProfileFields | null>(null);
+  const { profile, loading, saveProfile } = useCurrentUserProfile();
+  const [draftProfile, setDraftProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [dashKey, setDashKey] = useState(0);
 
   useEffect(() => {
-    if (!user) return;
-    setProfile(getPremiumProfileForUser(user));
-  }, [user]);
+    setDraftProfile(profile);
+  }, [profile]);
 
   const onSave = useCallback(
-    (e: FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault();
-      if (!user || !profile) return;
-      const phoneCheck = validatePremiumPhone(profile.phoneDialCode, profile.phoneNationalDigits);
+      if (!user || !draftProfile) return;
+      const phoneCheck = validatePremiumPhone(draftProfile.phoneDialCode, draftProfile.phoneNationalDigits);
       if (!phoneCheck.ok) {
         setPhoneError(phoneCheck.message);
         return;
       }
       setPhoneError(null);
-      savePremiumProfileFull(user.id, profile);
-      setSavedMsg("Profile saved locally.");
-      setDashKey((k) => k + 1);
-      window.setTimeout(() => setSavedMsg(null), 2800);
+      try {
+        await saveProfile(draftProfile);
+        setSavedMsg("Profile updated successfully.");
+        setDashKey((k) => k + 1);
+        window.setTimeout(() => setSavedMsg(null), 2800);
+      } catch (error) {
+        setSavedMsg(error instanceof Error ? error.message : "Could not save draftProfile.");
+      }
     },
-    [user, profile],
+    [draftProfile, saveProfile, user],
   );
 
-  if (!user || !profile) {
+  if (!user || loading || !profile || !draftProfile) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-base font-medium text-zinc-400">
         Loading profile…
@@ -69,15 +70,15 @@ export function FirePremiumProfilePage() {
     );
   }
 
-  const fnId = fireNepalId ?? "Not assigned";
+  const fnId = draftProfile.fireNepalId || "Not assigned";
   const expiry = membershipExpiryIso(user);
   const verified = user.emailVerified === true;
   const dialPresets = PHONE_DIAL_PRESETS.map((p) => p.value);
-  const isCustomDial = !dialPresets.includes(profile.phoneDialCode);
-  const phoneDigits = profile.phoneNationalDigits.replace(/\D/g, "");
-  const phoneValid = validatePremiumPhone(profile.phoneDialCode, profile.phoneNationalDigits);
+  const isCustomDial = !dialPresets.includes(draftProfile.phoneDialCode);
+  const phoneDigits = draftProfile.phoneNationalDigits.replace(/\D/g, "");
+  const phoneValid = validatePremiumPhone(draftProfile.phoneDialCode, draftProfile.phoneNationalDigits);
   const hasStoredPhone = phoneDigits.length > 0 && phoneValid.ok;
-  const phoneFormatted = formatPremiumPhoneDisplay(profile.phoneDialCode, profile.phoneNationalDigits);
+  const phoneFormatted = formatPremiumPhoneDisplay(draftProfile.phoneDialCode, draftProfile.phoneNationalDigits);
 
   const joinedLabel = new Date(user.createdAt).toLocaleDateString(undefined, {
     month: "short",
@@ -126,8 +127,8 @@ export function FirePremiumProfilePage() {
                 <div className="shrink-0">
                   <AvatarUploadZone
                     variant="compact"
-                    value={profile.avatarDataUrl}
-                    onChange={(url) => setProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
+                    value={draftProfile.avatarDataUrl}
+                    onChange={(url) => setDraftProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
                   />
                 </div>
                 <div className="min-w-0 flex-1 lg:hidden">
@@ -171,8 +172,8 @@ export function FirePremiumProfilePage() {
                 <label className="block">
                   <span className="sr-only">Full name</span>
                   <input
-                    value={profile.fullName}
-                    onChange={(e) => setProfile((p) => (p ? { ...p, fullName: e.target.value } : p))}
+                    value={draftProfile.fullName}
+                    onChange={(e) => setDraftProfile((p) => (p ? { ...p, fullName: e.target.value } : p))}
                     placeholder="Full name"
                     autoComplete="name"
                     className="w-full border-0 border-b-2 border-white/10 bg-transparent pb-2 text-xl font-black tracking-tight text-white outline-none ring-0 placeholder:text-zinc-600 focus:border-emerald-400/55 sm:text-2xl sm:tracking-tighter"
@@ -228,11 +229,11 @@ export function FirePremiumProfilePage() {
                   )}
                   <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
                     <select
-                      value={isCustomDial ? "__other__" : profile.phoneDialCode}
+                      value={isCustomDial ? "__other__" : draftProfile.phoneDialCode}
                       onChange={(e) => {
                         const v = e.target.value;
                         setPhoneError(null);
-                        setProfile((p) => {
+                        setDraftProfile((p) => {
                           if (!p) return p;
                           if (v === "__other__") return { ...p, phoneDialCode: "+" };
                           return {
@@ -254,13 +255,13 @@ export function FirePremiumProfilePage() {
                     </select>
                     {isCustomDial ? (
                       <input
-                        value={profile.phoneDialCode}
+                        value={draftProfile.phoneDialCode}
                         onChange={(e) => {
                           setPhoneError(null);
                           let v = e.target.value;
                           if (!v.startsWith("+")) v = `+${v.replace(/\D/g, "")}`;
                           else v = `+${v.slice(1).replace(/\D/g, "").slice(0, 4)}`;
-                          setProfile((p) =>
+                          setDraftProfile((p) =>
                             p
                               ? {
                                   ...p,
@@ -284,10 +285,10 @@ export function FirePremiumProfilePage() {
                       inputMode="tel"
                       autoComplete="tel-national"
                       placeholder="Add phone number"
-                      value={profile.phoneNationalDigits}
+                      value={draftProfile.phoneNationalDigits}
                       onChange={(e) => {
                         setPhoneError(null);
-                        setProfile((p) =>
+                        setDraftProfile((p) =>
                           p
                             ? {
                                 ...p,
@@ -357,8 +358,8 @@ export function FirePremiumProfilePage() {
                 Country
               </span>
               <input
-                value={profile.country}
-                onChange={(e) => setProfile((p) => (p ? { ...p, country: e.target.value } : p))}
+                value={draftProfile.country}
+                onChange={(e) => setDraftProfile((p) => (p ? { ...p, country: e.target.value } : p))}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
@@ -367,8 +368,8 @@ export function FirePremiumProfilePage() {
                 Country of work
               </span>
               <input
-                value={profile.countryOfWork}
-                onChange={(e) => setProfile((p) => (p ? { ...p, countryOfWork: e.target.value } : p))}
+                value={draftProfile.countryOfWork}
+                onChange={(e) => setDraftProfile((p) => (p ? { ...p, countryOfWork: e.target.value } : p))}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
@@ -377,9 +378,9 @@ export function FirePremiumProfilePage() {
                 Preferred currency
               </span>
               <select
-                value={profile.preferredCurrency}
+                value={draftProfile.preferredCurrency}
                 onChange={(e) =>
-                  setProfile((p) =>
+                  setDraftProfile((p) =>
                     p ? { ...p, preferredCurrency: e.target.value as PremiumMemberProfileFields["preferredCurrency"] } : p,
                   )
                 }
@@ -398,8 +399,8 @@ export function FirePremiumProfilePage() {
                 type="number"
                 min={0}
                 step={1000}
-                value={profile.fireGoalAmount || ""}
-                onChange={(e) => setProfile((p) => (p ? { ...p, fireGoalAmount: Number(e.target.value) || 0 } : p))}
+                value={draftProfile.fireGoalAmount || ""}
+                onChange={(e) => setDraftProfile((p) => (p ? { ...p, fireGoalAmount: Number(e.target.value) || 0 } : p))}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
@@ -411,8 +412,8 @@ export function FirePremiumProfilePage() {
                 type="number"
                 min={0}
                 step={1000}
-                value={profile.monthlyInvestment || ""}
-                onChange={(e) => setProfile((p) => (p ? { ...p, monthlyInvestment: Number(e.target.value) || 0 } : p))}
+                value={draftProfile.monthlyInvestment || ""}
+                onChange={(e) => setDraftProfile((p) => (p ? { ...p, monthlyInvestment: Number(e.target.value) || 0 } : p))}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
@@ -421,8 +422,8 @@ export function FirePremiumProfilePage() {
                 Risk profile
               </span>
               <select
-                value={profile.riskProfile}
-                onChange={(e) => setProfile((p) => (p ? { ...p, riskProfile: e.target.value as RiskProfile } : p))}
+                value={draftProfile.riskProfile}
+                onChange={(e) => setDraftProfile((p) => (p ? { ...p, riskProfile: e.target.value as RiskProfile } : p))}
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs font-semibold text-white outline-none ring-emerald-500/30 focus:ring-2"
               >
                 {RISKS.map((r) => (
@@ -462,9 +463,9 @@ export function FirePremiumProfilePage() {
           Live widgets
         </h3>
         <FireDashboardMetrics
-          fireGoalAmount={profile.fireGoalAmount}
-          fireGoalCurrency={profile.preferredCurrency}
-          monthlyInvestmentTarget={profile.monthlyInvestment}
+          fireGoalAmount={draftProfile.fireGoalAmount}
+          fireGoalCurrency={draftProfile.preferredCurrency}
+          monthlyInvestmentTarget={draftProfile.monthlyInvestment}
           refreshKey={dashKey}
         />
         <div className="mt-4 sm:mt-5">

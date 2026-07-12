@@ -4,6 +4,7 @@ import { BarChart3, BadgeCheck, Brain, ChevronDown, Gem, LayoutDashboard, Lock, 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 
 type UserMenuDropdownProps = {
   /** dark = hub shell; light = marketing chrome */
@@ -19,6 +20,7 @@ function initials(name: string): string {
 
 export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
   const { user, logout, isAdmin } = useProductAuth();
+  const { profile } = useCurrentUserProfile();
   const [open, setOpen] = useState(false);
   const [imgBroken, setImgBroken] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -27,7 +29,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
 
   useEffect(() => {
     setImgBroken(false);
-  }, [user?.avatarUrl]);
+  }, [profile?.avatarDataUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -55,18 +57,19 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
   const hoverRow = variant === "dark" ? "hover:bg-white/10" : "hover:bg-emerald-50";
 
   const showAvatar =
-    typeof user.avatarUrl === "string" &&
-    user.avatarUrl.length > 0 &&
-    (user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("http")) &&
+    typeof profile?.avatarDataUrl === "string" &&
+    profile.avatarDataUrl.length > 0 &&
+    (profile.avatarDataUrl.startsWith("data:") || profile.avatarDataUrl.startsWith("http")) &&
     !imgBroken;
 
   const verified = user.emailVerified === true;
+  const displayName = profile?.fullName?.trim() || "Member";
 
   const avatarInner = showAvatar ? (
     <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-emerald-400/30">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={user.avatarUrl!}
+        src={profile!.avatarDataUrl!}
         alt=""
         className="h-full w-full object-cover"
         onError={() => setImgBroken(true)}
@@ -74,7 +77,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
     </span>
   ) : (
     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500/30 to-lime-400/25 text-[10px] font-black text-emerald-100 ring-1 ring-emerald-400/35">
-      {initials(user.name)}
+      {initials(displayName)}
     </span>
   );
 
@@ -99,7 +102,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
           ) : null}
         </span>
         <Lock size={12} className="hidden shrink-0 text-emerald-500/80 sm:block" aria-hidden />
-        <span className="max-w-[100px] truncate sm:max-w-[140px]">{user.name}</span>
+        <span className="max-w-[100px] truncate sm:max-w-[140px]">{displayName}</span>
         <span className="hidden text-[9px] font-black uppercase tracking-wider text-emerald-600/90 sm:inline lg:hidden">
           Secure
         </span>
@@ -114,7 +117,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
             <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${variant === "dark" ? "text-white/45" : "text-zinc-400"}`}>
               Signed in
             </p>
-            <p className="mt-0.5 truncate text-sm font-bold">{user.name}</p>
+            <p className="mt-0.5 truncate text-sm font-bold">{displayName}</p>
             <p className={`truncate text-xs font-medium ${subMuted}`}>{user.email}</p>
           </div>
           <Link

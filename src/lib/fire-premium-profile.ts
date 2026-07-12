@@ -1,11 +1,4 @@
-/**
- * STEP 6C — premium member profile + membership metadata (local-first).
- * Binds to `ProductAuthUser.id`; replace with API sync when backend exists.
- */
-
-import type { ProductAuthUser } from "@/lib/product-auth-storage";
-
-export const PREMIUM_PROFILE_STORAGE_KEY = "fire-nepal-premium-profile-v1";
+/** Premium member profile display helpers. Profile fields come from public.user_profiles only. */
 
 export type RiskProfile = "conservative" | "balanced" | "growth" | "aggressive";
 
@@ -38,27 +31,6 @@ export const PHONE_DIAL_PRESETS: { value: string; label: string }[] = [
   { value: "+971", label: "UAE +971" },
   { value: "+49", label: "Germany +49" },
 ];
-
-export type PremiumProfileStore = {
-  version: 1;
-  byUserId: Record<string, PremiumMemberProfileFields>;
-};
-
-function defaultFields(user: ProductAuthUser): PremiumMemberProfileFields {
-  return {
-    fireNepalId: "",
-    fullName: user.name,
-    avatarDataUrl: user.avatarUrl ?? null,
-    phoneDialCode: "+977",
-    phoneNationalDigits: "",
-    country: "",
-    countryOfWork: "",
-    preferredCurrency: "NPR",
-    fireGoalAmount: 0,
-    monthlyInvestment: 0,
-    riskProfile: "balanced",
-  };
-}
 
 /** Strip non-digits; Korea (+82) drops a single leading 0 from local input. */
 export function normalizePhoneNationalDigits(dial: string, raw: string): string {
@@ -102,72 +74,24 @@ export function formatPremiumPhoneDisplay(dial: string, nationalDigits: string):
   return `${dial} ${parts.join(" ")}`.trim();
 }
 
-function safeParse(raw: string | null): PremiumProfileStore | null {
-  if (!raw) return null;
-  try {
-    const v = JSON.parse(raw) as PremiumProfileStore;
-    if (v?.version !== 1 || typeof v.byUserId !== "object" || !v.byUserId) return null;
-    return v;
-  } catch {
-    return null;
-  }
-}
-
-export function loadPremiumProfileStore(): PremiumProfileStore {
-  if (typeof window === "undefined") return { version: 1, byUserId: {} };
-  return safeParse(window.localStorage.getItem(PREMIUM_PROFILE_STORAGE_KEY)) ?? { version: 1, byUserId: {} };
-}
-
-export function savePremiumProfileStore(store: PremiumProfileStore): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(PREMIUM_PROFILE_STORAGE_KEY, JSON.stringify(store));
-  } catch {
-    /* quota */
-  }
-}
-
-export function getPremiumProfileForUser(user: ProductAuthUser): PremiumMemberProfileFields {
-  const store = loadPremiumProfileStore();
-  const base = defaultFields(user);
-  const existing = store.byUserId[user.id];
-  if (!existing) return base;
-  const dial = typeof existing.phoneDialCode === "string" && existing.phoneDialCode.startsWith("+")
-    ? existing.phoneDialCode
-    : base.phoneDialCode;
-  const rawNational = typeof existing.phoneNationalDigits === "string" ? existing.phoneNationalDigits : "";
-  return {
-    ...base,
-    ...existing,
-    phoneDialCode: dial,
-    phoneNationalDigits: normalizePhoneNationalDigits(dial, rawNational),
-  };
-}
-
-export function savePremiumProfileFull(userId: string, fields: PremiumMemberProfileFields): void {
-  const store = loadPremiumProfileStore();
-  store.byUserId[userId] = fields;
-  savePremiumProfileStore(store);
-}
-
-export function membershipActiveIso(user: ProductAuthUser): string {
+export function membershipActiveIso(user: { createdAt: string }): string {
   return user.createdAt;
 }
 
 /** Annual membership window from verified join. */
-export function membershipExpiryIso(user: ProductAuthUser): string {
+export function membershipExpiryIso(user: { createdAt: string }): string {
   const d = new Date(user.createdAt);
   d.setFullYear(d.getFullYear() + 1);
   return d.toISOString();
 }
 
-export function displayName(user: ProductAuthUser, profile: PremiumMemberProfileFields): string {
+export function displayName(profile: PremiumMemberProfileFields): string {
   const n = profile.fullName?.trim();
   if (n) return n;
-  return user.name;
+  return "Not added";
 }
 
-export function displayAvatar(user: ProductAuthUser, profile: PremiumMemberProfileFields): string | null {
+export function displayAvatar(profile: PremiumMemberProfileFields): string | null {
   if (profile.avatarDataUrl) return profile.avatarDataUrl;
-  return user.avatarUrl ?? null;
+  return null;
 }

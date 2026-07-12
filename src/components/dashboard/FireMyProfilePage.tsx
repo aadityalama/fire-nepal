@@ -28,23 +28,19 @@ import { toast } from "sonner";
 import { AvatarUploadZone } from "@/components/product/auth/AvatarUploadZone";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   displayAvatar,
   displayName,
   formatPremiumPhoneDisplay,
-  getPremiumProfileForUser,
   membershipExpiryIso,
   normalizePhoneNationalDigits,
   PHONE_DIAL_PRESETS,
-  savePremiumProfileFull,
   validatePremiumPhone,
   type PremiumMemberProfileFields,
   type RiskProfile,
 } from "@/lib/fire-premium-profile";
 import { TIER_CATALOG, TIER_DISPLAY } from "@/lib/fire-membership";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { fetchPremiumUserProfile, upsertPremiumUserProfile } from "@/services/user-profile-supabase";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -97,50 +93,21 @@ export function FireMyProfilePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editing = searchParams.get("edit") === "1";
-  const [profile, setProfile] = useState<PremiumMemberProfileFields | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const { profile, loading: loadingProfile, saveProfile } = useCurrentUserProfile();
+  const [draftProfile, setDraftProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [saving, setSaving] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (!user) {
-        setProfile(null);
-        setLoadingProfile(false);
-        return;
-      }
-      setLoadingProfile(true);
-      const fallback = getPremiumProfileForUser(user);
-      if (!isSupabaseConfigured()) {
-        if (!cancelled) {
-          setProfile(fallback);
-          setLoadingProfile(false);
-        }
-        return;
-      }
-      try {
-        const next = await fetchPremiumUserProfile(getSupabaseBrowserClient(), user.id, fallback);
-        if (!cancelled) setProfile(next ?? fallback);
-      } catch {
-        if (!cancelled) {
-          setProfile(fallback);
-          toast.error("Could not load your saved profile.");
-        }
-      } finally {
-        if (!cancelled) setLoadingProfile(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+    if (editing) setDraftProfile(profile);
+    else setDraftProfile(null);
+  }, [editing, profile]);
 
   const onSave = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
-      if (!user || !profile || saving) return;
-      const phoneCheck = validatePremiumPhone(profile.phoneDialCode, profile.phoneNationalDigits);
+      if (!user || !draftProfile || saving) return;
+      const phoneCheck = validatePremiumPhone(draftProfile.phoneDialCode, draftProfile.phoneNationalDigits);
       if (!phoneCheck.ok) {
         setPhoneError(phoneCheck.message);
         return;
@@ -148,11 +115,7 @@ export function FireMyProfilePage() {
       setPhoneError(null);
       setSaving(true);
       try {
-        if (isSupabaseConfigured()) {
-          const result = await upsertPremiumUserProfile(getSupabaseBrowserClient(), user.id, profile);
-          if (result.error) throw new Error(result.error);
-        }
-        savePremiumProfileFull(user.id, profile);
+        await saveProfile(draftProfile);
         toast.success("Profile updated successfully.");
         router.replace("/dashboard/profile");
       } catch (error) {
@@ -161,7 +124,7 @@ export function FireMyProfilePage() {
         setSaving(false);
       }
     },
-    [profile, router, saving, user],
+    [draftProfile, router, saveProfile, saving, user],
   );
 
   const expiryIso = useMemo(() => {
@@ -175,7 +138,7 @@ export function FireMyProfilePage() {
     return Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   }, [expiryIso]);
 
-  if (!user || loadingProfile || !profile) {
+  if (!user || loadingProfile || !profile || (editing && !draftProfile)) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-base font-medium text-zinc-400">
         Loading profile...
@@ -183,12 +146,13 @@ export function FireMyProfilePage() {
     );
   }
 
+  const visibleProfile = editing ? draftProfile! : profile;
   const dialPresets = PHONE_DIAL_PRESETS.map((p) => p.value);
-  const isCustomDial = !dialPresets.includes(profile.phoneDialCode);
-  const phoneDigits = profile.phoneNationalDigits.replace(/\D/g, "");
-  const phoneValid = validatePremiumPhone(profile.phoneDialCode, profile.phoneNationalDigits);
+  const isCustomDial = !dialPresets.includes(visibleProfile.phoneDialCode);
+  const phoneDigits = visibleProfile.phoneNationalDigits.replace(/\D/g, "");
+  const phoneValid = validatePremiumPhone(visibleProfile.phoneDialCode, visibleProfile.phoneNationalDigits);
   const hasStoredPhone = phoneDigits.length > 0 && phoneValid.ok;
-  const phoneFormatted = formatPremiumPhoneDisplay(profile.phoneDialCode, profile.phoneNationalDigits);
+  const phoneFormatted = formatPremiumPhoneDisplay(visibleProfile.phoneDialCode, visibleProfile.phoneNationalDigits);
   const joinedLabel = new Date(user.createdAt).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -202,10 +166,10 @@ export function FireMyProfilePage() {
         ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
         : "border-red-400/45 bg-red-500/15 text-red-100";
   const membershipStatus = record.status === "none" ? "No active paid subscription" : record.status.replace(/_/g, " ");
-  const avatar = displayAvatar(user, profile);
-  const name = displayName(user, profile);
+  const avatar = displayAvatar(visibleProfile);
+  const name = displayName(visibleProfile);
   const benefits = TIER_CATALOG[tier].bullets;
-  const fireNepalId = profile.fireNepalId || "Not assigned";
+  const fireNepalId = visibleProfile.fireNepalId || "Not assigned";
 
   const fieldClass =
     "w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 placeholder:text-zinc-600 focus:ring-2";
@@ -238,15 +202,15 @@ export function FireMyProfilePage() {
               <div className="flex min-w-0 items-start gap-4 sm:gap-5">
                 <AvatarUploadZone
                   variant="compact"
-                  value={profile.avatarDataUrl}
-                  onChange={(url) => setProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
+                  value={visibleProfile.avatarDataUrl}
+                  onChange={(url) => setDraftProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
                 />
                 <div className="min-w-0 flex-1">
                   <label className="block">
                     <span className="sr-only">Full name</span>
                     <input
-                      value={profile.fullName}
-                      onChange={(e) => setProfile((p) => (p ? { ...p, fullName: e.target.value } : p))}
+                      value={visibleProfile.fullName}
+                      onChange={(e) => setDraftProfile((p) => (p ? { ...p, fullName: e.target.value } : p))}
                       placeholder="Full name"
                       autoComplete="name"
                       className="w-full border-0 border-b-2 border-white/10 bg-transparent pb-2 text-xl font-black tracking-tight text-white outline-none ring-0 placeholder:text-zinc-600 focus:border-emerald-400/55 sm:text-2xl sm:tracking-tighter"
@@ -311,11 +275,11 @@ export function FireMyProfilePage() {
                 ) : null}
                 <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
                   <select
-                    value={isCustomDial ? "__other__" : profile.phoneDialCode}
+                    value={isCustomDial ? "__other__" : visibleProfile.phoneDialCode}
                     onChange={(e) => {
                       const v = e.target.value;
                       setPhoneError(null);
-                      setProfile((p) => {
+                      setDraftProfile((p) => {
                         if (!p) return p;
                         if (v === "__other__") return { ...p, phoneDialCode: "+" };
                         return {
@@ -337,13 +301,13 @@ export function FireMyProfilePage() {
                   </select>
                   {isCustomDial ? (
                     <input
-                      value={profile.phoneDialCode}
+                      value={visibleProfile.phoneDialCode}
                       onChange={(e) => {
                         setPhoneError(null);
                         let v = e.target.value;
                         if (!v.startsWith("+")) v = `+${v.replace(/\D/g, "")}`;
                         else v = `+${v.slice(1).replace(/\D/g, "").slice(0, 4)}`;
-                        setProfile((p) =>
+                        setDraftProfile((p) =>
                           p
                             ? {
                                 ...p,
@@ -367,10 +331,10 @@ export function FireMyProfilePage() {
                     inputMode="tel"
                     autoComplete="tel-national"
                     placeholder="Add phone number"
-                    value={profile.phoneNationalDigits}
+                    value={visibleProfile.phoneNationalDigits}
                     onChange={(e) => {
                       setPhoneError(null);
-                      setProfile((p) =>
+                      setDraftProfile((p) =>
                         p
                           ? {
                               ...p,
@@ -389,25 +353,25 @@ export function FireMyProfilePage() {
               <label className="block">
                 <span className={labelClass}>Country</span>
                 <input
-                  value={profile.country}
-                  onChange={(e) => setProfile((p) => (p ? { ...p, country: e.target.value } : p))}
+                  value={visibleProfile.country}
+                  onChange={(e) => setDraftProfile((p) => (p ? { ...p, country: e.target.value } : p))}
                   className={fieldClass}
                 />
               </label>
               <label className="block">
                 <span className={labelClass}>Country of work</span>
                 <input
-                  value={profile.countryOfWork}
-                  onChange={(e) => setProfile((p) => (p ? { ...p, countryOfWork: e.target.value } : p))}
+                  value={visibleProfile.countryOfWork}
+                  onChange={(e) => setDraftProfile((p) => (p ? { ...p, countryOfWork: e.target.value } : p))}
                   className={fieldClass}
                 />
               </label>
               <label className="block sm:col-span-2">
                 <span className={labelClass}>Preferred currency</span>
                 <select
-                  value={profile.preferredCurrency}
+                  value={visibleProfile.preferredCurrency}
                   onChange={(e) =>
-                    setProfile((p) =>
+                    setDraftProfile((p) =>
                       p ? { ...p, preferredCurrency: e.target.value as PremiumMemberProfileFields["preferredCurrency"] } : p,
                     )
                   }
@@ -424,8 +388,8 @@ export function FireMyProfilePage() {
                   type="number"
                   min={0}
                   step={1000}
-                  value={profile.fireGoalAmount || ""}
-                  onChange={(e) => setProfile((p) => (p ? { ...p, fireGoalAmount: Number(e.target.value) || 0 } : p))}
+                  value={visibleProfile.fireGoalAmount || ""}
+                  onChange={(e) => setDraftProfile((p) => (p ? { ...p, fireGoalAmount: Number(e.target.value) || 0 } : p))}
                   className={fieldClass}
                 />
               </label>
@@ -435,16 +399,16 @@ export function FireMyProfilePage() {
                   type="number"
                   min={0}
                   step={1000}
-                  value={profile.monthlyInvestment || ""}
-                  onChange={(e) => setProfile((p) => (p ? { ...p, monthlyInvestment: Number(e.target.value) || 0 } : p))}
+                  value={visibleProfile.monthlyInvestment || ""}
+                  onChange={(e) => setDraftProfile((p) => (p ? { ...p, monthlyInvestment: Number(e.target.value) || 0 } : p))}
                   className={fieldClass}
                 />
               </label>
               <label className="block sm:col-span-2">
                 <span className={labelClass}>Risk profile</span>
                 <select
-                  value={profile.riskProfile}
-                  onChange={(e) => setProfile((p) => (p ? { ...p, riskProfile: e.target.value as RiskProfile } : p))}
+                  value={visibleProfile.riskProfile}
+                  onChange={(e) => setDraftProfile((p) => (p ? { ...p, riskProfile: e.target.value as RiskProfile } : p))}
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 focus:ring-2"
                 >
                   {RISKS.map((r) => (
@@ -581,15 +545,15 @@ export function FireMyProfilePage() {
           Profile Summary
         </p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <ProfileValueCard icon={<Globe2 size={16} />} label="Country" value={emptyLabel(profile.country)} />
-          <ProfileValueCard icon={<BriefcaseBusiness size={16} />} label="Country of Work" value={emptyLabel(profile.countryOfWork)} />
-          <ProfileValueCard icon={<Coins size={16} />} label="Preferred Currency" value={profile.preferredCurrency} />
-          <ProfileValueCard icon={<Target size={16} />} label="FIRE Goal" value={formatMoney(profile.fireGoalAmount, profile.preferredCurrency)} />
-          <ProfileValueCard icon={<TrendingUp size={16} />} label="Monthly Investment" value={formatMoney(profile.monthlyInvestment, profile.preferredCurrency)} />
+          <ProfileValueCard icon={<Globe2 size={16} />} label="Country" value={emptyLabel(visibleProfile.country)} />
+          <ProfileValueCard icon={<BriefcaseBusiness size={16} />} label="Country of Work" value={emptyLabel(visibleProfile.countryOfWork)} />
+          <ProfileValueCard icon={<Coins size={16} />} label="Preferred Currency" value={visibleProfile.preferredCurrency} />
+          <ProfileValueCard icon={<Target size={16} />} label="FIRE Goal" value={formatMoney(visibleProfile.fireGoalAmount, visibleProfile.preferredCurrency)} />
+          <ProfileValueCard icon={<TrendingUp size={16} />} label="Monthly Investment" value={formatMoney(visibleProfile.monthlyInvestment, visibleProfile.preferredCurrency)} />
           <ProfileValueCard
             icon={<ShieldCheck size={16} />}
             label="Risk Profile"
-            value={RISKS.find((r) => r.id === profile.riskProfile)?.label ?? "Balanced"}
+            value={RISKS.find((r) => r.id === visibleProfile.riskProfile)?.label ?? "Balanced"}
           />
         </div>
       </section>

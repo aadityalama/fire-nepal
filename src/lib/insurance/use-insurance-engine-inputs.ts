@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   EXPENSE_MODULE_SYNC_EVENT,
   INSURANCE_MODULE_SYNC_EVENT,
   SAVINGS_MODULE_SYNC_EVENT,
 } from "@/lib/cashflow/live-sync-events";
 import { computeCashflowLiveMetrics } from "@/lib/cashflow/cashflow-live-metrics";
-import { loadPremiumProfileStore } from "@/lib/fire-premium-profile";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
@@ -41,6 +41,7 @@ export function useInsuranceEngineInputs(): {
 } {
   const { user } = useProductAuth();
   const uid = user?.id;
+  const { profile } = useCurrentUserProfile();
   const { summary } = useUnifiedFireSummary();
   const [tick, setTick] = useState(0);
 
@@ -75,8 +76,6 @@ export function useInsuranceEngineInputs(): {
     const ssf = loadSsfPensionWorkspace();
     const returnState = loadReturnPlannerState();
     const snapshot = computePlannerSnapshot(returnState);
-    const profileStore = loadPremiumProfileStore();
-    const profile = uid ? profileStore.byUserId[uid] : undefined;
     const age =
       onboarding.age > 0
         ? onboarding.age
@@ -99,7 +98,7 @@ export function useInsuranceEngineInputs(): {
       yearsToReturn: snapshot.yearsToReturn,
       returnReadinessPct: snapshot.returnReadinessPct,
     };
-  }, [tick, uid, summary.emergencyFundCoverageMonths, summary.fireProgressPct]);
+  }, [tick, uid, profile?.fireGoalAmount, summary.emergencyFundCoverageMonths, summary.fireProgressPct]);
 
   return { inputs, tick, recalculate };
 }

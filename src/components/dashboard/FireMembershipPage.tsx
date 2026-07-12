@@ -33,7 +33,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useCanonicalFireNepalId } from "@/hooks/useCanonicalFireNepalId";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
 import { MembershipPaymentSuccessDialog } from "@/components/membership/MembershipPaymentSuccessDialog";
 import { MainAppCard, type LauncherItem, type MainAppCardState } from "@/components/product/hub/MainAppCard";
@@ -747,7 +747,7 @@ function MembershipMyRequestsPanel() {
 export function FireMembershipPage() {
   const { user } = useProductAuth();
   const { tier, record, setTierDemo, syncServerEntitlement, pendingMembershipRequest } = useFireMembership();
-  const { fireNepalId } = useCanonicalFireNepalId(user);
+  const { profile } = useCurrentUserProfile();
   const [confirmDowngrade, setConfirmDowngrade] = useState<FireMembershipTier | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("yearly");
   const [paymentPlan, setPaymentPlan] = useState<MembershipRequestPlan | null>(null);
@@ -787,7 +787,7 @@ export function FireMembershipPage() {
     [tier, setTierDemo],
   );
 
-  const fnId = fireNepalId ?? "Not assigned";
+  const fnId = profile?.fireNepalId || "Not assigned";
   const active = user ? membershipActiveIso(user) : "";
   const expiry = user ? membershipExpiryIso(user) : "";
   const verified = user?.emailVerified === true;
