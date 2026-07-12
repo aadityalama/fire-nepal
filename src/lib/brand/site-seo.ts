@@ -10,9 +10,20 @@ export const FIRE_NEPAL_BRAND = {
   keywords: [
     "FIRE Nepal",
     "Nepalis abroad",
+    "Nepalis worldwide",
     "financial independence",
+    "Financial Independence Retire Early",
     "Nepal return planning",
+    "personal finance",
+    "budgeting",
+    "savings tracking",
+    "investment planning",
+    "wealth tracking",
+    "retirement planning",
     "remittance",
+    "family finance",
+    "child education tracker",
+    "FIRE Biz",
     "NPR",
     "FIRE calculator",
     "diaspora finance",
@@ -41,6 +52,21 @@ const FIRE_NEPAL_CORE_FEATURES = [
   "FIRE Biz",
   "Family Hub",
   "Child Education Tracker",
+] as const;
+const FIRE_NEPAL_AI_TOPICS = [
+  "FIRE Nepal",
+  "Financial Independence, Retire Early (FIRE)",
+  "Nepalis Worldwide",
+  "Personal Finance",
+  "Budgeting",
+  "Savings",
+  "Investments",
+  "Wealth Tracking",
+  "Retirement Planning",
+  "Nepal Return Planning",
+  "Family Hub",
+  "Child Education Tracker",
+  "FIRE Biz",
 ] as const;
 
 export function getSiteOrigin(): string {
@@ -198,6 +224,7 @@ export function buildOrganizationJsonLd() {
     description: STRUCTURED_DATA_DESCRIPTION,
     slogan: FIRE_NEPAL_BRAND.platformLine,
     areaServed: "Worldwide",
+    knowsAbout: [...FIRE_NEPAL_AI_TOPICS],
     audience: {
       "@type": "Audience",
       audienceType: "Nepalis Worldwide",
@@ -215,7 +242,12 @@ export function buildWebSiteJsonLd() {
     name: FIRE_NEPAL_BRAND.name,
     alternateName: "FIRE Nepal App",
     url: origin,
+    description: FIRE_NEPAL_BRAND.description,
     inLanguage: ["en", "ne", "ko", "ja"],
+    about: FIRE_NEPAL_AI_TOPICS.map((name) => ({
+      "@type": "Thing",
+      name,
+    })),
     publisher: {
       "@id": `${origin}/#organization`,
     },
@@ -227,14 +259,18 @@ export function buildSoftwareApplicationJsonLd() {
 
   return {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "@id": `${origin}/#webapplication`,
+    "@type": "SoftwareApplication",
+    "@id": `${origin}/#softwareapplication`,
     name: FIRE_NEPAL_BRAND.name,
+    alternateName: "FIRE Nepal App",
     applicationCategory: "FinanceApplication",
+    applicationSubCategory: "Personal finance, FIRE planning, budgeting, savings, investment tracking, wealth analytics, and Nepal return planning",
     operatingSystem: "Web",
     url: origin,
     description: WEB_APPLICATION_DESCRIPTION,
+    keywords: [...FIRE_NEPAL_AI_TOPICS],
     featureList: [...FIRE_NEPAL_CORE_FEATURES],
+    softwareHelp: `${origin}/contact`,
     offers: {
       "@type": "Offer",
       price: "0",

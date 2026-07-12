@@ -287,7 +287,7 @@ function FinancialOperatingSystem() {
 
 export default function HomePage() {
   return (
-    <main className="premium-shell overflow-hidden pb-20 sm:pb-0">
+    <main className="premium-shell overflow-hidden pb-20 sm:pb-0" aria-label="FIRE Nepal homepage">
       <HomeTopInfoBar />
 
       <ProductMarketingNav />
@@ -584,7 +584,7 @@ export default function HomePage() {
         <CommunityReviewsSection />
       </div>
 
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#021f1a] via-[#063f31] to-[#0b5f43] text-white">
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#021f1a] via-[#063f31] to-[#0b5f43] text-white" aria-label="FIRE Nepal footer">
         <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
         <div className="pointer-events-none absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-lime-300/10 blur-3xl" />
         <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
