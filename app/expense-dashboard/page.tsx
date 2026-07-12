@@ -1,4 +1,13 @@
+import type { Metadata } from "next";
 import { ExpenseDashboard, type ExpenseDashboardView } from "@/components/ExpenseDashboard";
+import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
+
+export const metadata: Metadata = {
+  title: "Expense Dashboard | FIRE Nepal",
+  description:
+    "Track personal and group expenses, categories, receipts, recurring costs, analytics, and reports inside FIRE Nepal.",
+  alternates: buildCanonicalAlternates("/expense-dashboard"),
+};
 
 const EXPENSE_DASHBOARD_VIEWS = new Set<ExpenseDashboardView>([
   "dashboard",

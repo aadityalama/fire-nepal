@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
 export const metadata: Metadata = {
   title: "FIRE lifestyle types | FIRE Nepal",
   description:
     "Lean FIRE, Traditional FIRE, and Fat FIRE explained — spending bands, portfolio targets, and how to choose for life after financial independence.",
+  alternates: buildCanonicalAlternates("/learn/fire-lifestyle"),
 };
 
 export default function FireLifestyleLearnPage() {

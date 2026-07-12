@@ -19,7 +19,8 @@ export const FIRE_NEPAL_BRAND = {
   ],
 } as const;
 
-const HOMEPAGE_CANONICAL_URL = "https://www.firenepal.com";
+export const FIRE_NEPAL_CANONICAL_ORIGIN = "https://www.firenepal.com";
+const HOMEPAGE_CANONICAL_URL = FIRE_NEPAL_CANONICAL_ORIGIN;
 const HOMEPAGE_TITLE = "FIRE Nepal | Financial Independence, Retire Early for Nepalis Worldwide";
 export const FIRE_NEPAL_THEME_COLOR = "#059669";
 const STRUCTURED_DATA_DESCRIPTION =
@@ -175,6 +176,12 @@ export function buildHomepageMetadata(): Metadata {
     other: {
       "apple-mobile-web-app-capable": "yes",
     },
+  };
+}
+
+export function buildCanonicalAlternates(path: `/${string}`): NonNullable<Metadata["alternates"]> {
+  return {
+    canonical: path === "/" ? FIRE_NEPAL_CANONICAL_ORIGIN : `${FIRE_NEPAL_CANONICAL_ORIGIN}${path}`,
   };
 }
 

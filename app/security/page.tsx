@@ -24,11 +24,13 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
 export const metadata: Metadata = {
   title: "Security Center | FIRE Nepal",
   description:
     "Premium FIRE Nepal security center for encryption, privacy, login activity, recovery options, and financial data protection.",
+  alternates: buildCanonicalAlternates("/security"),
 };
 
 const securityCards: Array<{
