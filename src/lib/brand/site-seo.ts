@@ -6,7 +6,7 @@ export const FIRE_NEPAL_BRAND = {
   platformLine: "Financial Platform for Nepalis Worldwide",
   audienceLine: "Built for Nepalis living, working and studying abroad.",
   description:
-    "A premium financial platform for Nepalis worldwide — multi-currency FIRE planning, savings tracking, investment education, remittance tools, and Nepal return readiness.",
+    "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide. Achieve Financial Independence, Retire Early (FIRE) and confidently plan your return to Nepal.",
   keywords: [
     "FIRE Nepal",
     "Nepalis abroad",
