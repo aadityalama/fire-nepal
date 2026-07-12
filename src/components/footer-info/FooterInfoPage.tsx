@@ -608,6 +608,18 @@ export function AboutFooterInfoPage() {
             </div>
           </AboutSection>
 
+          <AboutSection eyebrow="Founder" title="Founder of FIRE Nepal">
+            <p className="text-base font-semibold leading-8 text-slate-700">
+              Raj Kumar Ghalan is the Founder of FIRE Nepal, an all-in-one financial platform helping Nepalis worldwide achieve Financial Independence, Retire Early (FIRE) and confidently plan their return to Nepal.
+            </p>
+            <Link
+              href="/founder"
+              className="mt-5 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-800 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100"
+            >
+              View founder page
+            </Link>
+          </AboutSection>
+
           <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
             <AboutSection eyebrow="Our Mission" title="Financial freedom should not be limited by geography">
               <p className="text-base font-bold leading-8 text-slate-700">

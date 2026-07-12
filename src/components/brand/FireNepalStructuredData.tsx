@@ -1,5 +1,6 @@
 import {
   buildFaqPageJsonLd,
+  buildFounderPersonJsonLd,
   buildOrganizationJsonLd,
   buildSoftwareApplicationJsonLd,
   buildWebSiteJsonLd,
@@ -8,6 +9,7 @@ import {
 export function FireNepalStructuredData() {
   const payload = [
     buildOrganizationJsonLd(),
+    buildFounderPersonJsonLd(),
     buildWebSiteJsonLd(),
     buildSoftwareApplicationJsonLd(),
     buildFaqPageJsonLd(),

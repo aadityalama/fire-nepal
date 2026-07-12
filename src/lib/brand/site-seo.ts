@@ -34,6 +34,11 @@ export const FIRE_NEPAL_CANONICAL_ORIGIN = "https://www.firenepal.com";
 const HOMEPAGE_CANONICAL_URL = FIRE_NEPAL_CANONICAL_ORIGIN;
 const HOMEPAGE_TITLE = "FIRE Nepal | Financial Independence, Retire Early for Nepalis Worldwide";
 export const FIRE_NEPAL_THEME_COLOR = "#059669";
+export const FIRE_NEPAL_FOUNDER = {
+  name: "Raj Kumar Ghalan",
+  jobTitle: "Founder",
+  description: "Founder of FIRE Nepal.",
+} as const;
 const STRUCTURED_DATA_DESCRIPTION =
   "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide, helping users achieve Financial Independence, Retire Early (FIRE) and confidently plan their return to Nepal.";
 const WEB_APPLICATION_DESCRIPTION =
@@ -224,11 +229,31 @@ export function buildOrganizationJsonLd() {
     description: STRUCTURED_DATA_DESCRIPTION,
     slogan: FIRE_NEPAL_BRAND.platformLine,
     areaServed: "Worldwide",
+    founder: {
+      "@id": `${origin}/founder#person`,
+    },
     knowsAbout: [...FIRE_NEPAL_AI_TOPICS],
     audience: {
       "@type": "Audience",
       audienceType: "Nepalis Worldwide",
     },
+  };
+}
+
+export function buildFounderPersonJsonLd() {
+  const origin = HOMEPAGE_CANONICAL_URL;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "@id": `${origin}/founder#person`,
+    name: FIRE_NEPAL_FOUNDER.name,
+    jobTitle: FIRE_NEPAL_FOUNDER.jobTitle,
+    worksFor: {
+      "@id": `${origin}/#organization`,
+      name: FIRE_NEPAL_BRAND.name,
+    },
+    description: FIRE_NEPAL_FOUNDER.description,
   };
 }
 

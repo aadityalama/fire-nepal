@@ -10,6 +10,7 @@ type SitemapEntry = {
 const PUBLIC_SITEMAP_ROUTES: SitemapEntry[] = [
   { path: "/", changeFrequency: "weekly", priority: 1 },
   { path: "/about", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/founder", changeFrequency: "yearly", priority: 0.5 },
   { path: "/contact", changeFrequency: "monthly", priority: 0.6 },
   { path: "/security", changeFrequency: "monthly", priority: 0.6 },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.4 },
