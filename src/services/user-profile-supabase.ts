@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapUserProfileRowToMemberCard, type MemberCardData } from "@/lib/member-card-profile";
 import type { PremiumMemberProfileFields, RiskProfile } from "@/lib/fire-premium-profile";
 import type { Database } from "@/types/supabase-database";
 
@@ -97,4 +98,10 @@ export async function saveCurrentUserProfile(
   );
   if (error) throw new Error(error.message);
   return getCurrentUserProfile(client, userId);
+}
+
+export async function getMemberCardProfile(client: Client, userId: string): Promise<MemberCardData> {
+  const row = await fetchUserProfile(client, userId);
+  if (!row) throw new Error("Profile not found.");
+  return mapUserProfileRowToMemberCard(row);
 }

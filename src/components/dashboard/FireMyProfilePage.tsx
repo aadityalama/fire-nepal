@@ -7,7 +7,6 @@ import {
   Camera,
   Coins,
   Crown,
-  Download,
   Gem,
   Globe2,
   Hash,
@@ -21,6 +20,7 @@ import {
   UserRound,
   WalletCards,
 } from "lucide-react";
+import { MemberCardDownloadPanel } from "@/components/membership/MemberCardDownloadPanel";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -41,7 +41,6 @@ import {
   type RiskProfile,
 } from "@/lib/fire-premium-profile";
 import { TIER_CATALOG, TIER_DISPLAY } from "@/lib/fire-membership";
-import { downloadMemberCardPng } from "@/lib/member-card-export";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -97,7 +96,6 @@ export function FireMyProfilePage() {
   const { profile, loading: loadingProfile, saveProfile } = useCurrentUserProfile();
   const [draftProfile, setDraftProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [saving, setSaving] = useState(false);
-  const [downloadingCard, setDownloadingCard] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,28 +137,6 @@ export function FireMyProfilePage() {
     if (Number.isNaN(expiryDate.getTime())) return 0;
     return Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   }, [expiryIso]);
-
-  const onDownloadMemberCard = useCallback(async () => {
-    if (!user || !profile || downloadingCard) return;
-    setDownloadingCard(true);
-    try {
-      await downloadMemberCardPng({
-        fullName: displayName(profile),
-        avatarUrl: displayAvatar(profile),
-        fireNepalId: profile.fireNepalId || "Not assigned",
-        tier,
-        tierLabel: TIER_DISPLAY[tier].label,
-        expiryLabel: formatDate(record.currentPeriodEnd ?? membershipExpiryIso(user)),
-        emailVerified: user.emailVerified === true,
-      });
-      toast.success("Member card saved.");
-    } catch (error) {
-      if ((error as Error).name === "AbortError") return;
-      toast.error(error instanceof Error ? error.message : "Could not generate member card. Try again.");
-    } finally {
-      setDownloadingCard(false);
-    }
-  }, [downloadingCard, profile, record.currentPeriodEnd, tier, user]);
 
   if (!user || loadingProfile || !profile || (editing && !draftProfile)) {
     return (
@@ -480,17 +456,10 @@ export function FireMyProfilePage() {
           >
             Edit Profile
           </Link>
-          <button
-            type="button"
-            onClick={() => void onDownloadMemberCard()}
-            disabled={downloadingCard}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Download size={16} aria-hidden />
-            {downloadingCard ? "Generating…" : "Download Member Card"}
-          </button>
         </div>
       </header>
+
+      <MemberCardDownloadPanel className="space-y-4" />
 
       <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.12] via-[#04140f]/95 to-[#020807] p-5 shadow-[0_28px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-6 lg:p-7">
         <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-lime-400/10 blur-3xl" aria-hidden />

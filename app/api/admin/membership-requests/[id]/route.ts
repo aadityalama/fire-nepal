@@ -113,6 +113,20 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     return NextResponse.json({ error: `Profile update failed: ${profErr.message}` }, { status: 500 });
   }
 
+  const { error: userProfErr } = await admin
+    .from("user_profiles")
+    .update({
+      membership_plan: plan,
+      membership_start: periodStart,
+      membership_expiry: periodEnd,
+      updated_at: now,
+    })
+    .eq("id", row.user_id);
+
+  if (userProfErr) {
+    return NextResponse.json({ error: `User profile membership sync failed: ${userProfErr.message}` }, { status: 500 });
+  }
+
   const amount_minor = Math.round(amountNpr * 100);
 
   const { error: subErr } = await admin.from("subscriptions").upsert(

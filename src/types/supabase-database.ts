@@ -12,6 +12,11 @@ export type Database = {
           avatar_url: string | null;
           phone_dial_code: string | null;
           phone_national_digits: string | null;
+          phone: string | null;
+          email: string | null;
+          membership_plan: string;
+          membership_start: string | null;
+          membership_expiry: string | null;
           country: string | null;
           country_of_work: string | null;
           preferred_currency: string;
@@ -29,6 +34,11 @@ export type Database = {
           avatar_url?: string | null;
           phone_dial_code?: string | null;
           phone_national_digits?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          membership_plan?: string;
+          membership_start?: string | null;
+          membership_expiry?: string | null;
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;
@@ -45,6 +55,11 @@ export type Database = {
           avatar_url?: string | null;
           phone_dial_code?: string | null;
           phone_national_digits?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          membership_plan?: string;
+          membership_start?: string | null;
+          membership_expiry?: string | null;
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;
