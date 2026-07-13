@@ -14,6 +14,12 @@ import {
 const ACCEPT = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
 const MAX_BYTES = 5 * 1024 * 1024;
 
+/** Fixed profile avatar frame — uploaded images must never affect layout size. */
+const PROFILE_AVATAR_FRAME_CLASS =
+  "relative aspect-square h-[112px] w-[112px] shrink-0 overflow-hidden rounded-full lg:h-[140px] lg:w-[140px]";
+
+const PROFILE_AVATAR_IMG_CLASS = "absolute inset-0 h-full w-full max-h-full max-w-full object-cover";
+
 type AvatarUploadZoneProps = {
   value: string | null;
   onChange: (dataUrl: string | null) => void;
@@ -110,12 +116,12 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
 
   const imgClass =
     variant === "compact"
-      ? "h-full w-full object-cover"
-      : "h-full w-full object-cover";
+      ? PROFILE_AVATAR_IMG_CLASS
+      : "absolute inset-0 h-full w-full max-h-full max-w-full object-cover";
 
   const frameClass =
     variant === "compact"
-      ? "relative aspect-square w-16 shrink-0 overflow-hidden rounded-xl shadow-[0_0_24px_rgba(16,185,129,0.12)] ring-2 ring-emerald-400/25 transition-shadow duration-300 motion-safe:hover:shadow-[0_0_32px_rgba(16,185,129,0.22)] sm:w-[72px] sm:rounded-2xl"
+      ? `${PROFILE_AVATAR_FRAME_CLASS} shadow-[0_0_24px_rgba(16,185,129,0.12)] ring-2 ring-emerald-400/25 transition-shadow duration-300 motion-safe:hover:shadow-[0_0_32px_rgba(16,185,129,0.22)]`
       : "relative mx-auto aspect-square w-24 overflow-hidden rounded-2xl shadow-[0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-emerald-400/25 transition-shadow duration-300 motion-safe:hover:shadow-[0_0_40px_rgba(16,185,129,0.2)]";
 
   const overlayClass = [
@@ -130,7 +136,7 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
   ].join(" ");
 
   const filledPhotoBlock = value ? (
-    <div ref={rootRef} className={variant === "compact" ? "block w-full max-w-full" : "flex justify-center"}>
+    <div ref={rootRef} className={variant === "compact" ? "inline-flex shrink-0" : "flex justify-center"}>
       <div
         role="button"
         tabIndex={0}
@@ -292,7 +298,9 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
           }}
         />
         {variant === "compact" ? (
-          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/25 sm:h-[72px] sm:w-[72px] sm:rounded-2xl">
+          <div
+            className={`${PROFILE_AVATAR_FRAME_CLASS} grid place-items-center bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/25`}
+          >
             <ImagePlus size={24} strokeWidth={1.75} />
           </div>
         ) : (

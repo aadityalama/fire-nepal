@@ -199,8 +199,8 @@ export function FireMyProfilePage() {
         <form onSubmit={onSave} className="space-y-5 sm:space-y-6">
           <section className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] via-[#04140f] to-[#030806] p-5 shadow-[0_16px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 flex-col gap-5 md:flex-row md:items-start">
-                <div className="w-full md:w-auto md:shrink-0">
+              <div className="flex min-w-0 flex-col items-start gap-5 md:flex-row">
+                <div className="shrink-0">
                   <AvatarUploadZone
                     variant="compact"
                     value={visibleProfile.avatarDataUrl}
@@ -472,10 +472,10 @@ export function FireMyProfilePage() {
         <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-emerald-400/10 blur-3xl" aria-hidden />
         <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start">
-            <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border border-emerald-300/30 bg-emerald-500/10 shadow-[0_0_42px_rgba(16,185,129,0.24)] ring-4 ring-emerald-500/10 sm:h-32 sm:w-32">
+            <div className="relative aspect-square h-[112px] w-[112px] shrink-0 overflow-hidden rounded-full border border-emerald-300/30 bg-emerald-500/10 shadow-[0_0_42px_rgba(16,185,129,0.24)] ring-4 ring-emerald-500/10 lg:h-[140px] lg:w-[140px]">
               {avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatar} alt="" className="h-full w-full object-cover" />
+                <img src={avatar} alt="" className="absolute inset-0 h-full w-full max-h-full max-w-full object-cover" />
               ) : (
                 <div className="grid h-full w-full place-items-center text-emerald-200">
                   <UserRound size={48} strokeWidth={1.75} />
