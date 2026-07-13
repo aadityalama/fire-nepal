@@ -41,6 +41,7 @@ import {
   type RiskProfile,
 } from "@/lib/fire-premium-profile";
 import { TIER_CATALOG, TIER_DISPLAY } from "@/lib/fire-membership";
+import { downloadMemberCardPng } from "@/lib/member-card-export";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -96,6 +97,7 @@ export function FireMyProfilePage() {
   const { profile, loading: loadingProfile, saveProfile } = useCurrentUserProfile();
   const [draftProfile, setDraftProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [saving, setSaving] = useState(false);
+  const [downloadingCard, setDownloadingCard] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,6 +139,28 @@ export function FireMyProfilePage() {
     if (Number.isNaN(expiryDate.getTime())) return 0;
     return Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
   }, [expiryIso]);
+
+  const onDownloadMemberCard = useCallback(async () => {
+    if (!user || !profile || downloadingCard) return;
+    setDownloadingCard(true);
+    try {
+      await downloadMemberCardPng({
+        fullName: displayName(profile),
+        avatarUrl: displayAvatar(profile),
+        fireNepalId: profile.fireNepalId || "Not assigned",
+        tier,
+        tierLabel: TIER_DISPLAY[tier].label,
+        expiryLabel: formatDate(record.currentPeriodEnd ?? membershipExpiryIso(user)),
+        emailVerified: user.emailVerified === true,
+      });
+      toast.success("Member card saved.");
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      toast.error(error instanceof Error ? error.message : "Could not generate member card. Try again.");
+    } finally {
+      setDownloadingCard(false);
+    }
+  }, [downloadingCard, profile, record.currentPeriodEnd, tier, user]);
 
   if (!user || loadingProfile || !profile || (editing && !draftProfile)) {
     return (
@@ -458,11 +482,12 @@ export function FireMyProfilePage() {
           </Link>
           <button
             type="button"
-            disabled
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-5 py-3 text-sm font-black text-zinc-400"
+            onClick={() => void onDownloadMemberCard()}
+            disabled={downloadingCard}
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Download size={16} aria-hidden />
-            Download Member Card
+            {downloadingCard ? "Generating…" : "Download Member Card"}
           </button>
         </div>
       </header>
