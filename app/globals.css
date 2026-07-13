@@ -168,15 +168,9 @@ input {
   -webkit-backdrop-filter: blur(22px);
 }
 
+/* Hero photo is rendered only by HomepageHeroBackground — never user profile avatars. */
 .nepal-hero {
-  background:
-    linear-gradient(90deg, rgba(250, 255, 252, 0.98) 0%, rgba(250, 255, 252, 0.9) 42%, rgba(250, 255, 252, 0.2) 72%),
-    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.74) 0 9rem, transparent 9.4rem),
-    radial-gradient(circle at 18% 82%, rgba(0, 122, 61, 0.16), transparent 18rem),
-    linear-gradient(135deg, rgba(0, 122, 61, 0.18), rgba(214, 168, 62, 0.1)),
-    url("https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=1800&q=85");
-  background-position: center;
-  background-size: cover;
+  background-color: #fafffc;
 }
 
 .mountain-mask {

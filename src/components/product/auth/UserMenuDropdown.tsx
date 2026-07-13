@@ -3,8 +3,10 @@
 import { BarChart3, BadgeCheck, Brain, ChevronDown, Gem, LayoutDashboard, Lock, LogOut, Settings, Shield, UserRound, Activity } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProfileAvatarImage } from "@/components/profile/ProfileAvatarImage";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
+import { PROFILE_AVATAR_NAV_FRAME_CLASS } from "@/lib/profile-avatar-ui";
 
 type UserMenuDropdownProps = {
   /** dark = hub shell; light = marketing chrome */
@@ -66,14 +68,8 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
   const displayName = profile?.fullName.trim() ?? "";
 
   const avatarInner = showAvatar ? (
-    <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-emerald-400/30">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={profile!.avatarDataUrl!}
-        alt=""
-        className="h-full w-full object-cover"
-        onError={() => setImgBroken(true)}
-      />
+    <span className={`${PROFILE_AVATAR_NAV_FRAME_CLASS} ring-1 ring-emerald-400/30`}>
+      <ProfileAvatarImage src={profile!.avatarDataUrl!} onError={() => setImgBroken(true)} />
     </span>
   ) : (
     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-500/30 to-lime-400/25 text-[10px] font-black text-emerald-100 ring-1 ring-emerald-400/35">

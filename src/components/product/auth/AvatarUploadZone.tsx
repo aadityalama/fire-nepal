@@ -10,15 +10,10 @@ import {
   type DragEvent,
   type RefObject,
 } from "react";
+import { PROFILE_AVATAR_FRAME_CLASS, PROFILE_AVATAR_IMG_CLASS } from "@/lib/profile-avatar-ui";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
 const MAX_BYTES = 5 * 1024 * 1024;
-
-/** Fixed profile avatar frame — uploaded images must never affect layout size. */
-const PROFILE_AVATAR_FRAME_CLASS =
-  "relative aspect-square h-[112px] w-[112px] shrink-0 overflow-hidden rounded-full lg:h-[140px] lg:w-[140px]";
-
-const PROFILE_AVATAR_IMG_CLASS = "absolute inset-0 h-full w-full max-h-full max-w-full object-cover";
 
 type AvatarUploadZoneProps = {
   value: string | null;

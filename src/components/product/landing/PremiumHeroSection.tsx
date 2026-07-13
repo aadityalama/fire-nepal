@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useHomepageLanguage } from "@/contexts/HomepageLanguageContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { HomepageHeroBackground } from "@/components/product/landing/HomepageHeroBackground";
 
 const nepalTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Kathmandu",
@@ -84,7 +85,8 @@ export function PremiumHeroSection() {
   const heroCopy = copy.hero;
 
   return (
-    <header id="home" className="nepal-hero relative">
+    <header id="home" className="nepal-hero relative isolate overflow-hidden">
+      <HomepageHeroBackground />
       <NepalTimeHeroOrb />
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#f4fbf6] to-transparent" />
       <div className="mx-auto grid min-h-[620px] max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.08fr_0.92fr] lg:px-8 lg:py-20">
