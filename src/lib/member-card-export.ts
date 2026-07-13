@@ -2,8 +2,16 @@ import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/component
 import type { MemberCardData } from "@/lib/member-card-profile";
 import { validateMemberCardData } from "@/lib/member-card-profile";
 
-/** ~300 DPI capture relative to 96 CSS px. */
-const EXPORT_SCALE = 300 / 96;
+const BASE_EXPORT_SCALE = 300 / 96;
+
+function isMobileSafari(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const ios = /iP(hone|od|ad)/.test(ua);
+  const webkit = /WebKit/i.test(ua);
+  const notOtherBrowser = !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  return ios && webkit && notOtherBrowser;
+}
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -17,35 +25,100 @@ function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+function openBlobInNewTab(blob: Blob): boolean {
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  if (opened) {
+    window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+    return true;
+  }
+  URL.revokeObjectURL(url);
+  return false;
+}
+
 function memberCardFilename(data: MemberCardData, ext: "png" | "pdf"): string {
   const slug = data.fireNepalId.replace(/[^\w-]+/g, "-").slice(0, 48);
   return `fire-nepal-member-card-${slug}.${ext}`;
 }
 
-async function captureMemberCardCanvas(element: HTMLElement): Promise<HTMLCanvasElement> {
-  const { default: html2canvas } = await import("html2canvas");
-  return html2canvas(element, {
-    scale: EXPORT_SCALE,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#050505",
-    width: MEMBER_CARD_EXPORT_WIDTH,
-    height: MEMBER_CARD_EXPORT_HEIGHT,
-    windowWidth: MEMBER_CARD_EXPORT_WIDTH,
-    windowHeight: MEMBER_CARD_EXPORT_HEIGHT,
-    logging: false,
-  });
-}
-
-export async function memberCardPngBlobFromElement(element: HTMLElement): Promise<Blob> {
-  const canvas = await captureMemberCardCanvas(element);
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("PNG export failed"))),
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        try {
+          const dataUrl = canvas.toDataURL("image/png");
+          const bin = atob(dataUrl.split(",")[1] ?? "");
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          resolve(new Blob([bytes], { type: "image/png" }));
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error("PNG export failed"));
+        }
+      },
       "image/png",
       1,
     );
   });
+}
+
+async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasElement> {
+  const { default: html2canvas } = await import("html2canvas");
+
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.style.position = "fixed";
+  clone.style.left = "0";
+  clone.style.top = "0";
+  clone.style.margin = "0";
+  clone.style.zIndex = "2147483646";
+  clone.style.opacity = "1";
+  clone.style.pointerEvents = "none";
+  clone.style.width = `${MEMBER_CARD_EXPORT_WIDTH}px`;
+  clone.style.height = `${MEMBER_CARD_EXPORT_HEIGHT}px`;
+  clone.setAttribute("data-member-card-capture", "true");
+
+  document.body.appendChild(clone);
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+  const scale = isMobileSafari() ? Math.min(BASE_EXPORT_SCALE, 2) : BASE_EXPORT_SCALE;
+
+  try {
+    return await html2canvas(clone, {
+      scale,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#050505",
+      width: MEMBER_CARD_EXPORT_WIDTH,
+      height: MEMBER_CARD_EXPORT_HEIGHT,
+      windowWidth: MEMBER_CARD_EXPORT_WIDTH,
+      windowHeight: MEMBER_CARD_EXPORT_HEIGHT,
+      logging: false,
+      imageTimeout: 15_000,
+      onclone: (doc) => {
+        doc.querySelectorAll<HTMLElement>("[style*='backdrop-filter'], .backdrop-blur-md").forEach((node) => {
+          node.style.backdropFilter = "none";
+          node.style.setProperty("-webkit-backdrop-filter", "none");
+          if (node.classList.contains("backdrop-blur-md")) {
+            node.classList.remove("backdrop-blur-md");
+            node.style.backgroundColor = "rgba(0, 0, 0, 0.55)";
+          }
+        });
+      },
+    });
+  } finally {
+    clone.remove();
+  }
+}
+
+export async function memberCardPngBlobFromElement(element: HTMLElement): Promise<Blob> {
+  const canvas = await captureMemberCardCanvas(element);
+  return canvasToPngBlob(canvas);
 }
 
 async function shareOrDownloadBlob(blob: Blob, filename: string, title: string): Promise<void> {
@@ -57,10 +130,15 @@ async function shareOrDownloadBlob(blob: Blob, filename: string, title: string):
         await navigator.share({ files: [file], title });
         return;
       }
+      await navigator.share({ title, text: title });
+      return;
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
-      throw error instanceof Error ? error : new Error("Could not share member card.");
     }
+  }
+
+  if (isMobileSafari() && (blob.type === "image/png" || blob.type === "application/pdf")) {
+    if (openBlobInNewTab(blob)) return;
   }
 
   downloadBlob(blob, filename);
@@ -69,7 +147,7 @@ async function shareOrDownloadBlob(blob: Blob, filename: string, title: string):
 export async function downloadMemberCardPngFromElement(element: HTMLElement, data: MemberCardData): Promise<void> {
   const validation = validateMemberCardData(data);
   if (validation) throw new Error(validation);
-  await new Promise((resolve) => window.setTimeout(resolve, 450));
+  await new Promise((resolve) => window.setTimeout(resolve, 500));
   const blob = await memberCardPngBlobFromElement(element);
   await shareOrDownloadBlob(blob, memberCardFilename(data, "png"), "FIRE Nepal Member Card");
 }
@@ -77,7 +155,7 @@ export async function downloadMemberCardPngFromElement(element: HTMLElement, dat
 export async function downloadMemberCardPdfFromElement(element: HTMLElement, data: MemberCardData): Promise<void> {
   const validation = validateMemberCardData(data);
   if (validation) throw new Error(validation);
-  await new Promise((resolve) => window.setTimeout(resolve, 450));
+  await new Promise((resolve) => window.setTimeout(resolve, 500));
 
   const { jsPDF } = await import("jspdf");
   const canvas = await captureMemberCardCanvas(element);

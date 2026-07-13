@@ -1,10 +1,14 @@
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import { formatPremiumPhoneDisplay } from "@/lib/fire-premium-profile";
+import {
+  computeMembershipExpiryStatus,
+  type MembershipExpiryStatus,
+} from "@/lib/membership-expiry-status";
 import type { Database } from "@/types/supabase-database";
 
 export type UserProfileRow = Database["public"]["Tables"]["user_profiles"]["Row"];
 
-export type MemberCardStatus = "active" | "expiring_soon" | "expired";
+export type MemberCardStatus = MembershipExpiryStatus;
 
 export type MemberCardData = {
   fullName: string;
@@ -33,12 +37,6 @@ export type PublicMemberVerification = {
   status?: MemberCardStatus;
 };
 
-const PLANS = new Set<FireMembershipTier>(["free", "premium", "elite"]);
-
-function planOrFree(value: string | null | undefined): FireMembershipTier {
-  return PLANS.has(value as FireMembershipTier) ? (value as FireMembershipTier) : "free";
-}
-
 export function mapUserProfileRowToMemberCard(row: UserProfileRow): MemberCardData {
   const phoneFromParts =
     row.phone_national_digits && row.phone_national_digits.trim()
@@ -60,27 +58,24 @@ export function mapUserProfileRowToMemberCard(row: UserProfileRow): MemberCardDa
   };
 }
 
-export function computeMemberCardStatus(
-  membershipExpiry: string | null,
-  membershipPlan: FireMembershipTier = "free",
-  now: Date = new Date(),
-): MemberCardStatus {
-  if (membershipPlan === "free") return "active";
-  if (!membershipExpiry) return "expired";
-  const expiry = new Date(membershipExpiry);
-  if (Number.isNaN(expiry.getTime())) return "expired";
-  const days = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return "expired";
-  if (days < 30) return "expiring_soon";
-  return "active";
+const PLANS = new Set<FireMembershipTier>(["free", "premium", "elite"]);
+
+export function planOrFree(value: string | null | undefined): FireMembershipTier {
+  return PLANS.has(value as FireMembershipTier) ? (value as FireMembershipTier) : "free";
 }
 
-export function membershipDaysRemaining(membershipExpiry: string | null, now: Date = new Date()): number {
-  if (!membershipExpiry) return 0;
-  const expiry = new Date(membershipExpiry);
-  if (Number.isNaN(expiry.getTime())) return 0;
-  return Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+/** @deprecated Use computeMembershipExpiryStatus */
+export const computeMemberCardStatus = (
+  membershipExpiry: string | null,
+  _membershipPlan?: FireMembershipTier,
+  now?: Date,
+): MemberCardStatus => computeMembershipExpiryStatus(membershipExpiry, now).status;
+
+export function membershipDaysRemaining(membershipExpiry: string | null, now?: Date): number {
+  return computeMembershipExpiryStatus(membershipExpiry, now).daysRemaining;
 }
+
+export { computeMembershipExpiryStatus, membershipExpiryTone } from "@/lib/membership-expiry-status";
 
 export function formatMemberCardDate(value: string | null): string {
   if (!value) return "";
@@ -128,6 +123,6 @@ export function mapVerificationPayload(payload: Record<string, unknown>): Public
     membershipExpiry: expiry,
     countryOfWork: typeof payload.country_of_work === "string" ? payload.country_of_work : null,
     preferredCurrency: typeof payload.preferred_currency === "string" ? payload.preferred_currency : null,
-    status: computeMemberCardStatus(expiry, planOrFree(typeof payload.membership_plan === "string" ? payload.membership_plan : null)),
+    status: computeMembershipExpiryStatus(expiry).status,
   };
 }

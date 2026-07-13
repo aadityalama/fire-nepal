@@ -5,10 +5,9 @@ import { forwardRef, useEffect, useState } from "react";
 import { FIRE_NEPAL_CANONICAL_ORIGIN } from "@/lib/brand/site-seo";
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import {
-  computeMemberCardStatus,
+  computeMembershipExpiryStatus,
   currencyDisplay,
   formatMemberCardDate,
-  membershipDaysRemaining,
   tierBadgeLabel,
   tierDisplayName,
   type MemberCardData,
@@ -56,22 +55,16 @@ function tierAccent(plan: FireMembershipTier) {
   };
 }
 
-function statusPanel(
-  status: ReturnType<typeof computeMemberCardStatus>,
-  expiry: string | null,
-  plan: FireMembershipTier,
-) {
-  if (plan === "free") {
-    return {
-      label: "Membership status",
-      value: "FREE PLAN",
-      sub: "Upgrade for premium benefits",
-      action: null,
-      className: "border-zinc-400/35 bg-zinc-500/10 text-zinc-100",
-      valueClass: "text-white",
-    };
-  }
-  if (status === "expired") {
+function glassPanelClass(isExport: boolean): string {
+  return isExport
+    ? "border border-white/10 bg-[rgba(0,0,0,0.55)]"
+    : "border border-white/10 bg-white/[0.04] backdrop-blur-md";
+}
+
+function statusPanel(expiry: string | null) {
+  const state = computeMembershipExpiryStatus(expiry);
+
+  if (state.status === "expired") {
     return {
       label: "Status",
       value: "EXPIRED",
@@ -81,24 +74,21 @@ function statusPanel(
       valueClass: "text-red-100",
     };
   }
-  const days = membershipDaysRemaining(expiry);
-  if (status === "expiring_soon") {
-    return {
-      label: "Membership countdown",
-      value: `${days} Days Remaining`,
-      sub: `Renews on ${formatMemberCardDate(expiry)}`,
-      action: null,
-      className: "border-amber-400/45 bg-amber-500/12 text-amber-50",
-      valueClass: "text-amber-50",
-    };
-  }
+
+  const panelClass =
+    state.status === "expiring_soon"
+      ? "border-amber-400/45 bg-amber-500/12 text-amber-50"
+      : "border-emerald-400/40 bg-emerald-500/12 text-emerald-50";
+
+  const valueClass = state.status === "expiring_soon" ? "text-amber-50" : "text-white";
+
   return {
     label: "Membership countdown",
-    value: `${days} Days Remaining`,
+    value: `${state.daysRemaining} Days Remaining`,
     sub: `Renews on ${formatMemberCardDate(expiry)}`,
     action: null,
-    className: "border-emerald-400/40 bg-emerald-500/12 text-emerald-50",
-    valueClass: "text-white",
+    className: panelClass,
+    valueClass,
   };
 }
 
@@ -172,11 +162,12 @@ function MemberCardEmblem() {
 export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFireNepalMemberCardProps>(
   function PremiumFireNepalMemberCard({ data, mode = "preview" }, ref) {
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-    const status = computeMemberCardStatus(data.membershipExpiry, data.membershipPlan);
-    const panel = statusPanel(status, data.membershipExpiry, data.membershipPlan);
+    const panel = statusPanel(data.membershipExpiry);
     const accent = tierAccent(data.membershipPlan);
     const TierIcon = accent.icon;
     const verifyUrl = `${FIRE_NEPAL_CANONICAL_ORIGIN}/verify/${encodeURIComponent(data.fireNepalId)}`;
+    const isExport = mode === "export";
+    const glass = glassPanelClass(isExport);
 
     useEffect(() => {
       let cancelled = false;
@@ -199,17 +190,12 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
       };
     }, [data.fireNepalId, verifyUrl]);
 
-    const isExport = mode === "export";
-    const shellClass = isExport
-      ? "w-[1400px] min-w-[1400px] max-w-[1400px]"
-      : "w-full max-w-full";
-
     return (
       <div
         ref={ref}
         data-member-card-root="true"
-        className={`${shellClass} overflow-hidden rounded-[28px] border-2 border-amber-300/70 bg-[#050505] text-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]`}
-        style={isExport ? { width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT } : undefined}
+        className="overflow-hidden rounded-[28px] border-2 border-amber-300/70 bg-[#050505] text-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+        style={{ width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT }}
       >
         <div className="relative h-[420px] overflow-hidden border-b border-emerald-500/15">
           <MemberCardMountains />
@@ -256,11 +242,11 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
 
               <div className="min-w-0 space-y-4">
                 <h2 className="truncate text-4xl font-black uppercase tracking-[0.04em] text-white">{data.fullName}</h2>
-                <div className="inline-flex min-w-[280px] flex-col rounded-2xl border border-emerald-400/25 bg-black/35 px-4 py-3 backdrop-blur-md">
+                <div className={`inline-flex min-w-[280px] flex-col rounded-2xl px-4 py-3 ${glass} border-emerald-400/25`}>
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300/80">FIRE Nepal ID</p>
                   <p className="mt-1 font-mono text-xl font-black tracking-wide text-white">{data.fireNepalId}</p>
                 </div>
-                <div className={`inline-flex min-w-[320px] flex-col rounded-2xl border px-4 py-3 backdrop-blur-md ${panel.className}`}>
+                <div className={`inline-flex min-w-[320px] flex-col rounded-2xl px-4 py-3 ${glass} ${panel.className}`}>
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-85">{panel.label}</p>
                   <p className={`mt-1 text-3xl font-black tracking-tight ${panel.valueClass}`}>{panel.value}</p>
                   <p className="mt-1 text-sm font-semibold opacity-90">{panel.sub}</p>
@@ -298,7 +284,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
               <BadgeCheck size={14} />
               Member Details
             </p>
-            <div className="space-y-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-md">
+            <div className={`space-y-2.5 rounded-2xl p-4 ${glass}`}>
               {[
                 ["Member Since", formatMemberCardDate(data.membershipStart)],
                 ["Expiry Date", formatMemberCardDate(data.membershipExpiry)],
@@ -321,7 +307,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           </div>
 
           <div className="relative z-10 space-y-4">
-            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] p-4 backdrop-blur-md">
+            <div className={`rounded-2xl border border-emerald-400/15 p-4 ${isExport ? "bg-[rgba(6,78,59,0.18)]" : "bg-emerald-500/[0.06] backdrop-blur-md"}`}>
               <p className="font-nepali text-lg font-black leading-relaxed text-emerald-100">
                 {NEPALI_SLOGAN[0]}
                 <span className="block text-emerald-300">{NEPALI_SLOGAN[1]}</span>

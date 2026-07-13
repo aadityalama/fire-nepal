@@ -3,6 +3,7 @@
 import { BadgeCheck, Crown, Gem, ShieldAlert, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import {
+  computeMembershipExpiryStatus,
   formatMemberCardDate,
   tierDisplayName,
   type PublicMemberVerification,
@@ -22,9 +23,10 @@ function tierIcon(plan: FireMembershipTier | null | undefined) {
 
 export function MemberVerificationClient({ fireNepalId, verification }: MemberVerificationClientProps) {
   const found = verification.found;
-  const status = verification.status ?? "expired";
+  const expiryState = computeMembershipExpiryStatus(verification.membershipExpiry ?? null);
+  const status = verification.status ?? expiryState.status;
   const TierIcon = tierIcon(verification.membershipPlan);
-  const verified = found && status === "active";
+  const verified = found && expiryState.isActive;
   const expiring = found && status === "expiring_soon";
   const expired = found && status === "expired";
 

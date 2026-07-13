@@ -1,5 +1,7 @@
 /** Premium member profile display helpers. Profile fields come from public.user_profiles only. */
 
+import type { FireMembershipTier } from "@/lib/fire-membership";
+
 export type RiskProfile = "conservative" | "balanced" | "growth" | "aggressive";
 
 export type PremiumMemberProfileFields = {
@@ -18,6 +20,11 @@ export type PremiumMemberProfileFields = {
   fireGoalAmount: number;
   monthlyInvestment: number;
   riskProfile: RiskProfile;
+  membershipPlan: FireMembershipTier;
+  membershipStart: string | null;
+  membershipExpiry: string | null;
+  email: string | null;
+  phone: string | null;
 };
 
 /** Preset dial codes for profile phone UI (extend as needed). */

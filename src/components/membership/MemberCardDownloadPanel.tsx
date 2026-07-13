@@ -3,6 +3,7 @@
 import { Download, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import {
   PremiumFireNepalMemberCard,
   MEMBER_CARD_EXPORT_HEIGHT,
@@ -104,16 +105,16 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
         </button>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
-        <div className="mx-auto w-full max-w-[min(100%,920px)]">
+      <div className="mt-6 w-full max-w-full overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
+        <MemberCardPreviewScaler>
           <PremiumFireNepalMemberCard data={cardData} mode="preview" />
-        </div>
+        </MemberCardPreviewScaler>
       </div>
 
       <div
         aria-hidden
-        className="pointer-events-none fixed top-0 -z-[9999]"
-        style={{ left: -MEMBER_CARD_EXPORT_WIDTH - 64, width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT }}
+        className="pointer-events-none fixed left-0 top-0 opacity-[0.01]"
+        style={{ zIndex: -1, width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT }}
       >
         <PremiumFireNepalMemberCard ref={exportRef} data={cardData} mode="export" />
       </div>

@@ -26,14 +26,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AvatarUploadZone } from "@/components/product/auth/AvatarUploadZone";
-import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   displayAvatar,
   displayName,
   formatPremiumPhoneDisplay,
-  membershipExpiryIso,
   normalizePhoneNationalDigits,
   PHONE_DIAL_PRESETS,
   validatePremiumPhone,
@@ -41,6 +39,10 @@ import {
   type RiskProfile,
 } from "@/lib/fire-premium-profile";
 import { TIER_CATALOG, TIER_DISPLAY } from "@/lib/fire-membership";
+import {
+  computeMembershipExpiryStatus,
+  membershipExpiryTone,
+} from "@/lib/membership-expiry-status";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -89,7 +91,6 @@ function ProfileValueCard({
 
 export function FireMyProfilePage() {
   const { user } = useProductAuth();
-  const { record, tier } = useFireMembership();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editing = searchParams.get("edit") === "1";
@@ -127,16 +128,10 @@ export function FireMyProfilePage() {
     [draftProfile, router, saveProfile, saving, user],
   );
 
-  const expiryIso = useMemo(() => {
-    if (!user) return "";
-    return record.currentPeriodEnd ?? membershipExpiryIso(user);
-  }, [record.currentPeriodEnd, user]);
-
-  const remainingDays = useMemo(() => {
-    const expiryDate = new Date(expiryIso);
-    if (Number.isNaN(expiryDate.getTime())) return 0;
-    return Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  }, [expiryIso]);
+  const expiryState = useMemo(
+    () => computeMembershipExpiryStatus(profile?.membershipExpiry ?? null),
+    [profile?.membershipExpiry],
+  );
 
   if (!user || loadingProfile || !profile || (editing && !draftProfile)) {
     return (
@@ -158,14 +153,24 @@ export function FireMyProfilePage() {
     day: "numeric",
     year: "numeric",
   });
-  const expiryLabel = formatDate(expiryIso);
+  const expiryLabel = expiryState.expiryIso
+    ? formatDate(expiryState.expiryIso)
+    : "Not available";
+  const remainingDays = expiryState.daysRemaining;
+  const expiryTone = membershipExpiryTone(expiryState.status);
   const remainingTone =
-    remainingDays >= 180
+    expiryTone === "emerald"
       ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-100"
-      : remainingDays >= 30
+      : expiryTone === "amber"
         ? "border-amber-400/40 bg-amber-500/15 text-amber-100"
         : "border-red-400/45 bg-red-500/15 text-red-100";
-  const membershipStatus = record.status === "none" ? "No active paid subscription" : record.status.replace(/_/g, " ");
+  const membershipStatus =
+    expiryState.status === "expired"
+      ? "Membership expired"
+      : expiryState.status === "expiring_soon"
+        ? "Expiring soon"
+        : "Active membership";
+  const tier = visibleProfile.membershipPlan;
   const avatar = displayAvatar(visibleProfile);
   const name = displayName(visibleProfile);
   const benefits = TIER_CATALOG[tier].bullets;
@@ -522,9 +527,13 @@ export function FireMyProfilePage() {
                     Membership countdown
                   </p>
                   <p className="mt-2 text-2xl font-black tracking-tight tabular-nums">
-                    {Math.max(0, remainingDays)} Days Remaining
+                    {expiryState.status === "expired"
+                      ? "EXPIRED"
+                      : `${remainingDays} Days Remaining`}
                   </p>
-                  <p className="mt-1 text-sm font-semibold opacity-85">Renews on {expiryLabel}</p>
+                  <p className="mt-1 text-sm font-semibold opacity-85">
+                    {expiryState.status === "expired" ? "Membership Expired" : `Renews on ${expiryLabel}`}
+                  </p>
                 </div>
                 {remainingDays < 30 ? <ShieldCheck size={24} className="shrink-0" aria-hidden /> : null}
               </div>

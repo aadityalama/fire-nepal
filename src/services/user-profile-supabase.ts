@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapUserProfileRowToMemberCard, type MemberCardData } from "@/lib/member-card-profile";
-import type { PremiumMemberProfileFields, RiskProfile } from "@/lib/fire-premium-profile";
+import {
+  formatPremiumPhoneDisplay,
+  type PremiumMemberProfileFields,
+  type RiskProfile,
+} from "@/lib/fire-premium-profile";
+import { planOrFree } from "@/lib/member-card-profile";
 import type { Database } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
@@ -42,6 +47,11 @@ function riskOrDefault(value: string | null | undefined): RiskProfile {
 export function mapUserProfileToPremiumFields(
   row: UserProfileRow | null,
 ): PremiumMemberProfileFields {
+  const phoneFromParts =
+    row?.phone_national_digits && row.phone_national_digits.trim()
+      ? formatPremiumPhoneDisplay(row.phone_dial_code ?? "+977", row.phone_national_digits)
+      : null;
+
   return {
     fireNepalId: row?.fire_nepal_id?.trim() ?? "",
     fullName: row?.full_name?.trim() ?? "",
@@ -54,6 +64,11 @@ export function mapUserProfileToPremiumFields(
     fireGoalAmount: Number(row?.fire_goal ?? 0),
     monthlyInvestment: Number(row?.monthly_investment ?? 0),
     riskProfile: riskOrDefault(row?.risk_profile),
+    membershipPlan: planOrFree(row?.membership_plan),
+    membershipStart: row?.membership_start ?? null,
+    membershipExpiry: row?.membership_expiry ?? null,
+    email: row?.email?.trim().toLowerCase() ?? null,
+    phone: row?.phone?.trim() || phoneFromParts,
   };
 }
 
