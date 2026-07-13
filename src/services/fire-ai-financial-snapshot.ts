@@ -78,7 +78,7 @@ async function loadSnapshot(userId: string): Promise<FireAiFinancialSnapshot> {
   return {
     userId,
     profile: {
-      displayName: profileRow?.display_name ?? null,
+      displayName: profileRow?.full_name ?? null,
       preferredCurrency: profileRow?.preferred_currency ?? null,
       membershipPlan,
     },

@@ -20,9 +20,9 @@ export async function GET() {
 
   const { data: profiles } = await sb.from("profiles").select("id, plan_type, suspended_at, archived_at");
   const { data: subs } = await sb.from("subscriptions").select("user_id, current_period_end");
-  const { data: names } = await sb.from("user_profiles").select("id, display_name");
+  const { data: names } = await sb.from("user_profiles").select("id, full_name");
   const planBy = new Map((profiles ?? []).map((p) => [p.id, p.plan_type]));
-  const nameBy = new Map((names ?? []).map((n) => [n.id, n.display_name]));
+  const nameBy = new Map((names ?? []).map((n) => [n.id, n.full_name]));
 
   const subEndBy = new Map((subs ?? []).map((s) => [s.user_id, s.current_period_end]));
 
@@ -40,7 +40,7 @@ export async function GET() {
   const headers = [
     "id",
     "email",
-    "display_name",
+    "full_name",
     "plan_type",
     "expires_at",
     "suspended_at",
@@ -50,12 +50,7 @@ export async function GET() {
     "email_confirmed_at",
   ];
   const rows = users.map((u) => {
-    const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-    const metaName =
-      (typeof meta.name === "string" && meta.name) ||
-      (typeof meta.full_name === "string" && meta.full_name) ||
-      "";
-    const display = (nameBy.get(u.id) ?? "").trim() || metaName;
+    const display = (nameBy.get(u.id) ?? "").trim();
     return [
       u.id,
       u.email ?? "",

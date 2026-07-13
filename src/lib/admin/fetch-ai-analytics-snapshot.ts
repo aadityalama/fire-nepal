@@ -196,11 +196,11 @@ export async function fetchAdminAiAnalyticsSnapshot(): Promise<AdminAiAnalyticsS
   if (userIds.length > 0) {
     const { data: profiles, error: profileErr } = await sb
       .from("user_profiles")
-      .select("id, display_name")
+      .select("id, full_name")
       .in("id", userIds.slice(0, 1000));
     if (profileErr) loadError = profileErr.message;
     for (const row of profiles ?? []) {
-      profileByUser.set(row.id, { name: row.display_name ?? row.id.slice(0, 8), email: row.id });
+      profileByUser.set(row.id, { name: row.full_name?.trim() || "—", email: row.id });
     }
   }
 

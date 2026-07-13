@@ -12,8 +12,8 @@ import { InsightsSidebar } from "@/components/portfolio/premium/InsightsSidebar"
 import { KpiMetricCard } from "@/components/portfolio/premium/KpiMetricCard";
 import { NetWorthGrowthChart } from "@/components/portfolio/premium/NetWorthGrowthChart";
 import { formatNpr, nprToUsdLabel } from "@/data/fire-premium-dashboard";
-import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 
@@ -39,13 +39,13 @@ function fiCountdownLabel(monthsToFi: number | null | undefined): string {
 }
 
 export function FirePremiumPortfolioDashboard() {
-  const { user } = useProductAuth();
   const { resolvedTheme } = useFireTheme();
+  const { profile } = useCurrentUserProfile();
   const light = resolvedTheme === "light";
   const { totals, passiveMonthly, state, hydrated, coachSnapshot, usdPerNpr, fireScore } = useWealthPortfolio();
   const { summary } = useUnifiedFireSummary();
 
-  const displayName = user?.name?.trim() || "Member";
+  const fullName = profile?.fullName.trim() ?? "";
 
   const nwHistory = useMemo(() => state.netWorthHistory ?? [], [state.netWorthHistory]);
   const nwSpark = useMemo(() => {
@@ -84,7 +84,7 @@ export function FirePremiumPortfolioDashboard() {
   return (
     <div className="fn-premium-portfolio-root w-full min-w-0 max-w-full">
       <div className="fn-premium-portfolio-scale-inner fn-premium-portfolio wealth-dash-flow w-full min-w-0 max-w-full overflow-x-hidden pb-2 sm:pb-2.5 xl:pb-3">
-        <DashboardHeader userName={displayName} />
+        <DashboardHeader userName={fullName} />
 
         {/* Mobile: 2×2 core KPIs; desktop: auto-fit cards with a readable width floor. */}
         <section className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-[repeat(auto-fit,minmax(240px,1fr))] 2xl:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">

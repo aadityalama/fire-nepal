@@ -11,7 +11,7 @@ const RISK_PROFILES = new Set<RiskProfile>(["conservative", "balanced", "growth"
 export async function upsertUserProfileFields(
   client: Client,
   userId: string,
-  fields: { display_name?: string | null; avatar_url?: string | null; preferred_currency?: "NPR" | "KRW" | "USD" },
+  fields: { full_name?: string | null; avatar_url?: string | null; preferred_currency?: "NPR" | "KRW" | "USD" },
 ): Promise<{ error: string | null }> {
   const { error } = await client.from("user_profiles").upsert(
     {
@@ -43,7 +43,7 @@ export function mapUserProfileToPremiumFields(
 ): PremiumMemberProfileFields {
   return {
     fireNepalId: row?.fire_nepal_id?.trim() ?? "",
-    fullName: row?.display_name?.trim() ?? "",
+    fullName: row?.full_name?.trim() ?? "",
     avatarDataUrl: row?.avatar_url ?? null,
     phoneDialCode: row?.phone_dial_code?.trim() || "+977",
     phoneNationalDigits: row?.phone_national_digits ?? "",
@@ -81,7 +81,7 @@ export async function saveCurrentUserProfile(
   const { error } = await client.from("user_profiles").upsert(
     {
       id: userId,
-      display_name: fields.fullName.trim() || null,
+      full_name: fields.fullName.trim() || null,
       avatar_url: fields.avatarDataUrl,
       phone_dial_code: fields.phoneDialCode,
       phone_national_digits: fields.phoneNationalDigits,

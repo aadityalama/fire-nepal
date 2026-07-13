@@ -291,15 +291,15 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
 
   const userProfilesName = new Map<string, string | null>();
   if (sb) {
-    const { data: ups, error: uErr } = await sb.from("user_profiles").select("id, display_name");
+    const { data: ups, error: uErr } = await sb.from("user_profiles").select("id, full_name");
     if (uErr) loadError = loadError ?? uErr.message;
     for (const row of ups ?? []) {
-      userProfilesName.set(row.id, row.display_name);
+      userProfilesName.set(row.id, row.full_name);
     }
   }
 
   const emailByUser = new Map(users.map((u) => [u.id, u.email ?? "—"]));
-  const nameForUser = (userId: string): string => userProfilesName.get(userId) || emailByUser.get(userId) || userId.slice(0, 8);
+  const nameForUser = (userId: string): string => userProfilesName.get(userId)?.trim() || "—";
   const detailForUser = (userId: string): string => emailByUser.get(userId) ?? userId;
 
   let aiAnalytics = emptyAiAnalytics();
@@ -572,13 +572,8 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .slice(0, 200)
     .map((u) => {
-      const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-      const nameFromMeta =
-        (typeof meta.name === "string" && meta.name) ||
-        (typeof meta.full_name === "string" && meta.full_name) ||
-        "";
       const display = userProfilesName.get(u.id);
-      const name = (display && display.trim()) || nameFromMeta || "—";
+      const name = (display && display.trim()) || "—";
       const plan = profileByUser.get(u.id)?.plan_type;
       const planType =
         plan === "premium" || plan === "elite" || plan === "free" ? plan : "free";

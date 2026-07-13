@@ -6,11 +6,12 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FireAiFinancialIntelligenceDashboard } from "@/components/fire-nepal-ai/FireAiFinancialIntelligenceDashboard";
 import { FireAiRecentConversations } from "@/components/fire-nepal-ai/FireAiRecentConversations";
 import { FireAiSmartSuggestions } from "@/components/fire-nepal-ai/FireAiSmartSuggestions";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 
 export function FireAiHome() {
   const light = useFireTheme().resolvedTheme === "light";
+  const { profile } = useCurrentUserProfile();
   const {
-    user,
     summary,
     expenseInsights,
     fireGuidance,
@@ -20,7 +21,7 @@ export function FireAiHome() {
     hydrated,
   } = useFireAiData();
   const greeting = getTimeGreeting();
-  const name = firstName(user?.name, user?.email);
+  const name = firstName(profile?.fullName);
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -30,7 +31,7 @@ export function FireAiHome() {
             {greeting}
           </p>
           <h2 className={`text-2xl font-black tracking-tight sm:text-3xl ${light ? "text-slate-900" : "text-white"}`}>
-          {name} 👋
+            {name ? `${name} ` : ""}👋
           </h2>
         </div>
         <p className={`hidden max-w-sm text-right text-sm font-semibold leading-relaxed lg:block ${light ? "text-slate-500" : "text-emerald-200/60"}`}>

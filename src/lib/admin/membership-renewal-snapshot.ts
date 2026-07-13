@@ -30,13 +30,8 @@ export type AdminMembershipRenewalSnapshot = {
 const MAX_WIDGET = 12;
 
 function displayName(u: User, nameById: Map<string, string | null>): string {
-  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
   const display = nameById.get(u.id);
-  return (display && display.trim()) || fromMeta || "—";
+  return (display && display.trim()) || "—";
 }
 
 type ProfileLite = {

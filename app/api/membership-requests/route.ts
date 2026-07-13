@@ -169,12 +169,8 @@ export async function POST(request: Request) {
 
     const origin = getSiteOriginForServerAuthRedirect(request);
     const adminReviewUrl = `${origin}/admin/membership-requests`;
-    const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const payerName =
-      (typeof meta?.name === "string" && meta.name.trim()) ||
-      (typeof meta?.full_name === "string" && meta.full_name.trim()) ||
-      email.split("@")[0] ||
-      "Member";
+    const { data: profileRow } = await admin.from("user_profiles").select("full_name").eq("id", user.id).maybeSingle();
+    const payerName = profileRow?.full_name?.trim() || "";
     const planLabel = plan === "elite" ? "Elite" : "Premium";
     const submittedAtIso = row.created_at ?? new Date().toISOString();
 

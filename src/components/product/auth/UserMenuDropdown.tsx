@@ -63,7 +63,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
     !imgBroken;
 
   const verified = user.emailVerified === true;
-  const displayName = profile?.fullName?.trim() || "Member";
+  const displayName = profile?.fullName.trim() ?? "";
 
   const avatarInner = showAvatar ? (
     <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-emerald-400/30">
@@ -102,7 +102,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
           ) : null}
         </span>
         <Lock size={12} className="hidden shrink-0 text-emerald-500/80 sm:block" aria-hidden />
-        <span className="max-w-[100px] truncate sm:max-w-[140px]">{displayName}</span>
+        {displayName ? <span className="max-w-[100px] truncate sm:max-w-[140px]">{displayName}</span> : null}
         <span className="hidden text-[9px] font-black uppercase tracking-wider text-emerald-600/90 sm:inline lg:hidden">
           Secure
         </span>
@@ -117,7 +117,7 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
             <p className={`text-[10px] font-black uppercase tracking-[0.14em] ${variant === "dark" ? "text-white/45" : "text-zinc-400"}`}>
               Signed in
             </p>
-            <p className="mt-0.5 truncate text-sm font-bold">{displayName}</p>
+            {displayName ? <p className="mt-0.5 truncate text-sm font-bold">{displayName}</p> : null}
             <p className={`truncate text-xs font-medium ${subMuted}`}>{user.email}</p>
           </div>
           <Link

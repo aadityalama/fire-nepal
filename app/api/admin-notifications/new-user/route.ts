@@ -9,20 +9,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 type Body = { userId?: string };
 
-function displayNameFromUser(user: {
-  email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
-}): string {
-  const meta = user.user_metadata ?? {};
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name.trim()) ||
-    (typeof meta.full_name === "string" && meta.full_name.trim()) ||
-    "";
-  if (fromMeta) return fromMeta;
-  const em = user.email?.split("@")[0];
-  return em?.trim() || "Member";
-}
-
 /**
  * Called by the browser after Supabase `signUp` succeeds so admin email does not block signup.
  * The service role loads the user by id (client cannot forge arbitrary profiles).
@@ -60,7 +46,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "User has no email." }, { status: 400 });
   }
 
-  const name = displayNameFromUser(u);
+  const { data: profileRow } = await admin.from("user_profiles").select("full_name").eq("id", u.id).maybeSingle();
+  const name = profileRow?.full_name?.trim() || "";
   const registeredAtIso = u.created_at ?? new Date().toISOString();
 
   scheduleAdminNotification(async () => {

@@ -98,7 +98,7 @@ export async function PATCH(request: Request, ctx: RouteParams) {
 
     const { error: upErr } = await admin
       .from("user_profiles")
-      .update({ display_name: "Former member", updated_at: nowIso })
+      .update({ full_name: "Former member", updated_at: nowIso })
       .eq("id", userId);
     if (upErr) {
       console.error("[admin/members] permanent_remove user_profiles:", upErr.message);

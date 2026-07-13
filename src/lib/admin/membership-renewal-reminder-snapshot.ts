@@ -46,14 +46,9 @@ export type MembershipRenewalReminderSnapshot = {
   };
 };
 
-function displayName(u: User, displayFromUserProfiles: string | null): string {
-  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
+function displayName(_u: User, displayFromUserProfiles: string | null): string {
   const display = displayFromUserProfiles?.trim();
-  return display || fromMeta || u.email?.split("@")[0] || "Member";
+  return display || "—";
 }
 
 function sentKey(userId: string, reminderType: string, expiresAt: string): string {

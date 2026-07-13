@@ -55,23 +55,18 @@ export async function fetchAdminMembers(): Promise<{
     return { members: [], error: sErr.message };
   }
 
-  const { data: names, error: nErr } = await sb.from("user_profiles").select("id, display_name");
+  const { data: names, error: nErr } = await sb.from("user_profiles").select("id, full_name");
   if (nErr) {
     return { members: [], error: nErr.message };
   }
 
   const profileBy = new Map((profiles ?? []).map((r) => [r.id, r]));
   const subBy = new Map((subs ?? []).map((r) => [r.user_id, r]));
-  const nameBy = new Map((names ?? []).map((r) => [r.id, r.display_name]));
+  const nameBy = new Map((names ?? []).map((r) => [r.id, r.full_name]));
 
   const members: AdminMemberRow[] = users.map((u: User) => {
-    const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-    const nameFromMeta =
-      (typeof meta.name === "string" && meta.name) ||
-      (typeof meta.full_name === "string" && meta.full_name) ||
-      "";
     const display = nameBy.get(u.id);
-    const name = (display && display.trim()) || nameFromMeta || "—";
+    const name = (display && display.trim()) || "—";
     const prof = profileBy.get(u.id);
     const rawPlan = prof?.plan_type;
     const planType: PlanType =

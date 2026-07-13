@@ -65,15 +65,9 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
     return null;
   }
   const u = authData.user;
-  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
-
-  const { data: up } = await admin.from("user_profiles").select("display_name").eq("id", userId).maybeSingle();
-  const display = up?.display_name?.trim();
-  const name = display || fromMeta || u.email?.split("@")[0] || "Member";
+  const { data: up } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
+  const display = up?.full_name?.trim();
+  const name = display || "—";
 
   const { data: prof } = await admin.from("profiles").select("*").eq("id", userId).maybeSingle();
   const rawPlan = prof?.plan_type;

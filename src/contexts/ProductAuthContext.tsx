@@ -54,11 +54,6 @@ const LOGIN_TIMEOUT_MS = 12_000;
 
 function mapSupabaseUser(u: User): ProductAuthUser {
   const meta = u.user_metadata as Record<string, unknown> | undefined;
-  const name =
-    (typeof meta?.name === "string" && meta.name) ||
-    (typeof meta?.full_name === "string" && meta.full_name) ||
-    u.email?.split("@")[0] ||
-    "Member";
   const avatarUrl =
     typeof meta?.avatar_url === "string"
       ? meta.avatar_url
@@ -68,7 +63,7 @@ function mapSupabaseUser(u: User): ProductAuthUser {
   return {
     id: u.id,
     email: (u.email ?? "").toLowerCase(),
-    name,
+    name: "",
     createdAt: u.created_at,
     avatarUrl,
     emailVerified: Boolean(u.email_confirmed_at),
@@ -401,7 +396,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
           setUser(pu);
           saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" });
           const profileRes = await upsertUserProfileFields(sb, data.user.id, {
-            display_name: name.trim(),
+            full_name: name.trim(),
             avatar_url: opts.avatarUrl ?? null,
           });
           if (profileRes.error) {
@@ -465,7 +460,6 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
         setUser(pu);
         saveProductAuthSession({ version: 1, user: pu, accessToken: "mock" });
         const meta = data.user.user_metadata as Record<string, unknown> | undefined;
-        const displayName = typeof meta?.name === "string" ? meta.name : pu.name;
         const avatarFromMeta =
           typeof meta?.avatar_url === "string"
             ? meta.avatar_url
@@ -473,7 +467,6 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
               ? meta.avatarUrl
               : null;
         const profileRes = await upsertUserProfileFields(sb, data.user.id, {
-          display_name: displayName,
           avatar_url: avatarFromMeta ?? pu.avatarUrl,
         });
         if (profileRes.error) {

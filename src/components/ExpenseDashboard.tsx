@@ -64,6 +64,7 @@ import { RoommateShareSummaryModal } from "@/components/RoommateShareSummaryModa
 import { SettlementCelebration } from "@/components/SettlementCelebration";
 import { SettlementShareModal } from "@/components/SettlementShareModal";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   formatExpenseAmountForInput,
   krwToNpr,
@@ -790,6 +791,7 @@ export function ExpenseDashboard({
   initialView?: ExpenseDashboardView;
 }) {
   const { user } = useProductAuth();
+  const { profile } = useCurrentUserProfile();
   const personalMode = mode === "personal";
   const normalizeExpenseCategory = personalMode ? normalizePersonalCategory : normalizeGroupExpenseCategory;
   const expenseCategoryIds = personalMode ? EXPENSE_CATEGORIES : GROUP_EXPENSE_CATEGORIES;
@@ -1065,7 +1067,7 @@ export function ExpenseDashboard({
     setActivities((current) => [created, ...current]);
   }, [personalMode]);
 
-  const actorName = user?.name ?? "Member";
+  const actorName = profile?.fullName.trim() ?? "";
 
   const recordTransaction = useCallback(
     async (

@@ -77,14 +77,8 @@ export async function POST(request: Request, ctx: RouteParams) {
     return NextResponse.json({ error: "Member has no expiry date on file" }, { status: 400 });
   }
 
-  const meta = (authUser.user_metadata ?? {}) as Record<string, unknown>;
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
-  const { data: up } = await admin.from("user_profiles").select("display_name").eq("id", userId).maybeSingle();
-  const display = up?.display_name?.trim();
-  const memberName = display || fromMeta || email.split("@")[0] || "Member";
+  const { data: up } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
+  const memberName = up?.full_name?.trim() || "";
   const paidPlan = plan === "elite" ? "elite" : "premium";
 
   if (action === "preview") {

@@ -31,7 +31,7 @@ export function DashboardHeader({ userName, onPeriodChange }: DashboardHeaderPro
       <div className="min-w-0 max-w-2xl space-y-0.5">
         <p className="truncate text-xs font-bold uppercase tracking-wider text-white/65">Portfolio overview</p>
         <h1 className="font-nepali min-w-0 text-xl font-bold leading-[1.1] tracking-[-0.035em] text-white sm:text-2xl sm:leading-tight xl:text-2xl">
-          Namaste, {userName} <span className="fire-dash-wave inline-block">👋</span>
+          Namaste{userName ? `, ${userName}` : ""} <span className="fire-dash-wave inline-block">👋</span>
         </h1>
         <p className="text-xs font-medium leading-snug text-[#A7B4C4] line-clamp-2">
           Track your wealth, grow smarter, retire early — one premium workspace for Nepal and abroad.
@@ -80,14 +80,16 @@ export function DashboardHeader({ userName, onPeriodChange }: DashboardHeaderPro
         <PremiumGlassCard glow={false} className="flex items-center gap-2 px-2 py-1 sm:gap-2 sm:px-2.5 sm:py-1">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#38F2A0] text-[10px] font-bold text-[#07111A] shadow-[0_12px_24px_-20px_rgba(56,242,160,0.9)] ring-1 ring-white/20 sm:h-8 sm:w-8 sm:text-[11px]">
             {userName
-              .split(" ")
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean)
               .map((p) => p[0])
               .join("")
               .slice(0, 2)
               .toUpperCase()}
           </div>
           <div className="hidden min-w-0 sm:block">
-            <p className="truncate text-[13px] font-semibold tracking-tight text-white">{userName}</p>
+            {userName ? <p className="truncate text-[13px] font-semibold tracking-tight text-white">{userName}</p> : null}
             <p className="text-[9px] font-semibold uppercase tracking-wider text-[#38F2A0]">Premium</p>
           </div>
         </PremiumGlassCard>

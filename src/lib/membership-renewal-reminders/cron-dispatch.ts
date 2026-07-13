@@ -19,15 +19,6 @@ type ProfileRow = {
   archived_at: string | null;
 };
 
-function displayName(u: User): string {
-  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-  const fromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
-  return fromMeta || u.email?.split("@")[0] || "Member";
-}
-
 export type MembershipRenewalCronResult = {
   ok: boolean;
   error?: string;
@@ -65,6 +56,12 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
     return { ok: false, error: sErr.message, candidates: 0, sent: 0, failed: 0, skipped: 0 };
   }
   const subEnd = new Map((subs ?? []).map((r) => [r.user_id, r.current_period_end]));
+
+  const { data: profileNames, error: nameErr } = await admin.from("user_profiles").select("id, full_name");
+  if (nameErr) {
+    return { ok: false, error: nameErr.message, candidates: 0, sent: 0, failed: 0, skipped: 0 };
+  }
+  const nameById = new Map((profileNames ?? []).map((r) => [r.id, r.full_name]));
 
   let candidates = 0;
   let sent = 0;
@@ -108,7 +105,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
     }
 
     const plan = prof.plan_type === "elite" ? "elite" : "premium";
-    const memberName = u ? displayName(u) : "Member";
+    const memberName = nameById.get(prof.id)?.trim() || "";
     const expiryDateFormatted = format(exp, "MMMM d, yyyy");
     const planLabel = plan === "elite" ? "Elite" : "Premium";
     const tpl = buildRenewalReminderEmail(due, {

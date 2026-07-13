@@ -7,6 +7,7 @@ export type Database = {
         Row: {
           id: string;
           fire_nepal_id: string | null;
+          full_name: string | null;
           display_name: string | null;
           avatar_url: string | null;
           phone_dial_code: string | null;
@@ -23,6 +24,7 @@ export type Database = {
         Insert: {
           id: string;
           fire_nepal_id?: string;
+          full_name?: string | null;
           display_name?: string | null;
           avatar_url?: string | null;
           phone_dial_code?: string | null;
@@ -38,6 +40,7 @@ export type Database = {
         };
         Update: {
           fire_nepal_id?: string;
+          full_name?: string | null;
           display_name?: string | null;
           avatar_url?: string | null;
           phone_dial_code?: string | null;

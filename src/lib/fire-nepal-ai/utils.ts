@@ -25,12 +25,9 @@ export function getTimeGreeting(): "Good Morning" | "Good Afternoon" | "Good Eve
   return "Good Evening";
 }
 
-export function firstName(displayName?: string | null, email?: string | null): string {
+export function firstName(displayName?: string | null): string {
   if (displayName?.trim()) {
-    return displayName.trim().split(/\s+/)[0] ?? "there";
+    return displayName.trim().split(/\s+/)[0] ?? "";
   }
-  if (email?.includes("@")) {
-    return email.split("@")[0] ?? "there";
-  }
-  return "there";
+  return "";
 }

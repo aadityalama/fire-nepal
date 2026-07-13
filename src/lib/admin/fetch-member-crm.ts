@@ -121,15 +121,10 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     .eq("user_id", userId)
     .maybeSingle();
 
-  const { data: up } = await admin.from("user_profiles").select("display_name").eq("id", userId).maybeSingle();
+  const { data: up } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
 
-  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
-  const nameFromMeta =
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    "";
-  const display = up?.display_name?.trim();
-  const fullName = display || nameFromMeta || u.email?.split("@")[0] || "Member";
+  const display = up?.full_name?.trim();
+  const fullName = display || "—";
 
   const rawPlan = prof.plan_type;
   const planType: MemberCrmPayload["planType"] =
@@ -182,6 +177,7 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     }
   }
 
+  const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
   const metaCountry = typeof meta.country === "string" ? meta.country : null;
   const country = unknownOr(prof.country ?? metaCountry);
   const region = unknownOr(prof.region);

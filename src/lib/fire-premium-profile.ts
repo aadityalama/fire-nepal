@@ -86,9 +86,7 @@ export function membershipExpiryIso(user: { createdAt: string }): string {
 }
 
 export function displayName(profile: PremiumMemberProfileFields): string {
-  const n = profile.fullName?.trim();
-  if (n) return n;
-  return "Not added";
+  return profile.fullName.trim();
 }
 
 export function displayAvatar(profile: PremiumMemberProfileFields): string | null {

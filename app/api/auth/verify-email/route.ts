@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
   scheduleAdminNotification(async () => {
     await sendAdminNewUserEmail({
-      name: result.user.name,
+      name: "",
       email: result.user.email,
       userId: result.user.id,
       registeredAtIso: result.user.createdAt,

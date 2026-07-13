@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { applyOnboardingToCashflowIfEmpty } from "@/lib/apply-onboarding-profile";
 import {
   DEFAULT_ONBOARDING,
@@ -32,6 +33,7 @@ const STEPS = ["Profile", "Income", "Location", "Savings", "FIRE goal"] as const
 
 export function OnboardingFlow() {
   const { user } = useProductAuth();
+  const { profile } = useCurrentUserProfile();
   const router = useRouter();
   const initial = useMemo(() => loadProductOnboarding(), []);
   const [step, setStep] = useState(0);
@@ -41,6 +43,7 @@ export function OnboardingFlow() {
     version: 1,
   }));
   const [busy, setBusy] = useState(false);
+  const firstName = profile?.fullName.trim().split(/\s+/)[0] ?? "";
 
   function patch<K extends keyof ProductOnboardingState>(key: K, value: ProductOnboardingState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -71,7 +74,7 @@ export function OnboardingFlow() {
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-200/55">Onboarding</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Shape your FIRE profile</h1>
         <p className="mt-2 text-sm font-medium text-emerald-100/65">
-          {user ? `Welcome, ${user.name.split(" ")[0]}` : "Welcome"} — five quick inputs seed analytics and optional cashflow defaults.
+          Welcome{firstName ? `, ${firstName}` : ""} — five quick inputs seed analytics and optional cashflow defaults.
         </p>
 
         <div className="mt-8 flex gap-1.5 overflow-x-auto pb-1">
