@@ -199,12 +199,14 @@ export function FireMyProfilePage() {
         <form onSubmit={onSave} className="space-y-5 sm:space-y-6">
           <section className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] via-[#04140f] to-[#030806] p-5 shadow-[0_16px_48px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 items-start gap-4 sm:gap-5">
-                <AvatarUploadZone
-                  variant="compact"
-                  value={visibleProfile.avatarDataUrl}
-                  onChange={(url) => setDraftProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
-                />
+              <div className="flex min-w-0 flex-col gap-5 md:flex-row md:items-start">
+                <div className="w-full md:w-auto md:shrink-0">
+                  <AvatarUploadZone
+                    variant="compact"
+                    value={visibleProfile.avatarDataUrl}
+                    onChange={(url) => setDraftProfile((p) => (p ? { ...p, avatarDataUrl: url } : p))}
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
                   <label className="block">
                     <span className="sr-only">Full name</span>
@@ -246,7 +248,7 @@ export function FireMyProfilePage() {
               Profile information
             </h2>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div>
                 <span className={labelClass}>Email</span>
                 <div className="flex min-h-[42px] items-center gap-2 rounded-lg border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-emerald-50">
@@ -263,7 +265,7 @@ export function FireMyProfilePage() {
                 </div>
               </div>
 
-              <div className="sm:col-span-2">
+              <div className="md:col-span-2">
                 <div className="flex items-center gap-2">
                   <Phone size={15} className="shrink-0 text-emerald-400/80" aria-hidden />
                   <span className={labelClass}>Phone number</span>
@@ -273,7 +275,7 @@ export function FireMyProfilePage() {
                     {phoneFormatted}
                   </p>
                 ) : null}
-                <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
                   <select
                     value={isCustomDial ? "__other__" : visibleProfile.phoneDialCode}
                     onChange={(e) => {
@@ -366,7 +368,7 @@ export function FireMyProfilePage() {
                   className={fieldClass}
                 />
               </label>
-              <label className="block sm:col-span-2">
+              <label className="block md:col-span-2">
                 <span className={labelClass}>Preferred currency</span>
                 <select
                   value={visibleProfile.preferredCurrency}
@@ -404,7 +406,7 @@ export function FireMyProfilePage() {
                   className={fieldClass}
                 />
               </label>
-              <label className="block sm:col-span-2">
+              <label className="block md:col-span-2">
                 <span className={labelClass}>Risk profile</span>
                 <select
                   value={visibleProfile.riskProfile}

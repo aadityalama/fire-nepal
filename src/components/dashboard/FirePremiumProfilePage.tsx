@@ -123,8 +123,8 @@ export function FirePremiumProfilePage() {
 
           <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
             <div className="min-w-0 flex-1 space-y-5 lg:max-w-xl">
-              <div className="flex flex-row items-start gap-3 sm:gap-5">
-                <div className="shrink-0">
+              <div className="flex flex-col items-stretch gap-4 md:flex-row md:items-start md:gap-5">
+                <div className="w-full md:w-auto md:shrink-0">
                   <AvatarUploadZone
                     variant="compact"
                     value={draftProfile.avatarDataUrl}
@@ -132,7 +132,7 @@ export function FirePremiumProfilePage() {
                   />
                 </div>
                 <div className="min-w-0 flex-1 lg:hidden">
-                  <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3 min-[400px]:gap-3 sm:gap-4 md:gap-5">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-5">
                     <div className={statCardClass}>
                       <div className="flex flex-wrap items-start gap-1.5 text-zinc-400">
                         <Hash size={12} className="mt-0.5 shrink-0 opacity-90" aria-hidden />
@@ -227,7 +227,7 @@ export function FirePremiumProfilePage() {
                   ) : (
                     <p className="mt-2.5 text-sm font-semibold text-zinc-500">Add phone number</p>
                   )}
-                  <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="mt-3 flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
                     <select
                       value={isCustomDial ? "__other__" : draftProfile.phoneDialCode}
                       onChange={(e) => {
@@ -352,7 +352,7 @@ export function FirePremiumProfilePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.13em] text-emerald-200/55 sm:text-xs">
                 Country
@@ -373,7 +373,7 @@ export function FirePremiumProfilePage() {
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
-            <label className="block sm:col-span-2">
+            <label className="block md:col-span-2">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.13em] text-emerald-200/55 sm:text-xs">
                 Preferred currency
               </span>
@@ -417,7 +417,7 @@ export function FirePremiumProfilePage() {
                 className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-white outline-none ring-emerald-500/30 focus:ring-2"
               />
             </label>
-            <label className="block sm:col-span-2">
+            <label className="block md:col-span-2">
               <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-emerald-200/45">
                 Risk profile
               </span>

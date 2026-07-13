@@ -130,7 +130,7 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
   ].join(" ");
 
   const filledPhotoBlock = value ? (
-    <div ref={rootRef} className={variant === "compact" ? "inline-block max-w-full" : "flex justify-center"}>
+    <div ref={rootRef} className={variant === "compact" ? "block w-full max-w-full" : "flex justify-center"}>
       <div
         role="button"
         tabIndex={0}
@@ -220,7 +220,7 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
 
   const zoneClass =
     variant === "compact"
-      ? `relative flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 transition motion-safe:duration-300 ${
+      ? `relative flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 transition motion-safe:duration-300 ${
           dragOver
             ? "border-emerald-400/70 bg-emerald-500/10 shadow-[0_0_28px_rgba(16,185,129,0.12)]"
             : "border-white/12 bg-black/30 hover:border-emerald-400/35 hover:bg-emerald-500/[0.06]"
@@ -233,7 +233,7 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
 
   if (value) {
     return (
-      <div className={variant === "compact" ? "space-y-1.5" : "space-y-2"}>
+      <div className={variant === "compact" ? "w-full space-y-1.5" : "space-y-2"}>
         {variant === "default" ? (
           <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">
             Profile photo <span className="font-semibold text-emerald-200/35">(optional)</span>
@@ -250,7 +250,7 @@ export function AvatarUploadZone({ value, onChange, disabled, variant = "default
   }
 
   return (
-    <div className={variant === "compact" ? "space-y-1.5" : "space-y-2"}>
+    <div className={variant === "compact" ? "w-full space-y-1.5" : "space-y-2"}>
       {variant === "default" ? (
         <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">
           Profile photo <span className="font-semibold text-emerald-200/35">(optional)</span>
