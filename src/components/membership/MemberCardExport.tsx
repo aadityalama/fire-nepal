@@ -17,7 +17,7 @@ import {
 export const MEMBER_CARD_EXPORT_WIDTH = 1400;
 export const MEMBER_CARD_EXPORT_HEIGHT = 900;
 
-const HERO_HEIGHT = 392;
+const HERO_HEIGHT = 380;
 const FOOTER_HEIGHT = 56;
 const BODY_HEIGHT = MEMBER_CARD_EXPORT_HEIGHT - HERO_HEIGHT - FOOTER_HEIGHT;
 
@@ -156,12 +156,12 @@ function MemberCardMountains() {
       <rect width={MEMBER_CARD_EXPORT_WIDTH} height={HERO_HEIGHT} fill="url(#mcx-sky)" />
       <rect width={MEMBER_CARD_EXPORT_WIDTH} height={HERO_HEIGHT} fill="url(#mcx-glow)" />
       <path
-        d="M0 300 L120 230 L220 270 L340 160 L470 240 L590 130 L720 220 L860 100 L1020 200 L1180 140 L1400 260 L1400 392 L0 392 Z"
+        d={`M0 290 L120 220 L220 260 L340 150 L470 230 L590 120 L720 210 L860 90 L1020 190 L1180 130 L1400 250 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
         fill="url(#mcx-mtn)"
         opacity="0.9"
       />
       <path
-        d="M0 340 L180 280 L300 320 L460 230 L640 310 L820 220 L980 290 L1160 240 L1400 320 L1400 392 L0 392 Z"
+        d={`M0 330 L180 270 L300 310 L460 220 L640 300 L820 210 L980 280 L1160 230 L1400 310 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
         fill="#031612"
         opacity="0.85"
       />
@@ -348,7 +348,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
           </div>
 
           {/* Photo */}
-          <div style={{ position: "absolute", left: 40, top: 110, width: 148 }}>
+          <div data-export-photo="true" style={{ position: "absolute", left: 40, top: 110, width: 148 }}>
             <div
               style={{
                 position: "relative",
@@ -434,16 +434,20 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             <h2
               style={{
                 ...TEXT,
+                boxSizing: "border-box",
                 fontSize: 36,
                 fontWeight: 900,
                 letterSpacing: "0.04em",
                 textTransform: "uppercase",
                 color: "#ffffff",
-                lineHeight: 1.25,
-                maxHeight: 56,
-                overflow: "hidden",
+                // Explicit tall line-box so html2canvas does not clip glyph descenders/ascenders.
+                lineHeight: "48px",
+                height: 48,
+                overflow: "visible",
                 whiteSpace: "nowrap",
                 textOverflow: "ellipsis",
+                paddingTop: 2,
+                paddingBottom: 2,
               }}
             >
               {data.fullName}
@@ -457,6 +461,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 borderColor: "rgba(52,211,153,0.25)",
               }}
             >
+              <div data-export-id="true">
               <p
                 style={{
                   ...TEXT,
@@ -484,6 +489,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               >
                 {data.fireNepalId}
               </p>
+              </div>
             </SolidPanel>
 
             <SolidPanel
@@ -495,6 +501,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 borderColor: panel.border,
               }}
             >
+              <div data-export-countdown="true">
               <p
                 style={{
                   ...TEXT,
@@ -549,11 +556,12 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   {panel.action}
                 </p>
               ) : null}
+              </div>
             </SolidPanel>
           </div>
 
           {/* QR */}
-          <div style={{ position: "absolute", right: 40, top: 110, width: 160, textAlign: "center" }}>
+          <div data-export-qr="true" style={{ position: "absolute", right: 40, top: 110, width: 160, textAlign: "center" }}>
             {qrDataUrl ? (
               <div
                 style={{
@@ -709,19 +717,19 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
           <div
             style={{
               position: "absolute",
-              left: 520,
-              top: 72,
-              width: 360,
-              height: 280,
+              left: 500,
+              top: 48,
+              width: 400,
+              height: 320,
             }}
           >
             <div
               style={{
                 position: "absolute",
-                left: 90,
-                top: 40,
-                width: 180,
-                height: 180,
+                left: 80,
+                top: 36,
+                width: 240,
+                height: 240,
                 borderRadius: 999,
                 background: "radial-gradient(circle, rgba(16,185,129,0.28) 0%, rgba(5,5,5,0) 70%)",
               }}
@@ -730,9 +738,9 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               style={{
                 position: "absolute",
                 left: 100,
-                top: 50,
-                width: 160,
-                height: 160,
+                top: 56,
+                width: 200,
+                height: 200,
                 borderRadius: 999,
                 border: "1px solid rgba(252,211,77,0.35)",
                 background: "radial-gradient(circle at 30% 20%, rgba(52,211,153,0.35), rgba(5,5,5,0.92) 68%)",
@@ -744,27 +752,27 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               <div
                 style={{
                   position: "absolute",
-                  left: 12,
-                  top: 12,
-                  right: 12,
-                  bottom: 12,
+                  left: 14,
+                  top: 14,
+                  right: 14,
+                  bottom: 14,
                   borderRadius: 999,
                   border: "1px solid rgba(110,231,183,0.2)",
                 }}
               />
               <Flame
-                style={{ width: 64, height: 64, color: "#6ee7b7", filter: "none" }}
+                style={{ width: 72, height: 72, color: "#6ee7b7", filter: "none" }}
                 fill="currentColor"
               />
               <p
                 style={{
                   ...TEXT,
                   position: "absolute",
-                  top: 10,
+                  top: 14,
                   left: 0,
                   right: 0,
                   textAlign: "center",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 900,
                   letterSpacing: "0.28em",
                   textTransform: "uppercase",
@@ -778,11 +786,11 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 style={{
                   ...TEXT,
                   position: "absolute",
-                  bottom: 10,
+                  bottom: 14,
                   left: 0,
                   right: 0,
                   textAlign: "center",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 900,
                   letterSpacing: "0.28em",
                   textTransform: "uppercase",

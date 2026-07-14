@@ -298,20 +298,91 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+function prepareCaptureHost(): { host: HTMLElement; cleanup: () => void } {
+  const needsWideViewport = isIOS() || isMobileSafari() || window.innerWidth < MEMBER_CARD_EXPORT_WIDTH;
+
+  if (!needsWideViewport) {
+    const host = document.createElement("div");
+    host.style.cssText = [
+      "position:fixed",
+      "left:0",
+      "top:0",
+      `width:${MEMBER_CARD_EXPORT_WIDTH}px`,
+      `height:${MEMBER_CARD_EXPORT_HEIGHT}px`,
+      "margin:0",
+      "padding:0",
+      "overflow:hidden",
+      "z-index:2147483646",
+      "pointer-events:none",
+      "background:#050505",
+    ].join(";");
+    document.body.appendChild(host);
+    return {
+      host,
+      cleanup: () => host.remove(),
+    };
+  }
+
+  // Narrow viewports (iPhone Safari): paint inside a true 1400×900 iframe so
+  // html2canvas's window metrics match the card instead of the 390px layout viewport.
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "member-card-capture");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.width = String(MEMBER_CARD_EXPORT_WIDTH);
+  iframe.height = String(MEMBER_CARD_EXPORT_HEIGHT);
+  iframe.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    `width:${MEMBER_CARD_EXPORT_WIDTH}px`,
+    `height:${MEMBER_CARD_EXPORT_HEIGHT}px`,
+    "border:0",
+    "margin:0",
+    "padding:0",
+    "z-index:2147483646",
+    "opacity:1",
+    "visibility:visible",
+    "pointer-events:none",
+    "background:#050505",
+  ].join(";");
+  document.body.appendChild(iframe);
+
+  const idoc = iframe.contentDocument;
+  if (!idoc) {
+    iframe.remove();
+    throw new Error("Could not prepare membership card capture frame.");
+  }
+
+  idoc.open();
+  idoc.write(
+    `<!DOCTYPE html><html><head><base href="${location.origin}/"><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#050505;overflow:hidden;width:${MEMBER_CARD_EXPORT_WIDTH}px;height:${MEMBER_CARD_EXPORT_HEIGHT}px;"></body></html>`,
+  );
+  idoc.close();
+
+  document.querySelectorAll("link[rel='stylesheet'], style").forEach((node) => {
+    idoc.head.appendChild(node.cloneNode(true));
+  });
+
+  return {
+    host: idoc.body,
+    cleanup: () => iframe.remove(),
+  };
+}
+
 async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasElement> {
   const { default: html2canvas } = await import("html2canvas");
 
   // Wait on the live dedicated export tree (QR, fonts, images) before cloning.
   await waitForCaptureReady(source);
 
-  // Visible in-viewport clone — required for reliable WebKit/html2canvas paint.
-  // Source must already be MemberCardExport at 1400×900 (no scaled preview clone).
+  const { host, cleanup } = prepareCaptureHost();
+
+  // Capture from dedicated MemberCardExport at true 1400×900 (never the scaled preview).
   const clone = source.cloneNode(true) as HTMLElement;
-  clone.style.position = "fixed";
+  clone.style.position = "relative";
   clone.style.left = "0";
   clone.style.top = "0";
   clone.style.margin = "0";
-  clone.style.zIndex = "2147483646";
   clone.style.opacity = "1";
   clone.style.visibility = "visible";
   clone.style.pointerEvents = "none";
@@ -327,7 +398,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
   clone.setAttribute("data-member-card-capture", "true");
   clone.setAttribute("aria-hidden", "true");
 
-  document.body.appendChild(clone);
+  host.appendChild(clone);
 
   try {
     stripUnsupportedCaptureStyles(clone);
@@ -335,6 +406,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
     await waitForCaptureReady(clone);
 
     const scale = isIOS() || isMobileSafari() ? Math.min(BASE_EXPORT_SCALE, 2) : BASE_EXPORT_SCALE;
+    const view = clone.ownerDocument?.defaultView ?? window;
 
     return await html2canvas(clone, {
       scale,
@@ -350,7 +422,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
       logging: false,
       imageTimeout: 15_000,
       onclone: (clonedDoc, cloned) => {
-        const view = clonedDoc.defaultView ?? window;
+        const cloneView = clonedDoc.defaultView ?? view;
         const colorProperties = [
           "background-color",
           "background-image",
@@ -369,7 +441,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
           node.style.opacity = "1";
           node.style.visibility = "visible";
           node.style.transform = "none";
-          const computed = view.getComputedStyle(node);
+          const computed = cloneView.getComputedStyle(node);
           const hasBackdrop =
             (computed.backdropFilter && computed.backdropFilter !== "none") ||
             (computed.getPropertyValue("-webkit-backdrop-filter") &&
@@ -394,7 +466,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
       },
     });
   } finally {
-    clone.remove();
+    cleanup();
   }
 }
 
