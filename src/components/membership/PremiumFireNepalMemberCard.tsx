@@ -18,7 +18,8 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { forwardRef, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { NepalChucheMapOutline } from "@/components/membership/NepalChucheMapOutline";
 import { FIRE_NEPAL_CANONICAL_ORIGIN } from "@/lib/brand/site-seo";
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import {
@@ -57,9 +58,10 @@ function tierAccent(plan: FireMembershipTier) {
     return {
       label: tierBadgeLabel(plan),
       color: "#F6E27A",
-      border: "rgba(246,226,122,0.85)",
-      bg: "linear-gradient(180deg, rgba(58,42,8,0.92), rgba(20,14,4,0.96))",
-      glow: "0 0 22px rgba(212,175,55,0.45)",
+      border: "rgba(246,226,122,0.95)",
+      bg: "linear-gradient(180deg, rgba(84,60,10,0.96), rgba(34,22,4,0.98))",
+      glow:
+        "0 0 0 1px rgba(255,236,160,0.35), 0 0 18px rgba(212,175,55,0.65), 0 0 34px rgba(246,226,122,0.4), inset 0 1px 0 rgba(255,245,200,0.35)",
       icon: Crown,
     };
   }
@@ -180,7 +182,7 @@ function FireEmblem() {
             height: 86,
             borderRadius: 22,
             display: "block",
-            boxShadow: "0 0 28px rgba(16,185,129,0.55)",
+            boxShadow: "0 0 36px rgba(16,185,129,0.72), 0 0 18px rgba(52,211,153,0.45)",
           }}
         />
         <T
@@ -207,12 +209,14 @@ function FireEmblem() {
 export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFireNepalMemberCardProps>(
   function PremiumFireNepalMemberCard({ data, mode = "preview" }, ref) {
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const reactId = useId().replace(/:/g, "");
     const accent = tierAccent(data.membershipPlan);
     const TierIcon = accent.icon;
     const countdown = statusCopy(data.membershipExpiry);
     const verifyUrl = `${FIRE_NEPAL_CANONICAL_ORIGIN}/verify/${encodeURIComponent(data.fireNepalId)}`;
     const isExport = mode === "export";
     const initials = data.fullName.slice(0, 2).toUpperCase() || "FN";
+    const isElite = data.membershipPlan === "elite";
 
     useEffect(() => {
       let cancelled = false;
@@ -265,10 +269,12 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           background: "#050806",
-          border: `2px solid ${GOLD}`,
+          border: `2.5px solid ${GOLD}`,
           boxShadow: `
-            0 0 0 1px rgba(246,226,122,0.35),
-            0 0 28px rgba(212,175,55,0.35),
+            0 0 0 1px rgba(255,236,160,0.55),
+            0 0 0 3px rgba(212,175,55,0.22),
+            0 0 34px rgba(212,175,55,0.55),
+            0 0 64px rgba(246,226,122,0.28),
             0 28px 80px rgba(0,0,0,0.55)
           `,
         }}
@@ -318,10 +324,27 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             position: "absolute",
             inset: 5,
             borderRadius: 22,
-            border: "1px solid rgba(246,226,122,0.38)",
+            border: "1px solid rgba(246,226,122,0.55)",
+            boxShadow: "inset 0 0 24px rgba(212,175,55,0.12)",
             pointerEvents: "none",
           }}
         />
+
+        {/* Official Chuche map neon overlay — replaces baked-in outdated outline */}
+        <div
+          style={{
+            position: "absolute",
+            left: 760,
+            top: 160,
+            width: 420,
+            height: 224,
+            pointerEvents: "none",
+            opacity: 0.92,
+            filter: "drop-shadow(0 0 16px rgba(16,185,129,0.45))",
+          }}
+        >
+          <NepalChucheMapOutline width={420} height={224} uid={`${reactId}-bg`} />
+        </div>
 
         {/* ─── Top brand row ─── */}
         <div style={{ position: "absolute", left: 34, top: 26, display: "flex", alignItems: "center", gap: 12 }}>
@@ -336,7 +359,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
               height: 46,
               borderRadius: 14,
               display: "block",
-              boxShadow: "0 0 22px rgba(16,185,129,0.45)",
+              boxShadow: "0 0 30px rgba(16,185,129,0.7), 0 0 14px rgba(52,211,153,0.45)",
             }}
           />
           <div>
@@ -381,25 +404,38 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
         <div
           style={{
             position: "absolute",
-            right: 34,
-            top: 28,
+            right: 28,
+            top: 22,
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
-            padding: "9px 16px",
-            borderRadius: 10,
-            border: `1.5px solid ${accent.border}`,
+            gap: 11,
+            padding: "12px 22px",
+            borderRadius: 12,
+            border: `2px solid ${accent.border}`,
             background: accent.bg,
             color: accent.color,
             boxShadow: accent.glow,
-            fontSize: 11,
+            fontSize: 15,
             fontWeight: 900,
-            letterSpacing: "0.16em",
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
-            lineHeight: "14px",
+            lineHeight: "18px",
+            whiteSpace: "nowrap",
           }}
         >
-          <TierIcon size={15} strokeWidth={2.4} color={accent.color} />
+          <TierIcon
+            size={21}
+            strokeWidth={2.35}
+            color={accent.color}
+            style={
+              isElite
+                ? {
+                    filter:
+                      "drop-shadow(0 0 6px rgba(246,226,122,0.95)) drop-shadow(0 0 12px rgba(212,175,55,0.75))",
+                  }
+                : undefined
+            }
+          />
           {accent.label}
         </div>
 
@@ -447,20 +483,20 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           <span
             style={{
               position: "absolute",
-              left: 108,
-              top: 108,
-              width: 34,
-              height: 34,
+              left: 106,
+              top: 106,
+              width: 39,
+              height: 39,
               borderRadius: 999,
               display: "grid",
               placeItems: "center",
               background: EMERALD,
               border: "2px solid rgba(236,253,245,0.9)",
               color: "#022c22",
-              boxShadow: "0 6px 16px rgba(0,0,0,0.4)",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.4), 0 0 14px rgba(16,185,129,0.45)",
             }}
           >
-            <ShieldCheck size={17} strokeWidth={2.6} />
+            <ShieldCheck size={20} strokeWidth={2.6} />
           </span>
           <div
             style={{
@@ -574,21 +610,16 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
 
         {/* QR cluster */}
         <div style={{ position: "absolute", right: 38, top: 96, width: 250, display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/membership/nepal-map-glow.png"
-            alt=""
-            width={108}
-            height={108}
+          <div
             style={{
-              width: 108,
-              height: 108,
-              marginTop: 34,
-              objectFit: "contain",
-              display: "block",
+              width: 128,
+              height: 70,
+              marginTop: 52,
               filter: "drop-shadow(0 0 14px rgba(16,185,129,0.55))",
             }}
-          />
+          >
+            <NepalChucheMapOutline width={128} height={70} uid={`${reactId}-qr`} />
+          </div>
           <div style={{ width: 150, textAlign: "center" }}>
             <div
               style={{
@@ -597,32 +628,43 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
                 height: 138,
                 margin: "0 auto",
                 borderRadius: 16,
-                padding: 8,
+                padding: 7,
                 boxSizing: "border-box",
-                background: "#ffffff",
-                border: `2px solid ${GOLD}`,
-                boxShadow: `0 0 0 1px rgba(246,226,122,0.35), 0 0 28px rgba(212,175,55,0.4), 0 0 22px rgba(16,185,129,0.22)`,
+                background: "linear-gradient(145deg, #F6E27A 0%, #D4AF37 42%, #8A6914 100%)",
+                boxShadow: `0 0 0 1px rgba(255,236,160,0.45), 0 0 26px rgba(212,175,55,0.55), 0 0 18px rgba(16,185,129,0.18)`,
               }}
             >
-              {qrDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={qrDataUrl} alt="" width={122} height={122} style={{ width: 122, height: 122, display: "block" }} />
-              ) : (
-                <div
-                  style={{
-                    width: 122,
-                    height: 122,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "#f4f4f5",
-                    color: "#71717a",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  QR
-                </div>
-              )}
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 11,
+                  background: "#ffffff",
+                  padding: 6,
+                  boxSizing: "border-box",
+                  border: "1px solid rgba(212,175,55,0.35)",
+                }}
+              >
+                {qrDataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qrDataUrl} alt="" width={110} height={110} style={{ width: "100%", height: "100%", display: "block" }} />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "grid",
+                      placeItems: "center",
+                      background: "#f4f4f5",
+                      color: "#71717a",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    QR
+                  </div>
+                )}
+              </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/logo.png"
@@ -639,7 +681,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
                   marginTop: -17,
                   borderRadius: 10,
                   border: "2px solid #ffffff",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.25), 0 0 12px rgba(16,185,129,0.45)",
                   background: "#022c22",
                   display: "block",
                 }}
@@ -724,17 +766,42 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
                     >
                       {row.label}
                     </T>
-                    <T
-                      style={{
-                        marginTop: 2,
-                        fontSize: 15,
-                        fontWeight: 800,
-                        color: row.gold ? GOLD : "#ffffff",
-                        lineHeight: "20px",
-                      }}
-                    >
-                      {row.value}
-                    </T>
+                    {row.gold ? (
+                      <span
+                        style={{
+                          marginTop: 3,
+                          display: "inline-block",
+                          position: "relative",
+                          fontSize: 22,
+                          fontWeight: 900,
+                          lineHeight: "26px",
+                          letterSpacing: "0.02em",
+                          // Export-safe metallic gold treatment (preview === PNG/PDF).
+                          color: "#F6E27A",
+                          backgroundImage:
+                            "linear-gradient(90deg, rgba(184,134,11,0.25), rgba(246,226,122,0.4), rgba(255,243,196,0.35), rgba(212,175,55,0.4))",
+                          padding: "1px 6px 2px",
+                          borderRadius: 6,
+                          boxShadow: "inset 0 0 0 1px rgba(246,226,122,0.35), 0 0 16px rgba(212,175,55,0.28)",
+                          textShadow:
+                            "0 0 14px rgba(246,226,122,0.65), 0 1px 0 rgba(138,105,20,0.9), 0 0 1px #FFF3C4",
+                        }}
+                      >
+                        {row.value}
+                      </span>
+                    ) : (
+                      <T
+                        style={{
+                          marginTop: 2,
+                          fontSize: 15,
+                          fontWeight: 800,
+                          color: "#ffffff",
+                          lineHeight: "20px",
+                        }}
+                      >
+                        {row.value}
+                      </T>
+                    )}
                   </div>
                 </div>
               );
