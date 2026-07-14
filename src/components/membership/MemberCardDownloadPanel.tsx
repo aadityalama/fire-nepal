@@ -61,11 +61,10 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
       try {
         if (kind === "png") {
           await downloadMemberCardPngFromElement(exportRef.current, cardData);
-          toast.success("Member card PNG saved.");
         } else {
           await downloadMemberCardPdfFromElement(exportRef.current, cardData);
-          toast.success("Member card PDF saved.");
         }
+        toast.success(kind === "png" ? "Member card PNG ready." : "Member card PDF ready.");
       } catch (error) {
         if ((error as Error).name === "AbortError") return;
         toast.error(error instanceof Error ? error.message : "Could not generate member card.");
@@ -105,16 +104,24 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
         </button>
       </div>
 
-      <div className="mt-6 w-full max-w-full overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
+      <div className="mt-6 w-full max-w-full overflow-x-hidden overflow-y-visible rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
         <MemberCardPreviewScaler>
           <PremiumFireNepalMemberCard data={cardData} mode="preview" />
         </MemberCardPreviewScaler>
       </div>
 
+      {/* Off-screen export source; capture clones a visible in-viewport copy. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed left-0 top-0 opacity-[0.01]"
-        style={{ zIndex: -1, width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT }}
+        className="pointer-events-none fixed"
+        style={{
+          left: -MEMBER_CARD_EXPORT_WIDTH - 64,
+          top: 0,
+          zIndex: -1,
+          width: MEMBER_CARD_EXPORT_WIDTH,
+          height: MEMBER_CARD_EXPORT_HEIGHT,
+          overflow: "hidden",
+        }}
       >
         <PremiumFireNepalMemberCard ref={exportRef} data={cardData} mode="export" />
       </div>

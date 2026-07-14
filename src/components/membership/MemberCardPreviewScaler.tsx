@@ -6,7 +6,7 @@ import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/component
 /** Scales the fixed 1400×900 card to fit mobile viewport width without horizontal overflow. */
 export function MemberCardPreviewScaler({ children }: { children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -28,17 +28,18 @@ export function MemberCardPreviewScaler({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const scaledHeight = MEMBER_CARD_EXPORT_HEIGHT * scale;
+  const safeScale = scale > 0 ? scale : 0.01;
+  const scaledHeight = MEMBER_CARD_EXPORT_HEIGHT * safeScale;
 
   return (
     <div ref={containerRef} className="w-full max-w-full overflow-hidden">
-      <div className="relative mx-auto" style={{ width: "100%", height: scaledHeight }}>
+      <div className="relative mx-auto max-w-full" style={{ width: "100%", height: scaledHeight }}>
         <div
-          className="absolute left-0 top-0"
+          className="absolute left-0 top-0 origin-top-left"
           style={{
             width: MEMBER_CARD_EXPORT_WIDTH,
             height: MEMBER_CARD_EXPORT_HEIGHT,
-            transform: `scale(${scale})`,
+            transform: `scale(${safeScale})`,
             transformOrigin: "top left",
           }}
         >
