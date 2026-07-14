@@ -100,7 +100,7 @@ export async function writeMembership(
   patch: MembershipWritePatch,
   now: Date = new Date(),
 ): Promise<CanonicalMembership> {
-  const payload: Record<string, unknown> = {
+  const payload: Database["public"]["Tables"]["user_profiles"]["Insert"] = {
     id: userId,
     updated_at: now.toISOString(),
   };

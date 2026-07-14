@@ -1293,11 +1293,19 @@ export function FireMembershipPage() {
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-zinc-500">Membership active since</dt>
-              <dd className="font-bold text-white">{new Date(active).toLocaleDateString()}</dd>
+              <dd className="font-bold text-white">
+                {membership.membershipStart
+                  ? new Date(membership.membershipStart).toLocaleDateString()
+                  : "—"}
+              </dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-zinc-500">Annual anniversary</dt>
-              <dd className="font-bold text-amber-200/90">{new Date(expiry).toLocaleDateString()}</dd>
+              <dd className="font-bold text-amber-200/90">
+                {membership.membershipExpiry
+                  ? new Date(membership.membershipExpiry).toLocaleDateString()
+                  : "—"}
+              </dd>
             </div>
           </dl>
         </div>
