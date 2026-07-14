@@ -3,21 +3,32 @@
  *
  * ONLY reads/writes membership fields on `public.user_profiles`.
  * Do not read plan/expiry/suspend from profiles, subscriptions, or localStorage.
+ *
+ * Anti-regression:
+ * - Query failure never invents Free.
+ * - Missing row (new user) may be Free.
+ * - Demotion to Free requires an explicit admin reason.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import {
   assertDisplayedPlanMatchesCanonical,
+  assertPlanWriteAllowed,
   deriveCanonicalMembership,
   normalizeMembershipPlan,
+  parseMembershipPlan,
   type CanonicalMembership,
   type UserProfilesMembershipRow,
 } from "@/lib/membership/canonical";
 import type { Database } from "@/types/supabase-database";
 
 export type { CanonicalMembership } from "@/lib/membership/canonical";
-export { assertDisplayedPlanMatchesCanonical, normalizeMembershipPlan } from "@/lib/membership/canonical";
+export {
+  assertDisplayedPlanMatchesCanonical,
+  normalizeMembershipPlan,
+  parseMembershipPlan,
+} from "@/lib/membership/canonical";
 
 export const MEMBERSHIP_UPDATED_EVENT = "fn-membership-sot-updated";
 
@@ -34,18 +45,28 @@ export type MembershipWritePatch = {
   archivedAt?: string | null;
 };
 
-function toRow(data: Record<string, unknown> | null | undefined, userId: string): UserProfilesMembershipRow {
+export type MembershipWriteOptions = {
+  /** Required when changing a paid plan to Free. */
+  allowDemoteToFree?: boolean;
+  reason?: string;
+};
+
+function toRow(data: Record<string, unknown>, userId: string): UserProfilesMembershipRow {
   return {
-    id: (typeof data?.id === "string" ? data.id : userId) as string,
-    membership_plan: typeof data?.membership_plan === "string" ? data.membership_plan : "free",
-    membership_start: (data?.membership_start as string | null | undefined) ?? null,
-    membership_expiry: (data?.membership_expiry as string | null | undefined) ?? null,
-    membership_suspended_at: (data?.membership_suspended_at as string | null | undefined) ?? null,
-    membership_archived_at: (data?.membership_archived_at as string | null | undefined) ?? null,
+    id: (typeof data.id === "string" ? data.id : userId) as string,
+    membership_plan: typeof data.membership_plan === "string" ? data.membership_plan : null,
+    membership_start: (data.membership_start as string | null | undefined) ?? null,
+    membership_expiry: (data.membership_expiry as string | null | undefined) ?? null,
+    membership_suspended_at: (data.membership_suspended_at as string | null | undefined) ?? null,
+    membership_archived_at: (data.membership_archived_at as string | null | undefined) ?? null,
   };
 }
 
-/** Read canonical membership for one user from user_profiles only. */
+/**
+ * Read canonical membership for one user from user_profiles only.
+ * Throws on query failure so callers cannot treat a load error as Free.
+ * Missing row → Free (brand-new account).
+ */
 export async function getMembershipByUserId(
   client: Client,
   userId: string,
@@ -59,12 +80,28 @@ export async function getMembershipByUserId(
 
   if (error) {
     console.error("[MembershipService] getMembershipByUserId failed:", error.message, { userId });
+    throw new Error(`[MembershipService] membership load failed for ${userId}: ${error.message}`);
   }
 
-  return deriveCanonicalMembership(toRow(data as Record<string, unknown> | null, userId), userId, now);
+  if (!data) {
+    return deriveCanonicalMembership(
+      {
+        id: userId,
+        membership_plan: "free",
+        membership_start: null,
+        membership_expiry: null,
+        membership_suspended_at: null,
+        membership_archived_at: null,
+      },
+      userId,
+      now,
+    );
+  }
+
+  return deriveCanonicalMembership(toRow(data as Record<string, unknown>, userId), userId, now);
 }
 
-/** Batch-read membership rows for admin lists (user_profiles only). */
+/** Batch-read membership rows for admin lists (user_profiles only). Throws on query failure. */
 export async function getMembershipMapByUserIds(
   client: Client,
   userIds: string[],
@@ -76,30 +113,52 @@ export async function getMembershipMapByUserIds(
   const { data, error } = await client.from("user_profiles").select(MEMBERSHIP_SELECT).in("id", userIds);
   if (error) {
     console.error("[MembershipService] getMembershipMapByUserIds failed:", error.message);
+    throw new Error(`[MembershipService] membership batch load failed: ${error.message}`);
   }
 
+  const byId = new Map((data ?? []).map((row) => [String((row as { id: string }).id), row as Record<string, unknown>]));
   for (const id of userIds) {
-    map.set(id, deriveCanonicalMembership(null, id, now));
-  }
-  for (const row of data ?? []) {
-    const r = row as Record<string, unknown>;
-    const id = String(r.id);
-    map.set(id, deriveCanonicalMembership(toRow(r, id), id, now));
+    const row = byId.get(id);
+    if (row) {
+      map.set(id, deriveCanonicalMembership(toRow(row, id), id, now));
+    } else {
+      map.set(
+        id,
+        deriveCanonicalMembership(
+          {
+            id,
+            membership_plan: "free",
+            membership_start: null,
+            membership_expiry: null,
+            membership_suspended_at: null,
+            membership_archived_at: null,
+          },
+          id,
+          now,
+        ),
+      );
+    }
   }
   return map;
 }
 
 /**
  * Write membership fields to user_profiles (SOT).
- * Callers may additionally mirror to profiles/subscriptions for legacy tooling,
- * but all app reads must go through getMembershipByUserId.
+ * Never demotes paid → Free unless allowDemoteToFree or reason is provided.
  */
 export async function writeMembership(
   client: Client,
   userId: string,
   patch: MembershipWritePatch,
   now: Date = new Date(),
+  opts?: MembershipWriteOptions,
 ): Promise<CanonicalMembership> {
+  if (patch.plan !== undefined) {
+    const previous = await getMembershipByUserId(client, userId, now);
+    const nextPlan = normalizeMembershipPlan(patch.plan);
+    assertPlanWriteAllowed(previous.plan, nextPlan, opts);
+  }
+
   const payload: Database["public"]["Tables"]["user_profiles"]["Insert"] = {
     id: userId,
     updated_at: now.toISOString(),

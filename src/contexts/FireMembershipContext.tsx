@@ -74,8 +74,10 @@ export function FireMembershipProvider({ children }: { children: ReactNode }) {
     }
     try {
       const r = await fetch("/api/membership/entitlement", { credentials: "include", cache: "no-store" });
+      // Load failure → keep previous membership. Never invent Free.
       if (!r.ok) return null;
       const j = (await r.json()) as {
+        loaded?: boolean;
         planType?: string;
         effectivePlan?: string;
         membershipStart?: string | null;
@@ -85,9 +87,12 @@ export function FireMembershipProvider({ children }: { children: ReactNode }) {
         archivedAt?: string | null;
         pendingMembershipRequest?: PendingMembershipRequest | null;
       };
+      if (j.loaded === false) return null;
       setPendingMembershipRequestState(j.pendingMembershipRequest ?? null);
 
-      const plan = j.planType === "premium" || j.planType === "elite" ? j.planType : "free";
+      const plan = j.planType === "premium" || j.planType === "elite" || j.planType === "free" ? j.planType : null;
+      if (!plan) return null;
+
       const next = deriveCanonicalMembership(
         {
           id: user.id,

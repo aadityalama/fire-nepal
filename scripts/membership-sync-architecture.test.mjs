@@ -11,34 +11,48 @@ function read(path) {
 }
 
 /** Mirror of src/lib/membership/canonical.ts deriveCanonicalMembership for node:test. */
+function parseMembershipPlan(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "free" || normalized === "premium" || normalized === "elite") return normalized;
+  return null;
+}
+
 function deriveCanonicalMembership(row, userId, now = new Date()) {
-  const plan = row?.membership_plan === "premium" || row?.membership_plan === "elite" ? row.membership_plan : "free";
+  const plan = parseMembershipPlan(row?.membership_plan) ?? "free";
   const membershipStart = row?.membership_start ?? null;
   const membershipExpiry = row?.membership_expiry ?? null;
   const suspendedAt = row?.membership_suspended_at ?? null;
   const archivedAt = row?.membership_archived_at ?? null;
 
-  let expiryStatus = "none";
-  let daysRemaining = 0;
-  if (membershipExpiry) {
+  const hasExpiry = Boolean(membershipExpiry?.trim?.() || membershipExpiry);
+  let expiryStatus = "active";
+  let daysRemaining = Number.POSITIVE_INFINITY;
+  if (hasExpiry) {
     const exp = new Date(membershipExpiry);
     const ms = exp.getTime() - now.getTime();
     daysRemaining = Math.ceil(ms / (24 * 60 * 60 * 1000));
     if (ms < 0) expiryStatus = "expired";
     else if (daysRemaining <= 14) expiryStatus = "expiring_soon";
     else expiryStatus = "active";
+  } else if (plan === "free") {
+    expiryStatus = "expired";
+    daysRemaining = 0;
   }
 
   let status;
   if (archivedAt) status = "archived";
   else if (suspendedAt) status = "suspended";
   else if (plan === "free") status = "free";
-  else if (expiryStatus === "expired") status = "expired";
-  else if (expiryStatus === "expiring_soon") status = "expiring_soon";
+  else if (hasExpiry && expiryStatus === "expired") status = "expired";
+  else if (hasExpiry && expiryStatus === "expiring_soon") status = "expiring_soon";
   else status = "active";
 
   const accessBlocked =
-    Boolean(archivedAt) || Boolean(suspendedAt) || expiryStatus === "expired" || plan === "free";
+    Boolean(archivedAt) ||
+    Boolean(suspendedAt) ||
+    (hasExpiry && expiryStatus === "expired") ||
+    plan === "free";
 
   return {
     userId,
@@ -50,13 +64,20 @@ function deriveCanonicalMembership(row, userId, now = new Date()) {
     accessPlan: accessBlocked ? "free" : plan,
     status,
     expiryStatus,
-    daysRemaining,
+    daysRemaining: Number.isFinite(daysRemaining) ? daysRemaining : 0,
   };
 }
 
+function assertPlanWriteAllowed(previousPlan, nextPlan, opts = {}) {
+  if ((previousPlan === "premium" || previousPlan === "elite") && nextPlan === "free") {
+    if (!opts.allowDemoteToFree && !opts.reason?.trim()) {
+      throw new Error("Refusing to demote paid membership to Free without an explicit admin reason.");
+    }
+  }
+}
+
 function assertDisplayedPlanMatchesCanonical(surface, displayedPlan, canonical) {
-  const shown =
-    displayedPlan === "premium" || displayedPlan === "elite" ? displayedPlan : "free";
+  const shown = parseMembershipPlan(displayedPlan) ?? "free";
   if (shown !== canonical.plan) {
     console.error(
       `[membership-sync] MISMATCH on ${surface}: UI shows "${shown}" but user_profiles.membership_plan is "${canonical.plan}" for user ${canonical.userId}`,
@@ -67,6 +88,115 @@ function assertDisplayedPlanMatchesCanonical(surface, displayedPlan, canonical) 
 }
 
 const NOW = new Date("2026-07-14T12:00:00.000Z");
+
+test("Existing Elite user must stay Elite", () => {
+  const m = deriveCanonicalMembership(
+    {
+      membership_plan: "elite",
+      membership_start: "2026-01-01T00:00:00.000Z",
+      membership_expiry: "2027-01-01T00:00:00.000Z",
+    },
+    "u-elite",
+    NOW,
+  );
+  assert.equal(m.plan, "elite");
+  assert.equal(m.accessPlan, "elite");
+});
+
+test("Existing Premium user must stay Premium", () => {
+  const m = deriveCanonicalMembership(
+    {
+      membership_plan: "premium",
+      membership_start: "2026-01-01T00:00:00.000Z",
+      membership_expiry: "2027-01-01T00:00:00.000Z",
+    },
+    "u-premium",
+    NOW,
+  );
+  assert.equal(m.plan, "premium");
+  assert.equal(m.accessPlan, "premium");
+});
+
+test("Existing Free user must stay Free", () => {
+  const m = deriveCanonicalMembership(
+    { membership_plan: "free", membership_start: null, membership_expiry: null },
+    "u-free",
+    NOW,
+  );
+  assert.equal(m.plan, "free");
+  assert.equal(m.accessPlan, "free");
+  assert.equal(m.status, "free");
+});
+
+test("Expired user must stay Expired with plan preserved", () => {
+  const m = deriveCanonicalMembership(
+    {
+      membership_plan: "premium",
+      membership_start: "2025-01-01T00:00:00.000Z",
+      membership_expiry: "2026-01-01T00:00:00.000Z",
+    },
+    "u-expired",
+    NOW,
+  );
+  assert.equal(m.plan, "premium");
+  assert.equal(m.status, "expired");
+  assert.equal(m.accessPlan, "free");
+});
+
+test("Paid plan with null expiry stays active (open-ended — TEJESH case)", () => {
+  const m = deriveCanonicalMembership(
+    {
+      membership_plan: "premium",
+      membership_start: "2026-06-06T14:15:55.973794+00:00",
+      membership_expiry: null,
+    },
+    "u-tejesh",
+    NOW,
+  );
+  assert.equal(m.plan, "premium");
+  assert.equal(m.status, "active");
+  assert.equal(m.accessPlan, "premium");
+});
+
+test("One user's update must NEVER change another user's membership", () => {
+  const a = deriveCanonicalMembership(
+    {
+      membership_plan: "elite",
+      membership_start: "2026-01-01T00:00:00.000Z",
+      membership_expiry: "2027-01-01T00:00:00.000Z",
+    },
+    "user-a",
+    NOW,
+  );
+  const b = deriveCanonicalMembership(
+    {
+      membership_plan: "premium",
+      membership_start: "2026-01-01T00:00:00.000Z",
+      membership_expiry: "2027-01-01T00:00:00.000Z",
+    },
+    "user-b",
+    NOW,
+  );
+  assert.equal(a.userId, "user-a");
+  assert.equal(b.userId, "user-b");
+  assert.notEqual(a.plan, b.plan);
+  assert.equal(a.plan, "elite");
+  assert.equal(b.plan, "premium");
+});
+
+test("Demotion to Free requires explicit reason", () => {
+  assert.throws(() => assertPlanWriteAllowed("elite", "free", {}));
+  assert.doesNotThrow(() =>
+    assertPlanWriteAllowed("elite", "free", { reason: "admin-set-plan-free:x" }),
+  );
+  assert.doesNotThrow(() => assertPlanWriteAllowed("premium", "elite", {}));
+});
+
+test("parseMembershipPlan never invents Free for invalid tokens", () => {
+  assert.equal(parseMembershipPlan("elite"), "elite");
+  assert.equal(parseMembershipPlan(null), null);
+  assert.equal(parseMembershipPlan("gold"), null);
+});
 
 test("Free member: plan free, access free", () => {
   const m = deriveCanonicalMembership(
@@ -185,4 +315,22 @@ test("architecture: mismatch validation is wired on Profile + Membership pages",
   assert.match(read("src/components/dashboard/FirePremiumProfilePage.tsx"), /assertDisplayedPlanMatchesCanonical/);
   assert.match(read("src/components/dashboard/FireMembershipPage.tsx"), /assertDisplayedPlanMatchesCanonical/);
   assert.match(read("src/lib/membership/canonical.ts"), /\[membership-sync\] MISMATCH/);
+});
+
+test("architecture: load failure must not invent Free in entitlement/context", () => {
+  const route = read("app/api/membership/entitlement/route.ts");
+  const ctx = read("src/contexts/FireMembershipContext.tsx");
+  const service = read("src/services/membership-service.ts");
+  assert.match(route, /loaded: false/);
+  assert.match(route, /status: 503/);
+  assert.match(ctx, /if \(!r\.ok\) return null/);
+  assert.match(service, /membership load failed/);
+  assert.match(service, /Refusing to demote|assertPlanWriteAllowed/);
+});
+
+test("architecture: profiles trigger must not demote paid plans to Free", () => {
+  const migration = read("supabase/migrations/20260714220000_user_profiles_membership_never_demote.sql");
+  assert.match(migration, /NEVER demote/i);
+  assert.match(migration, /plan_type = 'free'/);
+  assert.doesNotMatch(migration, /membership_plan = coalesce\(nullif\(new\.plan_type/);
 });

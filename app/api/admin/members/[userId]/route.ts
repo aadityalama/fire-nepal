@@ -124,12 +124,18 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     }
 
     try {
-      await writeMembership(admin, userId, {
-        plan: "free",
-        membershipExpiry: null,
-        suspendedAt: null,
-        archivedAt: nowIso,
-      });
+      await writeMembership(
+        admin,
+        userId,
+        {
+          plan: "free",
+          membershipExpiry: null,
+          suspendedAt: null,
+          archivedAt: nowIso,
+        },
+        now,
+        { allowDemoteToFree: true, reason: `admin-permanent-remove:${superGate.userId}` },
+      );
       await admin.from("user_profiles").update({ full_name: "Former member", updated_at: nowIso }).eq("id", userId);
       await mirrorProfilesPlan(
         admin,
@@ -199,12 +205,20 @@ export async function PATCH(request: Request, ctx: RouteParams) {
           ? membership.membershipExpiry
           : addDays(now, 365).toISOString();
     try {
-      const next = await writeMembership(admin, userId, {
-        plan,
-        membershipStart: plan === "free" ? membership.membershipStart : periodStart,
-        membershipExpiry: periodEnd,
-        suspendedAt: null,
-      });
+      const next = await writeMembership(
+        admin,
+        userId,
+        {
+          plan,
+          membershipStart: plan === "free" ? membership.membershipStart : periodStart,
+          membershipExpiry: periodEnd,
+          suspendedAt: null,
+        },
+        now,
+        plan === "free"
+          ? { allowDemoteToFree: true, reason: `admin-set-plan-free:${adminUserId}` }
+          : { reason: `admin-set-plan-${plan}:${adminUserId}` },
+      );
       await mirrorProfilesPlan(
         admin,
         userId,

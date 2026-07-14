@@ -97,8 +97,14 @@ export function estimateOpenAiCostUsd(
 /** AI quotas — accessPlan from user_profiles only (MembershipService). */
 export async function resolveFireAiMembershipPlan(userId: string): Promise<FireAiMembershipPlan> {
   const sb = serviceClient();
-  const membership = await getMembershipByUserId(sb, userId);
-  return normalizePlan(membership.accessPlan);
+  try {
+    const membership = await getMembershipByUserId(sb, userId);
+    return normalizePlan(membership.accessPlan);
+  } catch (e) {
+    // Fail closed for quotas only — never write Free into user_profiles.
+    console.error("[fire-ai] membership load failed; applying free quota without mutating SOT", e);
+    return "free";
+  }
 }
 
 export async function syncFireAiMonthlyUsage(

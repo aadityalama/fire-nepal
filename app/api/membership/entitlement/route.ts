@@ -29,7 +29,15 @@ export async function GET() {
     // Prefer service role so SOT is never masked by RLS quirks; fall back to user client.
     const admin = createSupabaseServiceRoleClient();
     const client = admin ?? supabase;
-    const membership = await getMembershipByUserId(client, user.id);
+
+    let membership;
+    try {
+      membership = await getMembershipByUserId(client, user.id);
+    } catch (loadErr) {
+      const message = loadErr instanceof Error ? loadErr.message : "Membership load failed";
+      // Never invent Free on load failure — client must preserve prior UI state.
+      return NextResponse.json({ error: message, loaded: false }, { status: 503 });
+    }
     const access = toAccessRecord(membership);
 
     const { data: pendingRow } = await supabase
@@ -61,6 +69,7 @@ export async function GET() {
       daysRemaining: membership.daysRemaining,
       pendingMembershipRequest: pendingPlan ? { plan: pendingPlan } : null,
       sourceOfTruth: "public.user_profiles",
+      loaded: true,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Server error";
