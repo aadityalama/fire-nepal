@@ -26,6 +26,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AvatarUploadZone } from "@/components/product/auth/AvatarUploadZone";
+import { useFireMembership } from "@/contexts/FireMembershipContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
@@ -43,6 +44,7 @@ import {
   computeMembershipExpiryStatus,
   membershipExpiryTone,
 } from "@/lib/membership-expiry-status";
+import { assertDisplayedPlanMatchesCanonical } from "@/lib/membership/canonical";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -91,6 +93,7 @@ function ProfileValueCard({
 
 export function FireMyProfilePage() {
   const { user } = useProductAuth();
+  const { membership, syncServerEntitlement } = useFireMembership();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editing = searchParams.get("edit") === "1";
@@ -103,6 +106,17 @@ export function FireMyProfilePage() {
     if (editing) setDraftProfile(profile);
     else setDraftProfile(null);
   }, [editing, profile]);
+
+  // Keep Profile + MembershipService in lockstep; log hard errors on any plan mismatch.
+  useEffect(() => {
+    void syncServerEntitlement();
+  }, [syncServerEntitlement]);
+
+  useEffect(() => {
+    if (!profile || !membership.userId) return;
+    assertDisplayedPlanMatchesCanonical("FireMyProfilePage", membership.plan, membership);
+    assertDisplayedPlanMatchesCanonical("FireMyProfilePage/profileRow", profile.membershipPlan, membership);
+  }, [profile, membership]);
 
   const onSave = useCallback(
     async (e: FormEvent) => {
@@ -129,8 +143,11 @@ export function FireMyProfilePage() {
   );
 
   const expiryState = useMemo(
-    () => computeMembershipExpiryStatus(profile?.membershipExpiry ?? null),
-    [profile?.membershipExpiry],
+    () =>
+      computeMembershipExpiryStatus(
+        membership.membershipExpiry ?? profile?.membershipExpiry ?? null,
+      ),
+    [membership.membershipExpiry, profile?.membershipExpiry],
   );
 
   if (!user || loadingProfile || !profile || (editing && !draftProfile)) {
@@ -170,7 +187,8 @@ export function FireMyProfilePage() {
       : expiryState.status === "expiring_soon"
         ? "Expiring soon"
         : "Active membership";
-  const tier = visibleProfile.membershipPlan;
+  // Display plan from MembershipService SOT (user_profiles); profile row must match.
+  const tier = membership.userId ? membership.plan : visibleProfile.membershipPlan;
   const avatar = displayAvatar(visibleProfile);
   const name = displayName(visibleProfile);
   const benefits = TIER_CATALOG[tier].bullets;

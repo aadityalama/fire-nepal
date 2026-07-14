@@ -198,6 +198,8 @@ export function AdminMembersClient({
         window.alert(j.error ?? "Request failed");
         return;
       }
+      const { broadcastMembershipUpdated } = await import("@/services/membership-service");
+      broadcastMembershipUpdated(userId);
       await reload();
     } finally {
       setBusyId(null);

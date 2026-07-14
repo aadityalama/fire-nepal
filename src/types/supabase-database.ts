@@ -17,6 +17,8 @@ export type Database = {
           membership_plan: string;
           membership_start: string | null;
           membership_expiry: string | null;
+          membership_suspended_at: string | null;
+          membership_archived_at: string | null;
           country: string | null;
           country_of_work: string | null;
           preferred_currency: string;
@@ -39,6 +41,8 @@ export type Database = {
           membership_plan?: string;
           membership_start?: string | null;
           membership_expiry?: string | null;
+          membership_suspended_at?: string | null;
+          membership_archived_at?: string | null;
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;
@@ -60,6 +64,8 @@ export type Database = {
           membership_plan?: string;
           membership_start?: string | null;
           membership_expiry?: string | null;
+          membership_suspended_at?: string | null;
+          membership_archived_at?: string | null;
           country?: string | null;
           country_of_work?: string | null;
           preferred_currency?: string;

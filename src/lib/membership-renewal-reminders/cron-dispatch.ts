@@ -1,23 +1,17 @@
 import "server-only";
 
 import { format, parseISO } from "date-fns";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { buildRenewalReminderEmail } from "@/lib/membership-renewal-reminders/email-templates";
 import type { AutoReminderType } from "@/lib/membership-renewal-reminders/reminder-eligibility";
 import { autoReminderDue } from "@/lib/membership-renewal-reminders/reminder-eligibility";
 import { resolveResendFromAddress, sendEmailViaResend } from "@/lib/resend-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipMapByUserIds } from "@/services/membership-service";
 import type { Database } from "@/types/supabase-database";
 
 const MAX_SENDS_PER_RUN = 120;
-
-type ProfileRow = {
-  id: string;
-  plan_type: string;
-  suspended_at: string | null;
-  archived_at: string | null;
-};
 
 export type MembershipRenewalCronResult = {
   ok: boolean;
@@ -43,19 +37,11 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
   }
   const userById = new Map(users.map((u) => [u.id, u]));
 
-  const { data: profiles, error: pErr } = await admin
-    .from("profiles")
-    .select("id, plan_type, expires_at, suspended_at, archived_at")
-    .in("plan_type", ["premium", "elite"]);
-  if (pErr) {
-    return { ok: false, error: pErr.message, candidates: 0, sent: 0, failed: 0, skipped: 0 };
-  }
-
-  const { data: subs, error: sErr } = await admin.from("subscriptions").select("user_id, current_period_end");
-  if (sErr) {
-    return { ok: false, error: sErr.message, candidates: 0, sent: 0, failed: 0, skipped: 0 };
-  }
-  const subEnd = new Map((subs ?? []).map((r) => [r.user_id, r.current_period_end]));
+  const membershipBy = await getMembershipMapByUserIds(
+    admin,
+    users.map((u) => u.id),
+    now,
+  );
 
   const { data: profileNames, error: nameErr } = await admin.from("user_profiles").select("id, full_name");
   if (nameErr) {
@@ -68,13 +54,13 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
   let failed = 0;
   let skipped = 0;
 
-  for (const row of profiles ?? []) {
+  for (const [userId, membership] of membershipBy) {
     if (sent + failed >= MAX_SENDS_PER_RUN) break;
 
-    const prof = row as ProfileRow;
-    if (prof.archived_at) continue;
-    if (prof.suspended_at) continue;
-    const expiresIso = subEnd.get(prof.id) ?? null;
+    if (membership.plan !== "premium" && membership.plan !== "elite") continue;
+    if (membership.archivedAt) continue;
+    if (membership.suspendedAt) continue;
+    const expiresIso = membership.membershipExpiry;
     if (!expiresIso) continue;
     const exp = parseISO(expiresIso);
     if (Number.isNaN(exp.getTime())) continue;
@@ -87,7 +73,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
     const { data: sentDup } = await admin
       .from("membership_reminder_emails")
       .select("id")
-      .eq("user_id", prof.id)
+      .eq("user_id", userId)
       .eq("reminder_type", due)
       .eq("expires_at", expiresIso)
       .eq("delivery_status", "sent")
@@ -97,15 +83,15 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
       continue;
     }
 
-    const u = userById.get(prof.id);
+    const u = userById.get(userId);
     const email = u?.email?.trim();
     if (!email) {
       skipped += 1;
       continue;
     }
 
-    const plan = prof.plan_type === "elite" ? "elite" : "premium";
-    const memberName = nameById.get(prof.id)?.trim() || "";
+    const plan = membership.plan === "elite" ? "elite" : "premium";
+    const memberName = nameById.get(userId)?.trim() || "";
     const expiryDateFormatted = format(exp, "MMMM d, yyyy");
     const planLabel = plan === "elite" ? "Elite" : "Premium";
     const tpl = buildRenewalReminderEmail(due, {
@@ -125,7 +111,7 @@ export async function runMembershipRenewalRemindersCron(now: Date = new Date()):
 
     const delivery_status = sendRes.ok ? "sent" : "failed";
     const { error: insErr } = await admin.from("membership_reminder_emails").insert({
-      user_id: prof.id,
+      user_id: userId,
       email,
       reminder_type: due,
       delivery_status,

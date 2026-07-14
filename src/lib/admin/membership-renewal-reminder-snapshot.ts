@@ -9,7 +9,6 @@ import {
   MEMBERSHIP_AUTO_REMINDER_TYPES,
   nextUnsentAutoReminder,
 } from "@/lib/membership-renewal-reminders/reminder-next";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import type { Database } from "@/types/supabase-database";
 
 export type MembershipRenewalReminderActivityRow = {
@@ -172,7 +171,8 @@ export async function buildMembershipRenewalReminderSnapshot(
     if (prof.archived_at) continue;
     if (prof.plan_type !== "premium" && prof.plan_type !== "elite") continue;
     if (prof.suspended_at) continue;
-    const expiresIso = effectiveMembershipPeriodEnd(input.subEndByUser.get(u.id), null);
+    // subEndByUser is populated from user_profiles.membership_expiry (MembershipService).
+    const expiresIso = input.subEndByUser.get(u.id) ?? null;
     if (!expiresIso) continue;
     const exp = parseISO(expiresIso);
     if (Number.isNaN(exp.getTime())) continue;
@@ -227,7 +227,7 @@ export async function buildMembershipRenewalReminderSnapshot(
     if (prof.archived_at) continue;
     if (prof.suspended_at) continue;
     if (prof.plan_type !== "premium" && prof.plan_type !== "elite") continue;
-    const ex = effectiveMembershipPeriodEnd(input.subEndByUser.get(uid), null);
+    const ex = input.subEndByUser.get(uid) ?? null;
     if (!ex) continue;
     if (ex < expiredCutoff) expiredLong += 1;
   }

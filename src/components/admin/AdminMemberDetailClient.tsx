@@ -150,6 +150,8 @@ export function AdminMemberDetailClient({
         window.alert(j.error ?? "Renew failed");
         return;
       }
+      const { broadcastMembershipUpdated } = await import("@/services/membership-service");
+      broadcastMembershipUpdated(detail.userId);
       setRenewOpen(false);
       window.location.reload();
     } finally {

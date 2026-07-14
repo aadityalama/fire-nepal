@@ -7,8 +7,8 @@ import {
   MEMBERSHIP_AUTO_REMINDER_TYPES,
   nextUnsentAutoReminder,
 } from "@/lib/membership-renewal-reminders/reminder-next";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipByUserId } from "@/services/membership-service";
 
 export type AdminMemberNoteRow = {
   id: string;
@@ -69,22 +69,19 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
   const display = up?.full_name?.trim();
   const name = display || "—";
 
-  const { data: prof } = await admin.from("profiles").select("*").eq("id", userId).maybeSingle();
-  const rawPlan = prof?.plan_type;
-  const planType: AdminMemberDetail["planType"] =
-    rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
+  // Plan / expiry / suspend / archive — ONLY from public.user_profiles (MembershipService).
+  const membership = await getMembershipByUserId(admin, userId);
+  const planType: AdminMemberDetail["planType"] = membership.plan;
+  const expiresAt = membership.membershipExpiry;
+  const membershipActivatedAt = membership.membershipStart;
+  const suspendedAt = membership.suspendedAt;
+  const archivedAt = membership.archivedAt;
 
   const { data: sub } = await admin
     .from("subscriptions")
     .select("plan, status, current_period_end, current_period_start")
     .eq("user_id", userId)
     .maybeSingle();
-
-  const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, (prof as { expires_at?: string | null }).expires_at);
-  const membershipActivatedAt = prof?.membership_activated_at ?? sub?.current_period_start ?? null;
-
-  const suspendedAt = prof?.suspended_at ?? null;
-  const archivedAt = (prof as { archived_at?: string | null } | null)?.archived_at ?? null;
 
   const { data: notes, error: nErr } = await admin
     .from("admin_member_notes")
@@ -122,7 +119,7 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
   if (
     summaryExpiresIso &&
     (planType === "premium" || planType === "elite") &&
-    !(prof?.suspended_at ?? null) &&
+    !suspendedAt &&
     !archivedAt
   ) {
     const expDt = parseISO(summaryExpiresIso);
@@ -152,9 +149,9 @@ export async function fetchAdminMemberDetail(userId: string): Promise<AdminMembe
     name,
     createdAt: u.created_at ?? null,
     planType,
-    membershipActivatedAt: membershipActivatedAt as string | null,
+    membershipActivatedAt,
     expiresAt,
-    suspendedAt: prof?.suspended_at ?? null,
+    suspendedAt,
     archivedAt,
     subscription: sub
       ? {

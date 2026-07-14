@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test:security": "node --test scripts/security/*.test.mjs",
     "test:persistence": "node --test scripts/persistence-policy-regression.test.mjs",
+    "test:membership-sync": "node --test scripts/membership-sync-architecture.test.mjs",
     "generate:investment-registry": "node scripts/generate-investment-registry.mjs",
     "verify:membership-storage": "node scripts/verify-membership-payment-storage.mjs",
     "verify:supabase-auth-env": "node scripts/verify-supabase-auth-env.mjs",

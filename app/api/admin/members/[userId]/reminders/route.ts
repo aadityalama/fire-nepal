@@ -3,8 +3,8 @@ import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import type { AutoReminderType } from "@/lib/membership-renewal-reminders/reminder-eligibility";
 import { sendMembershipReminderForAdmin } from "@/lib/membership-renewal-reminders/cron-dispatch";
 import { MEMBERSHIP_AUTO_REMINDER_TYPES } from "@/lib/membership-renewal-reminders/reminder-next";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipByUserId } from "@/services/membership-service";
 
 type RouteParams = { params: Promise<{ userId: string }> };
 
@@ -50,29 +50,19 @@ export async function POST(request: Request, ctx: RouteParams) {
   }
   const email = emailAddr.trim();
 
-  const { data: prof } = await admin
-    .from("profiles")
-    .select("plan_type, suspended_at, archived_at")
-    .eq("id", userId)
-    .maybeSingle();
-  const { data: sub } = await admin
-    .from("subscriptions")
-    .select("current_period_end")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const plan = prof?.plan_type;
+  const membership = await getMembershipByUserId(admin, userId);
+  const plan = membership.plan;
   if (plan !== "premium" && plan !== "elite") {
     return NextResponse.json({ error: "Reminders apply to premium or elite members only" }, { status: 400 });
   }
-  if ((prof as { archived_at?: string | null } | null)?.archived_at) {
+  if (membership.archivedAt) {
     return NextResponse.json({ error: "Archived accounts cannot receive renewal reminders" }, { status: 400 });
   }
-  if (prof?.suspended_at) {
+  if (membership.suspendedAt) {
     return NextResponse.json({ error: "Suspended accounts cannot receive renewal reminders" }, { status: 400 });
   }
 
-  const expiresAtIso = effectiveMembershipPeriodEnd(sub?.current_period_end, null);
+  const expiresAtIso = membership.membershipExpiry;
   if (!expiresAtIso) {
     return NextResponse.json({ error: "Member has no expiry date on file" }, { status: 400 });
   }

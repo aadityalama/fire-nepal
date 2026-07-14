@@ -37,7 +37,7 @@ import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { MembershipPaymentModal } from "@/components/membership/MembershipPaymentModal";
 import { MembershipPaymentSuccessDialog } from "@/components/membership/MembershipPaymentSuccessDialog";
 import { MainAppCard, type LauncherItem, type MainAppCardState } from "@/components/product/hub/MainAppCard";
-import { membershipActiveIso, membershipExpiryIso } from "@/lib/fire-premium-profile";
+import { assertDisplayedPlanMatchesCanonical } from "@/lib/membership/canonical";
 import {
   ELITE_FAMILY_WEALTH_DETAILS,
   ELITE_FAMILY_WEALTH_FEATURE_LABEL,
@@ -746,7 +746,8 @@ function MembershipMyRequestsPanel() {
 
 export function FireMembershipPage() {
   const { user } = useProductAuth();
-  const { tier, record, setTierDemo, syncServerEntitlement, pendingMembershipRequest } = useFireMembership();
+  const { membership, record, setTierDemo, syncServerEntitlement, pendingMembershipRequest } =
+    useFireMembership();
   const { profile } = useCurrentUserProfile();
   const [confirmDowngrade, setConfirmDowngrade] = useState<FireMembershipTier | null>(null);
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("yearly");
@@ -754,16 +755,30 @@ export function FireMembershipPage() {
   const [paymentSuccess, setPaymentSuccess] = useState<MembershipPaymentSuccessPayload | null>(null);
   const founderCountdown = useFounderWindowCountdown();
 
+  // Display plan = stored user_profiles.membership_plan (matches Admin). Gates use accessPlan (`tier`).
+  const displayPlan = membership.plan;
+  const accessPlan = membership.accessPlan;
+
+  useEffect(() => {
+    void syncServerEntitlement();
+  }, [syncServerEntitlement]);
+
+  useEffect(() => {
+    if (!profile) return;
+    assertDisplayedPlanMatchesCanonical("FireMembershipPage", displayPlan, membership);
+    assertDisplayedPlanMatchesCanonical("FireMembershipPage/profileRow", profile.membershipPlan, membership);
+  }, [displayPlan, membership, profile]);
+
   const onSelectTier = useCallback(
     (next: FireMembershipTier) => {
-      if (next === tier) return;
-      if (next === "free" && tier !== "free") {
+      if (next === accessPlan && next === displayPlan) return;
+      if (next === "free" && displayPlan !== "free") {
         setConfirmDowngrade(next);
         return;
       }
       if (next === "premium" || next === "elite") {
         if (isSupabaseConfigured()) {
-          if (isMembershipUpgrade(tier, next)) {
+          if (isMembershipUpgrade(accessPlan, next)) {
             setPaymentPlan(next);
             setConfirmDowngrade(null);
             return;
@@ -784,21 +799,20 @@ export function FireMembershipPage() {
         setConfirmDowngrade(null);
       }
     },
-    [tier, setTierDemo],
+    [accessPlan, displayPlan, setTierDemo],
   );
 
   const fnId = profile?.fireNepalId || "Not assigned";
-  const active = user ? membershipActiveIso(user) : "";
-  const expiry = user ? membershipExpiryIso(user) : "";
   const verified = user?.emailVerified === true;
 
   const renewalLabel = useMemo(() => {
-    if (tier === "free") return "Upgrade to start a paid period.";
+    if (displayPlan === "free") return "Upgrade to start a paid period.";
+    if (membership.membershipExpiry) return new Date(membership.membershipExpiry).toLocaleDateString();
     if (record.currentPeriodEnd) return new Date(record.currentPeriodEnd).toLocaleDateString();
-    return new Date(expiry).toLocaleDateString();
-  }, [tier, record.currentPeriodEnd, expiry]);
+    return "Not set";
+  }, [displayPlan, membership.membershipExpiry, record.currentPeriodEnd]);
 
-  const limits = USAGE_LIMITS[tier];
+  const limits = USAGE_LIMITS[accessPlan];
   const aiLimit = limits.aiCoachQueries;
   const ocrLimit = limits.ocrImports;
   const aiLabel = Number.isFinite(aiLimit)
@@ -840,12 +854,12 @@ export function FireMembershipPage() {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300/60">Current Plan</p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <span
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black text-white shadow-lg ring-1 ring-white/10 bg-gradient-to-r ${TIER_DISPLAY[tier].accent}`}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black text-white shadow-lg ring-1 ring-white/10 bg-gradient-to-r ${TIER_DISPLAY[displayPlan].accent}`}
               >
-                {tier === "elite" ? <Crown size={18} className="text-amber-200" /> : null}
-                {tier === "premium" ? <Gem size={18} className="text-emerald-100" /> : null}
-                {tier === "free" ? <Sparkles size={18} className="text-zinc-200" /> : null}
-                {TIER_DISPLAY[tier].label}
+                {displayPlan === "elite" ? <Crown size={18} className="text-amber-200" /> : null}
+                {displayPlan === "premium" ? <Gem size={18} className="text-emerald-100" /> : null}
+                {displayPlan === "free" ? <Sparkles size={18} className="text-zinc-200" /> : null}
+                {TIER_DISPLAY[displayPlan].label}
               </span>
               {verified ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-200">
@@ -853,12 +867,22 @@ export function FireMembershipPage() {
                   Verified
                 </span>
               ) : null}
-              {tier === "premium" ? (
+              {membership.status === "suspended" ? (
+                <span className="rounded-full border border-rose-400/40 bg-rose-500/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-rose-100">
+                  Suspended
+                </span>
+              ) : null}
+              {membership.status === "expired" ? (
+                <span className="rounded-full border border-red-400/40 bg-red-500/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-red-100">
+                  Expired
+                </span>
+              ) : null}
+              {displayPlan === "premium" && membership.status === "active" ? (
                 <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-100">
                   Premium active
                 </span>
               ) : null}
-              {tier === "elite" ? (
+              {displayPlan === "elite" && (membership.status === "active" || membership.status === "expiring_soon") ? (
                 <span className="rounded-full border border-amber-400/35 bg-amber-500/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-amber-100">
                   Elite active
                 </span>
@@ -977,7 +1001,7 @@ export function FireMembershipPage() {
           <div className="relative z-10 grid gap-5 overflow-hidden rounded-[1.75rem] p-5 pt-14 sm:p-6 sm:pt-16 lg:grid-cols-[1fr_1.12fr_1fr] lg:items-stretch lg:gap-5 lg:p-7 lg:pt-[4.25rem]">
             {(["free", "premium", "elite"] as const).map((t, i) => {
               const cat = TIER_CATALOG[t];
-              const activeCard = tier === t;
+              const activeCard = displayPlan === t;
               const delay = i * 80;
               const isElite = t === "elite";
               const isPremium = t === "premium";
@@ -1169,7 +1193,12 @@ export function FireMembershipPage() {
         </div>
         <div className="space-y-6 sm:space-y-8">
           {MEMBERSHIP_APP_SHOWCASE.map((section) => (
-            <MembershipAppPlanSection key={section.plan} section={section} tier={tier} onSelectTier={onSelectTier} />
+            <MembershipAppPlanSection
+              key={section.plan}
+              section={section}
+              tier={displayPlan}
+              onSelectTier={onSelectTier}
+            />
           ))}
         </div>
       </section>

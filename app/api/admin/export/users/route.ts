@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { requireAdminApi, toCsv } from "@/lib/admin/verify-admin-api";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipMapByUserIds } from "@/services/membership-service";
 
 export async function GET() {
   const gate = await requireAdminApi();
@@ -18,24 +18,12 @@ export async function GET() {
     return NextResponse.json({ error }, { status: 502 });
   }
 
-  const { data: profiles } = await sb.from("profiles").select("id, plan_type, suspended_at, archived_at");
-  const { data: subs } = await sb.from("subscriptions").select("user_id, current_period_end");
+  const membershipBy = await getMembershipMapByUserIds(
+    sb,
+    users.map((u) => u.id),
+  );
   const { data: names } = await sb.from("user_profiles").select("id, full_name");
-  const planBy = new Map((profiles ?? []).map((p) => [p.id, p.plan_type]));
   const nameBy = new Map((names ?? []).map((n) => [n.id, n.full_name]));
-
-  const subEndBy = new Map((subs ?? []).map((s) => [s.user_id, s.current_period_end]));
-
-  const expBy = new Map(
-    (profiles ?? []).map((p) => [p.id, effectiveMembershipPeriodEnd(subEndBy.get(p.id), null) ?? ""]),
-  );
-  const suspBy = new Map(
-    (profiles ?? []).map((p) => [p.id, (p as { suspended_at?: string | null }).suspended_at ?? ""]),
-  );
-
-  const archBy = new Map(
-    (profiles ?? []).map((p) => [p.id, (p as { archived_at?: string | null }).archived_at ?? ""]),
-  );
 
   const headers = [
     "id",
@@ -51,14 +39,15 @@ export async function GET() {
   ];
   const rows = users.map((u) => {
     const display = (nameBy.get(u.id) ?? "").trim();
+    const m = membershipBy.get(u.id);
     return [
       u.id,
       u.email ?? "",
       display,
-      planBy.get(u.id) ?? "free",
-      expBy.get(u.id) ?? "",
-      suspBy.get(u.id) ?? "",
-      archBy.get(u.id) ?? "",
+      m?.plan ?? "free",
+      m?.membershipExpiry ?? "",
+      m?.suspendedAt ?? "",
+      m?.archivedAt ?? "",
       u.created_at ?? "",
       u.last_sign_in_at ?? "",
       u.email_confirmed_at ?? "",

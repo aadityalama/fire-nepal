@@ -150,6 +150,8 @@ export function MemberCrmDrawer({
         window.alert(j.error ?? "Action failed");
         return false;
       }
+      const { broadcastMembershipUpdated } = await import("@/services/membership-service");
+      broadcastMembershipUpdated(userId);
       await load();
       await onUpdated();
       return true;

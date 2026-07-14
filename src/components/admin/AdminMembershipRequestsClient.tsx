@@ -161,6 +161,10 @@ export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId
         return;
       }
       toast.success(action === "approve" ? "Approved — user plan updated." : "Request rejected.");
+      if (action === "approve") {
+        const { broadcastMembershipUpdated } = await import("@/services/membership-service");
+        broadcastMembershipUpdated();
+      }
       await load();
     } catch {
       toast.error("Network error");

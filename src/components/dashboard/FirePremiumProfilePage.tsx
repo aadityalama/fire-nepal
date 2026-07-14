@@ -11,7 +11,6 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import {
   formatPremiumPhoneDisplay,
-  membershipExpiryIso,
   normalizePhoneNationalDigits,
   PHONE_DIAL_PRESETS,
   type PremiumMemberProfileFields,
@@ -19,6 +18,8 @@ import {
   validatePremiumPhone,
 } from "@/lib/fire-premium-profile";
 import { TIER_DISPLAY } from "@/lib/fire-membership";
+import { assertDisplayedPlanMatchesCanonical } from "@/lib/membership/canonical";
+import { formatMemberCardDate } from "@/lib/member-card-profile";
 
 const RISKS: { id: RiskProfile; label: string }[] = [
   { id: "conservative", label: "Conservative" },
@@ -29,16 +30,26 @@ const RISKS: { id: RiskProfile; label: string }[] = [
 
 export function FirePremiumProfilePage() {
   const { user } = useProductAuth();
-  const { tier } = useFireMembership();
+  const { membership, syncServerEntitlement } = useFireMembership();
   const { profile, loading, saveProfile } = useCurrentUserProfile();
   const [draftProfile, setDraftProfile] = useState<PremiumMemberProfileFields | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [dashKey, setDashKey] = useState(0);
+  const tier = membership.plan;
 
   useEffect(() => {
     setDraftProfile(profile);
   }, [profile]);
+
+  useEffect(() => {
+    void syncServerEntitlement();
+  }, [syncServerEntitlement]);
+
+  useEffect(() => {
+    if (!profile || !membership.userId) return;
+    assertDisplayedPlanMatchesCanonical("FirePremiumProfilePage", profile.membershipPlan, membership);
+  }, [profile, membership]);
 
   const onSave = useCallback(
     async (e: FormEvent) => {
@@ -71,7 +82,9 @@ export function FirePremiumProfilePage() {
   }
 
   const fnId = draftProfile.fireNepalId || "Not assigned";
-  const expiry = membershipExpiryIso(user);
+  const expiry = membership.membershipExpiry
+    ? formatMemberCardDate(membership.membershipExpiry)
+    : formatMemberCardDate(profile.membershipExpiry);
   const verified = user.emailVerified === true;
   const dialPresets = PHONE_DIAL_PRESETS.map((p) => p.value);
   const isCustomDial = !dialPresets.includes(draftProfile.phoneDialCode);

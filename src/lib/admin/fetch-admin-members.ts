@@ -2,13 +2,13 @@ import "server-only";
 
 import type { User } from "@supabase/supabase-js";
 import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import {
   membershipUiBucket,
   type MembershipUiBucket,
   type PlanType,
 } from "@/lib/membership-profile-status";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipMapByUserIds } from "@/services/membership-service";
 
 export type AdminMemberRow = {
   id: string;
@@ -39,52 +39,35 @@ export async function fetchAdminMembers(): Promise<{
     return { members: [], error: listErr };
   }
 
-  const { data: profiles, error: pErr } = await sb
-    .from("profiles")
-    .select("id, plan_type, membership_activated_at, suspended_at, archived_at");
-
-  if (pErr) {
-    return { members: [], error: pErr.message };
-  }
-
-  const { data: subs, error: sErr } = await sb
-    .from("subscriptions")
-    .select("user_id, status, current_period_end, current_period_start");
-
-  if (sErr) {
-    return { members: [], error: sErr.message };
-  }
+  const userIds = users.map((u) => u.id);
+  const membershipBy = await getMembershipMapByUserIds(sb, userIds);
 
   const { data: names, error: nErr } = await sb.from("user_profiles").select("id, full_name");
   if (nErr) {
     return { members: [], error: nErr.message };
   }
-
-  const profileBy = new Map((profiles ?? []).map((r) => [r.id, r]));
-  const subBy = new Map((subs ?? []).map((r) => [r.user_id, r]));
   const nameBy = new Map((names ?? []).map((r) => [r.id, r.full_name]));
+
+  // Subscription status is billing mirror only — never used for planType display.
+  const { data: subs } = await sb.from("subscriptions").select("user_id, status, current_period_end");
+  const subBy = new Map((subs ?? []).map((r) => [r.user_id, r]));
 
   const members: AdminMemberRow[] = users.map((u: User) => {
     const display = nameBy.get(u.id);
     const name = (display && display.trim()) || "—";
-    const prof = profileBy.get(u.id);
-    const rawPlan = prof?.plan_type;
-    const planType: PlanType =
-      rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
-    const sub = subBy.get(u.id);
-    const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, null);
-    const membershipActivatedAt =
-      (prof?.membership_activated_at as string | null | undefined) ??
-      (sub?.current_period_start as string | null | undefined) ??
-      null;
-    const suspendedAt = (prof?.suspended_at as string | null | undefined) ?? null;
-    const archivedAt = (prof?.archived_at as string | null | undefined) ?? null;
+    const m = membershipBy.get(u.id);
+    const planType: PlanType = m?.plan ?? "free";
+    const expiresAt = m?.membershipExpiry ?? null;
+    const membershipActivatedAt = m?.membershipStart ?? null;
+    const suspendedAt = m?.suspendedAt ?? null;
+    const archivedAt = m?.archivedAt ?? null;
     const uiBucket = membershipUiBucket({
       planType,
       expiresAtIso: expiresAt,
       suspendedAtIso: suspendedAt,
       archivedAtIso: archivedAt,
     });
+    const sub = subBy.get(u.id);
     return {
       id: u.id,
       name,

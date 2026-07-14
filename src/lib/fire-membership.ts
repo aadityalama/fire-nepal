@@ -1,10 +1,11 @@
 /**
- * STEP 8 — FIRE Nepal membership tiers, feature gates, and billing-ready metadata.
- * Tier + usage persist per userId in localStorage until Stripe webhooks sync server-side.
+ * Membership tier helpers + feature-gate metadata.
+ * Plan/expiry SOT is `public.user_profiles` via MembershipService — never localStorage.
  */
 
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
 
+/** @deprecated Legacy key — purged on read; never used as plan SOT. */
 export const MEMBERSHIP_STORAGE_KEY = "fire-nepal-membership-v1";
 
 export type FireMembershipTier = "free" | "premium" | "elite";
@@ -95,29 +96,25 @@ export function defaultMembershipRecord(): FireMembershipRecord {
   };
 }
 
-function safeParse(raw: string | null): FireMembershipStore | null {
-  if (!raw) return null;
-  try {
-    const v = JSON.parse(raw) as FireMembershipStore;
-    if (v?.version !== 1 || typeof v.byUserId !== "object" || !v.byUserId) return null;
-    return v;
-  } catch {
-    return null;
-  }
-}
-
 export function loadMembershipStore(): FireMembershipStore {
-  if (typeof window === "undefined") return { version: 1, byUserId: {} };
-  return safeParse(window.localStorage.getItem(MEMBERSHIP_STORAGE_KEY)) ?? { version: 1, byUserId: {} };
+  // Purge any stale plan cache so Admin/Profile mismatches cannot resurface from localStorage.
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(MEMBERSHIP_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+  return { version: 1, byUserId: {} };
 }
 
-export function saveMembershipStore(store: FireMembershipStore): void {
+/** No-op: membership plan must never be cached in localStorage. */
+export function saveMembershipStore(_store: FireMembershipStore): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(MEMBERSHIP_STORAGE_KEY, JSON.stringify(store));
-    window.dispatchEvent(new Event("fn-membership-changed"));
+    window.localStorage.removeItem(MEMBERSHIP_STORAGE_KEY);
   } catch {
-    /* quota */
+    /* ignore */
   }
 }
 
@@ -148,31 +145,32 @@ function normalizeRecord(r: Partial<FireMembershipRecord> | undefined): FireMemb
   };
 }
 
-export function getMembershipRecordForUser(user: ProductAuthUser | null): FireMembershipRecord {
-  if (!user) return defaultMembershipRecord();
-  const store = loadMembershipStore();
-  return normalizeRecord(store.byUserId[user.id]);
+/** @deprecated Use MembershipService / useFireMembership().membership — returns free defaults only. */
+export function getMembershipRecordForUser(_user: ProductAuthUser | null): FireMembershipRecord {
+  loadMembershipStore();
+  return defaultMembershipRecord();
 }
 
-export function setMembershipRecordForUser(userId: string, patch: Partial<FireMembershipRecord>): FireMembershipRecord {
-  const store = loadMembershipStore();
-  const prev = normalizeRecord(store.byUserId[userId]);
-  const next: FireMembershipRecord = { ...prev, ...patch };
-  store.byUserId[userId] = normalizeRecord(next);
-  saveMembershipStore(store);
-  return store.byUserId[userId]!;
+/** @deprecated Plan writes go through MembershipService.writeMembership — does not persist. */
+export function setMembershipRecordForUser(
+  _userId: string,
+  patch: Partial<FireMembershipRecord>,
+): FireMembershipRecord {
+  loadMembershipStore();
+  return normalizeRecord({ ...defaultMembershipRecord(), ...patch });
 }
 
-/** Demo: set tier and synthetic renewal window (annual from now for paid tiers). */
-export function applyDemoTierChange(userId: string, tier: FireMembershipTier): FireMembershipRecord {
+/** Demo-only in-memory tier change (no localStorage; Supabase SOT when configured). */
+export function applyDemoTierChange(_userId: string, tier: FireMembershipTier): FireMembershipRecord {
   const now = new Date();
   const periodEnd = tier === "free" ? null : new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  return setMembershipRecordForUser(userId, {
+  return {
+    ...defaultMembershipRecord(),
     tier,
     status: tier === "free" ? "none" : "active",
     currentPeriodEnd: periodEnd,
     trialEndsAt: null,
-  });
+  };
 }
 
 /** True when moving to a higher-paid tier (opens payment flow instead of instant demo). */
@@ -180,20 +178,21 @@ export function isMembershipUpgrade(current: FireMembershipTier, target: FireMem
   return TIER_RANK[target] > TIER_RANK[current];
 }
 
-/** Apply tier from Supabase `profiles` after admin approval (overrides local paid state). */
+/** @deprecated Entitlement sync is MembershipService via /api/membership/entitlement — no local cache. */
 export function applyServerEntitlement(
-  userId: string,
+  _userId: string,
   tier: "premium" | "elite",
   currentPeriodEnd: string | null,
 ): FireMembershipRecord {
   const end =
     currentPeriodEnd ?? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  return setMembershipRecordForUser(userId, {
+  return {
+    ...defaultMembershipRecord(),
     tier,
     status: "active",
     currentPeriodEnd: end,
     trialEndsAt: null,
-  });
+  };
 }
 
 /** True when the user has an admin-approved, active paid plan (mirrors Supabase profile + subscription). */
@@ -206,14 +205,9 @@ export function effectiveFeatureTier(record: FireMembershipRecord): FireMembersh
   return hasActivePaidMembership(record) ? record.tier : "free";
 }
 
-/** Clear server-mirrored paid state when the account is not actively subscribed (e.g. after sync). */
-export function applyServerFreeEntitlement(userId: string): FireMembershipRecord {
-  return setMembershipRecordForUser(userId, {
-    tier: "free",
-    status: "none",
-    currentPeriodEnd: null,
-    trialEndsAt: null,
-  });
+/** @deprecated Entitlement sync is MembershipService — no local cache. */
+export function applyServerFreeEntitlement(_userId: string): FireMembershipRecord {
+  return defaultMembershipRecord();
 }
 
 export function canAccessFeature(record: FireMembershipRecord, feature: FireFeatureKey): boolean {

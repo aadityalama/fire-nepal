@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { getMembershipByUserId } from "@/services/membership-service";
 import type { Database } from "@/types/supabase-database";
 
 export type FireAiMembershipPlan = "free" | "premium" | "elite";
@@ -94,38 +94,11 @@ export function estimateOpenAiCostUsd(
   return Number(cost.toFixed(8));
 }
 
+/** AI quotas — accessPlan from user_profiles only (MembershipService). */
 export async function resolveFireAiMembershipPlan(userId: string): Promise<FireAiMembershipPlan> {
   const sb = serviceClient();
-  const { data: profile } = await sb
-    .from("profiles")
-    .select("plan_type, suspended_at, archived_at")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const { data: sub } = await sb
-    .from("subscriptions")
-    .select("status, current_period_end, plan")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  let profilePlan = normalizePlan(profile?.plan_type);
-  const subPlan = normalizePlan(sub?.plan);
-  const subActive = sub?.status === "active";
-
-  if (!profile && subActive && (subPlan === "premium" || subPlan === "elite")) {
-    profilePlan = subPlan;
-  }
-
-  const expiryIso = effectiveMembershipPeriodEnd(sub?.current_period_end ?? null, null);
-  const expired =
-    Boolean(expiryIso) && !Number.isNaN(new Date(expiryIso as string).getTime()) && new Date(expiryIso as string) <= new Date();
-  const blocked = Boolean(profile?.suspended_at) || Boolean((profile as { archived_at?: string | null } | null)?.archived_at) || expired;
-
-  if (blocked) return "free";
-  if (subActive && profilePlan === subPlan && (profilePlan === "premium" || profilePlan === "elite")) {
-    return profilePlan;
-  }
-  return "free";
+  const membership = await getMembershipByUserId(sb, userId);
+  return normalizePlan(membership.accessPlan);
 }
 
 export async function syncFireAiMonthlyUsage(

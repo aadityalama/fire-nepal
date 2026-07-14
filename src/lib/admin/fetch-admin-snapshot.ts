@@ -9,10 +9,10 @@ import {
   emptyMembershipRenewalReminderSnapshot,
   type MembershipRenewalReminderSnapshot,
 } from "@/lib/admin/membership-renewal-reminder-snapshot";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { membershipUiBucket, type PlanType } from "@/lib/membership-profile-status";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getMembershipMapByUserIds } from "@/services/membership-service";
 
 export type AdminSignupRow = {
   id: string;
@@ -232,6 +232,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     loadError = "SUPABASE_SERVICE_ROLE_KEY is not set — admin metrics need the service role on the server.";
   }
 
+  // Plan / expiry / suspend / archive — ONLY from public.user_profiles (MembershipService).
   const profileByUser = new Map<
     string,
     {
@@ -241,27 +242,21 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
       archived_at: string | null;
     }
   >();
-  if (sb) {
-    const { data: profiles, error: pErr } = await sb
-      .from("profiles")
-      .select("id, plan_type, last_active_at, suspended_at, archived_at");
-    if (pErr) loadError = loadError ?? pErr.message;
-    for (const row of profiles ?? []) {
-      profileByUser.set(row.id, {
-        plan_type: row.plan_type,
-        last_active_at: row.last_active_at,
-        suspended_at: row.suspended_at,
-        archived_at: (row as { archived_at?: string | null }).archived_at ?? null,
-      });
-    }
-  }
-
   const subEndByUser = new Map<string, string | null>();
   if (sb) {
-    const { data: subs, error: sErr } = await sb.from("subscriptions").select("user_id, current_period_end");
-    if (sErr) loadError = loadError ?? sErr.message;
-    for (const row of subs ?? []) {
-      subEndByUser.set(row.user_id, row.current_period_end);
+    const membershipBy = await getMembershipMapByUserIds(
+      sb,
+      users.map((u) => u.id),
+    );
+    for (const u of users) {
+      const m = membershipBy.get(u.id);
+      profileByUser.set(u.id, {
+        plan_type: m?.plan ?? "free",
+        last_active_at: null,
+        suspended_at: m?.suspendedAt ?? null,
+        archived_at: m?.archivedAt ?? null,
+      });
+      subEndByUser.set(u.id, m?.membershipExpiry ?? null);
     }
   }
 
@@ -535,7 +530,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     const planRaw = p?.plan_type ?? "free";
     const planType: PlanType =
       planRaw === "premium" || planRaw === "elite" || planRaw === "free" ? planRaw : "free";
-    const exp = effectiveMembershipPeriodEnd(subEndByUser.get(u.id), null);
+    const exp = subEndByUser.get(u.id) ?? null;
     const bucket = membershipUiBucket({
       planType,
       expiresAtIso: exp,

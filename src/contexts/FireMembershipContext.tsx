@@ -3,95 +3,116 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
-  applyDemoTierChange,
-  applyServerEntitlement,
-  applyServerFreeEntitlement,
   defaultMembershipRecord,
-  getMembershipRecordForUser,
-  hasActivePaidMembership,
   type FireMembershipRecord,
   type FireMembershipTier,
 } from "@/lib/fire-membership";
+import type { CanonicalMembership } from "@/lib/membership/canonical";
+import { deriveCanonicalMembership } from "@/lib/membership/canonical";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  MEMBERSHIP_UPDATED_EVENT,
+  broadcastMembershipUpdated,
+} from "@/services/membership-service";
 
 export type PendingMembershipRequest = { plan: "premium" | "elite" };
 
 type FireMembershipContextValue = {
   tier: FireMembershipTier;
+  /** Access-oriented record (accessPlan) for feature gates. */
   record: FireMembershipRecord;
+  /** Canonical SOT snapshot from user_profiles (plan display). */
+  membership: CanonicalMembership;
   /** Anonymous / logged out → free + default record (not persisted). */
   refresh: () => void;
+  /** @deprecated Demo tier mutation disabled when Supabase is configured — SOT is user_profiles. */
   setTierDemo: (tier: FireMembershipTier) => void;
-  /** When Supabase is enabled, pull server truth into local gates (admin-approved plan + pending QR requests). */
-  syncServerEntitlement: () => Promise<void>;
-  /** Latest `membership_requests` row with status pending (for UI only; does not grant access). */
+  /** Pull server truth from MembershipService (/api/membership/entitlement → user_profiles). */
+  syncServerEntitlement: () => Promise<CanonicalMembership | null>;
+  /** Latest `membership_requests` row with status pending (UI only; never grants access). */
   pendingMembershipRequest: PendingMembershipRequest | null;
 };
 
 const FireMembershipContext = createContext<FireMembershipContextValue | null>(null);
 
+function emptyMembership(userId = ""): CanonicalMembership {
+  return deriveCanonicalMembership(null, userId);
+}
+
+function recordFromCanonical(canonical: CanonicalMembership): FireMembershipRecord {
+  const base = defaultMembershipRecord();
+  const paid = canonical.accessPlan === "premium" || canonical.accessPlan === "elite";
+  return {
+    ...base,
+    tier: canonical.accessPlan,
+    status: paid ? "active" : "none",
+    currentPeriodEnd: paid ? canonical.membershipExpiry : null,
+    trialEndsAt: null,
+  };
+}
+
 export function FireMembershipProvider({ children }: { children: ReactNode }) {
   const { user } = useProductAuth();
-  const [tick, setTick] = useState(0);
+  const [membership, setMembership] = useState<CanonicalMembership>(() => emptyMembership());
   const [pendingMembershipRequestState, setPendingMembershipRequestState] = useState<PendingMembershipRequest | null>(
     null,
   );
+  const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
-  useEffect(() => {
-    const on = () => refresh();
-    window.addEventListener("storage", on);
-    window.addEventListener("fn-membership-changed", on);
-    return () => {
-      window.removeEventListener("storage", on);
-      window.removeEventListener("fn-membership-changed", on);
-    };
-  }, [refresh]);
-
-  const record = useMemo(() => {
-    void tick;
-    return user ? getMembershipRecordForUser(user) : defaultMembershipRecord();
-  }, [user, tick]);
-
-  const tier = record.tier;
-
-  const pendingMembershipRequest = user ? pendingMembershipRequestState : null;
-
-  const setTierDemo = useCallback(
-    (next: FireMembershipTier) => {
-      if (!user) return;
-      if (isSupabaseConfigured() && (next === "premium" || next === "elite")) {
-        return;
-      }
-      applyDemoTierChange(user.id, next);
-      refresh();
-    },
-    [user, refresh],
-  );
-
-  const syncServerEntitlement = useCallback(async () => {
-    if (!user || !isSupabaseConfigured()) return;
+  const syncServerEntitlement = useCallback(async (): Promise<CanonicalMembership | null> => {
+    if (!user) {
+      setMembership(emptyMembership());
+      setPendingMembershipRequestState(null);
+      return emptyMembership();
+    }
+    if (!isSupabaseConfigured()) {
+      const local = emptyMembership(user.id);
+      setMembership(local);
+      return local;
+    }
     try {
       const r = await fetch("/api/membership/entitlement", { credentials: "include", cache: "no-store" });
-      if (!r.ok) return;
+      if (!r.ok) return null;
       const j = (await r.json()) as {
+        planType?: string;
         effectivePlan?: string;
+        membershipStart?: string | null;
+        membershipExpiry?: string | null;
         currentPeriodEnd?: string | null;
+        suspendedAt?: string | null;
+        archivedAt?: string | null;
         pendingMembershipRequest?: PendingMembershipRequest | null;
       };
       setPendingMembershipRequestState(j.pendingMembershipRequest ?? null);
 
-      if (j.effectivePlan === "premium" || j.effectivePlan === "elite") {
-        applyServerEntitlement(user.id, j.effectivePlan, j.currentPeriodEnd ?? null);
-      } else if (hasActivePaidMembership(getMembershipRecordForUser(user))) {
-        applyServerFreeEntitlement(user.id);
+      const plan = j.planType === "premium" || j.planType === "elite" ? j.planType : "free";
+      const next = deriveCanonicalMembership(
+        {
+          id: user.id,
+          membership_plan: plan,
+          membership_start: j.membershipStart ?? null,
+          membership_expiry: j.membershipExpiry ?? j.currentPeriodEnd ?? null,
+          membership_suspended_at: j.suspendedAt ?? null,
+          membership_archived_at: j.archivedAt ?? null,
+        },
+        user.id,
+      );
+      setMembership(next);
+
+      // Purge legacy localStorage plan cache so stale Free/Elite mismatches cannot resurface.
+      try {
+        window.localStorage.removeItem("fire-nepal-membership-v1");
+      } catch {
+        /* ignore */
       }
-      refresh();
+      return next;
     } catch {
       /* offline / misconfigured */
+      return null;
     }
-  }, [user, refresh]);
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,18 +122,59 @@ export function FireMembershipProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, [syncServerEntitlement, tick]);
+
+  useEffect(() => {
+    const onUpdated = () => {
+      void syncServerEntitlement();
+    };
+    window.addEventListener(MEMBERSHIP_UPDATED_EVENT, onUpdated);
+    window.addEventListener("focus", onUpdated);
+    return () => {
+      window.removeEventListener(MEMBERSHIP_UPDATED_EVENT, onUpdated);
+      window.removeEventListener("focus", onUpdated);
+    };
   }, [syncServerEntitlement]);
+
+  const record = useMemo(() => recordFromCanonical(membership), [membership]);
+  /** Feature-gate tier (free when suspended/archived/expired). Display plan is membership.plan. */
+  const tier = membership.accessPlan;
+  const pendingMembershipRequest = user ? pendingMembershipRequestState : null;
+
+  const setTierDemo = useCallback(
+    (next: FireMembershipTier) => {
+      // Never write paid tiers locally when Supabase is the SOT.
+      if (!user || isSupabaseConfigured()) return;
+      setMembership(
+        deriveCanonicalMembership(
+          {
+            id: user.id,
+            membership_plan: next,
+            membership_start: next === "free" ? null : new Date().toISOString(),
+            membership_expiry:
+              next === "free" ? null : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            membership_suspended_at: null,
+            membership_archived_at: null,
+          },
+          user.id,
+        ),
+      );
+      broadcastMembershipUpdated(user.id);
+    },
+    [user],
+  );
 
   const value = useMemo<FireMembershipContextValue>(
     () => ({
       tier,
       record,
+      membership,
       refresh,
       setTierDemo,
       syncServerEntitlement,
       pendingMembershipRequest,
     }),
-    [tier, record, refresh, setTierDemo, syncServerEntitlement, pendingMembershipRequest],
+    [tier, record, membership, refresh, setTierDemo, syncServerEntitlement, pendingMembershipRequest],
   );
 
   return <FireMembershipContext.Provider value={value}>{children}</FireMembershipContext.Provider>;

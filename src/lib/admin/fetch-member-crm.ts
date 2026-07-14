@@ -4,8 +4,8 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { formatMembershipReminderType } from "@/lib/membership-renewal-reminders/reminder-next";
-import { effectiveMembershipPeriodEnd } from "@/lib/membership-effective-period-end";
 import { membershipUiBucket } from "@/lib/membership-profile-status";
+import { getMembershipByUserId } from "@/services/membership-service";
 
 export type MemberCrmMemberScore = "vip" | "regular" | "new_member" | "inactive";
 
@@ -112,30 +112,22 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   if (authErr || !authData?.user) return null;
   const u: User = authData.user;
 
-  const { data: prof, error: pErr } = await admin.from("profiles").select("*").eq("id", userId).maybeSingle();
-  if (pErr || !prof) return null;
-
-  const { data: sub } = await admin
-    .from("subscriptions")
-    .select("status, current_period_end, current_period_start")
-    .eq("user_id", userId)
-    .maybeSingle();
-
+  const membership = await getMembershipByUserId(admin, userId);
+  // profiles: activity/geo metadata only — never plan/expiry (MembershipService is SOT).
+  const { data: prof } = await admin.from("profiles").select("*").eq("id", userId).maybeSingle();
   const { data: up } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
 
   const display = up?.full_name?.trim();
   const fullName = display || "—";
 
-  const rawPlan = prof.plan_type;
-  const planType: MemberCrmPayload["planType"] =
-    rawPlan === "premium" || rawPlan === "elite" || rawPlan === "free" ? rawPlan : "free";
-
-  const expiresAt = effectiveMembershipPeriodEnd(sub?.current_period_end, (prof as { expires_at?: string | null }).expires_at);
-  const archivedAt = (prof as { archived_at?: string | null }).archived_at ?? null;
+  const planType: MemberCrmPayload["planType"] = membership.plan;
+  const expiresAt = membership.membershipExpiry;
+  const archivedAt = membership.archivedAt;
+  const suspendedAt = membership.suspendedAt;
   const bucket = membershipUiBucket({
     planType,
     expiresAtIso: expiresAt,
-    suspendedAtIso: prof.suspended_at,
+    suspendedAtIso: suspendedAt,
     archivedAtIso: archivedAt,
   });
   const statusLabels: Record<string, string> = {
@@ -152,7 +144,7 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   if (
     expiresAt &&
     (planType === "premium" || planType === "elite") &&
-    !prof.suspended_at &&
+    !suspendedAt &&
     !archivedAt
   ) {
     const exp = parseISO(expiresAt);
@@ -167,7 +159,7 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   }
 
   const lastSignIn = u.last_sign_in_at ?? null;
-  if (lastSignIn) {
+  if (lastSignIn && prof) {
     const cur = prof.last_login_at as string | null | undefined;
     if (!cur || new Date(lastSignIn) > new Date(cur)) {
       await admin
@@ -179,9 +171,9 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
 
   const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
   const metaCountry = typeof meta.country === "string" ? meta.country : null;
-  const country = unknownOr(prof.country ?? metaCountry);
-  const region = unknownOr(prof.region);
-  const timezone = unknownOr(prof.timezone);
+  const country = unknownOr((prof?.country as string | null | undefined) ?? metaCountry);
+  const region = unknownOr(prof?.region as string | null | undefined);
+  const timezone = unknownOr(prof?.timezone as string | null | undefined);
 
   const appMeta = (u.app_metadata ?? {}) as Record<string, unknown>;
   const providers = appMeta.providers;
@@ -275,13 +267,14 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
   const paidDates = (revenueRows ?? [])
     .filter((r) => (Number(r.amount_npr) || 0) > 0)
     .map((r) => r.created_at);
+  const activatedAt = membership.membershipStart;
   const firstPaidIso =
-    paidDates.length > 0 ? paidDates.reduce((a, b) => (a < b ? a : b)) : ((prof.membership_activated_at as string | null) ?? null);
+    paidDates.length > 0 ? paidDates.reduce((a, b) => (a < b ? a : b)) : activatedAt;
 
   const membershipDurationDays = firstPaidIso
     ? Math.max(0, differenceInCalendarDays(new Date(), parseISO(firstPaidIso)))
-    : prof.membership_activated_at
-      ? Math.max(0, differenceInCalendarDays(new Date(), parseISO(prof.membership_activated_at as string)))
+    : activatedAt
+      ? Math.max(0, differenceInCalendarDays(new Date(), parseISO(activatedAt)))
       : null;
 
   const avgRevenuePerRenewalNpr =
@@ -297,13 +290,12 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
 
   const timeline: MemberCrmTimelineRow[] = [];
 
-  const act = prof.membership_activated_at as string | null;
-  if (act) {
+  if (activatedAt) {
     timeline.push({
-      id: `syn:activated:${act}`,
-      occurredAt: act,
+      id: `syn:activated:${activatedAt}`,
+      occurredAt: activatedAt,
       title: `${planType === "elite" ? "Elite" : planType === "premium" ? "Premium" : "Membership"} activated`,
-      subtitle: "From profile membership_activated_at",
+      subtitle: "From user_profiles.membership_start (MembershipService SOT)",
       tone: "success",
     });
   }
@@ -414,8 +406,8 @@ export async function fetchMemberCrmPayload(userId: string): Promise<MemberCrmPa
     country,
     region,
     timezone,
-    lastLoginAt: lastSignIn ?? (prof.last_login_at as string | null) ?? null,
-    lastActiveAt: prof.last_active_at,
+    lastLoginAt: lastSignIn ?? (prof?.last_login_at as string | null | undefined) ?? null,
+    lastActiveAt: (prof?.last_active_at as string | null | undefined) ?? null,
     accountCreatedAt: joinedAt,
     deviceHint,
     browserHint,

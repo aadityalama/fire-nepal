@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type MembershipRequestPlan } from "@/lib/membership-payment";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { writeMembership } from "@/services/membership-service";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -92,8 +93,23 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     return NextResponse.json({ error: reqErr.message }, { status: 500 });
   }
 
-  const { data: existingProfile } = await admin.from("profiles").select("*").eq("id", row.user_id).maybeSingle();
+  // 1) Write SOT first (user_profiles via MembershipService)
+  try {
+    await writeMembership(admin, row.user_id, {
+      plan,
+      membershipStart: periodStart,
+      membershipExpiry: periodEnd,
+      suspendedAt: null,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "User profile membership sync failed" },
+      { status: 500 },
+    );
+  }
 
+  // 2) Mirror to profiles for legacy admin tooling (reads must still use user_profiles)
+  const { data: existingProfile } = await admin.from("profiles").select("*").eq("id", row.user_id).maybeSingle();
   const { error: profErr } = await admin.from("profiles").upsert(
     {
       id: row.user_id,
@@ -103,28 +119,14 @@ export async function PATCH(request: Request, ctx: RouteParams) {
         (existingProfile as { membership_activated_at?: string | null } | null)?.membership_activated_at ??
         periodStart,
       expires_at: periodEnd,
-      suspended_at: (existingProfile as { suspended_at?: string | null } | null)?.suspended_at ?? null,
+      suspended_at: null,
       updated_at: now,
     },
     { onConflict: "id" },
   );
 
   if (profErr) {
-    return NextResponse.json({ error: `Profile update failed: ${profErr.message}` }, { status: 500 });
-  }
-
-  const { error: userProfErr } = await admin
-    .from("user_profiles")
-    .update({
-      membership_plan: plan,
-      membership_start: periodStart,
-      membership_expiry: periodEnd,
-      updated_at: now,
-    })
-    .eq("id", row.user_id);
-
-  if (userProfErr) {
-    return NextResponse.json({ error: `User profile membership sync failed: ${userProfErr.message}` }, { status: 500 });
+    return NextResponse.json({ error: `Profile mirror update failed: ${profErr.message}` }, { status: 500 });
   }
 
   const amount_minor = Math.round(amountNpr * 100);
