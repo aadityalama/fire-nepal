@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Noto_Sans_Devanagari } from "next/font/google";
+import { Great_Vibes, Noto_Sans_Devanagari } from "next/font/google";
 import Script from "next/script";
 import { FireNepalStructuredData } from "@/components/brand/FireNepalStructuredData";
 import { ProductProviders } from "@/components/product/ProductProviders";
@@ -13,6 +13,13 @@ const notoSansDevanagari = Noto_Sans_Devanagari({
   weight: ["400", "500", "600", "700", "800", "900"],
 });
 
+const greatVibes = Great_Vibes({
+  subsets: ["latin"],
+  variable: "--font-signature",
+  display: "swap",
+  weight: "400",
+});
+
 export const metadata: Metadata = buildRootMetadata();
 
 export default function RootLayout({
@@ -22,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-homepage-language="en" suppressHydrationWarning>
-      <body className={notoSansDevanagari.variable}>
+      <body className={`${notoSansDevanagari.variable} ${greatVibes.variable}`}>
         <FireNepalStructuredData />
         <Script id="fire-nepal-theme-init" strategy="beforeInteractive">
           {`(function(){try{var k="fire-nepal-theme-v1";var raw=localStorage.getItem(k);var mode=raw==="light"||raw==="dark"||raw==="system"?raw:"dark";var dark=mode==="dark"||(mode==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=dark?"dark":"light";document.documentElement.setAttribute("data-fire-theme",r);document.documentElement.style.colorScheme=r;}catch(e){document.documentElement.setAttribute("data-fire-theme","dark");document.documentElement.style.colorScheme="dark";}})();`}

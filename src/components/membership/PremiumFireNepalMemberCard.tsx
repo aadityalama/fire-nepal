@@ -1,7 +1,24 @@
 "use client";
 
-import { BadgeCheck, Crown, Flame, Gem, Globe2, Headphones, Lock, ShieldCheck, Sparkles } from "lucide-react";
-import { forwardRef, useEffect, useId, useState } from "react";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Clock3,
+  Crown,
+  Flag,
+  Gem,
+  Globe2,
+  Headphones,
+  IdCard,
+  Lightbulb,
+  Lock,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { forwardRef, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { FIRE_NEPAL_CANONICAL_ORIGIN } from "@/lib/brand/site-seo";
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import {
@@ -16,146 +33,172 @@ import {
 export const MEMBER_CARD_EXPORT_WIDTH = 1400;
 export const MEMBER_CARD_EXPORT_HEIGHT = 900;
 
-const BENEFITS = [
-  "Budget smarter",
-  "Track wealth",
-  "FIRE Planning",
-  "AI Financial Coach",
-  "Secure & Verified",
-  "Built for Nepalis Worldwide",
-] as const;
-
-const NEPALI_SLOGAN = ["आजै योजना बनाऔं,", "आर्थिक स्वतन्त्रता हासिल गरौं।"];
+const EMPOWERMENT: Array<{ icon: typeof TrendingUp; text: string }> = [
+  { icon: TrendingUp, text: "बजेट अझ राम्रो बनाउनुहोस्" },
+  { icon: Clock3, text: "सम्पत्ति ट्र्याक गर्नुहोस्" },
+  { icon: Target, text: "FIRE योजना बनाउनुहोस्" },
+  { icon: Lightbulb, text: "AI वित्तीय कोच प्रयोग गर्नुहोस्" },
+  { icon: Flag, text: "विश्वभरका नेपालीका लागि" },
+];
 
 type PremiumFireNepalMemberCardProps = {
   data: MemberCardData;
-  /**
-   * Export marks the dedicated capture tree for PNG/PDF.
-   * Artwork / CSS is identical for preview and export — no redesign fork.
-   */
+  /** Marks dedicated capture tree; artwork is identical for preview and export. */
   mode?: "preview" | "export";
 };
+
+const GOLD = "#D4AF37";
+const GOLD_SOFT = "rgba(212,175,55,0.85)";
+const EMERALD = "#10b981";
+const EMERALD_SOFT = "#6ee7b7";
 
 function tierAccent(plan: FireMembershipTier) {
   if (plan === "elite") {
     return {
-      badge: "from-amber-400/90 via-yellow-300/80 to-amber-500/90 text-amber-950 border-amber-200/70",
-      glow: "shadow-[0_0_40px_rgba(245,158,11,0.35)]",
+      label: tierBadgeLabel(plan),
+      color: "#F6E27A",
+      border: "rgba(246,226,122,0.85)",
+      bg: "linear-gradient(180deg, rgba(58,42,8,0.92), rgba(20,14,4,0.96))",
+      glow: "0 0 22px rgba(212,175,55,0.45)",
       icon: Crown,
     };
   }
   if (plan === "premium") {
     return {
-      badge: "from-emerald-400/90 via-lime-300/70 to-emerald-500/90 text-emerald-950 border-emerald-200/60",
-      glow: "shadow-[0_0_36px_rgba(16,185,129,0.32)]",
+      label: tierBadgeLabel(plan),
+      color: "#A7F3D0",
+      border: "rgba(52,211,153,0.75)",
+      bg: "linear-gradient(180deg, rgba(6,78,59,0.92), rgba(2,30,22,0.96))",
+      glow: "0 0 22px rgba(16,185,129,0.4)",
       icon: Gem,
     };
   }
   return {
-    badge: "from-zinc-300/80 via-zinc-200/70 to-zinc-400/80 text-zinc-900 border-zinc-300/60",
-    glow: "shadow-[0_0_28px_rgba(161,161,170,0.25)]",
+    label: tierBadgeLabel(plan),
+    color: "#E4E4E7",
+    border: "rgba(212,212,216,0.65)",
+    bg: "linear-gradient(180deg, rgba(39,39,42,0.92), rgba(9,9,11,0.96))",
+    glow: "0 0 18px rgba(161,161,170,0.3)",
     icon: Sparkles,
   };
 }
 
-function statusPanel(expiry: string | null) {
+function statusCopy(expiry: string | null) {
   const state = computeMembershipExpiryStatus(expiry);
-
   if (state.status === "expired") {
     return {
-      label: "Status",
       value: "EXPIRED",
-      sub: "Membership Expired",
-      action: "Renew Membership",
-      className: "border-red-400/50 bg-red-500/15 text-red-50",
-      valueClass: "text-red-100",
+      sub: "Membership Expired · Renew now",
+      valueColor: "#fecaca",
+      border: "rgba(248,113,113,0.5)",
+      bg: "rgba(127,29,29,0.35)",
     };
   }
-
-  const panelClass =
-    state.status === "expiring_soon"
-      ? "border-amber-400/45 bg-amber-500/12 text-amber-50"
-      : "border-emerald-400/40 bg-emerald-500/12 text-emerald-50";
-
-  const valueClass = state.status === "expiring_soon" ? "text-amber-50" : "text-white";
-
   return {
-    label: "Membership countdown",
     value: `${state.daysRemaining} Days Remaining`,
     sub: `Renews on ${formatMemberCardDate(expiry)}`,
-    action: null,
-    className: panelClass,
-    valueClass,
+    valueColor: "#ffffff",
+    border: state.status === "expiring_soon" ? "rgba(251,191,36,0.45)" : "rgba(52,211,153,0.4)",
+    bg: state.status === "expiring_soon" ? "rgba(120,53,15,0.35)" : "rgba(6,78,59,0.32)",
   };
 }
 
-function MemberCardMountains({ uid }: { uid: string }) {
-  const sky = `${uid}-sky`;
-  const mtn = `${uid}-mtn`;
-  const glow = `${uid}-glow`;
-
+function T({ style, children, className }: { style?: CSSProperties; children: ReactNode; className?: string }) {
   return (
-    <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1400 420" preserveAspectRatio="xMidYMid slice" aria-hidden>
-      <defs>
-        <linearGradient id={sky} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#031612" />
-          <stop offset="45%" stopColor="#06281f" />
-          <stop offset="100%" stopColor="#010807" />
-        </linearGradient>
-        <linearGradient id={mtn} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#145f4b" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#02120e" stopOpacity="0.4" />
-        </linearGradient>
-        <radialGradient id={glow} cx="72%" cy="38%" r="28%">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <rect width="1400" height="420" fill={`url(#${sky})`} />
-      <rect width="1400" height="420" fill={`url(#${glow})`} />
-      <path
-        d="M0 320 L120 250 L220 290 L340 180 L470 260 L590 150 L720 240 L860 120 L1020 220 L1180 160 L1400 280 L1400 420 L0 420 Z"
-        fill={`url(#${mtn})`}
-        opacity="0.9"
-      />
-      <path
-        d="M0 360 L180 300 L300 340 L460 250 L640 330 L820 240 L980 310 L1160 260 L1400 340 L1400 420 L0 420 Z"
-        fill="#031612"
-        opacity="0.85"
-      />
-      {/* Nepal map outline */}
-      <path
-        d="M860 95 C900 70 940 72 980 95 C1010 112 1035 145 1045 180 C1020 165 990 158 960 165 C920 175 885 165 860 145 Z"
-        fill="none"
-        stroke="#34d399"
-        strokeWidth="3"
-        opacity="0.75"
-      />
-    </svg>
+    <p className={className} style={{ margin: 0, padding: 0, lineHeight: "normal", ...style }}>
+      {children}
+    </p>
   );
 }
 
-function MemberCardTempleSilhouette() {
+function FireEmblem() {
   return (
-    <svg className="pointer-events-none absolute bottom-0 left-0 right-0 h-28 w-full opacity-35" viewBox="0 0 1400 120" aria-hidden>
-      <path
-        d="M0 120 L0 78 L40 78 L55 52 L70 78 L110 78 L125 44 L140 78 L180 78 L200 36 L220 78 L260 78 L280 48 L300 78 L340 78 L360 40 L380 78 L420 78 L440 56 L460 78 L500 78 L520 34 L540 78 L580 78 L600 50 L620 78 L660 78 L680 38 L700 78 L740 78 L760 54 L780 78 L820 78 L840 30 L860 78 L900 78 L920 52 L940 78 L980 78 L1000 42 L1020 78 L1060 78 L1080 58 L1100 78 L1140 78 L1160 36 L1180 78 L1220 78 L1240 50 L1260 78 L1300 78 L1320 46 L1340 78 L1400 78 L1400 120 Z"
-        fill="#d4af37"
-        opacity="0.55"
+    <div
+      style={{
+        position: "relative",
+        width: 220,
+        height: 220,
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 8,
+          borderRadius: 999,
+          background: "radial-gradient(circle, rgba(16,185,129,0.45) 0%, rgba(5,5,5,0) 68%)",
+          filter: "blur(2px)",
+        }}
       />
-    </svg>
-  );
-}
-
-function MemberCardEmblem() {
-  return (
-    <div className="relative mx-auto flex h-44 w-44 items-center justify-center">
-      <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.35)_0%,rgba(5,5,5,0)_70%)] blur-md" />
-      <div className="relative grid h-40 w-40 place-items-center rounded-full border border-amber-300/35 bg-[radial-gradient(circle_at_30%_20%,rgba(52,211,153,0.35),rgba(5,5,5,0.92)_68%)] shadow-[0_0_50px_rgba(16,185,129,0.28)]">
-        <div className="absolute inset-3 rounded-full border border-emerald-300/20" />
-        <Flame className="h-16 w-16 text-emerald-300 drop-shadow-[0_0_18px_rgba(52,211,153,0.8)]" fill="currentColor" />
-        <p className="absolute -top-1 text-[10px] font-black uppercase tracking-[0.28em] text-amber-200/90">Financial Freedom</p>
-        <p className="absolute -bottom-1 text-[10px] font-black uppercase tracking-[0.28em] text-amber-200/90">Better Life</p>
+      <div
+        style={{
+          position: "relative",
+          width: 196,
+          height: 196,
+          borderRadius: 999,
+          border: `2px solid ${GOLD_SOFT}`,
+          boxShadow: `0 0 36px rgba(16,185,129,0.35), inset 0 0 28px rgba(16,185,129,0.2), 0 0 24px rgba(212,175,55,0.22)`,
+          background:
+            "radial-gradient(circle at 35% 28%, rgba(52,211,153,0.4), rgba(2,12,9,0.96) 62%, rgba(0,0,0,0.98) 100%)",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 10,
+            borderRadius: 999,
+            border: "1px solid rgba(110,231,183,0.28)",
+          }}
+        />
+        <T
+          style={{
+            position: "absolute",
+            top: 16,
+            left: 18,
+            right: 18,
+            textAlign: "center",
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: "0.28em",
+            textTransform: "uppercase",
+            color: GOLD_SOFT,
+          }}
+        >
+          Financial Freedom
+        </T>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt=""
+          width={86}
+          height={86}
+          style={{
+            width: 86,
+            height: 86,
+            borderRadius: 22,
+            display: "block",
+            boxShadow: "0 0 28px rgba(16,185,129,0.55)",
+          }}
+        />
+        <T
+          style={{
+            position: "absolute",
+            bottom: 16,
+            left: 18,
+            right: 18,
+            textAlign: "center",
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: "0.28em",
+            textTransform: "uppercase",
+            color: GOLD_SOFT,
+          }}
+        >
+          Better Life
+        </T>
       </div>
     </div>
   );
@@ -164,12 +207,12 @@ function MemberCardEmblem() {
 export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFireNepalMemberCardProps>(
   function PremiumFireNepalMemberCard({ data, mode = "preview" }, ref) {
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-    const reactId = useId().replace(/:/g, "");
-    const panel = statusPanel(data.membershipExpiry);
     const accent = tierAccent(data.membershipPlan);
     const TierIcon = accent.icon;
+    const countdown = statusCopy(data.membershipExpiry);
     const verifyUrl = `${FIRE_NEPAL_CANONICAL_ORIGIN}/verify/${encodeURIComponent(data.fireNepalId)}`;
     const isExport = mode === "export";
+    const initials = data.fullName.slice(0, 2).toUpperCase() || "FN";
 
     useEffect(() => {
       let cancelled = false;
@@ -178,9 +221,10 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
         try {
           const QRCode = (await import("qrcode")).default;
           const url = await QRCode.toDataURL(verifyUrl, {
-            width: 220,
+            width: 280,
             margin: 1,
-            color: { dark: "#064e3b", light: "#ffffff" },
+            errorCorrectionLevel: "H",
+            color: { dark: "#043227", light: "#ffffff" },
           });
           if (!cancelled) setQrDataUrl(url);
         } catch {
@@ -192,161 +236,626 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
       };
     }, [data.fireNepalId, verifyUrl]);
 
+    const detailRows: Array<{ icon: typeof CalendarDays; label: string; value: string; gold?: boolean }> = [
+      { icon: CalendarDays, label: "Member Since", value: formatMemberCardDate(data.membershipStart) },
+      { icon: CalendarDays, label: "Expiry Date", value: formatMemberCardDate(data.membershipExpiry) },
+      { icon: Globe2, label: "Country of Work", value: data.countryOfWork ?? "" },
+      { icon: Wallet, label: "Preferred Currency", value: currencyDisplay(data.preferredCurrency) },
+      { icon: IdCard, label: "Membership Tier", value: tierDisplayName(data.membershipPlan), gold: data.membershipPlan === "elite" },
+    ];
+
     return (
       <div
         ref={ref}
         data-member-card-root="true"
         data-member-card-export={isExport ? "true" : undefined}
         data-export-ready={qrDataUrl ? "true" : "false"}
-        className="overflow-hidden rounded-[28px] border-2 border-amber-300/70 bg-[#050505] text-white shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
-        style={{ width: MEMBER_CARD_EXPORT_WIDTH, height: MEMBER_CARD_EXPORT_HEIGHT }}
+        style={{
+          position: "relative",
+          boxSizing: "border-box",
+          width: MEMBER_CARD_EXPORT_WIDTH,
+          height: MEMBER_CARD_EXPORT_HEIGHT,
+          minWidth: MEMBER_CARD_EXPORT_WIDTH,
+          maxWidth: MEMBER_CARD_EXPORT_WIDTH,
+          minHeight: MEMBER_CARD_EXPORT_HEIGHT,
+          maxHeight: MEMBER_CARD_EXPORT_HEIGHT,
+          overflow: "hidden",
+          borderRadius: 26,
+          color: "#ffffff",
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          background: "#050806",
+          border: `2px solid ${GOLD}`,
+          boxShadow: `
+            0 0 0 1px rgba(246,226,122,0.35),
+            0 0 28px rgba(212,175,55,0.35),
+            0 28px 80px rgba(0,0,0,0.55)
+          `,
+        }}
       >
-        <div className="relative h-[420px] overflow-hidden border-b border-emerald-500/15">
-          <MemberCardMountains uid={reactId} />
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.08),transparent_28%),linear-gradient(180deg,rgba(5,5,5,0.05),rgba(5,5,5,0.55))]" />
+        {/* Master artwork backdrop — realistic Himalaya + Nepal map + topo + pagodas */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/membership/card-backdrop.jpg"
+          alt=""
+          width={MEMBER_CARD_EXPORT_WIDTH}
+          height={MEMBER_CARD_EXPORT_HEIGHT}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "72% 42%",
+            display: "block",
+          }}
+        />
 
-          <div className="relative z-10 flex h-full flex-col px-8 pb-6 pt-7 sm:px-10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="" className="h-12 w-12 rounded-2xl shadow-[0_0_24px_rgba(16,185,129,0.35)]" />
-                <div>
-                  <p className="text-2xl font-black tracking-[0.08em] text-white">FIRE NEPAL</p>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.34em] text-amber-200/85">Financial Independence</p>
-                </div>
-              </div>
+        {/* Depth / readability gradients — preserve premium lighting, do not flatten art */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: `
+              linear-gradient(90deg, rgba(2,6,4,0.88) 0%, rgba(2,6,4,0.62) 34%, rgba(2,6,4,0.18) 62%, rgba(2,6,4,0.42) 100%),
+              linear-gradient(180deg, rgba(2,6,4,0.28) 0%, rgba(2,6,4,0.08) 38%, rgba(2,6,4,0.55) 72%, rgba(0,0,0,0.82) 100%)
+            `,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            boxShadow: "inset 0 0 80px rgba(212,175,55,0.08)",
+          }}
+        />
+
+        {/* Inner gold hairline for double-border luxury feel */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 5,
+            borderRadius: 22,
+            border: "1px solid rgba(246,226,122,0.38)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* ─── Top brand row ─── */}
+        <div style={{ position: "absolute", left: 34, top: 26, display: "flex", alignItems: "center", gap: 12 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt=""
+            width={46}
+            height={46}
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 14,
+              display: "block",
+              boxShadow: "0 0 22px rgba(16,185,129,0.45)",
+            }}
+          />
+          <div>
+            <T style={{ fontSize: 22, fontWeight: 900, letterSpacing: "0.1em", color: "#fff", lineHeight: "26px" }}>
+              FIRE NEPAL
+            </T>
+            <T
+              style={{
+                marginTop: 2,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.34em",
+                textTransform: "uppercase",
+                color: GOLD_SOFT,
+                lineHeight: "14px",
+              }}
+            >
+              Financial Independence
+            </T>
+          </div>
+        </div>
+
+        <T
+          className="font-nepali"
+          style={{
+            position: "absolute",
+            left: 430,
+            top: 34,
+            width: 540,
+            textAlign: "center",
+            fontSize: 18,
+            fontWeight: 800,
+            color: "#f4f4f5",
+            lineHeight: "28px",
+            textShadow: "0 2px 16px rgba(0,0,0,0.65)",
+          }}
+        >
+          <span style={{ color: "#ffffff" }}>आजै योजना बनाऔं, </span>
+          <span style={{ color: EMERALD_SOFT }}>आर्थिक स्वतन्त्रता हासिल गरौं।</span>
+        </T>
+
+        <div
+          style={{
+            position: "absolute",
+            right: 34,
+            top: 28,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "9px 16px",
+            borderRadius: 10,
+            border: `1.5px solid ${accent.border}`,
+            background: accent.bg,
+            color: accent.color,
+            boxShadow: accent.glow,
+            fontSize: 11,
+            fontWeight: 900,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            lineHeight: "14px",
+          }}
+        >
+          <TierIcon size={15} strokeWidth={2.4} color={accent.color} />
+          {accent.label}
+        </div>
+
+        {/* ─── Identity band ─── */}
+        {/* Photo */}
+        <div style={{ position: "absolute", left: 42, top: 112, width: 156 }}>
+          <div
+            style={{
+              position: "relative",
+              width: 142,
+              height: 142,
+              borderRadius: 999,
+              overflow: "hidden",
+              border: `3px solid ${GOLD}`,
+              background: "rgba(6,78,59,0.35)",
+              boxShadow: `0 0 0 1px rgba(246,226,122,0.35), 0 0 34px rgba(212,175,55,0.35)`,
+            }}
+          >
+            {data.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={data.avatarUrl}
+                alt=""
+                width={142}
+                height={142}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
               <div
-                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.14em] bg-gradient-to-r ${accent.badge} ${accent.glow}`}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "linear-gradient(145deg, #059669, #064e3b)",
+                  fontSize: 34,
+                  fontWeight: 900,
+                  color: "#ecfdf5",
+                }}
               >
-                <TierIcon size={16} strokeWidth={2.5} />
-                {tierBadgeLabel(data.membershipPlan)}
+                {initials}
               </div>
+            )}
+          </div>
+          <span
+            style={{
+              position: "absolute",
+              left: 108,
+              top: 108,
+              width: 34,
+              height: 34,
+              borderRadius: 999,
+              display: "grid",
+              placeItems: "center",
+              background: EMERALD,
+              border: "2px solid rgba(236,253,245,0.9)",
+              color: "#022c22",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.4)",
+            }}
+          >
+            <ShieldCheck size={17} strokeWidth={2.6} />
+          </span>
+          <div
+            style={{
+              marginTop: 14,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "#d1fae5",
+            }}
+          >
+            <BadgeCheck size={14} color={EMERALD_SOFT} />
+            Verified Member
+          </div>
+        </div>
+
+        {/* Name + ID + countdown */}
+        <div style={{ position: "absolute", left: 230, top: 118, width: 620 }}>
+          <T
+            style={{
+              fontSize: 34,
+              fontWeight: 900,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "#ffffff",
+              lineHeight: "40px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              textShadow: "0 2px 18px rgba(0,0,0,0.55)",
+            }}
+          >
+            {data.fullName}
+          </T>
+
+          <T
+            style={{
+              marginTop: 14,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: EMERALD_SOFT,
+            }}
+          >
+            FIRE Nepal ID
+          </T>
+          <div
+            style={{
+              marginTop: 8,
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "10px 22px",
+              borderRadius: 999,
+              border: "1px solid rgba(52,211,153,0.55)",
+              background: "rgba(0,0,0,0.55)",
+              boxShadow: "0 0 18px rgba(16,185,129,0.28), inset 0 0 18px rgba(16,185,129,0.12)",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              color: "#ffffff",
+            }}
+          >
+            {data.fireNepalId}
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              width: 360,
+              borderRadius: 16,
+              border: `1px solid ${countdown.border}`,
+              background: countdown.bg,
+              padding: "14px 16px",
+              boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <CalendarDays size={15} color={EMERALD_SOFT} />
+              <T
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "rgba(236,253,245,0.9)",
+                }}
+              >
+                Membership Countdown
+              </T>
             </div>
+            <T
+              style={{
+                marginTop: 8,
+                fontSize: 28,
+                fontWeight: 900,
+                letterSpacing: "-0.02em",
+                color: countdown.valueColor,
+                lineHeight: "34px",
+              }}
+            >
+              {countdown.value}
+            </T>
+            <T style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: EMERALD_SOFT }}>{countdown.sub}</T>
+          </div>
+        </div>
 
-            <div className="mt-6 grid flex-1 grid-cols-[auto_1fr_auto] items-center gap-8">
-              <div className="relative">
-                <div className="relative h-36 w-36 overflow-hidden rounded-full border-[3px] border-amber-300/75 bg-emerald-900/30 shadow-[0_0_40px_rgba(245,158,11,0.22)]">
-                  {data.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={data.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center bg-gradient-to-br from-emerald-600 to-emerald-900 text-3xl font-black text-emerald-50">
-                      {data.fullName.slice(0, 2).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <span className="absolute -bottom-1 right-2 grid h-9 w-9 place-items-center rounded-full border border-emerald-300/50 bg-emerald-500 text-emerald-950 shadow-lg">
-                  <BadgeCheck size={18} strokeWidth={2.8} />
-                </span>
-                <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-100">
-                  <ShieldCheck size={12} />
-                  Verified Member
-                </p>
-              </div>
-
-              <div className="min-w-0 space-y-4">
-                <h2 className="truncate text-4xl font-black uppercase tracking-[0.04em] text-white">{data.fullName}</h2>
-                <div className="inline-flex min-w-[280px] flex-col rounded-2xl border border-emerald-400/25 bg-white/[0.04] px-4 py-3 backdrop-blur-md">
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300/80">FIRE Nepal ID</p>
-                  <p className="mt-1 font-mono text-xl font-black tracking-wide text-white">{data.fireNepalId}</p>
-                </div>
+        {/* QR cluster */}
+        <div style={{ position: "absolute", right: 38, top: 96, width: 250, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/membership/nepal-map-glow.png"
+            alt=""
+            width={108}
+            height={108}
+            style={{
+              width: 108,
+              height: 108,
+              marginTop: 34,
+              objectFit: "contain",
+              display: "block",
+              filter: "drop-shadow(0 0 14px rgba(16,185,129,0.55))",
+            }}
+          />
+          <div style={{ width: 150, textAlign: "center" }}>
+            <div
+              style={{
+                position: "relative",
+                width: 138,
+                height: 138,
+                margin: "0 auto",
+                borderRadius: 16,
+                padding: 8,
+                boxSizing: "border-box",
+                background: "#ffffff",
+                border: `2px solid ${GOLD}`,
+                boxShadow: `0 0 0 1px rgba(246,226,122,0.35), 0 0 28px rgba(212,175,55,0.4), 0 0 22px rgba(16,185,129,0.22)`,
+              }}
+            >
+              {qrDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrDataUrl} alt="" width={122} height={122} style={{ width: 122, height: 122, display: "block" }} />
+              ) : (
                 <div
-                  className={`inline-flex min-w-[320px] flex-col rounded-2xl border bg-white/[0.04] px-4 py-3 backdrop-blur-md ${panel.className}`}
+                  style={{
+                    width: 122,
+                    height: 122,
+                    display: "grid",
+                    placeItems: "center",
+                    background: "#f4f4f5",
+                    color: "#71717a",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
                 >
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-85">{panel.label}</p>
-                  <p className={`mt-1 text-3xl font-black tracking-tight ${panel.valueClass}`}>{panel.value}</p>
-                  <p className="mt-1 text-sm font-semibold opacity-90">{panel.sub}</p>
-                  {panel.action ? (
-                    <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-red-200">{panel.action}</p>
-                  ) : null}
+                  QR
                 </div>
-              </div>
-
-              <div className="flex flex-col items-center">
-                {qrDataUrl ? (
-                  <div className="rounded-2xl border border-white/15 bg-white p-2 shadow-[0_0_30px_rgba(16,185,129,0.18)]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={qrDataUrl} alt="" className="h-[132px] w-[132px]" />
-                  </div>
-                ) : (
-                  <div className="grid h-[148px] w-[148px] place-items-center rounded-2xl border border-white/10 bg-white/5 text-xs font-semibold text-zinc-400">
-                    QR loading
-                  </div>
-                )}
-                <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/80">Scan to verify</p>
-                <p className="mt-1 max-w-[160px] text-center text-[10px] font-semibold leading-snug text-zinc-400">
-                  Verify this membership at firenepal.com/verify
-                </p>
-              </div>
+              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt=""
+                width={34}
+                height={34}
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  width: 34,
+                  height: 34,
+                  marginLeft: -17,
+                  marginTop: -17,
+                  borderRadius: 10,
+                  border: "2px solid #ffffff",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                  background: "#022c22",
+                  display: "block",
+                }}
+              />
             </div>
+            <T
+              style={{
+                marginTop: 10,
+                fontSize: 11,
+                fontWeight: 900,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: GOLD,
+              }}
+            >
+              Scan to verify
+            </T>
+            <T style={{ marginTop: 4, fontSize: 10, fontWeight: 600, color: "rgba(244,244,245,0.82)", lineHeight: "14px" }}>
+              Verify this membership at firenepal.com/verify
+            </T>
           </div>
         </div>
 
-        <div className="relative grid min-h-[480px] grid-cols-[1.05fr_0.9fr_1.05fr] gap-6 px-8 py-7">
-          <MemberCardTempleSilhouette />
+        {/* Gold section divider */}
+        <div
+          style={{
+            position: "absolute",
+            left: 34,
+            right: 34,
+            top: 392,
+            height: 1,
+            background: `linear-gradient(90deg, transparent, ${GOLD_SOFT}, transparent)`,
+            boxShadow: "0 0 12px rgba(212,175,55,0.35)",
+          }}
+        />
 
-          <div className="relative z-10 space-y-3">
-            <p className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300/85">
-              <BadgeCheck size={14} />
+        {/* ─── Bottom left: member details ─── */}
+        <div style={{ position: "absolute", left: 42, top: 418, width: 360 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <BadgeCheck size={15} color={EMERALD_SOFT} />
+            <T
+              style={{
+                fontSize: 12,
+                fontWeight: 900,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: EMERALD_SOFT,
+              }}
+            >
               Member Details
-            </p>
-            <div className="space-y-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-md">
-              {[
-                ["Member Since", formatMemberCardDate(data.membershipStart)],
-                ["Expiry Date", formatMemberCardDate(data.membershipExpiry)],
-                ["Country of Work", data.countryOfWork ?? ""],
-                ["Preferred Currency", currencyDisplay(data.preferredCurrency)],
-                ["Membership Tier", tierDisplayName(data.membershipPlan)],
-                ["Phone Number", data.phone ?? ""],
-                ["Email", data.email ?? ""],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-start justify-between gap-4 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">{label}</span>
-                  <span className="max-w-[58%] break-words text-right text-sm font-black text-white">{value}</span>
+            </T>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {detailRows.map((row) => {
+              const Icon = row.icon;
+              return (
+                <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      display: "grid",
+                      placeItems: "center",
+                      border: "1px solid rgba(52,211,153,0.35)",
+                      background: "rgba(6,78,59,0.35)",
+                      color: EMERALD_SOFT,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon size={13} />
+                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <T
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        letterSpacing: "0.14em",
+                        textTransform: "uppercase",
+                        color: "rgba(161,161,170,0.95)",
+                      }}
+                    >
+                      {row.label}
+                    </T>
+                    <T
+                      style={{
+                        marginTop: 2,
+                        fontSize: 15,
+                        fontWeight: 800,
+                        color: row.gold ? GOLD : "#ffffff",
+                        lineHeight: "20px",
+                      }}
+                    >
+                      {row.value}
+                    </T>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative z-10 flex flex-col items-center justify-center">
-            <MemberCardEmblem />
-          </div>
-
-          <div className="relative z-10 space-y-4">
-            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] p-4 backdrop-blur-md">
-              <p className="font-nepali text-lg font-black leading-relaxed text-emerald-100">
-                {NEPALI_SLOGAN[0]}
-                <span className="block text-emerald-300">{NEPALI_SLOGAN[1]}</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300/80">Benefits</p>
-              <ul className="mt-3 space-y-2">
-                {BENEFITS.map((benefit) => (
-                  <li key={benefit} className="flex items-start gap-2 text-sm font-semibold text-emerald-50/90">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                    {benefit}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="text-sm font-semibold italic text-amber-200/85">Thank you for being a part of our mission.</p>
+              );
+            })}
           </div>
         </div>
 
-        <div className="relative z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-white/10 bg-black/50 px-8 py-4 text-xs font-bold text-emerald-100/80">
-          <p className="inline-flex items-center gap-2">
-            <Globe2 size={14} />
+        {/* Center emblem */}
+        <div style={{ position: "absolute", left: 590, top: 430, width: 220 }}>
+          <FireEmblem />
+        </div>
+
+        {/* Bottom right: empowerment */}
+        <div style={{ position: "absolute", right: 42, top: 418, width: 390 }}>
+          <T
+            style={{
+              fontSize: 12,
+              fontWeight: 900,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: EMERALD_SOFT,
+              marginBottom: 12,
+            }}
+          >
+            What We Empower You To Do
+          </T>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {EMPOWERMENT.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 999,
+                      display: "grid",
+                      placeItems: "center",
+                      background: "rgba(16,185,129,0.18)",
+                      border: "1px solid rgba(52,211,153,0.35)",
+                      color: EMERALD_SOFT,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon size={13} />
+                  </span>
+                  <T className="font-nepali" style={{ fontSize: 15, fontWeight: 700, color: "rgba(236,253,245,0.95)", lineHeight: "22px" }}>
+                    {item.text}
+                  </T>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 18, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <T
+                style={{
+                  fontFamily: 'var(--font-signature), "Great Vibes", "Segoe Script", cursive',
+                  fontSize: 34,
+                  fontWeight: 400,
+                  color: GOLD,
+                  lineHeight: "38px",
+                  textShadow: "0 0 18px rgba(212,175,55,0.35)",
+                }}
+              >
+                FIRE Nepal
+              </T>
+              <T style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "rgba(244,244,245,0.78)", fontStyle: "italic" }}>
+                Thank you for being a part of our mission.
+              </T>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/membership/holo-seal.png"
+              alt=""
+              width={58}
+              height={58}
+              style={{
+                width: 58,
+                height: 58,
+                objectFit: "contain",
+                display: "block",
+                filter: "drop-shadow(0 0 10px rgba(16,185,129,0.45))",
+                flexShrink: 0,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 46,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 36px",
+            borderTop: "1px solid rgba(212,175,55,0.28)",
+            background: "rgba(0,0,0,0.72)",
+            fontSize: 12,
+            fontWeight: 700,
+            color: "rgba(209,250,229,0.88)",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Globe2 size={13} />
             www.firenepal.com
-          </p>
-          <p className="inline-flex items-center gap-2 text-center text-emerald-50">
-            <Lock size={14} />
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#ecfdf5" }}>
+            <Lock size={13} />
             Secure. Private. Trusted.
-          </p>
-          <p className="inline-flex items-center justify-end gap-2 text-right">
-            <Headphones size={14} />
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Headphones size={13} />
             firenepal853@gmail.com
-          </p>
+          </span>
         </div>
       </div>
     );

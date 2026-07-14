@@ -3,13 +3,12 @@
 import { Download, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MemberCardExport } from "@/components/membership/MemberCardExport";
-import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import {
-  PremiumFireNepalMemberCard,
+  MemberCardExport,
   MEMBER_CARD_EXPORT_HEIGHT,
   MEMBER_CARD_EXPORT_WIDTH,
-} from "@/components/membership/PremiumFireNepalMemberCard";
+} from "@/components/membership/MemberCardExport";
+import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { mapUserProfileRowToMemberCard, type MemberCardData } from "@/lib/member-card-profile";
@@ -107,7 +106,8 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
 
       <div className="mt-6 w-full max-w-full overflow-x-hidden overflow-y-visible rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
         <MemberCardPreviewScaler>
-          <PremiumFireNepalMemberCard data={cardData} mode="preview" />
+          {/* Same MemberCardExport → PremiumFireNepalMemberCard tree as PNG/PDF capture */}
+          <MemberCardExport data={cardData} />
         </MemberCardPreviewScaler>
       </div>
 
