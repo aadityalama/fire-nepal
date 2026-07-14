@@ -17,9 +17,10 @@ import {
 export const MEMBER_CARD_EXPORT_WIDTH = 1400;
 export const MEMBER_CARD_EXPORT_HEIGHT = 900;
 
-const HERO_HEIGHT = 380;
-const FOOTER_HEIGHT = 56;
-const BODY_HEIGHT = MEMBER_CARD_EXPORT_HEIGHT - HERO_HEIGHT - FOOTER_HEIGHT;
+/** Section heights must sum to exactly 900 — no overflow, no dead band. */
+const HERO_HEIGHT = 420;
+const FOOTER_HEIGHT = 52;
+const BODY_HEIGHT = MEMBER_CARD_EXPORT_HEIGHT - HERO_HEIGHT - FOOTER_HEIGHT; // 428
 
 const BENEFITS = [
   "Budget smarter",
@@ -156,17 +157,17 @@ function MemberCardMountains() {
       <rect width={MEMBER_CARD_EXPORT_WIDTH} height={HERO_HEIGHT} fill="url(#mcx-sky)" />
       <rect width={MEMBER_CARD_EXPORT_WIDTH} height={HERO_HEIGHT} fill="url(#mcx-glow)" />
       <path
-        d={`M0 290 L120 220 L220 260 L340 150 L470 230 L590 120 L720 210 L860 90 L1020 190 L1180 130 L1400 250 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
+        d={`M0 318 L120 248 L220 288 L340 178 L470 258 L590 148 L720 238 L860 118 L1020 218 L1180 158 L1400 278 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
         fill="url(#mcx-mtn)"
         opacity="0.9"
       />
       <path
-        d={`M0 330 L180 270 L300 310 L460 220 L640 300 L820 210 L980 280 L1160 230 L1400 310 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
+        d={`M0 358 L180 298 L300 338 L460 248 L640 328 L820 238 L980 308 L1160 258 L1400 338 L1400 ${HERO_HEIGHT} L0 ${HERO_HEIGHT} Z`}
         fill="#031612"
         opacity="0.85"
       />
       <path
-        d="M860 75 C900 50 940 52 980 75 C1010 92 1035 125 1045 160 C1020 145 990 138 960 145 C920 155 885 145 860 125 Z"
+        d="M860 95 C900 70 940 72 980 95 C1010 112 1035 145 1045 180 C1020 165 990 158 960 165 C920 175 885 165 860 145 Z"
         fill="none"
         stroke="#34d399"
         strokeWidth="3"
@@ -180,13 +181,13 @@ function MemberCardTempleSilhouette() {
   return (
     <svg
       width={MEMBER_CARD_EXPORT_WIDTH}
-      height={96}
-      viewBox="0 0 1400 96"
-      style={{ position: "absolute", left: 0, right: 0, bottom: 0, opacity: 0.35, display: "block" }}
+      height={88}
+      viewBox="0 0 1400 88"
+      style={{ position: "absolute", left: 0, bottom: 0, opacity: 0.35, display: "block" }}
       aria-hidden
     >
       <path
-        d="M0 96 L0 62 L40 62 L55 36 L70 62 L110 62 L125 28 L140 62 L180 62 L200 20 L220 62 L260 62 L280 32 L300 62 L340 62 L360 24 L380 62 L420 62 L440 40 L460 62 L500 62 L520 18 L540 62 L580 62 L600 34 L620 62 L660 62 L680 22 L700 62 L740 62 L760 38 L780 62 L820 62 L840 14 L860 62 L900 62 L920 36 L940 62 L980 62 L1000 26 L1020 62 L1060 62 L1080 42 L1100 62 L1140 62 L1160 20 L1180 62 L1220 62 L1240 34 L1260 62 L1300 62 L1320 30 L1340 62 L1400 62 L1400 96 Z"
+        d="M0 88 L0 54 L40 54 L55 28 L70 54 L110 54 L125 20 L140 54 L180 54 L200 12 L220 54 L260 54 L280 24 L300 54 L340 54 L360 16 L380 54 L420 54 L440 32 L460 54 L500 54 L520 10 L540 54 L580 54 L600 26 L620 54 L660 54 L680 14 L700 54 L740 54 L760 30 L780 54 L820 54 L840 6 L860 54 L900 54 L920 28 L940 54 L980 54 L1000 18 L1020 54 L1060 54 L1080 34 L1100 54 L1140 54 L1160 12 L1180 54 L1220 54 L1240 26 L1260 54 L1300 54 L1320 22 L1340 54 L1400 54 L1400 88 Z"
         fill="#d4af37"
         opacity="0.55"
       />
@@ -262,7 +263,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
           boxShadow: "0 30px 90px rgba(0,0,0,0.55)",
         }}
       >
-        {/* ── Hero ── */}
+        {/* Hero: brand + photo + name/ID/countdown + QR — fixed pixels */}
         <div
           style={{
             position: "absolute",
@@ -285,7 +286,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             }}
           />
 
-          {/* Brand */}
+          {/* Brand — top left */}
           <div style={{ position: "absolute", left: 40, top: 28, display: "flex", alignItems: "center", gap: 12 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -302,7 +303,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               }}
             />
             <div>
-              <p style={{ ...TEXT, fontSize: 24, fontWeight: 900, letterSpacing: "0.08em", color: "#ffffff" }}>
+              <p style={{ ...TEXT, fontSize: 24, fontWeight: 900, letterSpacing: "0.08em", color: "#ffffff", lineHeight: "30px" }}>
                 FIRE NEPAL
               </p>
               <p
@@ -314,6 +315,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   letterSpacing: "0.34em",
                   textTransform: "uppercase",
                   color: "rgba(253,230,138,0.85)",
+                  lineHeight: "16px",
                 }}
               >
                 Financial Independence
@@ -321,7 +323,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             </div>
           </div>
 
-          {/* Tier badge */}
+          {/* Tier badge — top right, above QR */}
           <div
             style={{
               position: "absolute",
@@ -339,7 +341,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               fontWeight: 900,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
-              lineHeight: "normal",
+              lineHeight: "16px",
               boxShadow: accent.glow,
             }}
           >
@@ -347,8 +349,8 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             {tierBadgeLabel(data.membershipPlan)}
           </div>
 
-          {/* Photo */}
-          <div data-export-photo="true" style={{ position: "absolute", left: 40, top: 110, width: 148 }}>
+          {/* Photo — left, aligned with name/QR row */}
+          <div style={{ position: "absolute", left: 40, top: 118, width: 148 }}>
             <div
               style={{
                 position: "relative",
@@ -381,7 +383,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                     fontSize: 30,
                     fontWeight: 900,
                     color: "#ecfdf5",
-                    lineHeight: "normal",
+                    lineHeight: "36px",
                   }}
                 >
                   {initials}
@@ -415,13 +417,13 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 borderRadius: 999,
                 border: "1px solid rgba(52,211,153,0.3)",
                 background: "rgba(16,185,129,0.2)",
-                padding: "4px 12px",
+                padding: "5px 12px",
                 fontSize: 10,
                 fontWeight: 900,
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
                 color: "#d1fae5",
-                lineHeight: "normal",
+                lineHeight: "14px",
               }}
             >
               <ShieldCheck size={12} />
@@ -429,25 +431,23 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             </div>
           </div>
 
-          {/* Name + ID + countdown */}
-          <div style={{ position: "absolute", left: 220, top: 108, width: 860 }}>
+          {/* Name + ID + countdown — center-left, never under QR */}
+          <div style={{ position: "absolute", left: 220, top: 116, width: 760 }}>
             <h2
               style={{
                 ...TEXT,
-                boxSizing: "border-box",
+                boxSizing: "content-box",
+                width: "100%",
                 fontSize: 36,
                 fontWeight: 900,
                 letterSpacing: "0.04em",
                 textTransform: "uppercase",
                 color: "#ffffff",
-                // Explicit tall line-box so html2canvas does not clip glyph descenders/ascenders.
                 lineHeight: "48px",
-                height: 48,
+                minHeight: 48,
                 overflow: "visible",
                 whiteSpace: "nowrap",
                 textOverflow: "ellipsis",
-                paddingTop: 2,
-                paddingBottom: 2,
               }}
             >
               {data.fullName}
@@ -455,13 +455,12 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
 
             <SolidPanel
               style={{
-                marginTop: 14,
+                marginTop: 16,
                 width: 320,
-                padding: "12px 16px",
+                padding: "14px 16px",
                 borderColor: "rgba(52,211,153,0.25)",
               }}
             >
-              <div data-export-id="true">
               <p
                 style={{
                   ...TEXT,
@@ -470,7 +469,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   letterSpacing: "0.18em",
                   textTransform: "uppercase",
                   color: "rgba(110,231,183,0.85)",
-                  lineHeight: 1.3,
+                  lineHeight: "16px",
                 }}
               >
                 FIRE Nepal ID
@@ -478,30 +477,28 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               <p
                 style={{
                   ...TEXT,
-                  marginTop: 6,
+                  marginTop: 8,
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                   fontSize: 20,
                   fontWeight: 900,
                   letterSpacing: "0.04em",
                   color: "#ffffff",
-                  lineHeight: 1.35,
+                  lineHeight: "28px",
                 }}
               >
                 {data.fireNepalId}
               </p>
-              </div>
             </SolidPanel>
 
             <SolidPanel
               style={{
-                marginTop: 12,
-                width: 380,
-                padding: "12px 16px",
+                marginTop: 14,
+                width: 400,
+                padding: "14px 16px",
                 background: panel.bg,
                 borderColor: panel.border,
               }}
             >
-              <div data-export-countdown="true">
               <p
                 style={{
                   ...TEXT,
@@ -510,7 +507,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
                   color: "rgba(255,255,255,0.85)",
-                  lineHeight: 1.3,
+                  lineHeight: "16px",
                 }}
               >
                 {panel.label}
@@ -518,12 +515,12 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               <p
                 style={{
                   ...TEXT,
-                  marginTop: 6,
+                  marginTop: 8,
                   fontSize: 28,
                   fontWeight: 900,
                   letterSpacing: "-0.02em",
                   color: panel.valueColor,
-                  lineHeight: 1.3,
+                  lineHeight: "36px",
                 }}
               >
                 {panel.value}
@@ -531,11 +528,11 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
               <p
                 style={{
                   ...TEXT,
-                  marginTop: 4,
+                  marginTop: 6,
                   fontSize: 14,
                   fontWeight: 600,
                   color: "rgba(255,255,255,0.9)",
-                  lineHeight: 1.35,
+                  lineHeight: "20px",
                 }}
               >
                 {panel.sub}
@@ -550,18 +547,17 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                     letterSpacing: "0.14em",
                     textTransform: "uppercase",
                     color: "#fecaca",
-                    lineHeight: 1.3,
+                    lineHeight: "16px",
                   }}
                 >
                   {panel.action}
                 </p>
               ) : null}
-              </div>
             </SolidPanel>
           </div>
 
-          {/* QR */}
-          <div data-export-qr="true" style={{ position: "absolute", right: 40, top: 110, width: 160, textAlign: "center" }}>
+          {/* QR — top-right column under tier badge, aligned with photo top */}
+          <div style={{ position: "absolute", left: 1200, top: 118, width: 160, textAlign: "center" }}>
             {qrDataUrl ? (
               <div
                 style={{
@@ -599,7 +595,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   fontSize: 12,
                   fontWeight: 600,
                   color: "#a1a1aa",
-                  lineHeight: "normal",
+                  lineHeight: "16px",
                 }}
               >
                 QR loading
@@ -614,7 +610,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 letterSpacing: "0.16em",
                 textTransform: "uppercase",
                 color: "rgba(209,250,229,0.85)",
-                lineHeight: 1.3,
+                lineHeight: "14px",
               }}
             >
               Scan to verify
@@ -626,7 +622,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 fontSize: 10,
                 fontWeight: 600,
                 color: "#a1a1aa",
-                lineHeight: 1.4,
+                lineHeight: "14px",
               }}
             >
               Verify this membership at firenepal.com/verify
@@ -634,7 +630,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
           </div>
         </div>
 
-        {/* ── Body ── */}
+        {/* Body: three filled columns — details | emblem | benefits */}
         <div
           style={{
             position: "absolute",
@@ -647,8 +643,8 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
         >
           <MemberCardTempleSilhouette />
 
-          {/* Details */}
-          <div style={{ position: "absolute", left: 40, top: 24, width: 420 }}>
+          {/* Details column */}
+          <div style={{ position: "absolute", left: 40, top: 20, width: 420, height: BODY_HEIGHT - 28 }}>
             <p
               style={{
                 ...TEXT,
@@ -660,24 +656,34 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 color: "rgba(110,231,183,0.85)",
-                lineHeight: 1.3,
+                lineHeight: "16px",
               }}
             >
               <BadgeCheck size={14} />
               Member Details
             </p>
-            <SolidPanel style={{ marginTop: 12, padding: 16 }}>
+            <SolidPanel
+              style={{
+                marginTop: 10,
+                height: BODY_HEIGHT - 64,
+                boxSizing: "border-box",
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+              }}
+            >
               {detailRows.map(([label, value], index) => (
                 <div
                   key={label}
                   style={{
                     display: "flex",
-                    alignItems: "flex-start",
+                    alignItems: "center",
                     justifyContent: "space-between",
                     gap: 16,
-                    paddingBottom: index === detailRows.length - 1 ? 0 : 8,
-                    marginBottom: index === detailRows.length - 1 ? 0 : 8,
                     borderBottom: index === detailRows.length - 1 ? "none" : "1px solid rgba(255,255,255,0.05)",
+                    paddingBottom: index === detailRows.length - 1 ? 0 : 6,
+                    paddingTop: index === 0 ? 0 : 6,
                   }}
                 >
                   <span
@@ -688,7 +694,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
                       color: "#a1a1aa",
-                      lineHeight: 1.35,
+                      lineHeight: "16px",
                       flexShrink: 0,
                     }}
                   >
@@ -702,7 +708,7 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                       fontSize: 14,
                       fontWeight: 900,
                       color: "#ffffff",
-                      lineHeight: 1.35,
+                      lineHeight: "20px",
                       wordBreak: "break-word",
                     }}
                   >
@@ -713,23 +719,23 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             </SolidPanel>
           </div>
 
-          {/* Emblem */}
+          {/* Emblem — vertically centered in body */}
           <div
             style={{
               position: "absolute",
-              left: 500,
-              top: 48,
-              width: 400,
-              height: 320,
+              left: 510,
+              top: Math.round((BODY_HEIGHT - 200) / 2),
+              width: 380,
+              height: 200,
             }}
           >
             <div
               style={{
                 position: "absolute",
-                left: 80,
-                top: 36,
+                left: 70,
+                top: 0,
                 width: 240,
-                height: 240,
+                height: 200,
                 borderRadius: 999,
                 background: "radial-gradient(circle, rgba(16,185,129,0.28) 0%, rgba(5,5,5,0) 70%)",
               }}
@@ -737,8 +743,8 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             <div
               style={{
                 position: "absolute",
-                left: 100,
-                top: 56,
+                left: 90,
+                top: 0,
                 width: 200,
                 height: 200,
                 borderRadius: 999,
@@ -760,24 +766,21 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   border: "1px solid rgba(110,231,183,0.2)",
                 }}
               />
-              <Flame
-                style={{ width: 72, height: 72, color: "#6ee7b7", filter: "none" }}
-                fill="currentColor"
-              />
+              <Flame style={{ width: 72, height: 72, color: "#6ee7b7", filter: "none" }} fill="currentColor" />
               <p
                 style={{
                   ...TEXT,
                   position: "absolute",
-                  top: 14,
-                  left: 0,
-                  right: 0,
+                  top: 16,
+                  left: 8,
+                  right: 8,
                   textAlign: "center",
                   fontSize: 11,
                   fontWeight: 900,
-                  letterSpacing: "0.28em",
+                  letterSpacing: "0.22em",
                   textTransform: "uppercase",
                   color: "rgba(253,230,138,0.9)",
-                  lineHeight: 1.3,
+                  lineHeight: "14px",
                 }}
               >
                 Financial Freedom
@@ -786,16 +789,16 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                 style={{
                   ...TEXT,
                   position: "absolute",
-                  bottom: 14,
-                  left: 0,
-                  right: 0,
+                  bottom: 16,
+                  left: 8,
+                  right: 8,
                   textAlign: "center",
                   fontSize: 11,
                   fontWeight: 900,
                   letterSpacing: "0.28em",
                   textTransform: "uppercase",
                   color: "rgba(253,230,138,0.9)",
-                  lineHeight: 1.3,
+                  lineHeight: "14px",
                 }}
               >
                 Better Life
@@ -803,11 +806,11 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             </div>
           </div>
 
-          {/* Benefits */}
-          <div style={{ position: "absolute", right: 40, top: 24, width: 420 }}>
+          {/* Benefits column */}
+          <div style={{ position: "absolute", right: 40, top: 20, width: 420, height: BODY_HEIGHT - 28 }}>
             <SolidPanel
               style={{
-                padding: 16,
+                padding: "14px 16px",
                 background: "rgba(6,78,59,0.28)",
                 borderColor: "rgba(52,211,153,0.15)",
               }}
@@ -819,48 +822,47 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
                   fontSize: 18,
                   fontWeight: 900,
                   color: "#d1fae5",
-                  lineHeight: 1.45,
+                  lineHeight: "28px",
                 }}
               >
                 {NEPALI_SLOGAN[0]}
-                <span style={{ display: "block", color: "#6ee7b7", lineHeight: 1.45 }}>{NEPALI_SLOGAN[1]}</span>
+                <span style={{ display: "block", color: "#6ee7b7", lineHeight: "28px" }}>{NEPALI_SLOGAN[1]}</span>
               </p>
             </SolidPanel>
 
             <p
               style={{
                 ...TEXT,
-                marginTop: 16,
+                marginTop: 14,
                 fontSize: 11,
                 fontWeight: 900,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 color: "rgba(110,231,183,0.85)",
-                lineHeight: 1.3,
+                lineHeight: "16px",
               }}
             >
               Benefits
             </p>
-            <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0 }}>
+            <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0 }}>
               {BENEFITS.map((benefit) => (
                 <li
                   key={benefit}
                   style={{
                     display: "flex",
-                    alignItems: "flex-start",
+                    alignItems: "center",
                     gap: 8,
-                    marginBottom: 8,
+                    marginBottom: 10,
                     fontSize: 14,
                     fontWeight: 600,
                     color: "rgba(236,253,245,0.9)",
-                    lineHeight: 1.35,
+                    lineHeight: "20px",
                   }}
                 >
                   <span
                     style={{
                       width: 6,
                       height: 6,
-                      marginTop: 7,
                       borderRadius: 999,
                       background: "#34d399",
                       flexShrink: 0,
@@ -873,12 +875,12 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             <p
               style={{
                 ...TEXT,
-                marginTop: 8,
+                marginTop: 4,
                 fontSize: 14,
                 fontWeight: 600,
                 fontStyle: "italic",
                 color: "rgba(253,230,138,0.85)",
-                lineHeight: 1.35,
+                lineHeight: "20px",
               }}
             >
               Thank you for being a part of our mission.
@@ -886,12 +888,12 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
           </div>
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div
           style={{
             position: "absolute",
             left: 0,
-            bottom: 0,
+            top: HERO_HEIGHT + BODY_HEIGHT,
             width: MEMBER_CARD_EXPORT_WIDTH,
             height: FOOTER_HEIGHT,
             boxSizing: "border-box",
@@ -905,27 +907,18 @@ export const MemberCardExport = forwardRef<HTMLDivElement, MemberCardExportProps
             fontSize: 12,
             fontWeight: 700,
             color: "rgba(209,250,229,0.85)",
-            lineHeight: "normal",
+            lineHeight: "16px",
           }}
         >
-          <p style={{ ...TEXT, display: "flex", alignItems: "center", gap: 8, lineHeight: "normal" }}>
+          <p style={{ ...TEXT, display: "flex", alignItems: "center", gap: 8, lineHeight: "16px" }}>
             <Globe2 size={14} />
             www.firenepal.com
           </p>
-          <p
-            style={{
-              ...TEXT,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              color: "#ecfdf5",
-              lineHeight: "normal",
-            }}
-          >
+          <p style={{ ...TEXT, display: "flex", alignItems: "center", gap: 8, color: "#ecfdf5", lineHeight: "16px" }}>
             <Lock size={14} />
             Secure. Private. Trusted.
           </p>
-          <p style={{ ...TEXT, display: "flex", alignItems: "center", gap: 8, lineHeight: "normal" }}>
+          <p style={{ ...TEXT, display: "flex", alignItems: "center", gap: 8, lineHeight: "16px" }}>
             <Headphones size={14} />
             firenepal853@gmail.com
           </p>
