@@ -3,12 +3,12 @@
 import { Download, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import {
-  PremiumFireNepalMemberCard,
+  MemberCardExport,
   MEMBER_CARD_EXPORT_HEIGHT,
   MEMBER_CARD_EXPORT_WIDTH,
-} from "@/components/membership/PremiumFireNepalMemberCard";
+} from "@/components/membership/MemberCardExport";
+import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { mapUserProfileRowToMemberCard, type MemberCardData } from "@/lib/member-card-profile";
@@ -106,24 +106,26 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
 
       <div className="mt-6 w-full max-w-full overflow-x-hidden overflow-y-visible rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
         <MemberCardPreviewScaler>
-          <PremiumFireNepalMemberCard data={cardData} mode="preview" />
+          {/* Preview scales a separate instance; PNG/PDF capture the dedicated export tree below. */}
+          <MemberCardExport data={cardData} />
         </MemberCardPreviewScaler>
       </div>
 
-      {/* Off-screen export source; capture clones a visible in-viewport copy. */}
+      {/* Dedicated export source at true 1400×900 — never inside the responsive scaler. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed"
         style={{
+          position: "fixed",
           left: -MEMBER_CARD_EXPORT_WIDTH - 64,
           top: 0,
           zIndex: -1,
           width: MEMBER_CARD_EXPORT_WIDTH,
           height: MEMBER_CARD_EXPORT_HEIGHT,
           overflow: "hidden",
+          pointerEvents: "none",
         }}
       >
-        <PremiumFireNepalMemberCard ref={exportRef} data={cardData} mode="export" />
+        <MemberCardExport ref={exportRef} data={cardData} />
       </div>
     </div>
   );

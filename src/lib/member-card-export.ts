@@ -1,4 +1,4 @@
-import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/PremiumFireNepalMemberCard";
+import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/MemberCardExport";
 import type { MemberCardData } from "@/lib/member-card-profile";
 import { validateMemberCardData } from "@/lib/member-card-profile";
 
@@ -186,7 +186,31 @@ function stripUnsupportedCaptureStyles(root: HTMLElement) {
   });
 }
 
+async function waitForExportReadyAttribute(root: HTMLElement) {
+  const exportRoot =
+    root.matches("[data-member-card-export='true']")
+      ? root
+      : root.querySelector<HTMLElement>("[data-member-card-export='true']");
+  if (!exportRoot) return;
+
+  if (exportRoot.getAttribute("data-export-ready") === "true") return;
+
+  await new Promise<void>((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      if (exportRoot.getAttribute("data-export-ready") === "true" || Date.now() - started > 4_000) {
+        resolve();
+        return;
+      }
+      window.setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 async function waitForCaptureReady(root: HTMLElement) {
+  await waitForExportReadyAttribute(root);
+
   if (document.fonts?.ready) {
     try {
       await Promise.race([document.fonts.ready, new Promise<void>((r) => window.setTimeout(r, 2_000))]);
@@ -277,7 +301,11 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasElement> {
   const { default: html2canvas } = await import("html2canvas");
 
-  // Visible clone in the viewport — required for reliable WebKit/html2canvas paint.
+  // Wait on the live dedicated export tree (QR, fonts, images) before cloning.
+  await waitForCaptureReady(source);
+
+  // Visible in-viewport clone — required for reliable WebKit/html2canvas paint.
+  // Source must already be MemberCardExport at 1400×900 (no scaled preview clone).
   const clone = source.cloneNode(true) as HTMLElement;
   clone.style.position = "fixed";
   clone.style.left = "0";
@@ -290,6 +318,8 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
   clone.style.transform = "none";
   clone.style.width = `${MEMBER_CARD_EXPORT_WIDTH}px`;
   clone.style.height = `${MEMBER_CARD_EXPORT_HEIGHT}px`;
+  clone.style.minWidth = `${MEMBER_CARD_EXPORT_WIDTH}px`;
+  clone.style.minHeight = `${MEMBER_CARD_EXPORT_HEIGHT}px`;
   clone.style.maxWidth = `${MEMBER_CARD_EXPORT_WIDTH}px`;
   clone.style.maxHeight = `${MEMBER_CARD_EXPORT_HEIGHT}px`;
   clone.style.overflow = "hidden";
@@ -320,7 +350,6 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
       logging: false,
       imageTimeout: 15_000,
       onclone: (clonedDoc, cloned) => {
-        // Prefer the clone document's view when present (html2canvas may use an iframe).
         const view = clonedDoc.defaultView ?? window;
         const colorProperties = [
           "background-color",
@@ -339,6 +368,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
         nodes.forEach((node) => {
           node.style.opacity = "1";
           node.style.visibility = "visible";
+          node.style.transform = "none";
           const computed = view.getComputedStyle(node);
           const hasBackdrop =
             (computed.backdropFilter && computed.backdropFilter !== "none") ||
