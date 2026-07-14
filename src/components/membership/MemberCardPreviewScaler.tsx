@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/MemberCardExport";
+import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/PremiumFireNepalMemberCard";
 
 /** Scales the fixed 1400×900 card to fit mobile viewport width without horizontal overflow. */
 export function MemberCardPreviewScaler({ children }: { children: ReactNode }) {

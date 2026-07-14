@@ -3,12 +3,13 @@
 import { Download, FileText } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MemberCardExport } from "@/components/membership/MemberCardExport";
+import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
 import {
-  MemberCardExport,
+  PremiumFireNepalMemberCard,
   MEMBER_CARD_EXPORT_HEIGHT,
   MEMBER_CARD_EXPORT_WIDTH,
-} from "@/components/membership/MemberCardExport";
-import { MemberCardPreviewScaler } from "@/components/membership/MemberCardPreviewScaler";
+} from "@/components/membership/PremiumFireNepalMemberCard";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { mapUserProfileRowToMemberCard, type MemberCardData } from "@/lib/member-card-profile";
@@ -106,12 +107,11 @@ export function MemberCardDownloadPanel({ className = "" }: MemberCardDownloadPa
 
       <div className="mt-6 w-full max-w-full overflow-x-hidden overflow-y-visible rounded-[1.25rem] border border-white/10 bg-black/30 p-3 sm:p-4">
         <MemberCardPreviewScaler>
-          {/* Preview scales a separate instance; PNG/PDF capture the dedicated export tree below. */}
-          <MemberCardExport data={cardData} />
+          <PremiumFireNepalMemberCard data={cardData} mode="preview" />
         </MemberCardPreviewScaler>
       </div>
 
-      {/* Dedicated export source at true 1400×900 — never inside the responsive scaler. */}
+      {/* Off-screen export source — thin wrapper around the same premium card JSX/CSS. */}
       <div
         aria-hidden
         style={{

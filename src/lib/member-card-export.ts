@@ -1,4 +1,4 @@
-import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/MemberCardExport";
+import { MEMBER_CARD_EXPORT_HEIGHT, MEMBER_CARD_EXPORT_WIDTH } from "@/components/membership/PremiumFireNepalMemberCard";
 import type { MemberCardData } from "@/lib/member-card-profile";
 import { validateMemberCardData } from "@/lib/member-card-profile";
 
@@ -377,7 +377,7 @@ async function captureMemberCardCanvas(source: HTMLElement): Promise<HTMLCanvasE
 
   const { host, cleanup } = prepareCaptureHost();
 
-  // Capture from dedicated MemberCardExport at true 1400×900 (never the scaled preview).
+  // Capture the dedicated export tree (same PremiumFireNepalMemberCard JSX as preview) at 1400×900.
   const clone = source.cloneNode(true) as HTMLElement;
   clone.style.position = "relative";
   clone.style.left = "0";
