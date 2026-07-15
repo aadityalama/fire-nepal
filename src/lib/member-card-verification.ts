@@ -1,6 +1,11 @@
 import "server-only";
 
-import { mapVerificationPayload, type PublicMemberVerification } from "@/lib/member-card-profile";
+import {
+  mapVerificationPayload,
+  planOrFree,
+  type PublicMemberVerification,
+} from "@/lib/member-card-profile";
+import { deriveCanonicalMembership } from "@/lib/membership/canonical";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -12,6 +17,72 @@ type RpcClient = {
   ) => Promise<{ data: unknown; error: { message: string } | null }>;
 };
 
+type UserProfilesVerificationRow = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  fire_nepal_id: string | null;
+  membership_plan: string | null;
+  membership_start: string | null;
+  membership_expiry: string | null;
+  membership_suspended_at: string | null;
+  membership_archived_at: string | null;
+  country_of_work: string | null;
+  preferred_currency: string | null;
+};
+
+const USER_PROFILES_VERIFY_SELECT =
+  "id, full_name, avatar_url, fire_nepal_id, membership_plan, membership_start, membership_expiry, membership_suspended_at, membership_archived_at, country_of_work, preferred_currency" as const;
+
+function mapUserProfilesRowToVerification(row: UserProfilesVerificationRow): PublicMemberVerification {
+  const canonical = deriveCanonicalMembership(
+    {
+      id: row.id,
+      membership_plan: row.membership_plan,
+      membership_start: row.membership_start,
+      membership_expiry: row.membership_expiry,
+      membership_suspended_at: row.membership_suspended_at,
+      membership_archived_at: row.membership_archived_at,
+    },
+    row.id,
+  );
+
+  return {
+    found: true,
+    fullName: row.full_name,
+    avatarUrl: row.avatar_url,
+    fireNepalId: row.fire_nepal_id,
+    membershipPlan: planOrFree(row.membership_plan),
+    membershipStart: canonical.membershipStart,
+    membershipExpiry: canonical.membershipExpiry,
+    countryOfWork: row.country_of_work,
+    preferredCurrency: row.preferred_currency,
+    // Public verify page uses expiry lifecycle (active / expiring_soon / expired).
+    status: canonical.expiryStatus,
+  };
+}
+
+async function fetchFromUserProfiles(
+  fireNepalId: string,
+): Promise<PublicMemberVerification | null> {
+  const admin = createSupabaseServiceRoleClient();
+  if (!admin) return null;
+
+  const { data, error } = await admin
+    .from("user_profiles")
+    .select(USER_PROFILES_VERIFY_SELECT)
+    .eq("fire_nepal_id", fireNepalId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[verify] user_profiles lookup failed:", error.message, { fireNepalId });
+    return null;
+  }
+  if (!data) return { found: false };
+
+  return mapUserProfilesRowToVerification(data as UserProfilesVerificationRow);
+}
+
 async function runVerificationRpc(client: RpcClient, fireNepalId: string): Promise<PublicMemberVerification> {
   const { data, error } = await client.rpc("get_public_member_verification", {
     p_fire_nepal_id: fireNepalId,
@@ -21,9 +92,21 @@ async function runVerificationRpc(client: RpcClient, fireNepalId: string): Promi
   return mapVerificationPayload(data as Record<string, unknown>);
 }
 
+/**
+ * Public membership verification — same SOT as admin/profile:
+ * `public.user_profiles` membership_start / membership_expiry / membership_plan.
+ */
 export async function fetchPublicMemberVerification(fireNepalId: string): Promise<PublicMemberVerification> {
   if (!isSupabaseConfigured()) {
     return { found: false };
+  }
+
+  // Prefer direct user_profiles read (MembershipService SOT) so dates/plan match admin + profile.
+  try {
+    const fromProfiles = await fetchFromUserProfiles(fireNepalId);
+    if (fromProfiles) return fromProfiles;
+  } catch (err) {
+    console.error("[verify] user_profiles path failed, falling back to RPC:", err);
   }
 
   try {

@@ -112,17 +112,27 @@ export function validateMemberCardData(data: MemberCardData): string | null {
 
 export function mapVerificationPayload(payload: Record<string, unknown>): PublicMemberVerification {
   if (payload.found !== true) return { found: false };
+  const membershipPlan = planOrFree(
+    typeof payload.membership_plan === "string" ? payload.membership_plan : null,
+  );
+  const membershipStart = typeof payload.membership_start === "string" ? payload.membership_start : null;
   const expiry = typeof payload.membership_expiry === "string" ? payload.membership_expiry : null;
+  // Match MembershipService / user_profiles: paid plan with null expiry is open-ended Active.
+  const status = expiry
+    ? computeMembershipExpiryStatus(expiry).status
+    : membershipPlan === "free"
+      ? "expired"
+      : "active";
   return {
     found: true,
     fullName: typeof payload.full_name === "string" ? payload.full_name : null,
     avatarUrl: typeof payload.avatar_url === "string" ? payload.avatar_url : null,
     fireNepalId: typeof payload.fire_nepal_id === "string" ? payload.fire_nepal_id : null,
-    membershipPlan: planOrFree(typeof payload.membership_plan === "string" ? payload.membership_plan : null),
-    membershipStart: typeof payload.membership_start === "string" ? payload.membership_start : null,
+    membershipPlan,
+    membershipStart,
     membershipExpiry: expiry,
     countryOfWork: typeof payload.country_of_work === "string" ? payload.country_of_work : null,
     preferredCurrency: typeof payload.preferred_currency === "string" ? payload.preferred_currency : null,
-    status: computeMembershipExpiryStatus(expiry).status,
+    status,
   };
 }

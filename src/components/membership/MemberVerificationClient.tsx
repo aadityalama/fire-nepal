@@ -21,14 +21,44 @@ function tierIcon(plan: FireMembershipTier | null | undefined) {
   return Sparkles;
 }
 
+/** MMM D, YYYY — never blank (shows "Not available" when missing/invalid). */
+function displayMembershipDate(value: string | null | undefined): string {
+  const formatted = formatMemberCardDate(value ?? null);
+  return formatted || "Not available";
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-400">{label}</span>
+      <span className="text-right text-sm font-black text-white">{value}</span>
+    </div>
+  );
+}
+
 export function MemberVerificationClient({ fireNepalId, verification }: MemberVerificationClientProps) {
   const found = verification.found;
   const expiryState = computeMembershipExpiryStatus(verification.membershipExpiry ?? null);
-  const status = verification.status ?? expiryState.status;
+  // Prefer server status (derived from user_profiles via MembershipService rules).
+  const status =
+    verification.status ??
+    (verification.membershipExpiry
+      ? expiryState.status
+      : verification.membershipPlan && verification.membershipPlan !== "free"
+        ? "active"
+        : "expired");
   const TierIcon = tierIcon(verification.membershipPlan);
-  const verified = found && expiryState.isActive;
+  const verified = found && status === "active";
   const expiring = found && status === "expiring_soon";
   const expired = found && status === "expired";
+  const isActiveMembership = verified || expiring;
+
+  const memberSince = displayMembershipDate(verification.membershipStart);
+  const expiryDate = displayMembershipDate(verification.membershipExpiry);
+  const statusLabel = expired ? "Expired Membership" : "Active";
+  const daysRemainingLabel = verification.membershipExpiry
+    ? String(Math.max(0, expiryState.daysRemaining))
+    : "Not available";
 
   return (
     <main className="min-h-screen bg-[#050505] px-4 py-10 text-white sm:px-6">
@@ -75,10 +105,11 @@ export function MemberVerificationClient({ fireNepalId, verification }: MemberVe
                     {tierDisplayName(verification.membershipPlan ?? "free")}
                   </span>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-400">Expiry Date</span>
-                  <span className="text-sm font-black text-white">{formatMemberCardDate(verification.membershipExpiry ?? null)}</span>
-                </div>
+                <DetailRow label="Member Since" value={memberSince} />
+                <DetailRow label="Expiry Date" value={expiryDate} />
+                <DetailRow label="Status" value={statusLabel} />
+                {expired ? <DetailRow label="Expired On" value={expiryDate} /> : null}
+                {isActiveMembership ? <DetailRow label="Days Remaining" value={daysRemainingLabel} /> : null}
               </div>
 
               {verified ? (
