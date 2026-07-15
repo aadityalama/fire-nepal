@@ -28,6 +28,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Bar, Line } from "react-chartjs-2";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { SwpAiRetirementAnalysis } from "@/components/SwpAiRetirementAnalysis";
+import { SwpDashboardV2 } from "@/components/SwpDashboardV2";
 import {
   buildSwpAiInsight,
   formatSwpCurrency,
@@ -541,6 +542,8 @@ export function SwpCalculator() {
         </section>
 
         <SwpAiRetirementAnalysis result={result} inputs={parsed} currency={currency} />
+
+        <SwpDashboardV2 result={result} inputs={parsed} currency={currency} />
       </div>
     </main>
   );
