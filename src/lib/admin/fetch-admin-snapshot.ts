@@ -244,19 +244,27 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
   >();
   const subEndByUser = new Map<string, string | null>();
   if (sb) {
-    const membershipBy = await getMembershipMapByUserIds(
-      sb,
-      users.map((u) => u.id),
-    );
-    for (const u of users) {
-      const m = membershipBy.get(u.id);
-      profileByUser.set(u.id, {
-        plan_type: m?.plan ?? "free",
-        last_active_at: null,
-        suspended_at: m?.suspendedAt ?? null,
-        archived_at: m?.archivedAt ?? null,
-      });
-      subEndByUser.set(u.id, m?.membershipExpiry ?? null);
+    try {
+      const membershipBy = await getMembershipMapByUserIds(
+        sb,
+        users.map((u) => u.id),
+      );
+      for (const u of users) {
+        const m = membershipBy.get(u.id);
+        profileByUser.set(u.id, {
+          plan_type: m?.plan ?? "free",
+          last_active_at: null,
+          // Null-safe: missing access-flag columns → null.
+          suspended_at: m?.suspendedAt ?? null,
+          archived_at: m?.archivedAt ?? null,
+        });
+        subEndByUser.set(u.id, m?.membershipExpiry ?? null);
+      }
+    } catch (err) {
+      // Never crash /admin on membership load — soft-degrade into loadError banner.
+      const message = err instanceof Error ? err.message : "Membership batch load failed";
+      console.error("[fetchAdminSnapshot] membership load failed:", message);
+      loadError = loadError ?? message;
     }
   }
 

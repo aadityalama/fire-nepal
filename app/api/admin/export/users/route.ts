@@ -18,10 +18,16 @@ export async function GET() {
     return NextResponse.json({ error }, { status: 502 });
   }
 
-  const membershipBy = await getMembershipMapByUserIds(
-    sb,
-    users.map((u) => u.id),
-  );
+  let membershipBy: Awaited<ReturnType<typeof getMembershipMapByUserIds>>;
+  try {
+    membershipBy = await getMembershipMapByUserIds(
+      sb,
+      users.map((u) => u.id),
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Membership batch load failed";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
   const { data: names } = await sb.from("user_profiles").select("id, full_name");
   const nameBy = new Map((names ?? []).map((n) => [n.id, n.full_name]));
 
@@ -46,6 +52,7 @@ export async function GET() {
       display,
       m?.plan ?? "free",
       m?.membershipExpiry ?? "",
+      // Null-safe CSV cells when access flags are absent pre-migration.
       m?.suspendedAt ?? "",
       m?.archivedAt ?? "",
       u.created_at ?? "",

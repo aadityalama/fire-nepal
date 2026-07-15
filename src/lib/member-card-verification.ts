@@ -31,8 +31,17 @@ type UserProfilesVerificationRow = {
   preferred_currency: string | null;
 };
 
-const USER_PROFILES_VERIFY_SELECT =
-  "id, full_name, avatar_url, fire_nepal_id, membership_plan, membership_start, membership_expiry, membership_suspended_at, membership_archived_at, country_of_work, preferred_currency" as const;
+const USER_PROFILES_VERIFY_SELECT_FULL =
+  "id, full_name, avatar_url, fire_nepal_id, membership_plan, membership_start, membership_expiry, membership_suspended_at, membership_archived_at, country_of_work, preferred_currency";
+const USER_PROFILES_VERIFY_SELECT_BASE =
+  "id, full_name, avatar_url, fire_nepal_id, membership_plan, membership_start, membership_expiry, country_of_work, preferred_currency";
+
+function isMissingAccessColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const msg = (error.message ?? "").toLowerCase();
+  return msg.includes("membership_suspended_at") || msg.includes("membership_archived_at");
+}
 
 function mapUserProfilesRowToVerification(row: UserProfilesVerificationRow): PublicMemberVerification {
   const canonical = deriveCanonicalMembership(
@@ -41,8 +50,9 @@ function mapUserProfilesRowToVerification(row: UserProfilesVerificationRow): Pub
       membership_plan: row.membership_plan,
       membership_start: row.membership_start,
       membership_expiry: row.membership_expiry,
-      membership_suspended_at: row.membership_suspended_at,
-      membership_archived_at: row.membership_archived_at,
+      // Null-safe when access-flag columns are absent pre-migration.
+      membership_suspended_at: row.membership_suspended_at ?? null,
+      membership_archived_at: row.membership_archived_at ?? null,
     },
     row.id,
   );
@@ -68,19 +78,48 @@ async function fetchFromUserProfiles(
   const admin = createSupabaseServiceRoleClient();
   if (!admin) return null;
 
-  const { data, error } = await admin
+  const full = await admin
     .from("user_profiles")
-    .select(USER_PROFILES_VERIFY_SELECT)
+    .select(USER_PROFILES_VERIFY_SELECT_FULL)
     .eq("fire_nepal_id", fireNepalId)
     .maybeSingle();
+
+  let row: UserProfilesVerificationRow | null = null;
+  let error = full.error;
+
+  if (!error && full.data) {
+    row = full.data as unknown as UserProfilesVerificationRow;
+  } else if (error && isMissingAccessColumnError(error)) {
+    console.warn(
+      "[verify] access-flag columns missing — falling back to base user_profiles select.",
+      error.message,
+    );
+    const fallback = await admin
+      .from("user_profiles")
+      .select(USER_PROFILES_VERIFY_SELECT_BASE)
+      .eq("fire_nepal_id", fireNepalId)
+      .maybeSingle();
+    error = fallback.error;
+    if (!error && fallback.data) {
+      const base = fallback.data as unknown as Omit<
+        UserProfilesVerificationRow,
+        "membership_suspended_at" | "membership_archived_at"
+      >;
+      row = {
+        ...base,
+        membership_suspended_at: null,
+        membership_archived_at: null,
+      };
+    }
+  }
 
   if (error) {
     console.error("[verify] user_profiles lookup failed:", error.message, { fireNepalId });
     return null;
   }
-  if (!data) return { found: false };
+  if (!row) return { found: false };
 
-  return mapUserProfilesRowToVerification(data as UserProfilesVerificationRow);
+  return mapUserProfilesRowToVerification(row);
 }
 
 async function runVerificationRpc(client: RpcClient, fireNepalId: string): Promise<PublicMemberVerification> {

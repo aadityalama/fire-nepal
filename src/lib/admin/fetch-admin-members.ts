@@ -40,7 +40,13 @@ export async function fetchAdminMembers(): Promise<{
   }
 
   const userIds = users.map((u) => u.id);
-  const membershipBy = await getMembershipMapByUserIds(sb, userIds);
+  let membershipBy: Awaited<ReturnType<typeof getMembershipMapByUserIds>>;
+  try {
+    membershipBy = await getMembershipMapByUserIds(sb, userIds);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Membership batch load failed";
+    return { members: [], error: message };
+  }
 
   const { data: names, error: nErr } = await sb.from("user_profiles").select("id, full_name");
   if (nErr) {
@@ -59,6 +65,7 @@ export async function fetchAdminMembers(): Promise<{
     const planType: PlanType = m?.plan ?? "free";
     const expiresAt = m?.membershipExpiry ?? null;
     const membershipActivatedAt = m?.membershipStart ?? null;
+    // Null-safe when access-flag columns are absent in production.
     const suspendedAt = m?.suspendedAt ?? null;
     const archivedAt = m?.archivedAt ?? null;
     const uiBucket = membershipUiBucket({

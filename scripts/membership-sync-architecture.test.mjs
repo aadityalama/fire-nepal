@@ -281,7 +281,13 @@ test("architecture: MembershipService is the shared SOT reader/writer", () => {
   assert.match(service, /from\("user_profiles"\)/);
   assert.match(service, /export async function getMembershipByUserId/);
   assert.match(service, /export async function writeMembership/);
-  assert.doesNotMatch(service, /\.from\("profiles"\)/);
+  // Reads must stay on user_profiles. profiles upsert is allowed only as
+  // write-path mirror when access-flag columns are missing pre-migration.
+  const writeIdx = service.indexOf("export async function writeMembership");
+  assert.ok(writeIdx > 0);
+  const readHalf = service.slice(0, writeIdx);
+  assert.doesNotMatch(readHalf, /\.from\("profiles"\)/);
+  assert.match(service, /profiles lifecycle mirror/);
   assert.doesNotMatch(service, /\.from\("subscriptions"\)/);
   assert.doesNotMatch(service, /localStorage\.(getItem|setItem|removeItem)/);
 });
@@ -326,6 +332,21 @@ test("architecture: load failure must not invent Free in entitlement/context", (
   assert.match(ctx, /if \(!r\.ok\) return null/);
   assert.match(service, /membership load failed/);
   assert.match(service, /Refusing to demote|assertPlanWriteAllowed/);
+});
+
+test("architecture: MembershipService falls back when access-flag columns are missing", () => {
+  const service = read("src/services/membership-service.ts");
+  assert.match(service, /isMissingMembershipAccessColumnError/);
+  assert.match(service, /MEMBERSHIP_SELECT_BASE/);
+  assert.match(service, /membership_suspended_at/);
+  assert.match(service, /42703/);
+  assert.match(service, /falling back to base membership columns/);
+});
+
+test("architecture: admin snapshot soft-degrades instead of crashing on membership load", () => {
+  const snap = read("src/lib/admin/fetch-admin-snapshot.ts");
+  assert.match(snap, /getMembershipMapByUserIds/);
+  assert.match(snap, /Never crash \/admin|soft-degrade|loadError = loadError \?\? message/);
 });
 
 test("architecture: profiles trigger must not demote paid plans to Free", () => {
