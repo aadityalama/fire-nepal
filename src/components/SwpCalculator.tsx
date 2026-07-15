@@ -33,7 +33,6 @@ import {
   buildSwpAiInsight,
   formatSwpCurrency,
   runSwpSimulation,
-  type SwpCurrency,
 } from "@/lib/swp-calculator";
 
 ChartJS.register(
@@ -103,18 +102,11 @@ function BilingualInputLabel({
 }
 
 export function SwpCalculator() {
-  const [currency, setCurrency] = useState<SwpCurrency>("KRW");
   const [initialCorpus, setInitialCorpus] = useState<number | undefined>(undefined);
   const [monthlyWithdrawal, setMonthlyWithdrawal] = useState<number | undefined>(undefined);
   const [returnPct, setReturnPct] = useState<number | undefined>(undefined);
   const [inflationPct, setInflationPct] = useState<number | undefined>(undefined);
   const [horizonYearsRaw, setHorizonYearsRaw] = useState<number | undefined>(undefined);
-
-  function applyCurrencyPreset(next: SwpCurrency) {
-    setCurrency(next);
-    setInitialCorpus(undefined);
-    setMonthlyWithdrawal(undefined);
-  }
 
   const parsed = useMemo(() => {
     const initial = Math.max(0, initialCorpus ?? 0);
@@ -137,12 +129,12 @@ export function SwpCalculator() {
     [parsed],
   );
 
-  const fmt = (n: number) => formatSwpCurrency(n, currency);
-  const amountPrefix = currency === "KRW" ? "₩" : "रु";
+  const fmt = (n: number) => formatSwpCurrency(n);
+  const amountPrefix = "रु";
 
   const aiText = useMemo(
-    () => buildSwpAiInsight(result, parsed.horizonYears, currency, parsed.annualInflationPct),
-    [result, parsed.horizonYears, currency, parsed.annualInflationPct],
+    () => buildSwpAiInsight(result, parsed.horizonYears, parsed.annualInflationPct),
+    [result, parsed.horizonYears, parsed.annualInflationPct],
   );
 
   const labels = result.yearly.map((y) => `Y${y.year}`);
@@ -264,27 +256,13 @@ export function SwpCalculator() {
   return (
     <main className="premium-shell min-h-screen bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6">
           <Link
             href="/"
             className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white px-4 py-2.5 text-sm font-black text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50"
           >
             <ArrowLeft size={16} /> Back to FIRE Nepal
           </Link>
-          <div className="flex gap-2 rounded-full border border-emerald-100 bg-white/90 p-1 shadow-sm backdrop-blur">
-            {(["KRW", "NPR"] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => applyCurrencyPreset(c)}
-                className={`rounded-full px-4 py-2 text-sm font-black transition ${
-                  currency === c ? "bg-emerald-700 text-white shadow-md" : "text-emerald-800 hover:bg-emerald-50"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
         </div>
 
         <section className="dark-glass-card relative overflow-hidden rounded-[2rem] p-6 text-white md:p-10">
@@ -301,8 +279,8 @@ export function SwpCalculator() {
                 नेपाल ↔ कोरिया जीवनको लागि व्यवस्थित निकासी योजना
               </p>
               <p className="mt-4 max-w-xl text-base leading-relaxed text-emerald-50/85 sm:text-lg">
-                Model inflation-linked spending, portfolio survival, and safe withdrawal pressure — in {currency} with
-                premium visuals built for FIRE Nepal.
+                Model inflation-linked spending, portfolio survival, and safe withdrawal pressure — in Nepalese
+                Rupees (रु) with premium visuals built for FIRE Nepal.
               </p>
             </div>
             <div className="glass-card rounded-[1.7rem] p-6 text-emerald-950">
@@ -541,9 +519,9 @@ export function SwpCalculator() {
           </div>
         </section>
 
-        <SwpAiRetirementAnalysis result={result} inputs={parsed} currency={currency} />
+        <SwpAiRetirementAnalysis result={result} inputs={parsed} />
 
-        <SwpDashboardV2 result={result} inputs={parsed} currency={currency} />
+        <SwpDashboardV2 result={result} inputs={parsed} />
       </div>
     </main>
   );

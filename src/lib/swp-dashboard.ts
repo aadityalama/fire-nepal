@@ -2,7 +2,6 @@ import {
   buildSwpRetirementAnalysis,
   runSwpSimulation,
   type SwpAnalysisInputs,
-  type SwpCurrency,
   type SwpRetirementAnalysis,
   type SwpSimulationResult,
 } from "@/lib/swp-calculator";
@@ -52,7 +51,6 @@ export interface SwpWealthTimelinePoint {
 
 export interface SwpDashboardModel {
   hasData: boolean;
-  currency: SwpCurrency;
   inputs: SwpAnalysisInputs;
   result: SwpSimulationResult;
   analysis: SwpRetirementAnalysis;
@@ -199,9 +197,8 @@ export function formatSwpMultiple(x: number): string {
 export function buildSwpDashboardModel(
   result: SwpSimulationResult,
   inputs: SwpAnalysisInputs,
-  currency: SwpCurrency,
 ): SwpDashboardModel {
-  const analysis = buildSwpRetirementAnalysis(result, inputs, currency);
+  const analysis = buildSwpRetirementAnalysis(result, inputs);
   const timeline: SwpWealthTimelinePoint[] = result.yearly.map((y) => ({
     year: y.year,
     balance: Math.max(0, y.balanceWithInflation),
@@ -210,7 +207,6 @@ export function buildSwpDashboardModel(
 
   return {
     hasData: inputs.initial > 0 && inputs.monthly > 0,
-    currency,
     inputs,
     result,
     analysis,

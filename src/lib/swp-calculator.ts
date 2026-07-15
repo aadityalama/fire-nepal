@@ -1,5 +1,3 @@
-export type SwpCurrency = "KRW" | "NPR";
-
 export interface SwpInputs {
   initialCorpus: number;
   monthlyWithdrawal: number;
@@ -233,18 +231,15 @@ export function runSwpSimulation(inputs: SwpInputs): SwpSimulationResult {
   };
 }
 
-export function formatSwpCurrency(value: number, currency: SwpCurrency): string {
+/** All SWP values are shown in Nepalese Rupees (रु). */
+export function formatSwpCurrency(value: number): string {
   const abs = Math.abs(Math.round(value));
-  if (currency === "KRW") {
-    return `₩${abs.toLocaleString("en-US")}`;
-  }
   return `रु ${abs.toLocaleString("en-IN")}`;
 }
 
 export function buildSwpAiInsight(
   result: SwpSimulationResult,
   horizonYears: number,
-  currency: SwpCurrency,
   annualInflationPct: number,
 ): string {
   const parts: string[] = [];
@@ -272,7 +267,7 @@ export function buildSwpAiInsight(
     const gap = last.balanceFlatWithdrawal - last.balanceWithInflation;
     if (gap > 0) {
       parts.push(
-        `By year ${last.year}, inflation-linked spending leaves about ${formatSwpCurrency(gap, currency)} less in balance than keeping withdrawals flat (same return assumptions).`,
+        `By year ${last.year}, inflation-linked spending leaves about ${formatSwpCurrency(gap)} less in balance than keeping withdrawals flat (same return assumptions).`,
       );
     }
   }
@@ -305,7 +300,6 @@ export interface SwpRecommendation {
 
 export interface SwpRetirementAnalysis {
   hasData: boolean;
-  currency: SwpCurrency;
   plan: {
     initial: number;
     monthly: number;
@@ -395,10 +389,9 @@ function withdrawalSafetyBand(ratePct: number): SwpWithdrawalSafety {
 export function buildSwpRetirementAnalysis(
   result: SwpSimulationResult,
   inputs: SwpAnalysisInputs,
-  currency: SwpCurrency,
 ): SwpRetirementAnalysis {
   const { initial, monthly, annualReturnPct, annualInflationPct, horizonYears } = inputs;
-  const fmt = (n: number) => formatSwpCurrency(n, currency);
+  const fmt = (n: number) => formatSwpCurrency(n);
   const hasData = initial > 0 && monthly > 0;
 
   // 1. Your plan ----------------------------------------------------------
@@ -591,7 +584,6 @@ export function buildSwpRetirementAnalysis(
 
   return {
     hasData,
-    currency,
     plan: {
       initial,
       monthly,

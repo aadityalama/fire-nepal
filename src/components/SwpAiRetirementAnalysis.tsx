@@ -31,7 +31,6 @@ import {
   buildSwpRetirementAnalysis,
   formatSwpCurrency,
   type SwpAnalysisInputs,
-  type SwpCurrency,
   type SwpSimulationResult,
   type SwpTone,
 } from "@/lib/swp-calculator";
@@ -193,17 +192,15 @@ function Paragraph({ children }: Readonly<{ children: ReactNode }>) {
 export function SwpAiRetirementAnalysis({
   result,
   inputs,
-  currency,
 }: Readonly<{
   result: SwpSimulationResult;
   inputs: SwpAnalysisInputs;
-  currency: SwpCurrency;
 }>) {
   const analysis = useMemo(
-    () => buildSwpRetirementAnalysis(result, inputs, currency),
-    [result, inputs, currency],
+    () => buildSwpRetirementAnalysis(result, inputs),
+    [result, inputs],
   );
-  const fmt = (n: number) => formatSwpCurrency(n, currency);
+  const fmt = (n: number) => formatSwpCurrency(n);
 
   const scoreAccent: AccentKey =
     analysis.score.band === "excellent" || analysis.score.band === "good"

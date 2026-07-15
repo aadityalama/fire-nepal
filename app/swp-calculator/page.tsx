@@ -5,7 +5,7 @@ import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 export const metadata: Metadata = {
   title: "SWP Calculator | FIRE Nepal",
   description:
-    "Premium systematic withdrawal planner with KRW & NPR support, inflation modeling, sustainability score, and FIRE-safe withdrawal insights.",
+    "Premium systematic withdrawal planner in Nepalese Rupees (NPR) with inflation modeling, sustainability score, and FIRE-safe withdrawal insights.",
   alternates: buildCanonicalAlternates("/swp-calculator"),
 };
 

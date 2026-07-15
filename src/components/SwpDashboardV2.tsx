@@ -39,7 +39,6 @@ import { Line } from "react-chartjs-2";
 import {
   formatSwpCurrency,
   type SwpAnalysisInputs,
-  type SwpCurrency,
   type SwpSimulationResult,
 } from "@/lib/swp-calculator";
 import {
@@ -175,10 +174,9 @@ function Slider({
 function WhatIfSimulator({
   base,
   baseResult,
-  currency,
-}: Readonly<{ base: SwpAnalysisInputs; baseResult: SwpSimulationResult; currency: SwpCurrency }>) {
+}: Readonly<{ base: SwpAnalysisInputs; baseResult: SwpSimulationResult }>) {
   const [sim, setSim] = useState<SwpAnalysisInputs>(base);
-  const fmt = (n: number) => formatSwpCurrency(n, currency);
+  const fmt = (n: number) => formatSwpCurrency(n);
 
   const simResult = useMemo(() => runSwpFromInputs(sim), [sim]);
   const dirty =
@@ -401,17 +399,15 @@ function ReportModule({ model }: Readonly<{ model: SwpDashboardModel }>) {
 export function SwpDashboardV2({
   result,
   inputs,
-  currency,
 }: Readonly<{
   result: SwpSimulationResult;
   inputs: SwpAnalysisInputs;
-  currency: SwpCurrency;
 }>) {
   const model = useMemo(
-    () => buildSwpDashboardModel(result, inputs, currency),
-    [result, inputs, currency],
+    () => buildSwpDashboardModel(result, inputs),
+    [result, inputs],
   );
-  const fmt = (n: number) => formatSwpCurrency(n, currency);
+  const fmt = (n: number) => formatSwpCurrency(n);
   const inputsKey = `${inputs.initial}-${inputs.monthly}-${inputs.annualReturnPct}-${inputs.annualInflationPct}-${inputs.horizonYears}`;
 
   const goalAccent = GOAL_ACCENT[model.goal.status];
@@ -458,8 +454,7 @@ export function SwpDashboardV2({
         },
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currency],
+    [],
   );
 
   const journeyStats: { icon: LucideIcon; label: string; nepaliLabel: string; value: number; grad: string }[] = [
@@ -714,7 +709,7 @@ export function SwpDashboardV2({
             title="Interactive What-If Simulator"
             nepaliLabel="What-If सिमुलेटर"
           >
-            <WhatIfSimulator key={inputsKey} base={inputs} baseResult={result} currency={currency} />
+            <WhatIfSimulator key={inputsKey} base={inputs} baseResult={result} />
           </ModuleShell>
 
           {/* Module 6: Legacy Wealth Section */}

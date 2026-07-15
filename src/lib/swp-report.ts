@@ -1,4 +1,3 @@
-import type { SwpCurrency } from "@/lib/swp-calculator";
 import type { SwpDashboardModel } from "@/lib/swp-dashboard";
 
 const COLORS = {
@@ -13,10 +12,10 @@ const COLORS = {
   white: [255, 255, 255] as [number, number, number],
 };
 
-export function formatReportMoney(value: number, currency: SwpCurrency): string {
+/** PDF core fonts can't render the रु glyph, so the report uses the ASCII "NPR" code. */
+export function formatReportMoney(value: number): string {
   const abs = Math.abs(Math.round(value));
-  const grouped = abs.toLocaleString(currency === "KRW" ? "en-US" : "en-IN");
-  return `${currency} ${grouped}`;
+  return `NPR ${abs.toLocaleString("en-IN")}`;
 }
 
 function riskLabel(level: SwpDashboardModel["analysis"]["risk"]["level"]): string {
@@ -61,7 +60,7 @@ async function buildDoc(model: SwpDashboardModel): Promise<JsPdfDoc> {
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 14;
   const contentW = pageW - margin * 2;
-  const fmt = (n: number) => formatReportMoney(n, model.currency);
+  const fmt = (n: number) => formatReportMoney(n);
 
   let y = 0;
 
@@ -326,7 +325,7 @@ export async function shareSwpReportPdf(model: SwpDashboardModel): Promise<SwpSh
   const fileName = REPORT_NAME();
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
 
-  const shareText = `My FIRE Nepal retirement plan — Goal: ${model.goal.labelEn}, Sustainability ${model.analysis.score.value}/100, Remaining ${formatReportMoney(model.legacy.value, model.currency)}.`;
+  const shareText = `My FIRE Nepal retirement plan — Goal: ${model.goal.labelEn}, Sustainability ${model.analysis.score.value}/100, Remaining ${formatReportMoney(model.legacy.value)}.`;
 
   try {
     if (nav && typeof File !== "undefined") {
