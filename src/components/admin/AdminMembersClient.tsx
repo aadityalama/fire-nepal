@@ -248,7 +248,7 @@ export function AdminMembersClient({
             href="/admin"
             className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-100 transition hover:bg-emerald-500/18"
           >
-            Operations overview
+            Overview
           </Link>
         </div>
       </div>
