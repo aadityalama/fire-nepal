@@ -1,13 +1,13 @@
-\"use client\";
+"use client";
 
-import { Brain, Clock, FileDown, LineChart, ShieldAlert, Sparkles, TrendingUp } from \"lucide-react\";
-import { useMemo, useRef, useCallback } from \"react\";
-import { FireAiGlassCard } from \"@/components/fire-nepal-ai/ui/FireAiGlassCard\";
-import { CircularProgress } from \"@/components/fire-nepal-ai/ui/CircularProgress\";
-import { AiProgressBar } from \"@/components/fire-nepal-ai/ui/AiProgressBar\";
-import { useFireCalculator } from \"@/components/FireCalculatorContext\";
-import html2canvas from \"html2canvas\";
-import jsPDF from \"jspdf\";
+import { Brain, Clock, FileDown, LineChart, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
+import { useMemo, useRef, useCallback } from "react";
+import { FireAiGlassCard } from "@/components/fire-nepal-ai/ui/FireAiGlassCard";
+import { CircularProgress } from "@/components/fire-nepal-ai/ui/CircularProgress";
+import { AiProgressBar } from "@/components/fire-nepal-ai/ui/AiProgressBar";
+import { useFireCalculator } from "@/components/FireCalculatorContext";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 function numberSafe(n?: number | null): number {
   if (!n || Number.isNaN(n) || !Number.isFinite(n)) return 0;
@@ -30,8 +30,8 @@ function buildNepaliSummary({
   swrMonthlyIncomeNpr: number;
 }): string {
   const rounded = Math.round(readinessScore);
-  const years = yearsToFire <= 0 ? \"अहिले\" : `${yearsToFire.toFixed(1)} वर्ष`;
-  const income = new Intl.NumberFormat(\"ne-NP\").format(Math.round(swrMonthlyIncomeNpr));
+  const years = yearsToFire <= 0 ? "अहिले" : `${yearsToFire.toFixed(1)} वर्ष`;
+  const income = new Intl.NumberFormat("ne-NP").format(Math.round(swrMonthlyIncomeNpr));
   return `तपाईंको FIRE तयारी स्कोर ${rounded}/100 छ। अनुमानित आर्थिक स्वतन्त्रता ${years} पछि सम्भव छ। सुरक्षित निकासी दर अनुसार महिनामा करिब रु ${income} निष्क्रिय आम्दानी सम्भावित छ। खर्च नियन्त्रण र बचत दर बढाउँदा लक्ष्य छिटो पुग्नेछ।`;
 }
 
