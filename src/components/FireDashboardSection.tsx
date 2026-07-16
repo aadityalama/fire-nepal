@@ -4,6 +4,7 @@ import { LineChart } from "lucide-react";
 import { FireCalculatorInputs, FireRetirementProjection, FIRE_CALCULATOR_PANEL_CLASS } from "@/components/FireCalculator";
 import { FireCalculatorProvider, useFireCalculator } from "@/components/FireCalculatorContext";
 import { SavingsChart } from "@/components/SavingsChart";
+import { FireAiFinancialAdvisor } from "@/components/fire-nepal-ai/readiness/FireAiFinancialAdvisor";
 import { FireReadinessSection } from "@/components/fire-nepal-ai/readiness/FireReadinessSection";
 
 function SavingsGrowthHeader() {
@@ -94,14 +95,18 @@ export function FireDashboardSection() {
           </div>
         </div>
 
-        {/* Mounted below Wealth Lifecycle Simulator, above compound-interest CTA.
-            Shares FireCalculatorProvider so every input change re-renders this analysis. */}
+        {/* Mounted below Wealth Lifecycle Simulator.
+            Shares FireCalculatorProvider so every input change re-renders analysis + advisor. */}
         <section
           id="ai-fire-readiness"
           aria-label="AI FIRE Readiness Analysis"
           className={`${FIRE_CALCULATOR_PANEL_CLASS} w-full p-4 sm:p-5 md:p-6`}
         >
           <FireReadinessSection />
+        </section>
+
+        <section id="ai-fire-financial-advisor" className="w-full min-w-0">
+          <FireAiFinancialAdvisor />
         </section>
 
         <button
