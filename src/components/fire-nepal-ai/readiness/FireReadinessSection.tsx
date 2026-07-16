@@ -6,6 +6,7 @@ import { FireAiGlassCard } from "@/components/fire-nepal-ai/ui/FireAiGlassCard";
 import { CircularProgress } from "@/components/fire-nepal-ai/ui/CircularProgress";
 import { AiProgressBar } from "@/components/fire-nepal-ai/ui/AiProgressBar";
 import { useFireCalculator } from "@/components/FireCalculatorContext";
+import { getRemainingWealthNpr } from "@/lib/fire-calculator-model";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -62,9 +63,7 @@ export function FireReadinessSection() {
 
     const probability = 100 * clamp01(0.6 * progress + 0.25 * (years > 0 ? Math.max(0, 1 - years / 40) : 1) + 0.15 * (solvencyBonus > 0 ? 1 : 0.6));
 
-    const remainingWealth =
-      wealthResult.depletionAge === null ? wealthResult.peakWealthNpr : Math.max(0, wealthResult.peakWealthNpr - (proj - 0));
-
+    const remainingWealth = getRemainingWealthNpr(wealthResult);
     const riskGap = req > 0 ? Math.max(0, 1 - proj / req) : 1;
     const riskShortfallPct = Math.round(100 * riskGap);
     const riskVolatilityTag =
@@ -195,7 +194,8 @@ export function FireReadinessSection() {
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">Remaining Wealth Projection</p>
           <p className="mt-2 text-2xl font-black text-emerald-900">{formatMoney(remainingWealthNpr)}</p>
           <p className="mt-2 text-sm font-semibold text-slate-600">
-            Peak balance ~ {formatMoney(wealthResult.peakWealthNpr)} · Solvent through ~ {wealthResult.solventThroughAge}
+            End of horizon (age {Math.round(wealthResult.solventThroughAge)}) · Peak ~{" "}
+            {formatMoney(wealthResult.peakWealthNpr)}
           </p>
         </FireAiGlassCard>
 

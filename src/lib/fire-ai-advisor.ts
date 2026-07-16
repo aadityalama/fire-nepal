@@ -4,6 +4,7 @@ import type {
   WealthLifecycleResult,
   WealthSimulationParams,
 } from "@/lib/fire-calculator-model";
+import { getRemainingWealthNpr } from "@/lib/fire-calculator-model";
 
 export type FireAdvisorTone = "positive" | "warning" | "info";
 export type FireAdvisorScoreBand = "excellent" | "good" | "moderate" | "risky";
@@ -249,10 +250,7 @@ export function buildFireFinancialAdvisorAnalysis(
     `जति लामो समय लगानी रहन्छ, चक्रवृद्धि उति बलियो हुन्छ। सुरुका वर्षमा बृद्धि सुस्त देखिए पनि पछिल्ला वर्षमा सम्पत्ति छिटो बढ्ने प्रवृत्ति हुन्छ।`,
   ];
 
-  const remainingAtHorizon =
-    wealthResult.depletionAge === null
-      ? Math.max(0, wealthResult.yearly[wealthResult.yearly.length - 1]?.balanceActualNpr ?? wealthResult.peakWealthNpr)
-      : 0;
+  const remainingAtHorizon = getRemainingWealthNpr(wealthResult);
   const likelyRemain = wealthResult.depletionAge === null && remainingAtHorizon > 0;
   const canLeaveToFamily = likelyRemain && remainingAtHorizon >= requiredCorpus * 0.2;
 

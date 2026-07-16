@@ -47,15 +47,24 @@ export type WealthLifecycleResult = {
   monthsToFire: number;
   peakWealthAge: number;
   peakWealthNpr: number;
+  /**
+   * Final actual portfolio after the last simulated month (post-withdrawal).
+   * This is the Remaining Wealth figure — not peakWealthNpr.
+   * 0 when the portfolio depletes before the horizon.
+   */
+  endingBalanceNpr: number;
   /** First age where balance effectively hits zero in simulation; null if solvent through horizon. */
   depletionAge: number | null;
-  /** Age through which balance stays positive (horizon cap 100). */
+  /** Age through which balance stays positive (absolute age cap {@link WEALTH_HORIZON_AGE}). */
   solventThroughAge: number;
   /** True if expenses exceed SWR cap in perpetual mode (lifestyle gap). */
   perpetualShortfall: boolean;
 };
 
-const MAX_SIM_MONTHS = 100 * 12;
+/** Absolute age at which the wealth lifecycle simulation stops (inclusive). */
+export const WEALTH_HORIZON_AGE = 100;
+/** Safety cap so a very young starter cannot run unbounded month loops. */
+const MAX_SIM_MONTHS = WEALTH_HORIZON_AGE * 12;
 const EPS = 50;
 
 export function calculateFireProjection({
@@ -121,13 +130,22 @@ export function simulateWealthLifecycle(params: WealthSimulationParams): WealthL
   let depletionAge: number | null = null;
 
   const startYear = new Date().getFullYear();
+  // Stop at absolute age WEALTH_HORIZON_AGE (not currentAge + 100 years).
+  const monthsUntilHorizon = Math.max(
+    0,
+    Math.ceil((WEALTH_HORIZON_AGE - params.currentAge) * 12),
+  );
+  const monthLimit = Math.min(MAX_SIM_MONTHS, monthsUntilHorizon);
 
-  for (let m = 0; m < MAX_SIM_MONTHS; m += 1) {
+  for (let m = 0; m < monthLimit; m += 1) {
     const ageEndOfMonth = params.currentAge + (m + 1) / 12;
+    if (ageEndOfMonth > WEALTH_HORIZON_AGE + 1e-9) break;
+
     const calendarYear = startYear + Math.floor(m / 12);
     const accumulating = m < monthsToFire;
 
     if (accumulating) {
+      // annualReturnPct is percent (15 → 0.15); monthly rate = pct/100/12 (applied once).
       balance = balance * (1 + monthlyReturn) + params.monthlySavingsNpr;
       growthTrack = growthTrack * (1 + monthlyReturn) + params.monthlySavingsNpr;
     } else {
@@ -141,7 +159,7 @@ export function simulateWealthLifecycle(params: WealthSimulationParams): WealthL
         withdrawal = Math.min(need, safeCap);
         if (need > safeCap + EPS) perpetualShortfall = true;
       } else if (params.legacyMode === "spenddown") {
-        const target = Math.max(params.currentAge + 1, params.spenddownTargetAge);
+        const target = Math.max(params.currentAge + 1, Math.min(params.spenddownTargetAge, WEALTH_HORIZON_AGE));
         const monthsLeftToTarget = Math.max(1, Math.round((target - ageEndOfMonth) * 12));
         withdrawal = Math.min(afterGrowth, Math.max(need, afterGrowth / monthsLeftToTarget));
       }
@@ -166,11 +184,10 @@ export function simulateWealthLifecycle(params: WealthSimulationParams): WealthL
 
     if (!accumulating && balance <= EPS) {
       depletionAge = ageEndOfMonth;
+      balance = 0;
       break;
     }
   }
-
-  const fireAgeYears = params.currentAge + monthsToFire / 12;
 
   const yearly: WealthLifecycleYear[] = [];
   const byYear = new Map<number, (typeof monthlySnapshots)[0]>();
@@ -191,7 +208,10 @@ export function simulateWealthLifecycle(params: WealthSimulationParams): WealthL
   }
 
   const last = monthlySnapshots[monthlySnapshots.length - 1];
-  const solventThroughAge = last ? Math.min(100, Math.round(last.age * 10) / 10) : params.currentAge;
+  const endingBalanceNpr = depletionAge !== null ? 0 : Math.max(0, last?.balanceActual ?? balance);
+  const solventThroughAge = last
+    ? Math.min(WEALTH_HORIZON_AGE, Math.round(last.age * 10) / 10)
+    : params.currentAge;
 
   return {
     yearly,
@@ -199,10 +219,17 @@ export function simulateWealthLifecycle(params: WealthSimulationParams): WealthL
     monthsToFire: fireBase.monthsToFire,
     peakWealthAge,
     peakWealthNpr,
+    endingBalanceNpr,
     depletionAge,
     solventThroughAge,
     perpetualShortfall,
   };
+}
+
+/** Remaining wealth = final post-withdrawal simulator balance (matches lifecycle chart end). */
+export function getRemainingWealthNpr(wealth: WealthLifecycleResult): number {
+  if (wealth.depletionAge !== null) return 0;
+  return Math.max(0, wealth.endingBalanceNpr);
 }
 
 export type YearlySavingsPoint = {
