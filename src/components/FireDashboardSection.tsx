@@ -4,6 +4,7 @@ import { LineChart } from "lucide-react";
 import { FireCalculatorInputs, FireRetirementProjection, FIRE_CALCULATOR_PANEL_CLASS } from "@/components/FireCalculator";
 import { FireCalculatorProvider, useFireCalculator } from "@/components/FireCalculatorContext";
 import { SavingsChart } from "@/components/SavingsChart";
+import { FireReadinessSection } from "@/components/fire-nepal-ai/readiness/FireReadinessSection";
 
 function SavingsGrowthHeader() {
   const { horizonGrowthPct, result } = useFireCalculator();
@@ -96,6 +97,10 @@ export function FireDashboardSection() {
             </div>
           </section>
         </div>
+      </div>
+      {/* Premium AI section — auto-updates via same context */}
+      <div className="mt-4 sm:mt-5">
+        <FireReadinessSection />
       </div>
     </FireCalculatorProvider>
   );
