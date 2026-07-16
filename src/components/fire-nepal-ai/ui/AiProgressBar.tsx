@@ -9,14 +9,14 @@ type AiProgressBarProps = {
 };
 
 export function AiProgressBar({ value, label, className }: AiProgressBarProps) {
-  const light = useFireTheme().resolvedTheme === \"light\";
+  const light = useFireTheme().resolvedTheme === "light";
   const pct = value === null ? 0 : Math.min(100, Math.max(0, Math.round(value)));
   return (
     <div className={className}>
       {label ? (
         <div className="mb-1 flex items-center justify-between text-[11px] font-black text-emerald-900 sm:text-xs">
           <span>{label}</span>
-          <span>{value === null ? \"—\" : `${pct}%`}</span>
+          <span>{value === null ? "—" : `${pct}%`}</span>
         </div>
       ) : null}
       <div
