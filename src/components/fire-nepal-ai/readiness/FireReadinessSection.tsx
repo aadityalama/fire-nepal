@@ -124,7 +124,7 @@ export function FireReadinessSection() {
   );
 
   return (
-    <div className="mt-4 space-y-4 sm:mt-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600/10 text-emerald-700">
@@ -225,8 +225,6 @@ export function FireReadinessSection() {
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">Risk Analysis</p>
             <ShieldAlert size={16} className="text-emerald-700" />
           </div>
-        </FireAiGlassCard>
-        <FireAiGlassCard>
           <div className="mt-2 space-y-2">
             <AiProgressBar value={100 - riskShortfallPct} label="Target coverage" />
             <p className="text-sm font-semibold text-slate-600">

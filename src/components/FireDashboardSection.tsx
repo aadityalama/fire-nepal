@@ -63,44 +63,53 @@ function WealthSimulatorAlerts() {
 export function FireDashboardSection() {
   return (
     <FireCalculatorProvider>
-      <div
-        id="calculator"
-        className="grid min-w-0 grid-cols-1 gap-4 sm:gap-5 md:gap-6 lg:auto-rows-fr lg:grid-cols-3 lg:items-stretch lg:gap-5 xl:gap-6"
-      >
-        <div className="flex h-full min-h-0 min-w-0">
-          <FireCalculatorInputs />
-        </div>
-        <div className="flex h-full min-h-0 min-w-0">
-          <FireRetirementProjection />
-        </div>
-        <div className="flex h-full min-h-0 min-w-0">
-          <section
-            aria-labelledby="fire-wealth-simulator-heading"
-            className={`${FIRE_CALCULATOR_PANEL_CLASS} flex h-full min-h-0 w-full flex-col p-5 sm:p-6`}
-          >
-            <SavingsGrowthHeader />
-            <div className="flex min-h-[12rem] flex-1 flex-col items-center justify-center py-2 sm:min-h-[13rem] sm:py-3">
-              <div className="relative aspect-[16/9] w-full max-w-full min-h-[10.5rem] max-h-[17.5rem] sm:max-h-[19rem] lg:max-h-[20rem]">
-                <div className="absolute inset-0 min-h-0">
-                  <SavingsChart />
+      <div className="flex min-w-0 flex-col gap-4 sm:gap-5 md:gap-6">
+        <div
+          id="calculator"
+          className="grid min-w-0 grid-cols-1 gap-4 sm:gap-5 md:gap-6 lg:auto-rows-fr lg:grid-cols-3 lg:items-stretch lg:gap-5 xl:gap-6"
+        >
+          <div className="flex h-full min-h-0 min-w-0">
+            <FireCalculatorInputs />
+          </div>
+          <div className="flex h-full min-h-0 min-w-0">
+            <FireRetirementProjection />
+          </div>
+          <div className="flex h-full min-h-0 min-w-0">
+            <section
+              aria-labelledby="fire-wealth-simulator-heading"
+              className={`${FIRE_CALCULATOR_PANEL_CLASS} flex h-full min-h-0 w-full flex-col p-5 sm:p-6`}
+            >
+              <SavingsGrowthHeader />
+              <div className="flex min-h-[12rem] flex-1 flex-col items-center justify-center py-2 sm:min-h-[13rem] sm:py-3">
+                <div className="relative aspect-[16/9] w-full max-w-full min-h-[10.5rem] max-h-[17.5rem] sm:max-h-[19rem] lg:max-h-[20rem]">
+                  <div className="absolute inset-0 min-h-0">
+                    <SavingsChart />
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-auto flex shrink-0 flex-col gap-3">
-              <WealthSimulatorAlerts />
-              <button
-                type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/65 bg-gradient-to-b from-white/85 to-emerald-50/40 py-2.5 text-sm font-black text-emerald-800 shadow-[0_1px_0_rgba(255,255,255,0.85)_inset,0_6px_22px_rgba(0,63,47,0.06)] backdrop-blur transition hover:border-emerald-200/80 hover:bg-emerald-50/75 sm:py-3"
-              >
-                <LineChart size={15} /> How Compound Interest Works?
-              </button>
-            </div>
-          </section>
+              <div className="mt-auto flex shrink-0 flex-col gap-3">
+                <WealthSimulatorAlerts />
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-      {/* Premium AI section — auto-updates via same context */}
-      <div className="mt-4 sm:mt-5">
-        <FireReadinessSection />
+
+        {/* Mounted below Wealth Lifecycle Simulator, above compound-interest CTA.
+            Shares FireCalculatorProvider so every input change re-renders this analysis. */}
+        <section
+          id="ai-fire-readiness"
+          aria-label="AI FIRE Readiness Analysis"
+          className={`${FIRE_CALCULATOR_PANEL_CLASS} w-full p-4 sm:p-5 md:p-6`}
+        >
+          <FireReadinessSection />
+        </section>
+
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/65 bg-gradient-to-b from-white/85 to-emerald-50/40 py-2.5 text-sm font-black text-emerald-800 shadow-[0_1px_0_rgba(255,255,255,0.85)_inset,0_6px_22px_rgba(0,63,47,0.06)] backdrop-blur transition hover:border-emerald-200/80 hover:bg-emerald-50/75 sm:py-3"
+        >
+          <LineChart size={15} /> How Compound Interest Works?
+        </button>
       </div>
     </FireCalculatorProvider>
   );
