@@ -24,7 +24,6 @@ import {
   CartesianGrid,
   Cell,
   Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -33,36 +32,25 @@ import {
   YAxis,
 } from "recharts";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
+import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
 import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import {
+  EMERGENCY_KRW_TO_NPR,
+  EMERGENCY_RISK_PROFILES,
+  formatEmergencyMonths,
+  formatEmergencyNpr,
+  runEmergencyFundProjection,
+  type EmergencyRiskProfileKey,
+} from "@/lib/emergency-fund";
 
-type RiskLevel = "stable" | "moderate" | "high";
+type RiskLevel = EmergencyRiskProfileKey;
 
-const KRW_TO_NPR = 0.1029;
-const MONTHS = ["Now", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
+const KRW_TO_NPR = EMERGENCY_KRW_TO_NPR;
 const BUCKET_COLORS = ["#10b981", "#14b8a6", "#84cc16", "#f59e0b"];
 
-const riskProfiles: Record<RiskLevel, { label: string; recommendedMonths: number; bufferPct: number; helper: string }> = {
-  stable: {
-    label: "Stable job",
-    recommendedMonths: 6,
-    bufferPct: 0.08,
-    helper: "Regular salary, low dependents",
-  },
-  moderate: {
-    label: "Family support",
-    recommendedMonths: 8,
-    bufferPct: 0.14,
-    helper: "Remittance + family duties",
-  },
-  high: {
-    label: "Return-ready",
-    recommendedMonths: 12,
-    bufferPct: 0.22,
-    helper: "Visa/job risk or Nepal return",
-  },
-};
+const riskProfiles = EMERGENCY_RISK_PROFILES;
 
 const emergencyBuckets = [
   { name: "Cash in Korea", value: 185_000, note: "Instant access" },
@@ -76,11 +64,7 @@ function sanitizeIntegerInput(value: string) {
 }
 
 function formatNpr(value: number) {
-  return new Intl.NumberFormat("en-NP", {
-    maximumFractionDigits: 0,
-    style: "currency",
-    currency: "NPR",
-  }).format(Math.round(value));
+  return formatEmergencyNpr(value);
 }
 
 function formatKrw(value: number) {
@@ -92,7 +76,7 @@ function formatKrw(value: number) {
 }
 
 function formatMonths(value: number) {
-  return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} mo`;
+  return formatEmergencyMonths(value);
 }
 
 function parseNumber(value: string) {
@@ -214,50 +198,16 @@ export function EmergencyFundDashboard() {
     return () => window.clearTimeout(id);
   }, []);
 
-  const analytics = useMemo(() => {
-    const monthlyExpense = parseNumber(monthlyExpenseRaw);
-    const currentFund = parseNumber(currentFundRaw);
-    const monthlySave = parseNumber(monthlySaveRaw);
-    const risk = riskProfiles[riskLevel];
-    const recommendedFund = monthlyExpense * risk.recommendedMonths * (1 + risk.bufferPct);
-    const gap = Math.max(0, recommendedFund - currentFund);
-    const runwayMonths = monthlyExpense > 0 ? currentFund / monthlyExpense : 0;
-    const readiness = recommendedFund > 0 ? Math.min(100, (currentFund / recommendedFund) * 100) : 100;
-    const monthsToTarget = monthlySave > 0 ? Math.ceil(gap / monthlySave) : 0;
-    const stressRunway = monthlyExpense > 0 ? currentFund / (monthlyExpense * 1.25) : 0;
-    const nextMilestone = Math.min(100, Math.ceil(readiness / 10) * 10);
-
-    const projection = MONTHS.map((label, index) => {
-      const fund = Math.min(recommendedFund, currentFund + monthlySave * index);
-      return {
-        label,
-        fund,
-        target: recommendedFund,
-        readiness: recommendedFund > 0 ? Math.min(100, (fund / recommendedFund) * 100) : 100,
-      };
-    });
-
-    const scenarios = [
-      { name: "Job loss", months: runwayMonths, target: risk.recommendedMonths },
-      { name: "Medical", months: currentFund / Math.max(1, monthlyExpense + 35_000), target: 4 },
-      { name: "Return buffer", months: stressRunway, target: risk.recommendedMonths },
-    ];
-
-    return {
-      monthlyExpense,
-      currentFund,
-      monthlySave,
-      recommendedFund,
-      gap,
-      runwayMonths,
-      readiness,
-      monthsToTarget,
-      stressRunway,
-      nextMilestone,
-      projection,
-      scenarios,
-    };
-  }, [currentFundRaw, monthlyExpenseRaw, monthlySaveRaw, riskLevel]);
+  const analytics = useMemo(
+    () =>
+      runEmergencyFundProjection({
+        monthlyExpense: parseNumber(monthlyExpenseRaw),
+        currentFund: parseNumber(currentFundRaw),
+        monthlySave: parseNumber(monthlySaveRaw),
+        riskLevel,
+      }),
+    [currentFundRaw, monthlyExpenseRaw, monthlySaveRaw, riskLevel],
+  );
 
   const tickColor = light ? "#64748b" : "#a1a1aa";
   const gridColor = light ? "rgba(15, 23, 42, 0.08)" : "rgba(255,255,255, 0.06)";
@@ -491,6 +441,8 @@ export function EmergencyFundDashboard() {
             ))}
           </div>
         </MotionCard>
+
+        <EmergencyFundAiSafetyAnalysis result={analytics} />
       </div>
     </WealthDashboardShell>
   );
