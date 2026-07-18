@@ -34,19 +34,21 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { SipAiWealthProjection } from "@/components/SipAiWealthProjection";
+import {
+  formatSipCurrency,
+  runSipProjection,
+  SIP_FIRE_TARGET_NPR,
+  SIP_LEAN_FIRE_NPR,
+  SIP_RATES_TO_NPR,
+  type SipCurrency,
+} from "@/lib/sip-calculator";
 
-type Currency = "KRW" | "NPR" | "USD";
+type Currency = SipCurrency;
 
-const RATES_TO_NPR: Record<Currency, number> = {
-  KRW: 0.1029,
-  NPR: 1,
-  USD: 133.5,
-};
-
-const FIRE_TARGET_NPR = 30_000_000;
-const LEAN_FIRE_NPR = 15_000_000;
-const FULL_FIRE_NPR = 30_000_000;
-const NEPAL_MONTHLY_EXPENSE_NPR = 100_000;
+const RATES_TO_NPR = SIP_RATES_TO_NPR;
+const LEAN_FIRE_NPR = SIP_LEAN_FIRE_NPR;
+const FULL_FIRE_NPR = SIP_FIRE_TARGET_NPR;
 
 const quickPresets: Array<{ label: string; amount: number; currency: Currency; helper: string }> = [
   { label: "₩100k", amount: 100_000, currency: "KRW", helper: "Starter habit" },
@@ -80,16 +82,11 @@ function fromNpr(value: number, currency: Currency) {
 }
 
 function formatCurrency(value: number, currency: Currency) {
-  const locale = currency === "KRW" ? "ko-KR" : currency === "NPR" ? "en-NP" : "en-US";
-  return new Intl.NumberFormat(locale, {
-    currency,
-    maximumFractionDigits: 0,
-    style: "currency",
-  }).format(Math.round(value));
+  return formatSipCurrency(value, currency);
 }
 
 function formatNpr(value: number) {
-  return formatCurrency(value, "NPR");
+  return formatSipCurrency(value, "NPR");
 }
 
 function formatPct(value: number) {
@@ -101,10 +98,6 @@ function compactNumber(value: number) {
   if (value >= 100_000) return `${(value / 100_000).toFixed(1)}L`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
   return Math.round(value).toLocaleString("en-US");
-}
-
-function yearsToReach(rows: Array<{ year: number; valueNpr: number }>, targetNpr: number) {
-  return rows.find((row) => row.valueNpr >= targetNpr)?.year ?? null;
 }
 
 function InputField({
@@ -244,79 +237,29 @@ export function SipCalculatorDashboard() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const projection = useMemo(() => {
-    const monthlyInvestment = Math.max(0, Number(monthlyRaw || 0));
-    const annualReturn = Math.max(0, Math.min(60, Number(returnRaw || 0)));
-    const years = Math.max(0, Math.min(60, Math.floor(Number(yearsRaw || 0))));
-    const inflation = Math.max(0, Math.min(40, Number(inflationRaw || 0)));
-    const monthlyReturn = annualReturn / 100 / 12;
-    const months = years * 12;
-    const futureValue =
-      monthlyReturn > 0
-        ? monthlyInvestment * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
-        : monthlyInvestment * months;
-    const totalInvested = monthlyInvestment * months;
-    const totalProfit = Math.max(0, futureValue - totalInvested);
-    const inflationFactor = Math.pow(1 + inflation / 100, years);
-    const inflationAdjustedValue = inflationFactor > 0 ? futureValue / inflationFactor : futureValue;
-    const futureValueNpr = toNpr(futureValue, currency);
-    const totalInvestedNpr = toNpr(totalInvested, currency);
-    const inflationAdjustedNpr = toNpr(inflationAdjustedValue, currency);
-    const fireCompletion = Math.min(100, (futureValueNpr / FIRE_TARGET_NPR) * 100);
-    const passiveIncomeNpr = futureValueNpr * 0.04 / 12;
-    const growthMultiple = totalInvested > 0 ? futureValue / totalInvested : 0;
-    const inflationReductionPct = futureValue > 0 ? Math.max(0, (1 - inflationAdjustedValue / futureValue) * 100) : 0;
+  const projection = useMemo(
+    () =>
+      runSipProjection({
+        monthlyInvestment: Number(monthlyRaw || 0),
+        annualReturnPct: Number(returnRaw || 0),
+        years: Number(yearsRaw || 0),
+        inflationPct: Number(inflationRaw || 0),
+        currency,
+      }),
+    [currency, inflationRaw, monthlyRaw, returnRaw, yearsRaw],
+  );
 
-    const yearlyRows = Array.from({ length: years + 1 }, (_, year) => {
-      const yearMonths = year * 12;
-      const nominalValue =
-        monthlyReturn > 0
-          ? monthlyInvestment * ((Math.pow(1 + monthlyReturn, yearMonths) - 1) / monthlyReturn) * (1 + monthlyReturn)
-          : monthlyInvestment * yearMonths;
-      const invested = monthlyInvestment * yearMonths;
-      const profit = Math.max(0, nominalValue - invested);
-      const realValue = nominalValue / Math.pow(1 + inflation / 100, year);
-      const valueNpr = toNpr(nominalValue, currency);
-
-      return {
-        year,
-        nominalValue,
-        invested,
-        profit,
-        realValue,
-        valueNpr,
-        fireProgress: Math.min(100, (valueNpr / FIRE_TARGET_NPR) * 100),
-      };
-    });
-
-    const leanFireYear = yearsToReach(yearlyRows, LEAN_FIRE_NPR);
-    const fullFireYear = yearsToReach(yearlyRows, FULL_FIRE_NPR);
-    const coastFireYear = yearsToReach(yearlyRows, 7_500_000);
-    const retirementYearsCovered = NEPAL_MONTHLY_EXPENSE_NPR > 0 ? futureValueNpr / (NEPAL_MONTHLY_EXPENSE_NPR * 12) : 0;
-
-    return {
-      monthlyInvestment,
-      annualReturn,
-      years,
-      inflation,
-      futureValue,
-      totalInvested,
-      totalProfit,
-      inflationAdjustedValue,
-      futureValueNpr,
-      totalInvestedNpr,
-      inflationAdjustedNpr,
-      fireCompletion,
-      passiveIncomeNpr,
-      growthMultiple,
-      inflationReductionPct,
-      leanFireYear,
-      fullFireYear,
-      coastFireYear,
-      retirementYearsCovered,
-      yearlyRows,
-    };
-  }, [currency, inflationRaw, monthlyRaw, returnRaw, yearsRaw]);
+  const sipAiInputs = useMemo(
+    () => ({
+      monthlyInvestment: projection.monthlyInvestment,
+      annualReturnPct: projection.annualReturn,
+      years: projection.years,
+      inflationPct: projection.inflation,
+      currency,
+      currentAge: 30,
+    }),
+    [currency, projection.annualReturn, projection.inflation, projection.monthlyInvestment, projection.years],
+  );
 
   const isEmpty = projection.monthlyInvestment <= 0 || projection.years <= 0;
   const prefix = currency === "KRW" ? "₩" : currency === "NPR" ? "रु" : "$";
@@ -780,6 +723,8 @@ export function SipCalculatorDashboard() {
                     </table>
                   </div>
                 </section>
+
+                <SipAiWealthProjection result={projection} inputs={sipAiInputs} />
               </>
             )}
           </>
