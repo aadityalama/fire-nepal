@@ -40,32 +40,32 @@ const ACCENT: Record<
   { soft: string; grad: string; ring: string; chipText: string; dot: string }
 > = {
   emerald: {
-    soft: "border-emerald-200/80 bg-emerald-50/80 text-emerald-900",
-    grad: "from-emerald-600 to-emerald-500",
-    ring: "#059669",
-    chipText: "text-emerald-700",
-    dot: "text-emerald-600",
+    soft: "border-emerald-300/90 bg-emerald-50/95 text-emerald-950",
+    grad: "from-emerald-800 to-emerald-600",
+    ring: "#047857",
+    chipText: "text-emerald-800",
+    dot: "text-emerald-800",
   },
   amber: {
-    soft: "border-amber-200/80 bg-amber-50/80 text-amber-900",
-    grad: "from-amber-500 to-amber-400",
+    soft: "border-amber-300/90 bg-amber-50/95 text-amber-950",
+    grad: "from-amber-600 to-amber-500",
     ring: "#d97706",
-    chipText: "text-amber-700",
-    dot: "text-amber-600",
+    chipText: "text-amber-800",
+    dot: "text-amber-700",
   },
   red: {
-    soft: "border-red-200/80 bg-red-50/80 text-red-900",
-    grad: "from-red-600 to-rose-500",
+    soft: "border-red-300/90 bg-red-50/95 text-red-950",
+    grad: "from-red-700 to-rose-600",
     ring: "#dc2626",
-    chipText: "text-red-700",
-    dot: "text-red-600",
+    chipText: "text-red-800",
+    dot: "text-red-700",
   },
   sky: {
-    soft: "border-sky-200/80 bg-sky-50/80 text-sky-900",
-    grad: "from-sky-500 to-cyan-400",
+    soft: "border-sky-300/90 bg-sky-50/95 text-sky-950",
+    grad: "from-sky-700 to-cyan-500",
     ring: "#0284c7",
-    chipText: "text-sky-700",
-    dot: "text-sky-600",
+    chipText: "text-sky-800",
+    dot: "text-sky-700",
   },
 };
 
@@ -126,18 +126,18 @@ function AnalysisCard({
           <Icon size={24} strokeWidth={2.1} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-slate-400">
+          <span className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-gray-500">
             चरण {step}
           </span>
-          <span className="block text-[0.95rem] font-black leading-tight text-emerald-950 sm:text-base">
+          <span className="block text-[0.95rem] font-black leading-tight text-emerald-900 sm:text-base">
             {title}
           </span>
-          <Ne className="block text-[0.72rem] font-semibold leading-snug text-slate-400">{nepaliLabel}</Ne>
+          <Ne className="block text-[0.72rem] font-semibold leading-snug text-gray-500">{nepaliLabel}</Ne>
         </span>
         {chip ? <span className="hidden shrink-0 sm:block">{chip}</span> : null}
         <ChevronDown
           size={20}
-          className={`shrink-0 text-emerald-600 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-emerald-800 transition-transform duration-300 ${open ? "rotate-180" : ""}`}
         />
       </button>
       <div
@@ -174,12 +174,12 @@ function InfoRow({
   value,
 }: Readonly<{ icon: LucideIcon; label: string; nepaliLabel: string; value: string }>) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-100/80 bg-white/70 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200/90 bg-white/90 px-4 py-3">
       <span className="flex min-w-0 items-center gap-2.5">
-        <Icon size={18} className="shrink-0 text-emerald-600" />
+        <Icon size={18} className="shrink-0 text-emerald-800" />
         <span className="min-w-0">
-          <span className="block text-[0.8rem] font-bold leading-tight text-slate-600">{label}</span>
-          <Ne className="block text-[0.68rem] font-semibold leading-tight text-slate-400">{nepaliLabel}</Ne>
+          <span className="block text-[0.8rem] font-bold leading-tight text-gray-700">{label}</span>
+          <Ne className="block text-[0.68rem] font-semibold leading-tight text-gray-500">{nepaliLabel}</Ne>
         </span>
       </span>
       <span className="shrink-0 text-right text-sm font-black text-emerald-900">{value}</span>
@@ -189,7 +189,7 @@ function InfoRow({
 
 function Paragraph({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <Ne className="block text-[0.9rem] font-semibold leading-relaxed text-slate-700">{children}</Ne>
+    <Ne className="block text-[0.9rem] font-semibold leading-relaxed text-gray-700">{children}</Ne>
   );
 }
 
@@ -270,8 +270,8 @@ export function FireAiFinancialAdvisor() {
             <ClipboardList size={24} />
           </span>
           <div>
-            <p className="text-base font-black text-emerald-950">Enter your FIRE plan to unlock advice</p>
-            <Ne className="mt-1 block text-[0.88rem] font-semibold leading-relaxed text-slate-600">
+            <p className="text-base font-black text-emerald-900">Enter your FIRE plan to unlock advice</p>
+            <Ne className="mt-1 block text-[0.88rem] font-semibold leading-relaxed text-gray-700">
               माथि बचत, मासिक बचत र खर्च हाल्नुहोस् — AI ले तुरुन्तै विस्तृत व्यक्तिगत विश्लेषण तयार गर्नेछ।
             </Ne>
           </div>
@@ -358,26 +358,26 @@ export function FireAiFinancialAdvisor() {
               }
             >
               <div className="grid gap-2.5 sm:grid-cols-3">
-                <div className="rounded-2xl border border-emerald-100/80 bg-white/70 p-4 text-center">
-                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+                <div className="rounded-2xl border border-emerald-200/90 bg-white/90 p-4 text-center">
+                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-gray-500">
                     Estimated FIRE Age
                   </p>
                   <p className={`mt-1 text-2xl font-black ${ACCENT[distanceAccent].chipText}`}>
                     {analysis.distance.fireAge}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-emerald-100/80 bg-white/70 p-4 text-center">
-                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+                <div className="rounded-2xl border border-emerald-200/90 bg-white/90 p-4 text-center">
+                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-gray-500">
                     Years Remaining
                   </p>
-                  <p className="mt-1 text-2xl font-black text-slate-700">
+                  <p className="mt-1 text-2xl font-black text-gray-700">
                     {analysis.distance.yearsRemaining <= 0
                       ? "0"
                       : analysis.distance.yearsRemaining.toFixed(1)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-emerald-100/80 bg-white/70 p-4 text-center">
-                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+                <div className="rounded-2xl border border-emerald-200/90 bg-white/90 p-4 text-center">
+                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-gray-500">
                     Current Progress
                   </p>
                   <p className="mt-1 text-2xl font-black text-emerald-800">{analysis.distance.progressPct}%</p>
@@ -416,7 +416,7 @@ export function FireAiFinancialAdvisor() {
                       <p className={`text-3xl font-black leading-none ${ACCENT[scoreAccent].chipText}`}>
                         {analysis.score.value}
                       </p>
-                      <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-wide text-slate-400">
+                      <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-wide text-gray-500">
                         / 100
                       </p>
                     </div>
@@ -437,15 +437,15 @@ export function FireAiFinancialAdvisor() {
                 </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/60 p-4">
+                <div className="rounded-2xl border border-emerald-300/90 bg-emerald-50/90 p-4">
                   <p className="text-[0.68rem] font-black uppercase tracking-wide text-emerald-700">
                     Strengths · बलियो पक्ष
                   </p>
                   <ul className="mt-2 space-y-1.5">
                     {analysis.score.strengthsNe.map((s, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        <BadgeCheck size={15} className="mt-0.5 shrink-0 text-emerald-600" />
-                        <Ne className="text-[0.82rem] font-semibold leading-snug text-slate-700">{s}</Ne>
+                        <BadgeCheck size={15} className="mt-0.5 shrink-0 text-emerald-800" />
+                        <Ne className="text-[0.82rem] font-semibold leading-snug text-gray-700">{s}</Ne>
                       </li>
                     ))}
                   </ul>
@@ -458,7 +458,7 @@ export function FireAiFinancialAdvisor() {
                     {analysis.score.weaknessesNe.map((s, i) => (
                       <li key={i} className="flex items-start gap-2">
                         <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
-                        <Ne className="text-[0.82rem] font-semibold leading-snug text-slate-700">{s}</Ne>
+                        <Ne className="text-[0.82rem] font-semibold leading-snug text-gray-700">{s}</Ne>
                       </li>
                     ))}
                   </ul>
@@ -481,33 +481,33 @@ export function FireAiFinancialAdvisor() {
               }
             >
               <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-[1fr_auto_1fr]">
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 p-4 text-center">
-                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-emerald-700/80">
+                <div className="rounded-2xl border border-emerald-300/90 bg-emerald-50/90 p-4 text-center">
+                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-emerald-800">
                     Expected Passive Income
                   </p>
-                  <Ne className="block text-[0.62rem] font-semibold text-emerald-700/60">
+                  <Ne className="block text-[0.62rem] font-semibold text-emerald-700">
                     अपेक्षित निष्क्रिय आम्दानी
                   </Ne>
                   <p className="mt-1 text-xl font-black text-emerald-800">
                     {fmtNe(analysis.passiveIncome.expectedMonthly)}
-                    <span className="text-xs font-bold text-slate-500"> /mo</span>
+                    <span className="text-xs font-bold text-gray-500"> /mo</span>
                   </p>
                 </div>
                 <div className="grid place-items-center">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-500">
                     VS
                   </span>
                 </div>
                 <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-4 text-center">
-                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-amber-700/80">
+                  <p className="text-[0.68rem] font-black uppercase tracking-wide text-amber-800">
                     Required Retirement Expense
                   </p>
-                  <Ne className="block text-[0.62rem] font-semibold text-amber-700/60">
+                  <Ne className="block text-[0.62rem] font-semibold text-amber-700">
                     आवश्यक रिटायरमेन्ट खर्च
                   </Ne>
                   <p className="mt-1 text-xl font-black text-amber-800">
                     {fmtNe(analysis.passiveIncome.requiredMonthly)}
-                    <span className="text-xs font-bold text-slate-500"> /mo</span>
+                    <span className="text-xs font-bold text-gray-500"> /mo</span>
                   </p>
                 </div>
               </div>
@@ -533,10 +533,10 @@ export function FireAiFinancialAdvisor() {
                 {analysis.wealthGrowth.storyNe.map((line, i) => (
                   <li
                     key={i}
-                    className="flex items-start gap-2.5 rounded-2xl border border-emerald-100/80 bg-emerald-50/50 px-4 py-3"
+                    className="flex items-start gap-2.5 rounded-2xl border border-emerald-200/90 bg-emerald-50/80 px-4 py-3"
                   >
-                    <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-600" />
-                    <Ne className="text-[0.86rem] font-semibold leading-relaxed text-slate-700">{line}</Ne>
+                    <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-800" />
+                    <Ne className="text-[0.86rem] font-semibold leading-relaxed text-gray-700">{line}</Ne>
                   </li>
                 ))}
               </ul>
@@ -555,8 +555,8 @@ export function FireAiFinancialAdvisor() {
                 </Chip>
               }
             >
-              <div className="rounded-2xl border border-emerald-100/80 bg-white/70 p-5 text-center">
-                <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+              <div className="rounded-2xl border border-emerald-200/90 bg-white/90 p-5 text-center">
+                <p className="text-[0.68rem] font-black uppercase tracking-wide text-gray-500">
                   Estimated Remaining Wealth
                 </p>
                 <p className={`mt-1 text-3xl font-black ${ACCENT[remainingAccent].chipText}`}>
@@ -570,10 +570,10 @@ export function FireAiFinancialAdvisor() {
                 {analysis.remaining.bulletsNe.map((line, i) => (
                   <li
                     key={i}
-                    className="flex items-start gap-2 rounded-xl border border-emerald-100/70 bg-white/60 px-3 py-2.5"
+                    className="flex items-start gap-2 rounded-xl border border-emerald-200/90 bg-white/90 px-3 py-2.5"
                   >
-                    <PiggyBank size={15} className="mt-0.5 shrink-0 text-emerald-600" />
-                    <Ne className="text-[0.82rem] font-semibold leading-snug text-slate-700">{line}</Ne>
+                    <PiggyBank size={15} className="mt-0.5 shrink-0 text-emerald-800" />
+                    <Ne className="text-[0.82rem] font-semibold leading-snug text-gray-700">{line}</Ne>
                   </li>
                 ))}
               </ul>
@@ -596,10 +596,10 @@ export function FireAiFinancialAdvisor() {
                 {analysis.inflation.explanationNe.map((line, i) => (
                   <li
                     key={i}
-                    className="flex items-start gap-2.5 rounded-2xl border border-amber-100/80 bg-amber-50/50 px-4 py-3"
+                    className="flex items-start gap-2.5 rounded-2xl border border-amber-200/90 bg-amber-50/80 px-4 py-3"
                   >
-                    <Flame size={16} className="mt-0.5 shrink-0 text-amber-500" />
-                    <Ne className="text-[0.86rem] font-semibold leading-relaxed text-slate-700">{line}</Ne>
+                    <Flame size={16} className="mt-0.5 shrink-0 text-amber-700" />
+                    <Ne className="text-[0.86rem] font-semibold leading-relaxed text-gray-700">{line}</Ne>
                   </li>
                 ))}
               </ul>
@@ -626,14 +626,14 @@ export function FireAiFinancialAdvisor() {
                     <div key={risk.id} className={`rounded-2xl border p-4 ${ACCENT[accent].soft}`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xl">{risk.emoji}</span>
-                        <span className="text-sm font-black text-emerald-950">{risk.labelEn}</span>
-                        <Ne className="text-xs font-semibold text-slate-500">({risk.labelNe})</Ne>
+                        <span className="text-sm font-black text-emerald-900">{risk.labelEn}</span>
+                        <Ne className="text-xs font-semibold text-gray-500">({risk.labelNe})</Ne>
                         <span className={`ml-auto text-xs font-black ${ACCENT[accent].chipText}`}>
                           {risk.emoji}{" "}
                           {risk.level === "low" ? "Low" : risk.level === "moderate" ? "Moderate" : "High"}
                         </span>
                       </div>
-                      <Ne className="mt-2 block text-[0.84rem] font-semibold leading-relaxed text-slate-700">
+                      <Ne className="mt-2 block text-[0.84rem] font-semibold leading-relaxed text-gray-700">
                         {risk.explanationNe}
                       </Ne>
                     </div>
@@ -669,7 +669,7 @@ export function FireAiFinancialAdvisor() {
                       </span>
                       <div className="min-w-0">
                         <Ne className="block text-[0.92rem] font-black leading-snug">{rec.titleNe}</Ne>
-                        <Ne className="mt-0.5 block text-[0.82rem] font-semibold leading-relaxed text-slate-600">
+                        <Ne className="mt-0.5 block text-[0.82rem] font-semibold leading-relaxed text-gray-700">
                           {rec.detailNe}
                         </Ne>
                       </div>
@@ -694,7 +694,7 @@ export function FireAiFinancialAdvisor() {
               }
             >
               <div className="relative overflow-hidden rounded-2xl border border-sky-100/80 bg-gradient-to-br from-sky-50/90 to-emerald-50/70 p-5">
-                <Ne className="block whitespace-pre-line text-[0.95rem] font-semibold leading-relaxed text-slate-700">
+                <Ne className="block whitespace-pre-line text-[0.95rem] font-semibold leading-relaxed text-gray-700">
                   {analysis.journeyStoryNe}
                 </Ne>
               </div>
