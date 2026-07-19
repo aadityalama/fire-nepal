@@ -98,6 +98,8 @@ export const config = {
     "/admin/:path*",
     "/fire-biz",
     "/fire-biz/:path*",
+    "/fire-lending",
+    "/fire-lending/:path*",
     "/more",
     "/more/:path*",
     "/fire-ai",

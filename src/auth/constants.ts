@@ -32,6 +32,7 @@ export const FN_PROTECTED_PREFIXES = [
   "/child-records-vault",
   "/admin",
   "/fire-biz",
+  "/fire-lending",
   "/more",
   "/fire-ai",
 ] as const;

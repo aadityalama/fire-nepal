@@ -13,6 +13,7 @@ import {
   FileText,
   Gem,
   HandCoins,
+  Handshake,
   Home,
   Info,
   Landmark,
@@ -323,6 +324,15 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
         icon: LayoutGrid,
         accent: "from-emerald-500/35 to-lime-300/15",
         testId: "hub-fire-biz-card",
+      },
+      {
+        href: "/fire-lending",
+        title: "Loan & P2P Lending",
+        body: "Borrow, Lend, Digital Agreements, EMI Tracking, AI Risk Analysis & Secure Peer-to-Peer Lending.",
+        icon: Handshake,
+        accent: "from-emerald-500/30 to-amber-300/15",
+        badge: "NEW",
+        testId: "hub-fire-lending-card",
       },
       {
         href: "/portfolio/real-estate",
