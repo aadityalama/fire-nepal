@@ -13,6 +13,7 @@ const ITEMS: { id: ReNavTab; label: string; icon: typeof Home; elevate?: boolean
   { id: "more", label: "More", icon: MoreHorizontal },
 ];
 
+/** Mobile-only bottom navigation (&lt; md). Hidden on tablet/desktop which use their own nav. */
 export function RealEstateBottomNav({
   active,
   onChange,
@@ -22,8 +23,8 @@ export function RealEstateBottomNav({
 }) {
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-[55] border-t border-emerald-400/15 bg-[#04140f]/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-xl"
-      aria-label="Real Estate navigation"
+      className="fixed bottom-0 left-0 right-0 z-[55] border-t border-emerald-400/15 bg-[#04140f]/95 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom,0px))] pt-2 backdrop-blur-xl md:hidden"
+      aria-label="Real Estate mobile navigation"
     >
       <div className="mx-auto flex max-w-lg items-end justify-between gap-0.5">
         {ITEMS.map((item) => {

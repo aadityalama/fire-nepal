@@ -100,7 +100,7 @@ export function RealEstatePropertyDetail({
   const growth = buildGrowthSeries(row.purchaseValue, row.estimatedValue, 10);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:space-y-5">
       <ReBackHeader
         title={row.name || "Untitled property"}
         subtitle={row.location?.trim() || RE_KIND_LABEL[row.propertyType]}
@@ -122,107 +122,145 @@ export function RealEstatePropertyDetail({
         }
       />
 
-      {/* Gallery */}
-      <div className="relative overflow-hidden rounded-3xl ring-1 ring-emerald-400/20">
-        <div className="aspect-[16/10] bg-gradient-to-br from-emerald-950 to-[#04140f]">
-          {photos[slide] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photos[slide]} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full place-items-center text-sm font-semibold text-emerald-200/40">No photos yet</div>
-          )}
-        </div>
-        {photos.length > 1 ? (
-          <>
-            <button
-              type="button"
-              className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white"
-              onClick={() => setSlide((s) => (s - 1 + photos.length) % photos.length)}
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white"
-              onClick={() => setSlide((s) => (s + 1) % photos.length)}
-            >
-              <ChevronRight size={18} />
-            </button>
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-              {photos.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSlide(i)}
-                  className={cn("h-1.5 rounded-full transition", i === slide ? "w-5 bg-lime-300" : "w-1.5 bg-white/40")}
-                />
-              ))}
+      {/*
+        Mobile: stacked gallery → tabs → content
+        Tablet: gallery+score side-by-side, then tabs
+        Desktop: left sticky gallery column | right tabs+content
+      */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] lg:items-start lg:gap-6">
+        <div className="space-y-4 lg:sticky lg:top-4">
+          <div className="relative overflow-hidden rounded-3xl ring-1 ring-emerald-400/20">
+            <div className="aspect-[16/10] bg-gradient-to-br from-emerald-950 to-[#04140f] md:aspect-[16/9] lg:aspect-[4/3]">
+              {photos[slide] ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photos[slide]} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="grid h-full place-items-center text-sm font-semibold text-emerald-200/40">No photos yet</div>
+              )}
             </div>
-          </>
-        ) : null}
-        <div className="absolute right-3 top-3">
-          <ReScoreRing score={score} size={72} label="Health" />
-        </div>
-      </div>
+            {photos.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white"
+                  onClick={() => setSlide((s) => (s - 1 + photos.length) % photos.length)}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white"
+                  onClick={() => setSlide((s) => (s + 1) % photos.length)}
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  {photos.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSlide(i)}
+                      className={cn("h-1.5 rounded-full transition", i === slide ? "w-5 bg-lime-300" : "w-1.5 bg-white/40")}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+            {/* Mobile score overlay */}
+            <div className="absolute right-3 top-3 md:hidden">
+              <ReScoreRing score={score} size={72} label="Health" />
+            </div>
+          </div>
 
-      {/* Tabs */}
-      <div className="-mx-1 flex gap-1 overflow-x-auto pb-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-wide transition",
-              tab === t.id
-                ? "border-emerald-400/45 bg-emerald-500/20 text-lime-200"
-                : "border-emerald-400/15 text-emerald-200/55",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+          {/* Tablet score beside gallery */}
+          <div className="hidden items-center gap-4 rounded-3xl border border-emerald-400/15 bg-black/30 p-4 md:flex lg:hidden">
+            <ReScoreRing score={score} size={88} label="Health" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Property score</p>
+              <p className="mt-1 text-sm font-black text-emerald-50">{RE_KIND_LABEL[row.propertyType]}</p>
+              <p className="mt-1 text-xs font-semibold text-emerald-200/55">
+                ROI {metrics.roi != null ? `${metrics.roi.toFixed(1)}%` : "—"} · CAGR{" "}
+                {metrics.cagr != null ? `${metrics.cagr.toFixed(1)}%` : "—"}
+              </p>
+            </div>
+          </div>
 
-      {tab === "overview" ? (
-        <OverviewTab
-          row={row}
-          metrics={metrics}
-          editing={editing}
-          setEditing={setEditing}
-          onChange={onChange}
-          krwPerNpr={krwPerNpr}
-          usdPerNpr={usdPerNpr}
-        />
-      ) : null}
-      {tab === "analytics" ? <AnalyticsTab row={row} metrics={metrics} growth={growth} /> : null}
-      {tab === "ai" ? (
-        <div className="space-y-3">
-          <ReGlass className="p-4">
+          {/* Desktop score under gallery */}
+          <ReGlass className="hidden p-5 lg:block">
             <div className="flex items-center gap-4">
-              <ReScoreRing score={score} size={80} />
+              <ReScoreRing score={score} size={96} label="Health" />
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Sentiment</p>
-                <p className="mt-1 text-sm font-black text-emerald-50">{ai.sentimentLabelEn}</p>
-                <p className="mt-1 text-xs font-semibold text-emerald-200/55">{ai.sentimentLabelNe}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Property score</p>
+                <p className="mt-1 text-base font-black text-emerald-50">{RE_KIND_LABEL[row.propertyType]}</p>
+                <p className="mt-1 text-xs font-semibold text-emerald-200/55">
+                  ROI {metrics.roi != null ? `${metrics.roi.toFixed(1)}%` : "—"} · CAGR{" "}
+                  {metrics.cagr != null ? `${metrics.cagr.toFixed(1)}%` : "—"}
+                </p>
               </div>
             </div>
           </ReGlass>
-          {ai.cards[0] ? (
-            <ReGlass className="p-4">
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Recommendation</p>
-              <p className="mt-1 text-sm font-black text-emerald-50">{ai.cards[0].headlineEn}</p>
-              <p className="mt-1 text-xs font-semibold leading-relaxed text-emerald-200/60">{ai.cards[0].bodyEn}</p>
-            </ReGlass>
-          ) : null}
-          <RealEstateAiInsightsEngine bundle={ai} />
         </div>
-      ) : null}
-      {tab === "transactions" ? (
-        <TransactionsTab row={row} ledger={ledger} onChange={onChange} onMutate={onMutate} />
-      ) : null}
-      {tab === "documents" ? <RealEstateDocumentsVault row={row} onChange={onChange} /> : null}
-      {tab === "photos" ? <RealEstatePhotosGallery row={row} onChange={onChange} /> : null}
+
+        <div className="min-w-0 space-y-4">
+          <div className="-mx-1 flex gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible lg:gap-1.5">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-wide transition lg:px-4",
+                  tab === t.id
+                    ? "border-emerald-400/45 bg-emerald-500/20 text-lime-200"
+                    : "border-emerald-400/15 text-emerald-200/55",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "overview" ? (
+            <OverviewTab
+              row={row}
+              metrics={metrics}
+              editing={editing}
+              setEditing={setEditing}
+              onChange={onChange}
+              krwPerNpr={krwPerNpr}
+              usdPerNpr={usdPerNpr}
+            />
+          ) : null}
+          {tab === "analytics" ? <AnalyticsTab row={row} metrics={metrics} growth={growth} /> : null}
+          {tab === "ai" ? (
+            <div className="space-y-3">
+              <ReGlass className="p-4">
+                <div className="flex items-center gap-4">
+                  <ReScoreRing score={score} size={80} />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Sentiment</p>
+                    <p className="mt-1 text-sm font-black text-emerald-50">{ai.sentimentLabelEn}</p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-200/55">{ai.sentimentLabelNe}</p>
+                  </div>
+                </div>
+              </ReGlass>
+              {ai.cards[0] ? (
+                <ReGlass className="p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200/50">Recommendation</p>
+                  <p className="mt-1 text-sm font-black text-emerald-50">{ai.cards[0].headlineEn}</p>
+                  <p className="mt-1 text-xs font-semibold leading-relaxed text-emerald-200/60">{ai.cards[0].bodyEn}</p>
+                </ReGlass>
+              ) : null}
+              <RealEstateAiInsightsEngine bundle={ai} />
+            </div>
+          ) : null}
+          {tab === "transactions" ? (
+            <TransactionsTab row={row} ledger={ledger} onChange={onChange} onMutate={onMutate} />
+          ) : null}
+          {tab === "documents" ? <RealEstateDocumentsVault row={row} onChange={onChange} /> : null}
+          {tab === "photos" ? <RealEstatePhotosGallery row={row} onChange={onChange} /> : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -260,7 +298,7 @@ function OverviewTab({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3 lg:grid-cols-3">
         <MetricTile label="Purchase" value={formatReCcy(row.purchaseValue, row.currency)} />
         <MetricTile label="Current" value={formatReCcy(row.estimatedValue, row.currency)} tone="lime" />
         <MetricTile
@@ -339,8 +377,8 @@ function EditPropertyForm({
   onDone: () => void;
 }) {
   return (
-    <ReGlass className="space-y-3 p-4">
-      <div>
+    <ReGlass className="space-y-3 p-4 md:p-5 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+      <div className="lg:col-span-2">
         <ReFieldLabel>Name</ReFieldLabel>
         <input
           value={row.name}
@@ -423,12 +461,12 @@ function EditPropertyForm({
         label="Acquired date"
         value={row.acquiredDate}
         onChange={(v) => onChange(row.id, { acquiredDate: v })}
-        className="w-full sm:max-w-none"
+        className="w-full sm:max-w-none lg:col-span-2"
       />
       <button
         type="button"
         onClick={onDone}
-        className="min-h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 text-sm font-black text-emerald-950"
+        className="min-h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 text-sm font-black text-emerald-950 lg:col-span-2"
       >
         Done
       </button>

@@ -225,24 +225,75 @@ export function RealEstateAddWizard({
   };
 
   return (
-    <div className="space-y-4">
-      <ReBackHeader title="Add Property" subtitle={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`} onBack={onCancel} />
-
-      <div className="flex gap-1">
-        {STEPS.map((_, i) => (
-          <div
-            key={STEPS[i]}
-            className={cn(
-              "h-1.5 flex-1 rounded-full transition",
-              i <= step ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "bg-emerald-500/15",
-            )}
-          />
-        ))}
+    <div className="space-y-4 md:mx-auto md:max-w-2xl lg:mx-0 lg:max-w-none lg:space-y-0">
+      <div className="lg:hidden">
+        <ReBackHeader title="Add Property" subtitle={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`} onBack={onCancel} />
       </div>
 
-      <ReGlass className="p-5">
+      {/* Desktop: two-pane wizard — steps rail | form */}
+      <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6 lg:items-start">
+        <aside className="hidden lg:block">
+          <ReGlass className="sticky top-4 p-5">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="mb-4 text-xs font-black text-emerald-300"
+            >
+              ← Cancel
+            </button>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400/80">Add Property</p>
+            <p className="mt-1 text-lg font-black text-emerald-50">Step {step + 1} of {STEPS.length}</p>
+            <ol className="mt-5 space-y-1.5">
+              {STEPS.map((label, i) => (
+                <li key={label}>
+                  <button
+                    type="button"
+                    onClick={() => setStep(i)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-bold transition",
+                      i === step
+                        ? "bg-emerald-500/20 text-lime-200"
+                        : i < step
+                          ? "text-emerald-200/70 hover:bg-white/[0.04]"
+                          : "text-emerald-200/35",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid h-6 w-6 place-items-center rounded-full text-[10px] font-black",
+                        i <= step ? "bg-emerald-500/30 text-lime-200" : "bg-white/5 text-emerald-200/40",
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                    {label}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </ReGlass>
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          <div className="flex gap-1 lg:hidden">
+            {STEPS.map((_, i) => (
+              <div
+                key={STEPS[i]}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full transition",
+                  i <= step ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "bg-emerald-500/15",
+                )}
+              />
+            ))}
+          </div>
+
+          <p className="hidden text-sm font-semibold text-emerald-200/55 lg:block">
+            {STEPS[step]}
+          </p>
+
+      <ReGlass className="p-5 md:p-6 lg:p-8">
         {step === 0 ? (
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
             {(Object.keys(RE_KIND_LABEL) as RealEstateKind[]).map((k) => (
               <button
                 key={k}
@@ -418,7 +469,7 @@ export function RealEstateAddWizard({
       </ReGlass>
 
       {step < 8 ? (
-        <div className="flex gap-2">
+        <div className="flex gap-2 md:max-w-md md:ml-auto">
           <button
             type="button"
             disabled={step === 0}
@@ -437,6 +488,8 @@ export function RealEstateAddWizard({
           </button>
         </div>
       ) : null}
+        </div>
+      </div>
     </div>
   );
 }
