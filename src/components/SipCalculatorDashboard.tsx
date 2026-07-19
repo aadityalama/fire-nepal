@@ -35,28 +35,25 @@ import {
   YAxis,
 } from "recharts";
 import { SipAiWealthProjection } from "@/components/SipAiWealthProjection";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
-  formatSipCurrency,
+  formatSipNpr,
   runSipProjection,
   SIP_FIRE_TARGET_NPR,
   SIP_LEAN_FIRE_NPR,
-  SIP_RATES_TO_NPR,
-  type SipCurrency,
 } from "@/lib/sip-calculator";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { fetchUserProfile, mapUserProfileToPremiumFields } from "@/services/user-profile-supabase";
 
-type Currency = SipCurrency;
-
-const RATES_TO_NPR = SIP_RATES_TO_NPR;
 const LEAN_FIRE_NPR = SIP_LEAN_FIRE_NPR;
 const FULL_FIRE_NPR = SIP_FIRE_TARGET_NPR;
+const NPR_PREFIX = "रु";
 
-const quickPresets: Array<{ label: string; amount: number; currency: Currency; helper: string }> = [
-  { label: "₩100k", amount: 100_000, currency: "KRW", helper: "Starter habit" },
-  { label: "₩300k", amount: 300_000, currency: "KRW", helper: "Strong savings" },
-  { label: "₩500k", amount: 500_000, currency: "KRW", helper: "Steady contribution tier" },
-  { label: "₩1M", amount: 1_000_000, currency: "KRW", helper: "Accelerated FIRE" },
-  { label: "NPR 50k", amount: 50_000, currency: "NPR", helper: "Nepal investing" },
-  { label: "NPR 100k", amount: 100_000, currency: "NPR", helper: "Premium SIP" },
+const quickPresets: Array<{ label: string; amount: number; helper: string }> = [
+  { label: "NPR 10k", amount: 10_000, helper: "Starter habit" },
+  { label: "NPR 25k", amount: 25_000, helper: "Steady habit" },
+  { label: "NPR 50k", amount: 50_000, helper: "Nepal investing" },
+  { label: "NPR 100k", amount: 100_000, helper: "Premium SIP" },
 ];
 
 const milestoneTimeline = [
@@ -73,20 +70,8 @@ function sanitizeDecimalInput(value: string) {
   return `${cleaned.slice(0, dot + 1)}${cleaned.slice(dot + 1).replace(/\./g, "")}`;
 }
 
-function toNpr(value: number, currency: Currency) {
-  return value * RATES_TO_NPR[currency];
-}
-
-function fromNpr(value: number, currency: Currency) {
-  return value / RATES_TO_NPR[currency];
-}
-
-function formatCurrency(value: number, currency: Currency) {
-  return formatSipCurrency(value, currency);
-}
-
 function formatNpr(value: number) {
-  return formatSipCurrency(value, "NPR");
+  return formatSipNpr(value);
 }
 
 function formatPct(value: number) {
@@ -225,17 +210,33 @@ function SliderField({
 }
 
 export function SipCalculatorDashboard() {
-  const [currency, setCurrency] = useState<Currency>("KRW");
-  const [monthlyRaw, setMonthlyRaw] = useState("500000");
-  const [returnRaw, setReturnRaw] = useState("12");
-  const [yearsRaw, setYearsRaw] = useState("15");
-  const [inflationRaw, setInflationRaw] = useState("5.8");
+  const { user } = useProductAuth();
+  const [monthlyRaw, setMonthlyRaw] = useState("");
+  const [returnRaw, setReturnRaw] = useState("");
+  const [yearsRaw, setYearsRaw] = useState("");
+  const [inflationRaw, setInflationRaw] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setIsLoading(false), 280);
-    return () => window.clearTimeout(timer);
-  }, []);
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (!user?.id) return;
+        const row = await fetchUserProfile(getSupabaseBrowserClient(), user.id);
+        if (cancelled || !row) return;
+        const profile = mapUserProfileToPremiumFields(row);
+        // Only seed NPR-denominated saved investment — never demo/KRW/USD amounts.
+        if (profile.preferredCurrency === "NPR" && profile.monthlyInvestment > 0) {
+          setMonthlyRaw(String(Math.round(profile.monthlyInvestment)));
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const projection = useMemo(
     () =>
@@ -244,9 +245,9 @@ export function SipCalculatorDashboard() {
         annualReturnPct: Number(returnRaw || 0),
         years: Number(yearsRaw || 0),
         inflationPct: Number(inflationRaw || 0),
-        currency,
+        currency: "NPR",
       }),
-    [currency, inflationRaw, monthlyRaw, returnRaw, yearsRaw],
+    [inflationRaw, monthlyRaw, returnRaw, yearsRaw],
   );
 
   const sipAiInputs = useMemo(
@@ -255,21 +256,20 @@ export function SipCalculatorDashboard() {
       annualReturnPct: projection.annualReturn,
       years: projection.years,
       inflationPct: projection.inflation,
-      currency,
+      currency: "NPR" as const,
       currentAge: 30,
     }),
-    [currency, projection.annualReturn, projection.inflation, projection.monthlyInvestment, projection.years],
+    [projection.annualReturn, projection.inflation, projection.monthlyInvestment, projection.years],
   );
 
   const isEmpty = projection.monthlyInvestment <= 0 || projection.years <= 0;
-  const prefix = currency === "KRW" ? "₩" : currency === "NPR" ? "रु" : "$";
   const annualSafeWithdrawal = projection.futureValueNpr * 0.04;
   const fireAnalyticsCards: Array<{ label: string; value: string; icon: LucideIcon }> = [
     { label: "Coast FIRE date", value: projection.coastFireYear ? `${projection.coastFireYear} years` : "Beyond horizon", icon: CalendarClock },
     { label: "Lean FIRE estimate", value: projection.leanFireYear ? `${projection.leanFireYear} years` : "Beyond horizon", icon: Gauge },
     { label: "Full FIRE estimate", value: projection.fullFireYear ? `${projection.fullFireYear} years` : "Beyond horizon", icon: Flame },
-    { label: "Retirement corpus", value: formatNpr(projection.futureValueNpr), icon: WalletCards },
-    { label: "Safe withdrawal", value: `${formatNpr(annualSafeWithdrawal)} / year`, icon: ShieldCheck },
+    { label: "Retirement corpus", value: isEmpty ? "No data yet" : formatNpr(projection.futureValueNpr), icon: WalletCards },
+    { label: "Safe withdrawal", value: isEmpty ? "No data yet" : `${formatNpr(annualSafeWithdrawal)} / year`, icon: ShieldCheck },
   ];
   const scenarioMonthly = projection.monthlyInvestment;
   const scenarioYears = projection.years;
@@ -278,25 +278,14 @@ export function SipCalculatorDashboard() {
       ? (() => {
           const monthlyReturn = projection.annualReturn / 100 / 12;
           const months = scenarioYears * 12;
-          const value =
-            monthlyReturn > 0
-              ? scenarioMonthly * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
-              : scenarioMonthly * months;
-          return toNpr(value, currency);
+          return monthlyReturn > 0
+            ? scenarioMonthly * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
+            : scenarioMonthly * months;
         })()
       : 0;
 
   function applyPreset(preset: (typeof quickPresets)[number]) {
-    setCurrency(preset.currency);
     setMonthlyRaw(String(preset.amount));
-  }
-
-  function changeCurrency(nextCurrency: Currency) {
-    if (nextCurrency === currency) return;
-    const amount = Math.max(0, Number(monthlyRaw || 0));
-    const nprAmount = toNpr(amount, currency);
-    setMonthlyRaw(String(Math.round(fromNpr(nprAmount, nextCurrency))));
-    setCurrency(nextCurrency);
   }
 
   return (
@@ -310,19 +299,8 @@ export function SipCalculatorDashboard() {
             <ArrowLeft size={16} />
             Back to Homepage
           </Link>
-          <div className="flex w-fit gap-1 rounded-full border border-emerald-100 bg-white/80 p-1 shadow-sm backdrop-blur">
-            {(["KRW", "NPR", "USD"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => changeCurrency(option)}
-                className={`rounded-full px-4 py-2 text-xs font-black transition ${
-                  currency === option ? "bg-emerald-700 text-white shadow" : "text-emerald-800 hover:bg-emerald-50"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
+          <div className="inline-flex w-fit items-center rounded-full border border-emerald-100 bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-800 shadow-sm backdrop-blur">
+            NPR only
           </div>
         </div>
 
@@ -348,23 +326,23 @@ export function SipCalculatorDashboard() {
                 नियमित लगानी वृद्धि योजना
               </p>
               <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
-                A premium long-term wealth growth dashboard for Nepali workers abroad, built to connect monthly investing,
-                inflation, Korea income, and FIRE readiness.
+                A premium long-term wealth growth dashboard for Nepali investors, built to connect monthly NPR investing,
+                inflation, and FIRE readiness.
               </p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Growth multiple</p>
                   <motion.p key={projection.growthMultiple} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-2 text-3xl font-black">
-                    {projection.growthMultiple.toFixed(1)}x
+                    {isEmpty ? "—" : `${projection.growthMultiple.toFixed(1)}x`}
                   </motion.p>
                 </div>
                 <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">FIRE progress</p>
-                  <p className="mt-2 text-3xl font-black">{formatPct(projection.fireCompletion)}</p>
+                  <p className="mt-2 text-3xl font-black">{isEmpty ? "No data yet" : formatPct(projection.fireCompletion)}</p>
                 </div>
                 <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Passive income</p>
-                  <p className="mt-2 text-2xl font-black">{formatNpr(projection.passiveIncomeNpr)}</p>
+                  <p className="mt-2 text-2xl font-black">{isEmpty ? "No data yet" : formatNpr(projection.passiveIncomeNpr)}</p>
                 </div>
               </div>
             </motion.div>
@@ -379,7 +357,7 @@ export function SipCalculatorDashboard() {
                 <div>
                   <p className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100">Live Wealth Projection</p>
                   <p className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">
-                    {formatCurrency(projection.futureValue, currency)}
+                    {isEmpty ? "No data yet" : formatNpr(projection.futureValue)}
                   </p>
                 </div>
                 <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-emerald-800 shadow-lg">
@@ -389,19 +367,20 @@ export function SipCalculatorDashboard() {
               <div className="rounded-2xl bg-emerald-950/35 p-4">
                 <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
                   <span>NPR 3Cr FIRE target</span>
-                  <span>{formatPct(projection.fireCompletion)}</span>
+                  <span>{isEmpty ? "0%" : formatPct(projection.fireCompletion)}</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-white/15">
                   <motion.div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-lime-300 to-yellow-300"
                     initial={{ width: 0 }}
-                    animate={{ width: `${projection.fireCompletion}%` }}
+                    animate={{ width: `${isEmpty ? 0 : projection.fireCompletion}%` }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
                   />
                 </div>
                 <p className="mt-3 text-sm font-bold leading-relaxed text-emerald-50/80">
-                  Your money could grow {projection.growthMultiple.toFixed(1)}x. Inflation reduces purchasing power by{" "}
-                  {formatPct(projection.inflationReductionPct)}.
+                  {isEmpty
+                    ? "Enter your monthly NPR SIP and timeline to unlock growth, inflation, and FIRE projections."
+                    : `Your money could grow ${projection.growthMultiple.toFixed(1)}x. Inflation reduces purchasing power by ${formatPct(projection.inflationReductionPct)}.`}
                 </p>
               </div>
             </motion.div>
@@ -431,10 +410,22 @@ export function SipCalculatorDashboard() {
                 </div>
                 <div className="grid gap-4">
                   <InputField
-                    label="Monthly Investment"
+                    label="Monthly Investment (NPR)"
                     value={monthlyRaw}
-                    prefix={prefix}
+                    prefix={NPR_PREFIX}
                     onChange={(next) => setMonthlyRaw(sanitizeDecimalInput(next))}
+                  />
+                  <InputField
+                    label="Expected Annual Return"
+                    value={returnRaw}
+                    suffix="%"
+                    onChange={(next) => setReturnRaw(sanitizeDecimalInput(next))}
+                  />
+                  <InputField
+                    label="Investment Period"
+                    value={yearsRaw}
+                    suffix="Y"
+                    onChange={(next) => setYearsRaw(sanitizeDecimalInput(next))}
                   />
                   <InputField
                     label="Inflation"
@@ -443,26 +434,26 @@ export function SipCalculatorDashboard() {
                     onChange={(next) => setInflationRaw(sanitizeDecimalInput(next))}
                   />
                   <SliderField label="Return slider" value={projection.annualReturn} min={0} max={24} step={0.5} suffix="%" onChange={setReturnRaw} />
-                  <SliderField label="Year slider" value={projection.years} min={1} max={40} step={1} suffix="Y" onChange={setYearsRaw} />
+                  <SliderField label="Year slider" value={projection.years} min={0} max={40} step={1} suffix="Y" onChange={setYearsRaw} />
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <ResultCard label="Future Value" value={formatCurrency(projection.futureValue, currency)} hint="Projected SIP corpus." icon={TrendingUp} />
-                <ResultCard label="Total Invested" value={formatCurrency(projection.totalInvested, currency)} hint="Your total contributions." icon={PiggyBank} tone="dark" />
-                <ResultCard label="Total Profit" value={formatCurrency(projection.totalProfit, currency)} hint="Compounding gain." icon={Banknote} tone="lime" />
-                <ResultCard label="Inflation Adjusted" value={formatCurrency(projection.inflationAdjustedValue, currency)} hint="Future buying power." icon={WalletCards} tone="gold" />
-                <ResultCard label="Monthly Passive Income" value={formatNpr(projection.passiveIncomeNpr)} hint="Estimated with 4% rule." icon={Flame} />
-                <ResultCard label="FIRE Completion" value={formatPct(projection.fireCompletion)} hint="Against NPR 3Cr target." icon={Target} tone="dark" />
+                <ResultCard label="Future Value" value={isEmpty ? "No data yet" : formatNpr(projection.futureValue)} hint="Projected SIP corpus (NPR)." icon={TrendingUp} />
+                <ResultCard label="Total Invested" value={isEmpty ? "0" : formatNpr(projection.totalInvested)} hint="Your total contributions." icon={PiggyBank} tone="dark" />
+                <ResultCard label="Total Profit" value={isEmpty ? "0" : formatNpr(projection.totalProfit)} hint="Compounding gain." icon={Banknote} tone="lime" />
+                <ResultCard label="Inflation Adjusted" value={isEmpty ? "0" : formatNpr(projection.inflationAdjustedValue)} hint="Future buying power." icon={WalletCards} tone="gold" />
+                <ResultCard label="Monthly Passive Income" value={isEmpty ? "No data yet" : formatNpr(projection.passiveIncomeNpr)} hint="Estimated with 4% rule." icon={Flame} />
+                <ResultCard label="FIRE Completion" value={isEmpty ? "0%" : formatPct(projection.fireCompletion)} hint="Against NPR 3Cr target." icon={Target} tone="dark" />
               </div>
             </section>
 
             <section className="mt-6 glass-card soft-gradient-border rounded-[2rem] p-5 sm:p-6">
               <div className="mb-5">
                 <h2 className="text-2xl font-black tracking-tight text-emerald-950">Quick Presets</h2>
-                <p className="text-sm font-bold text-slate-500">Fast scenarios for Nepalis abroad and at home in Nepal.</p>
+                <p className="text-sm font-bold text-slate-500">Fast NPR SIP scenarios for planning in Nepal.</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {quickPresets.map((preset) => (
                   <button
                     key={preset.label}
@@ -523,7 +514,7 @@ export function SipCalculatorDashboard() {
                               boxShadow: "0 18px 50px rgba(0,63,47,0.14)",
                             }}
                             formatter={(value: number | string, name: string) => [
-                              formatCurrency(Number(value), currency),
+                              formatNpr(Number(value)),
                               name === "nominalValue" ? "Future value" : name === "realValue" ? "Inflation adjusted" : "Invested",
                             ]}
                             labelFormatter={(label) => `Year ${label}`}
@@ -579,7 +570,7 @@ export function SipCalculatorDashboard() {
                           <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} tickFormatter={(value: number) => compactNumber(value)} />
                           <Tooltip
                             contentStyle={{ background: "rgba(255,255,255,0.94)", border: "1px solid rgba(0,122,61,0.16)", borderRadius: "18px" }}
-                            formatter={(value: number | string) => formatCurrency(Number(value), currency)}
+                            formatter={(value: number | string) => formatNpr(Number(value))}
                           />
                           <Bar dataKey="value" radius={[14, 14, 0, 0]} animationDuration={850}>
                             {["#064e3b", "#22c55e", "#d6a83e"].map((color) => (
@@ -634,7 +625,7 @@ export function SipCalculatorDashboard() {
                       <h2 className="mt-4 text-3xl font-black tracking-tight">
                         {scenarioMonthly > 0 && scenarioYears > 0 ? (
                           <>
-                            If you invest {formatCurrency(scenarioMonthly, currency)} monthly for {scenarioYears}{" "}
+                            If you invest {formatNpr(scenarioMonthly)} monthly for {scenarioYears}{" "}
                             {scenarioYears === 1 ? "year" : "years"}
                           </>
                         ) : (
@@ -658,7 +649,7 @@ export function SipCalculatorDashboard() {
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
                           <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Contributed (scenario)</p>
                           <p className="mt-2 text-2xl font-black">
-                            {formatCurrency(scenarioMonthly * Math.max(0, scenarioYears) * 12, currency)}
+                            {formatNpr(scenarioMonthly * Math.max(0, scenarioYears) * 12)}
                           </p>
                         </div>
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
@@ -713,9 +704,9 @@ export function SipCalculatorDashboard() {
                         {projection.yearlyRows.map((row) => (
                           <tr key={row.year} className="transition hover:bg-emerald-50/75">
                             <td className="whitespace-nowrap px-4 py-3 font-black text-emerald-950">{row.year}</td>
-                            <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatCurrency(row.invested, currency)}</td>
-                            <td className="whitespace-nowrap px-4 py-3 font-bold text-emerald-700">{formatCurrency(row.profit, currency)}</td>
-                            <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatCurrency(row.nominalValue, currency)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatNpr(row.invested)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-bold text-emerald-700">{formatNpr(row.profit)}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatNpr(row.nominalValue)}</td>
                             <td className="whitespace-nowrap px-4 py-3 font-black text-amber-700">{formatPct(row.fireProgress)}</td>
                           </tr>
                         ))}
@@ -735,7 +726,7 @@ export function SipCalculatorDashboard() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">SIP Value</p>
-            <p className="text-lg font-black text-emerald-950">{formatCurrency(projection.futureValue, currency)}</p>
+            <p className="text-lg font-black text-emerald-950">{isEmpty ? "No data yet" : formatNpr(projection.futureValue)}</p>
           </div>
           <div className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">
             {formatPct(projection.fireCompletion)}
