@@ -20,6 +20,12 @@ import type {
 import { sanitizeGoogleMapsUrl } from "@/components/portfolio/real-estate-maps-url";
 import { deriveMetalTotalCostBasisNprPatch } from "@/components/portfolio/metal-buy-basis";
 import { sanitizeMetalPurchaseBillUrls } from "@/components/portfolio/metal-photo-utils";
+import {
+  sanitizeAnnualRentalIncome,
+  sanitizeRealEstateDocuments,
+  sanitizeRealEstateGallery,
+  sanitizeRealEstatePropertyTxns,
+} from "@/components/portfolio/real-estate-documents";
 import { sanitizePropertyPhotoRef } from "@/components/portfolio/real-estate-photo-utils";
 
 export const STORAGE_KEY_V2 = "fire-nepal-portfolio-v2";
@@ -515,6 +521,10 @@ function normalizeV2(parsed: Partial<WealthPortfolioStateV2>): WealthPortfolioSt
       location: sanitizeLocationField(row.location),
       mapsUrl: sanitizeGoogleMapsUrl(row.mapsUrl),
       propertyPhoto: sanitizePropertyPhotoRef(row.propertyPhoto),
+      propertyPhotos: sanitizeRealEstateGallery(row.propertyPhotos),
+      documents: sanitizeRealEstateDocuments(row.documents),
+      propertyTransactions: sanitizeRealEstatePropertyTxns(row.propertyTransactions),
+      annualRentalIncome: sanitizeAnnualRentalIncome(row.annualRentalIncome),
     };
   });
   const vehRaw = Array.isArray(parsed.vehicles) ? parsed.vehicles : d.vehicles;

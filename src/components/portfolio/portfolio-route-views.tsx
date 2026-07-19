@@ -117,12 +117,7 @@ export function PortfolioGoldPage() {
 export function PortfolioRealEstatePage() {
   const { state, krwPerNpr, usdPerNpr, applyPortfolioMutate, updateRe, addRe, removeRe } = useWealthPortfolio();
   return (
-    <div className={flow}>
-      <DashboardSectionHeader
-        accent="teal"
-        title="Real Estate"
-        subtitle="Primary home, rentals, land, and commercial — modeled in NPR."
-      />
+    <div className="flex min-w-0 max-w-full flex-col">
       <RealEstatePanel
         rows={state.realEstate}
         ledger={state.ledger}

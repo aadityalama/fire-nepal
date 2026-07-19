@@ -52,6 +52,57 @@ export type PortfolioLedgerEntry = {
 
 export type RealEstateKind = "land" | "house" | "apartment" | "commercial";
 
+/** Document vault categories for a property (display + organization only). */
+export type RealEstateDocumentCategory =
+  | "property_photo"
+  | "lalpurja"
+  | "blueprint"
+  | "sale_agreement"
+  | "insurance"
+  | "loan_papers"
+  | "tax"
+  | "valuation"
+  | "passport"
+  | "citizenship"
+  | "pan"
+  | "other";
+
+export type RealEstateDocument = {
+  id: string;
+  name: string;
+  category: RealEstateDocumentCategory;
+  mimeType: string;
+  /** HTTPS (Supabase Storage public/signed URL) or inline data URL fallback. */
+  url: string;
+  /** Private Storage object path when uploaded to Supabase. */
+  storagePath?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+/**
+ * Property-level cash events beyond portfolio buy/sell ledger rows.
+ * Purchase/sale kinds mirror ledger when recorded through the premium UI.
+ */
+export type RealEstatePropertyTxnKind =
+  | "purchase"
+  | "sale"
+  | "rental_income"
+  | "maintenance"
+  | "renovation"
+  | "expense"
+  | "income";
+
+export type RealEstatePropertyTxn = {
+  id: string;
+  kind: RealEstatePropertyTxnKind;
+  amount: number;
+  currency: PortfolioDisplayCurrency;
+  date: string;
+  notes?: string;
+  fees?: number;
+};
+
 export type VehicleKind = "bike" | "car" | "ev";
 
 export type LiabilityKind = "loan" | "credit" | "mortgage" | "personal";
@@ -116,6 +167,17 @@ export type RealEstateRow = {
    * Does not affect valuations — display only.
    */
   propertyPhoto?: string;
+  /**
+   * Additional gallery photos (HTTPS or JPEG data URLs). Cover remains `propertyPhoto`.
+   * Display only — does not affect valuations.
+   */
+  propertyPhotos?: string[];
+  /** Document vault entries (deeds, IDs, insurance, etc.). Display / vault only. */
+  documents?: RealEstateDocument[];
+  /** Property cash timeline (rent, maintenance, etc.). Does not change net-worth mark. */
+  propertyTransactions?: RealEstatePropertyTxn[];
+  /** Optional annual rental income in row currency — used for yield analytics only. */
+  annualRentalIncome?: number;
 };
 
 export type VehicleRow = {
