@@ -3,130 +3,120 @@
 import { motion, useReducedMotion } from "framer-motion";
 
 /**
- * Full-width Himalayan scene — inlined SVG (no dynamic import) for reliable production render.
- * `preserveAspectRatio="xMidYMid slice"` matches CSS background-size: cover + center.
+ * Full-bleed Himalayan backdrop — realistic membership artwork (cover + center),
+ * emerald cinematic lighting, soft fog, and a right-side temple/stupa silhouette.
+ * No abstract polygon mesh.
  */
 export function ReturnToNepalHeroBackground() {
   const reduced = useReducedMotion();
 
   return (
-    <div
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-      aria-hidden
-      style={{
-        background: "linear-gradient(180deg, #0a3d32 0%, #041a14 55%, #000805 100%)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
+      {/* Realistic Himalaya + Nepal map + pagoda cityscape */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/membership/card-backdrop.jpg"
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover object-[72%_42%]"
+        style={{
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
+
+      {/* Cinematic readability + emerald premium lighting */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `
+            linear-gradient(105deg, rgba(0,8,5,0.88) 0%, rgba(0,10,7,0.55) 38%, rgba(0,8,5,0.28) 62%, rgba(0,12,9,0.62) 100%),
+            linear-gradient(180deg, rgba(0,10,8,0.35) 0%, rgba(0,8,5,0.12) 40%, rgba(0,6,4,0.55) 72%, rgba(0,0,0,0.78) 100%)
+          `,
+        }}
+      />
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 55% at 68% 28%, rgba(16,185,129,0.28) 0%, rgba(16,185,129,0.08) 42%, transparent 68%)",
+        }}
+        animate={reduced ? {} : { opacity: [0.72, 1, 0.72] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 50% 40% at 88% 18%, rgba(52,211,153,0.18) 0%, transparent 55%)",
+        }}
+      />
+
+      {/* Soft fog / depth */}
+      <motion.div
+        className="absolute -left-[10%] bottom-[8%] h-[42%] w-[70%] rounded-[100%] bg-emerald-950/50 blur-3xl"
+        animate={reduced ? {} : { x: [0, 24, 0], opacity: [0.35, 0.5, 0.35] }}
+        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div
+        className="absolute right-[5%] bottom-[12%] h-[36%] w-[48%] rounded-[100%] bg-black/45 blur-3xl"
+        animate={reduced ? {} : { x: [0, -18, 0], opacity: [0.4, 0.55, 0.4] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
+      />
+      <div
+        className="absolute inset-x-0 bottom-0 h-[38%]"
+        style={{
+          background: "linear-gradient(180deg, transparent 0%, rgba(0,6,4,0.45) 45%, rgba(0,0,0,0.72) 100%)",
+        }}
+      />
+
+      {/* Nepal temple / stupa silhouette — right */}
       <svg
-        className="absolute inset-0 h-full w-full"
-        style={{ minHeight: "100%", minWidth: "100%" }}
-        viewBox="0 0 800 400"
-        preserveAspectRatio="xMidYMid slice"
-        xmlns="http://www.w3.org/2000/svg"
+        className="absolute bottom-[6%] right-[2%] h-[48%] w-[38%] max-w-[220px] opacity-90 sm:right-[4%] sm:h-[55%] sm:max-w-[280px]"
+        viewBox="0 0 200 240"
+        preserveAspectRatio="xMidYMax meet"
       >
         <defs>
-          <linearGradient id="rtn-sky" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#0d4a3f" />
-            <stop offset="35%" stopColor="#073328" />
-            <stop offset="70%" stopColor="#041f1a" />
-            <stop offset="100%" stopColor="#011210" />
+          <linearGradient id="rtn-stupa-fill" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#021a14" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#000805" stopOpacity="0.98" />
           </linearGradient>
-          <linearGradient id="rtn-mtn-far" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#1a6b62" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#0a4540" stopOpacity="0.75" />
-          </linearGradient>
-          <linearGradient id="rtn-mtn-mid" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#16857a" />
-            <stop offset="60%" stopColor="#0f5249" />
-            <stop offset="100%" stopColor="#063530" />
-          </linearGradient>
-          <linearGradient id="rtn-mtn-near" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#0f6b5e" />
-            <stop offset="40%" stopColor="#0a5c4a" />
-            <stop offset="100%" stopColor="#033d32" />
-          </linearGradient>
-          <linearGradient id="rtn-snow" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#f0fdf4" stopOpacity="0.98" />
-            <stop offset="100%" stopColor="#bbf7d0" stopOpacity="0.45" />
-          </linearGradient>
-          <linearGradient id="rtn-sun-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#4ade80" stopOpacity="0.42" />
-            <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id="rtn-fog" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#041a14" stopOpacity="0" />
-            <stop offset="100%" stopColor="#000805" stopOpacity="0.55" />
-          </linearGradient>
+          <filter id="rtn-stupa-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-
-        <rect width="800" height="400" fill="url(#rtn-sky)" />
-
-        <ellipse cx="620" cy="72" rx="200" ry="130" fill="url(#rtn-sun-glow)" />
-
-        <motion.g
-          animate={reduced ? {} : { x: [0, 4, 0] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <path
-            d="M0 280 L80 200 L140 240 L200 160 L280 220 L360 140 L440 200 L520 120 L600 180 L680 100 L760 160 L800 140 L800 400 L0 400 Z"
-            fill="url(#rtn-mtn-far)"
-            opacity="0.82"
-          />
-        </motion.g>
-
-        <motion.g
-          animate={reduced ? {} : { x: [0, -6, 0] }}
-          transition={{ duration: 26, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <path
-            d="M0 320 L60 240 L120 280 L180 200 L250 260 L320 170 L400 240 L480 150 L560 210 L640 130 L720 200 L800 170 L800 400 L0 400 Z"
-            fill="url(#rtn-mtn-mid)"
-          />
-          <path
-            d="M300 175 L320 170 L340 175 L330 195 L310 195 Z M470 155 L480 150 L495 158 L485 178 L468 172 Z M625 135 L640 130 L658 140 L645 165 L628 158 Z"
-            fill="url(#rtn-snow)"
-            opacity="0.9"
-          />
-        </motion.g>
-
-        <motion.g
-          animate={reduced ? {} : { x: [0, 8, 0] }}
-          transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <path
-            d="M0 360 L100 280 L180 310 L260 230 L340 290 L420 210 L500 270 L580 190 L660 250 L740 220 L800 260 L800 400 L0 400 Z"
-            fill="url(#rtn-mtn-near)"
-          />
-          <path d="M400 215 L420 210 L445 220 L430 255 L405 248 Z" fill="url(#rtn-snow)" />
-        </motion.g>
-
-        <rect x="0" y="290" width="800" height="110" fill="url(#rtn-fog)" />
-
-        {/* Nepal pagoda — right */}
-        <g transform="translate(600, 232)" opacity="0.96">
-          <path d="M40 0 L80 0 L60 18 Z" fill="#022c22" />
-          <rect x="30" y="18" width="60" height="6" rx="1" fill="#0a5c4a" />
-          <path d="M25 24 L95 24 L70 42 Z" fill="#022c22" />
-          <rect x="20" y="42" width="80" height="7" rx="1" fill="#0a5c4a" />
-          <path d="M15 49 L105 49 L75 72 Z" fill="#011a16" />
-          <rect x="10" y="72" width="100" height="8" rx="1" fill="#0a5c4a" />
-          <path d="M5 80 L115 80 L80 108 Z" fill="#011a16" />
-          <rect x="0" y="108" width="120" height="10" rx="2" fill="#022c22" />
-          <rect x="-8" y="118" width="136" height="14" rx="2" fill="#000805" opacity="0.85" />
-          <line x1="60" y1="0" x2="60" y2="-16" stroke="#34d399" strokeWidth="2.2" opacity="0.75" />
-          <circle cx="60" cy="-18" r="3.5" fill="#6ee7b7" opacity="0.85" />
-          <path
-            d="M60 -16 L42 10 M60 -16 L78 8 M60 -16 L60 22"
-            stroke="#34d399"
-            strokeWidth="1"
-            opacity="0.45"
-            strokeDasharray="2 3"
-          />
+        {/* Tiered pagoda */}
+        <g fill="url(#rtn-stupa-fill)" filter="url(#rtn-stupa-glow)">
+          <path d="M100 8 L118 28 L82 28 Z" />
+          <rect x="78" y="28" width="44" height="5" rx="1" fill="#0a5c4a" opacity="0.85" />
+          <path d="M70 33 L130 33 L108 52 L92 52 Z" />
+          <rect x="68" y="52" width="64" height="5" rx="1" fill="#0a5c4a" opacity="0.8" />
+          <path d="M58 57 L142 57 L118 82 L82 82 Z" />
+          <rect x="56" y="82" width="88" height="6" rx="1" fill="#0a5c4a" opacity="0.75" />
+          <path d="M44 88 L156 88 L128 122 L72 122 Z" />
+          <rect x="40" y="122" width="120" height="8" rx="2" />
+          <rect x="28" y="130" width="144" height="14" rx="2" opacity="0.95" />
         </g>
-
-        <path d="M0 380 Q200 360 400 370 T800 365 L800 400 L0 400 Z" fill="#000805" opacity="0.45" />
+        {/* Stupa dome + spire */}
+        <g transform="translate(148, 95)" fill="url(#rtn-stupa-fill)" opacity="0.95">
+          <ellipse cx="0" cy="48" rx="28" ry="10" />
+          <path d="M-22 48 Q-22 18 0 8 Q22 18 22 48 Z" />
+          <rect x="-6" y="0" width="12" height="10" rx="1" />
+          <path d="M0 -2 L8 8 L-8 8 Z" fill="#022c22" />
+          <line x1="0" y1="-18" x2="0" y2="-2" stroke="#34d399" strokeWidth="2" opacity="0.7" />
+          <circle cx="0" cy="-20" r="3" fill="#6ee7b7" opacity="0.85" />
+        </g>
+        <motion.circle
+          cx="148"
+          cy="75"
+          r="18"
+          fill="rgba(16,185,129,0.15)"
+          animate={reduced ? {} : { r: [12, 22, 12], opacity: [0.35, 0.12, 0.35] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+        />
       </svg>
     </div>
   );
