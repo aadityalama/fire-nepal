@@ -14,7 +14,7 @@ const SOCIAL_LINKS = [
     name: "Facebook",
     tooltip: "Facebook",
     ariaLabel: "Follow FIRE Nepal on Facebook",
-    href: "https://www.facebook.com/firenepal",
+    href: "https://www.facebook.com/share/1AuV3FkbDN/?mibextid=wwXIfr",
     path: "M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z",
   },
   {
@@ -28,14 +28,14 @@ const SOCIAL_LINKS = [
     name: "YouTube",
     tooltip: "YouTube",
     ariaLabel: "Follow FIRE Nepal on YouTube",
-    href: "https://www.youtube.com/@firenepal",
+    href: "https://www.youtube.com/@Firenepal853",
     path: "M23.5 6.19a3.02 3.02 0 0 0-2.12-2.14C19.54 3.55 12 3.55 12 3.55s-7.54 0-9.38.5A3.02 3.02 0 0 0 .5 6.19 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.81 3.02 3.02 0 0 0 2.12 2.14c1.84.5 9.38.5 9.38.5s7.54 0 9.38-.5a3.02 3.02 0 0 0 2.12-2.14A31.6 31.6 0 0 0 24 12a31.6 31.6 0 0 0-.5-5.81zM9.55 15.57V8.43L15.82 12l-6.27 3.57z",
   },
   {
     name: "TikTok",
     tooltip: "TikTok",
     ariaLabel: "Follow FIRE Nepal on TikTok",
-    href: "https://www.tiktok.com/@firenepal",
+    href: "https://www.tiktok.com/@firenepal4",
     path: "M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.03-1.49.16-2.22 1.3-4.38 3.14-5.64 1.94-1.4 4.56-1.77 6.8-.95.03 1.5-.01 3-.01 4.5-.8-.26-1.68-.37-2.53-.2-1.08.2-2.08.85-2.68 1.77-.47.72-.64 1.62-.5 2.47.23 1.43 1.37 2.63 2.8 2.9 1.11.22 2.28-.06 3.13-.8.63-.54.97-1.35 1.02-2.17.03-2.98.01-5.96.02-8.94z",
   },
   {
