@@ -15,6 +15,7 @@ import {
   CreditCard,
   CalendarClock,
   UserRound,
+  Crown,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,23 +25,55 @@ import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { FireLendingMobileBottomNav } from "@/components/fire-lending/FireLendingMobileBottomNav";
 import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
+import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
-const NAV: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
-  { href: "/fire-lending", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/fire-lending/loans", label: "My Loans", icon: Landmark },
-  { href: "/fire-lending/borrowed", label: "Borrowed", icon: Wallet },
-  { href: "/fire-lending/lent", label: "Lent", icon: Handshake },
-  { href: "/fire-lending/requests", label: "Loan Requests", icon: Inbox },
-  { href: "/fire-lending/payments", label: "Payments", icon: CreditCard },
-  { href: "/fire-lending/installments", label: "Installments", icon: CalendarClock },
-  { href: "/fire-lending/borrowers", label: "Borrowers", icon: Users },
-  { href: "/fire-lending/lenders", label: "Lenders", icon: UserRound },
-  { href: "/fire-lending/agreements", label: "Agreements", icon: FileText },
-  { href: "/fire-lending/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/fire-lending/trust-score", label: "Trust Score", icon: BadgeCheck },
-  { href: "/fire-lending/documents", label: "Documents", icon: Shield },
-  { href: "/fire-lending/settings", label: "Settings", icon: Settings },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  badgeKey?: "requests" | "payments" | "agreements" | "notifications";
+  elite?: boolean;
+};
+
+const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Overview",
+    items: [
+      { href: "/fire-lending", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/fire-lending/analytics", label: "Analytics", icon: BarChart3, elite: true },
+      { href: "/fire-lending/trust-score", label: "Trust Score", icon: BadgeCheck, elite: true },
+    ],
+  },
+  {
+    title: "Lending",
+    items: [
+      { href: "/fire-lending/loans", label: "My Loans", icon: Landmark },
+      { href: "/fire-lending/borrowed", label: "Borrowed", icon: Wallet },
+      { href: "/fire-lending/lent", label: "Lent", icon: Handshake },
+      { href: "/fire-lending/requests", label: "Loan Requests", icon: Inbox, badgeKey: "requests" },
+    ],
+  },
+  {
+    title: "Collections",
+    items: [
+      { href: "/fire-lending/payments", label: "Payments", icon: CreditCard, badgeKey: "payments" },
+      { href: "/fire-lending/installments", label: "Installments", icon: CalendarClock },
+    ],
+  },
+  {
+    title: "Network",
+    items: [
+      { href: "/fire-lending/borrowers", label: "Borrowers", icon: Users },
+      { href: "/fire-lending/lenders", label: "Lenders", icon: UserRound },
+      { href: "/fire-lending/agreements", label: "Agreements", icon: FileText, badgeKey: "agreements" },
+      { href: "/fire-lending/documents", label: "Documents", icon: Shield },
+    ],
+  },
+  {
+    title: "System",
+    items: [{ href: "/fire-lending/settings", label: "Settings", icon: Settings, badgeKey: "notifications" }],
+  },
 ];
 
 function navActive(href: string, pathname: string | null): boolean {
@@ -50,14 +83,14 @@ function navActive(href: string, pathname: string | null): boolean {
 }
 
 function sidebarLinkCls(active: boolean, light: boolean) {
-  return `flex min-h-[44px] items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.99] ${
+  return `group relative flex min-h-[44px] items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold transition duration-200 active:scale-[0.99] ${
     active
       ? light
-        ? "bg-emerald-100 text-emerald-900"
-        : "bg-gradient-to-r from-emerald-500/90 to-lime-400/90 text-emerald-950 shadow-lg shadow-emerald-500/20"
+        ? "bg-emerald-100 text-emerald-900 shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_24px_rgba(16,185,129,0.18)]"
+        : "bg-gradient-to-r from-emerald-500/95 to-lime-400/90 text-emerald-950 shadow-[0_0_28px_rgba(16,185,129,0.35)]"
       : light
-        ? "text-slate-700 hover:bg-emerald-50 hover:text-slate-900"
-        : "text-emerald-100/80 hover:bg-white/[0.06] hover:text-white"
+        ? "text-slate-700 hover:translate-x-0.5 hover:bg-emerald-50 hover:text-slate-900"
+        : "text-emerald-100/80 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white"
   }`;
 }
 
@@ -65,8 +98,16 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const { store, agreementCenter } = useFireLending();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const close = useCallback(() => setDrawerOpen(false), []);
+
+  const badges = {
+    requests: store.requests.filter((r) => r.status === "pending").length,
+    payments: store.installments.filter((i) => i.status === "due" || i.status === "overdue").length,
+    agreements: agreementCenter.pendingSignature + agreementCenter.waitingApproval,
+    notifications: store.notifications.filter((n) => !n.read).length,
+  };
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -152,20 +193,54 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
         <aside
           id="fire-lending-drawer"
           aria-hidden={!drawerOpen}
-          className={`fixed inset-y-0 left-0 z-50 flex w-[min(90vw,280px)] flex-col border-r backdrop-blur-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
+          className={`fixed inset-y-0 left-0 z-50 flex w-[min(90vw,292px)] flex-col border-r backdrop-blur-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
             light ? "border-emerald-200/60 bg-white/95" : "border-emerald-400/10 bg-[#04140f]/95"
           } ${drawerOpen ? "translate-x-0 pointer-events-auto" : "-translate-x-full pointer-events-none lg:pointer-events-auto lg:translate-x-0"}`}
         >
-          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
-            {NAV.map((item) => {
-              const active = navActive(item.href, pathname);
-              return (
-                <Link key={item.href} href={item.href} className={sidebarLinkCls(active, light)} onClick={close}>
-                  <item.icon size={18} className="shrink-0 opacity-90" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
+          <div className={`mx-4 mt-4 flex items-center gap-2 rounded-xl border px-3 py-2 ${light ? "border-amber-200/70 bg-amber-50/80" : "border-amber-400/25 bg-amber-500/10"}`}>
+            <Crown size={14} className={light ? "text-amber-700" : "text-amber-300"} />
+            <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-amber-800" : "text-amber-200"}`}>Elite Module</span>
+          </div>
+          <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.title}>
+                <p className={`mb-1.5 px-3 text-[10px] font-black uppercase tracking-[0.16em] ${light ? "text-slate-400" : "text-emerald-200/40"}`}>
+                  {section.title}
+                </p>
+                <div className="flex flex-col gap-1">
+                  {section.items.map((navItem) => {
+                    const active = navActive(navItem.href, pathname);
+                    const count = navItem.badgeKey ? badges[navItem.badgeKey] : 0;
+                    return (
+                      <Link key={navItem.href} href={navItem.href} className={sidebarLinkCls(active, light)} onClick={close}>
+                        <navItem.icon size={18} className="shrink-0 opacity-90" />
+                        <span className="min-w-0 flex-1 truncate">{navItem.label}</span>
+                        {navItem.elite ? (
+                          <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${light ? "bg-amber-100 text-amber-800" : "bg-amber-500/20 text-amber-200"}`}>
+                            Elite
+                          </span>
+                        ) : null}
+                        {count > 0 ? (
+                          <span
+                            className={`grid min-w-[1.25rem] place-items-center rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                              active
+                                ? light
+                                  ? "bg-emerald-700 text-white"
+                                  : "bg-emerald-950/40 text-emerald-50"
+                                : light
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-emerald-500/20 text-lime-200"
+                            }`}
+                          >
+                            {count}
+                          </span>
+                        ) : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
         </aside>
 

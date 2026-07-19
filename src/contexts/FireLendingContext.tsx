@@ -10,11 +10,15 @@ import {
   type ReactNode,
 } from "react";
 import {
+  buildActivityFeed,
+  buildAgreementCenter,
   buildAiInsights,
   buildKpis,
   buildMonthlySeries,
   buildPortfolioSummary,
   buildStatusDistribution,
+  buildTopBorrowers,
+  buildUpcomingPayments,
 } from "@/lib/fire-lending/analytics";
 import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
@@ -38,6 +42,10 @@ type FireLendingContextValue = {
   insights: ReturnType<typeof buildAiInsights>;
   monthlySeries: ReturnType<typeof buildMonthlySeries>;
   statusDistribution: ReturnType<typeof buildStatusDistribution>;
+  upcomingPayments: ReturnType<typeof buildUpcomingPayments>;
+  activityFeed: ReturnType<typeof buildActivityFeed>;
+  topBorrowers: ReturnType<typeof buildTopBorrowers>;
+  agreementCenter: ReturnType<typeof buildAgreementCenter>;
   partyById: (id: string) => FireLendingStore["parties"][number] | undefined;
   createLoanFromWizard: (draft: LoanWizardDraft) => string;
   respondToRequest: (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => void;
@@ -82,6 +90,10 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   const insights = useMemo(() => buildAiInsights(store, summary), [store, summary]);
   const monthlySeries = useMemo(() => buildMonthlySeries(store.loans, store.payments), [store.loans, store.payments]);
   const statusDistribution = useMemo(() => buildStatusDistribution(store.loans), [store.loans]);
+  const upcomingPayments = useMemo(() => buildUpcomingPayments(store), [store]);
+  const activityFeed = useMemo(() => buildActivityFeed(store), [store]);
+  const topBorrowers = useMemo(() => buildTopBorrowers(store), [store]);
+  const agreementCenter = useMemo(() => buildAgreementCenter(store), [store]);
 
   const partyById = useCallback((id: string) => store.parties.find((p) => p.id === id), [store.parties]);
 
@@ -359,6 +371,10 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     insights,
     monthlySeries,
     statusDistribution,
+    upcomingPayments,
+    activityFeed,
+    topBorrowers,
+    agreementCenter,
     partyById,
     createLoanFromWizard,
     respondToRequest,

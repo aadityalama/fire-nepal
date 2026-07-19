@@ -159,11 +159,13 @@ export type PortfolioSummary = {
   totalLent: number;
   totalBorrowed: number;
   interestEarned: number;
+  expectedInterest: number;
   collectionRate: number;
   dueToday: number;
   overdue: number;
   trustScore: number;
   aiSummary: string;
+  lastUpdated: string;
 };
 
 export type LendingKpi = {
@@ -172,7 +174,8 @@ export type LendingKpi = {
   value: string;
   changePct: number;
   sparkline: number[];
-  accent: "emerald" | "teal" | "amber" | "rose" | "gold";
+  accent: "emerald" | "teal" | "amber" | "rose" | "gold" | "blue";
+  tone: "healthy" | "due" | "overdue" | "info";
 };
 
 export type AiInsight = {
@@ -182,6 +185,44 @@ export type AiInsight = {
   body: string;
   actionLabel?: string;
   href?: string;
+  confidence: number;
+};
+
+export type UpcomingPaymentItem = {
+  id: string;
+  loanId: string;
+  partyId: string;
+  partyName: string;
+  amount: number;
+  currency: CurrencyCode;
+  dueDate: string;
+  bucket: "today" | "tomorrow" | "3days" | "7days";
+  status: string;
+};
+
+export type ActivityItem = {
+  id: string;
+  kind: "loan_created" | "agreement_signed" | "payment_received" | "reminder_sent" | "settlement";
+  title: string;
+  body: string;
+  at: string;
+};
+
+export type TopBorrowerItem = {
+  partyId: string;
+  name: string;
+  trustScore: number;
+  outstanding: number;
+  nextDue?: string;
+  performancePct: number;
+};
+
+export type AgreementCenterStats = {
+  pendingSignature: number;
+  waitingApproval: number;
+  active: number;
+  completed: number;
+  expired: number;
 };
 
 export type MonthlySeriesPoint = {
@@ -190,6 +231,7 @@ export type MonthlySeriesPoint = {
   borrowing: number;
   interest: number;
   collected: number;
+  growth: number;
 };
 
 export type FireLendingStore = {

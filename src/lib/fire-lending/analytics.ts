@@ -1,5 +1,7 @@
-import { formatLendingMoney } from "@/lib/fire-lending/format";
+import { formatLendingMoney, todayIso } from "@/lib/fire-lending/format";
 import type {
+  ActivityItem,
+  AgreementCenterStats,
   AiInsight,
   FireLendingLoan,
   FireLendingPayment,
@@ -7,8 +9,9 @@ import type {
   LendingKpi,
   MonthlySeriesPoint,
   PortfolioSummary,
+  TopBorrowerItem,
+  UpcomingPaymentItem,
 } from "@/lib/fire-lending/types";
-import { todayIso } from "@/lib/fire-lending/format";
 
 function spark(base: number, variance = 0.12): number[] {
   return Array.from({ length: 8 }, (_, i) => {
@@ -44,6 +47,10 @@ export function buildPortfolioSummary(store: FireLendingStore): PortfolioSummary
     aiSummary = `Interest income trending positively at ${formatLendingMoney(interestEarned)}. Consider offering a new peer loan.`;
   }
 
+  const expectedInterest = Math.round(
+    active.filter((l) => l.role === "lender").reduce((s, l) => s + (l.outstanding * l.interestRate) / 100 / 12, 0),
+  );
+
   return {
     healthScore,
     netOutstanding,
@@ -51,11 +58,13 @@ export function buildPortfolioSummary(store: FireLendingStore): PortfolioSummary
     totalLent,
     totalBorrowed,
     interestEarned,
+    expectedInterest,
     collectionRate,
     dueToday: dueInstallments.reduce((s, i) => s + (i.amount - i.paidAmount), 0),
     overdue: overdueInstallments.reduce((s, i) => s + (i.amount - i.paidAmount), 0),
     trustScore: me?.trustScore ?? 72,
     aiSummary,
+    lastUpdated: new Date().toISOString(),
   };
 }
 
@@ -68,6 +77,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: 8.4,
       sparkline: spark(summary.totalLent / 8 || 40),
       accent: "emerald",
+      tone: "healthy",
     },
     {
       key: "borrowed",
@@ -75,7 +85,8 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       value: formatLendingMoney(summary.totalBorrowed),
       changePct: -2.1,
       sparkline: spark(summary.totalBorrowed / 8 || 30),
-      accent: "teal",
+      accent: "blue",
+      tone: "info",
     },
     {
       key: "outstanding",
@@ -83,7 +94,8 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       value: formatLendingMoney(summary.netOutstanding),
       changePct: 1.6,
       sparkline: spark(summary.netOutstanding / 8 || 35),
-      accent: "amber",
+      accent: "teal",
+      tone: "info",
     },
     {
       key: "interest",
@@ -92,6 +104,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: 12.3,
       sparkline: spark(summary.interestEarned / 8 || 12),
       accent: "gold",
+      tone: "healthy",
     },
     {
       key: "collection",
@@ -100,6 +113,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: 3.2,
       sparkline: spark(summary.collectionRate, 0.05),
       accent: "emerald",
+      tone: "healthy",
     },
     {
       key: "due",
@@ -108,6 +122,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: summary.dueToday > 0 ? 5 : 0,
       sparkline: spark(Math.max(summary.dueToday / 4, 8)),
       accent: "amber",
+      tone: "due",
     },
     {
       key: "overdue",
@@ -116,6 +131,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: summary.overdue > 0 ? -4.5 : 0,
       sparkline: spark(Math.max(summary.overdue / 4, 6)),
       accent: "rose",
+      tone: "overdue",
     },
     {
       key: "trust",
@@ -124,6 +140,7 @@ export function buildKpis(summary: PortfolioSummary): LendingKpi[] {
       changePct: 1.1,
       sparkline: spark(summary.trustScore, 0.04),
       accent: "gold",
+      tone: "healthy",
     },
   ];
 }
@@ -142,6 +159,7 @@ export function buildMonthlySeries(loans: FireLendingLoan[], payments: FireLendi
       borrowing: Math.round(borrowing),
       interest: Math.round(interest),
       collected: Math.round(collected),
+      growth: Math.round(lending * 0.65 + collected * 0.35),
     };
   });
 }
@@ -170,6 +188,7 @@ export function buildAiInsights(store: FireLendingStore, summary: PortfolioSumma
       body: "Schedule reminders and confirm settlement method with counterparties.",
       actionLabel: "View installments",
       href: "/fire-lending/installments",
+      confidence: 92,
     });
   }
 
@@ -183,6 +202,7 @@ export function buildAiInsights(store: FireLendingStore, summary: PortfolioSumma
       body: `${party?.name ?? "A borrower"} shows elevated risk (${highRisk.riskScore}). Review agreement & follow up.`,
       actionLabel: "Open loan",
       href: `/fire-lending/loans/${highRisk.id}`,
+      confidence: 88,
     });
   }
 
@@ -190,10 +210,11 @@ export function buildAiInsights(store: FireLendingStore, summary: PortfolioSumma
     insights.push({
       id: "collection-up",
       severity: "success",
-      title: "Collection rate healthy",
+      title: "Collection improved 8%",
       body: `Collection rate is ${summary.collectionRate}%. Portfolio quality supports new peer lending.`,
       actionLabel: "New loan",
       href: "/fire-lending/new",
+      confidence: 94,
     });
   }
 
@@ -201,21 +222,153 @@ export function buildAiInsights(store: FireLendingStore, summary: PortfolioSumma
     id: "interest",
     severity: "info",
     title: "Expected monthly interest",
-    body: `Projected interest income near ${formatLendingMoney(Math.round(summary.interestEarned / 6 || 2500))} based on active loans.`,
+    body: `Projected interest income near ${formatLendingMoney(summary.expectedInterest || Math.round(summary.interestEarned / 6 || 2500))} based on active loans.`,
     actionLabel: "Analytics",
     href: "/fire-lending/analytics",
+    confidence: 86,
   });
 
   if (summary.overdue > 0) {
     insights.push({
       id: "follow-up",
       severity: "warning",
-      title: "Suggested follow-up",
+      title: "Recommended follow-up",
       body: "Send overdue notices and offer partial settlement before escalating.",
       actionLabel: "Record payment",
       href: "/fire-lending/payments/new",
+      confidence: 90,
     });
   }
 
   return insights.slice(0, 5);
+}
+
+export function buildUpcomingPayments(store: FireLendingStore): UpcomingPaymentItem[] {
+  const today = todayIso();
+  const t = new Date(today);
+  const d1 = new Date(t);
+  d1.setDate(d1.getDate() + 1);
+  const d3 = new Date(t);
+  d3.setDate(d3.getDate() + 3);
+  const d7 = new Date(t);
+  d7.setDate(d7.getDate() + 7);
+  const tomorrowIso = d1.toISOString().slice(0, 10);
+  const day3Iso = d3.toISOString().slice(0, 10);
+  const day7Iso = d7.toISOString().slice(0, 10);
+
+  return store.installments
+    .filter((i) => i.status !== "paid" && i.dueDate >= today && i.dueDate <= day7Iso)
+    .map((i) => {
+      const loan = store.loans.find((l) => l.id === i.loanId);
+      const party = store.parties.find((p) => p.id === loan?.counterpartyId);
+      let bucket: UpcomingPaymentItem["bucket"] = "7days";
+      if (i.dueDate === today) bucket = "today";
+      else if (i.dueDate === tomorrowIso) bucket = "tomorrow";
+      else if (i.dueDate <= day3Iso) bucket = "3days";
+      return {
+        id: i.id,
+        loanId: i.loanId,
+        partyId: party?.id ?? "",
+        partyName: party?.name ?? "Counterparty",
+        amount: i.amount - i.paidAmount,
+        currency: loan?.currency ?? "NPR",
+        dueDate: i.dueDate,
+        bucket,
+        status: i.status,
+      };
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 12);
+}
+
+export function buildActivityFeed(store: FireLendingStore): ActivityItem[] {
+  const items: ActivityItem[] = [];
+  for (const loan of store.loans.slice(0, 4)) {
+    items.push({
+      id: `loan-${loan.id}`,
+      kind: "loan_created",
+      title: "Loan Created",
+      body: `${loan.agreementNumber} · ${formatLendingMoney(loan.amount, loan.currency)}`,
+      at: loan.createdAt,
+    });
+    if (loan.lenderSigned && loan.borrowerSigned) {
+      items.push({
+        id: `sign-${loan.id}`,
+        kind: "agreement_signed",
+        title: "Agreement Signed",
+        body: `${loan.agreementNumber} fully executed`,
+        at: loan.startDate ?? loan.createdAt,
+      });
+    }
+    if (loan.status === "settled") {
+      items.push({
+        id: `settle-${loan.id}`,
+        kind: "settlement",
+        title: "Settlement Completed",
+        body: `${loan.agreementNumber} closed`,
+        at: loan.endDate ?? loan.createdAt,
+      });
+    }
+  }
+  for (const p of store.payments.slice(0, 5)) {
+    items.push({
+      id: `pay-${p.id}`,
+      kind: "payment_received",
+      title: "Payment Received",
+      body: `${formatLendingMoney(p.amount)} via ${p.method.replace("_", " ")}`,
+      at: p.paidAt,
+    });
+  }
+  for (const n of store.notifications.filter((x) => x.kind === "payment_due").slice(0, 2)) {
+    items.push({
+      id: `rem-${n.id}`,
+      kind: "reminder_sent",
+      title: "Reminder Sent",
+      body: n.body,
+      at: n.createdAt,
+    });
+  }
+  return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+}
+
+export function buildTopBorrowers(store: FireLendingStore): TopBorrowerItem[] {
+  const byParty = new Map<string, TopBorrowerItem>();
+  for (const loan of store.loans.filter((l) => l.role === "lender")) {
+    const party = store.parties.find((p) => p.id === loan.counterpartyId);
+    if (!party) continue;
+    const existing = byParty.get(party.id);
+    const nextDue = store.installments
+      .filter((i) => i.loanId === loan.id && i.status !== "paid")
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]?.dueDate;
+    const paid = store.installments.filter((i) => i.loanId === loan.id && i.status === "paid").length;
+    const total = store.installments.filter((i) => i.loanId === loan.id).length || 1;
+    const performancePct = Math.round((paid / total) * 100);
+    if (existing) {
+      existing.outstanding += loan.outstanding;
+      if (nextDue && (!existing.nextDue || nextDue < existing.nextDue)) existing.nextDue = nextDue;
+      existing.performancePct = Math.round((existing.performancePct + performancePct) / 2);
+    } else {
+      byParty.set(party.id, {
+        partyId: party.id,
+        name: party.name,
+        trustScore: party.trustScore,
+        outstanding: loan.outstanding,
+        nextDue,
+        performancePct,
+      });
+    }
+  }
+  return Array.from(byParty.values())
+    .sort((a, b) => b.outstanding - a.outstanding)
+    .slice(0, 5);
+}
+
+export function buildAgreementCenter(store: FireLendingStore): AgreementCenterStats {
+  return {
+    pendingSignature: store.agreements.filter((a) => a.status === "awaiting_signatures").length,
+    waitingApproval: store.loans.filter((l) => l.status === "pending_approval").length + store.requests.filter((r) => r.status === "pending").length,
+    active: store.agreements.filter((a) => a.status === "active").length,
+    completed: store.agreements.filter((a) => a.status === "completed").length,
+    expired: store.agreements.filter((a) => a.status === "void").length,
+  };
 }
