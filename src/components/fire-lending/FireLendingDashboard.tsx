@@ -51,7 +51,7 @@ export function FireLendingDashboard() {
   return (
     <LendingMobileScreen>
       <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-col gap-3.5 sm:gap-4">
-        <motion.div variants={item} className="sticky top-[4.25rem] z-20 -mx-1 px-1 lg:static lg:z-auto">
+        <motion.div variants={item} className="-mx-1 px-1">
           <FireLendingHeroCard summary={summary} loading={loading} />
         </motion.div>
 
