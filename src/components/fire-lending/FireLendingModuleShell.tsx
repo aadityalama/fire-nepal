@@ -127,8 +127,10 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
   }, [drawerOpen]);
 
   return (
+    // Single document scroll: no h-screen / overflow-y shell wrapping main.
+    // Horizontal clipping stays on html/body (globals.css). Drawer nav is the only overflow-y-auto, and it is off-canvas when closed.
     <div
-      className={`fire-lending-root relative min-h-screen max-w-[100vw] overflow-x-clip transition-[background-color,color] duration-300 ${
+      className={`fire-lending-root relative min-h-screen max-w-[100vw] transition-[background-color,color] duration-300 ${
         light ? "bg-slate-100 text-slate-900" : "bg-[#020807] text-zinc-100"
       }`}
     >
@@ -142,7 +144,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
       />
 
       <header
-        className={`sticky top-0 z-40 border-b backdrop-blur-xl ${
+        className={`relative z-40 border-b backdrop-blur-xl lg:sticky lg:top-0 ${
           light ? "border-emerald-200/40 bg-white/90" : "border-emerald-500/10 bg-[#030806]/85"
         }`}
       >
@@ -178,7 +180,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="relative z-10 mx-auto flex max-w-[1600px] min-h-[calc(100dvh-4rem)]">
+      <div className="relative z-10 mx-auto flex w-full max-w-[1600px]">
         <button
           type="button"
           className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] transition-opacity duration-300 lg:hidden ${
@@ -193,7 +195,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
         <aside
           id="fire-lending-drawer"
           aria-hidden={!drawerOpen}
-          className={`fixed inset-y-0 left-0 z-50 flex w-[min(90vw,292px)] flex-col border-r backdrop-blur-xl transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 lg:shrink-0 ${
+          className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(90vw,292px)] flex-col border-r backdrop-blur-xl transition-transform duration-300 lg:static lg:z-auto lg:h-auto lg:min-h-0 lg:translate-x-0 lg:shrink-0 ${
             light ? "border-emerald-200/60 bg-white/95" : "border-emerald-400/10 bg-[#04140f]/95"
           } ${drawerOpen ? "translate-x-0 pointer-events-auto" : "-translate-x-full pointer-events-none lg:pointer-events-auto lg:translate-x-0"}`}
         >
@@ -201,7 +203,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
             <Crown size={14} className={light ? "text-amber-700" : "text-amber-300"} />
             <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${light ? "text-amber-800" : "text-amber-200"}`}>Elite Module</span>
           </div>
-          <nav className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
             {NAV_SECTIONS.map((section) => (
               <div key={section.title}>
                 <p className={`mb-1.5 px-3 text-[10px] font-black uppercase tracking-[0.16em] ${light ? "text-slate-400" : "text-emerald-200/40"}`}>
@@ -244,7 +246,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
           </nav>
         </aside>
 
-        <main className="relative z-10 min-w-0 flex-1 px-4 py-5 pb-28 sm:px-6 lg:pb-8">{children}</main>
+        <main className="relative z-10 min-w-0 flex-1 overflow-visible px-4 py-5 pb-28 sm:px-6 lg:pb-8">{children}</main>
       </div>
 
       <FireLendingMobileBottomNav />
