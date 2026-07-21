@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, FileSignature, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
+import { FireLendingBorrowerSearchPanel } from "@/components/fire-lending/FireLendingBorrowerSearchPanel";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
   LendingGlassCard,
@@ -14,6 +15,7 @@ import {
 } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import type { BorrowerMemberProfile } from "@/lib/fire-lending/borrower-member";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
 import type { ConnectionMethod, CurrencyCode, LoanRole, LoanType, LoanWizardDraft } from "@/lib/fire-lending/types";
 
@@ -22,12 +24,14 @@ const STEPS = ["Borrower", "Details", "Agreement", "Approval", "Signatures"] as 
 export function FireLendingLoanWizard() {
   const router = useRouter();
   const params = useSearchParams();
-  const { store, createLoanFromWizard, signAgreement, downloadAgreement, partyById } = useFireLending();
+  const { store, createLoanFromWizard, signAgreement, downloadAgreement, partyById, upsertConnectedParty } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const [step, setStep] = useState(0);
   const [createdLoanId, setCreatedLoanId] = useState<string | null>(null);
   const [approval, setApproval] = useState<"pending" | "accepted" | "rejected" | "changes">("pending");
+  const [connectedMember, setConnectedMember] = useState<BorrowerMemberProfile | null>(null);
+  const [borrowerLocked, setBorrowerLocked] = useState(false);
 
   const initialMethod = (params.get("method") as ConnectionMethod | null) ?? "fire_id";
   const modeRequest = params.get("mode") === "request";
@@ -51,6 +55,9 @@ export function FireLendingLoanWizard() {
     role: modeRequest ? "borrower" : "lender",
   });
 
+  const useRealtimeMemberSearch =
+    draft.connectionMethod === "fire_id" || draft.connectionMethod === "qr";
+
   const matches = useMemo(() => {
     const q = draft.counterpartyQuery.trim().toLowerCase();
     return store.parties
@@ -65,7 +72,13 @@ export function FireLendingLoanWizard() {
       });
   }, [draft.counterpartyQuery, store.currentUserId, store.parties]);
 
-  const selected = partyById(draft.counterpartyId);
+  const selected = partyById(draft.counterpartyId) ?? (connectedMember
+    ? {
+        id: connectedMember.id,
+        name: connectedMember.fullName,
+        fireNepalId: connectedMember.fireNepalId,
+      }
+    : undefined);
   const createdLoan = store.loans.find((l) => l.id === createdLoanId);
   const createdAgreement = store.agreements.find((a) => a.loanId === createdLoanId);
 
@@ -73,7 +86,7 @@ export function FireLendingLoanWizard() {
     setDraft((d) => ({ ...d, [key]: value }));
 
   const canNext = () => {
-    if (step === 0) return Boolean(draft.counterpartyId);
+    if (step === 0) return Boolean(draft.counterpartyId) && (!useRealtimeMemberSearch || borrowerLocked);
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
     if (step === 3) return approval === "accepted";
     return true;
@@ -91,6 +104,23 @@ export function FireLendingLoanWizard() {
     { method: "qr", label: "QR Code", icon: QrCode },
     { method: "invite_link", label: "Invite Link", icon: Link2 },
   ];
+
+  const handleConnectMember = (member: BorrowerMemberProfile) => {
+    const party = upsertConnectedParty(member);
+    setConnectedMember(member);
+    setBorrowerLocked(true);
+    setDraft((d) => ({
+      ...d,
+      counterpartyId: party.id,
+      counterpartyQuery: member.fireNepalId,
+    }));
+  };
+
+  const handleDisconnectMember = () => {
+    setBorrowerLocked(false);
+    setConnectedMember(null);
+    setDraft((d) => ({ ...d, counterpartyId: "", counterpartyQuery: "" }));
+  };
 
   return (
     <LendingMobileScreen>
@@ -131,8 +161,14 @@ export function FireLendingLoanWizard() {
               <button
                 key={opt.method}
                 type="button"
-                onClick={() => patch("connectionMethod", opt.method)}
-                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-[10px] font-black transition ${
+                disabled={borrowerLocked && useRealtimeMemberSearch}
+                onClick={() => {
+                  if (borrowerLocked) return;
+                  patch("connectionMethod", opt.method);
+                  setConnectedMember(null);
+                  setDraft((d) => ({ ...d, connectionMethod: opt.method, counterpartyId: "", counterpartyQuery: "" }));
+                }}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-[10px] font-black transition disabled:opacity-60 ${
                   draft.connectionMethod === opt.method
                     ? light
                       ? "border-emerald-400 bg-emerald-50 text-emerald-900"
@@ -147,47 +183,57 @@ export function FireLendingLoanWizard() {
               </button>
             ))}
           </div>
-          <LendingInput
-            label={
-              draft.connectionMethod === "mobile"
-                ? "Mobile number"
-                : draft.connectionMethod === "invite_link"
-                  ? "Invite link / code"
-                  : draft.connectionMethod === "qr"
-                    ? "QR payload / FIRE ID"
-                    : "FIRE Nepal ID or name"
-            }
-            value={draft.counterpartyQuery}
-            onChange={(v) => patch("counterpartyQuery", v)}
-            placeholder="Search member…"
-          />
-          <ul className="mt-3 space-y-1.5">
-            {matches.map((party) => (
-              <li key={party.id}>
-                <button
-                  type="button"
-                  onClick={() => patch("counterpartyId", party.id)}
-                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${
-                    draft.counterpartyId === party.id
-                      ? light
-                        ? "border-emerald-400 bg-emerald-50"
-                        : "border-emerald-400/40 bg-emerald-500/15"
-                      : light
-                        ? "border-emerald-200/60 bg-white/80"
-                        : "border-emerald-400/10 bg-black/20"
-                  }`}
-                >
-                  <div>
-                    <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{party.name}</p>
-                    <p className={`text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
-                      {party.fireNepalId} · {party.mobile} · Trust {party.trustScore}
-                    </p>
-                  </div>
-                  <LendingStatusPill status={party.verified ? "verified" : "unverified"} />
-                </button>
-              </li>
-            ))}
-          </ul>
+
+          {useRealtimeMemberSearch ? (
+            <FireLendingBorrowerSearchPanel
+              connectedMember={connectedMember}
+              locked={borrowerLocked}
+              onConnect={handleConnectMember}
+              onDisconnect={handleDisconnectMember}
+            />
+          ) : (
+            <>
+              <LendingInput
+                label={
+                  draft.connectionMethod === "mobile"
+                    ? "Mobile number"
+                    : draft.connectionMethod === "invite_link"
+                      ? "Invite link / code"
+                      : "FIRE Nepal ID or name"
+                }
+                value={draft.counterpartyQuery}
+                onChange={(v) => patch("counterpartyQuery", v)}
+                placeholder="Search member…"
+              />
+              <ul className="mt-3 space-y-1.5">
+                {matches.map((party) => (
+                  <li key={party.id}>
+                    <button
+                      type="button"
+                      onClick={() => patch("counterpartyId", party.id)}
+                      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${
+                        draft.counterpartyId === party.id
+                          ? light
+                            ? "border-emerald-400 bg-emerald-50"
+                            : "border-emerald-400/40 bg-emerald-500/15"
+                          : light
+                            ? "border-emerald-200/60 bg-white/80"
+                            : "border-emerald-400/10 bg-black/20"
+                      }`}
+                    >
+                      <div>
+                        <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{party.name}</p>
+                        <p className={`text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
+                          {party.fireNepalId} · {party.mobile} · Trust {party.trustScore}
+                        </p>
+                      </div>
+                      <LendingStatusPill status={party.verified ? "verified" : "unverified"} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </LendingGlassCard>
       ) : null}
 

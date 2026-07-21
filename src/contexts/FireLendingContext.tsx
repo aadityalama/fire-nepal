@@ -24,9 +24,11 @@ import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
 import { loadLendingStore, resetLendingStore, saveLendingStore } from "@/lib/fire-lending/storage";
+import { borrowerMemberToParty, type BorrowerMemberProfile } from "@/lib/fire-lending/borrower-member";
 import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score";
 import type {
   FireLendingLoan,
+  FireLendingParty,
   FireLendingPayment,
   FireLendingRequest,
   FireLendingStore,
@@ -47,6 +49,7 @@ type FireLendingContextValue = {
   topBorrowers: ReturnType<typeof buildTopBorrowers>;
   agreementCenter: ReturnType<typeof buildAgreementCenter>;
   partyById: (id: string) => FireLendingStore["parties"][number] | undefined;
+  upsertConnectedParty: (member: BorrowerMemberProfile) => FireLendingParty;
   createLoanFromWizard: (draft: LoanWizardDraft) => string;
   respondToRequest: (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => void;
   recordPayment: (input: {
@@ -96,6 +99,24 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   const agreementCenter = useMemo(() => buildAgreementCenter(store), [store]);
 
   const partyById = useCallback((id: string) => store.parties.find((p) => p.id === id), [store.parties]);
+
+  const upsertConnectedParty = useCallback((member: BorrowerMemberProfile) => {
+    const party = borrowerMemberToParty(member);
+    setStore(
+      persist((prev) => {
+        const existingIdx = prev.parties.findIndex(
+          (p) => p.id === party.id || p.fireNepalId === party.fireNepalId,
+        );
+        if (existingIdx === -1) {
+          return { ...prev, parties: [...prev.parties, party] };
+        }
+        const parties = [...prev.parties];
+        parties[existingIdx] = { ...parties[existingIdx], ...party, id: party.id };
+        return { ...prev, parties };
+      }),
+    );
+    return party;
+  }, []);
 
   const createLoanFromWizard = useCallback((draft: LoanWizardDraft) => {
     const loanId = uid("loan");
@@ -376,6 +397,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     topBorrowers,
     agreementCenter,
     partyById,
+    upsertConnectedParty,
     createLoanFromWizard,
     respondToRequest,
     recordPayment,
