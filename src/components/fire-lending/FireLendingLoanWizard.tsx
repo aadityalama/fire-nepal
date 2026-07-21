@@ -15,23 +15,40 @@ import {
 } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import type { BorrowerMemberProfile } from "@/lib/fire-lending/borrower-member";
+import {
+  isBorrowerSelected as computeIsBorrowerSelected,
+  partyToBorrowerMember,
+  type BorrowerMemberProfile,
+} from "@/lib/fire-lending/borrower-member";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
 import type { ConnectionMethod, CurrencyCode, LoanRole, LoanType, LoanWizardDraft } from "@/lib/fire-lending/types";
 
 const STEPS = ["Borrower", "Details", "Agreement", "Approval", "Signatures"] as const;
 
+/** Atomic borrower selection — Continue reads `isBorrowerSelected` from this. */
+type BorrowerSelection = {
+  locked: boolean;
+  member: BorrowerMemberProfile | null;
+  counterpartyId: string;
+};
+
+const EMPTY_SELECTION: BorrowerSelection = {
+  locked: false,
+  member: null,
+  counterpartyId: "",
+};
+
 export function FireLendingLoanWizard() {
   const router = useRouter();
   const params = useSearchParams();
-  const { store, createLoanFromWizard, signAgreement, downloadAgreement, partyById, upsertConnectedParty } = useFireLending();
+  const { store, createLoanFromWizard, signAgreement, downloadAgreement, partyById, upsertConnectedParty } =
+    useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const [step, setStep] = useState(0);
   const [createdLoanId, setCreatedLoanId] = useState<string | null>(null);
   const [approval, setApproval] = useState<"pending" | "accepted" | "rejected" | "changes">("pending");
-  const [connectedMember, setConnectedMember] = useState<BorrowerMemberProfile | null>(null);
-  const [borrowerLocked, setBorrowerLocked] = useState(false);
+  const [selection, setSelection] = useState<BorrowerSelection>(EMPTY_SELECTION);
 
   const initialMethod = (params.get("method") as ConnectionMethod | null) ?? "fire_id";
   const modeRequest = params.get("mode") === "request";
@@ -55,8 +72,16 @@ export function FireLendingLoanWizard() {
     role: modeRequest ? "borrower" : "lender",
   });
 
-  const useRealtimeMemberSearch =
+  const requiresConnect =
     draft.connectionMethod === "fire_id" || draft.connectionMethod === "qr";
+
+  const localMembers = useMemo(
+    () =>
+      store.parties
+        .filter((p) => p.id !== store.currentUserId)
+        .map(partyToBorrowerMember),
+    [store.parties, store.currentUserId],
+  );
 
   const matches = useMemo(() => {
     const q = draft.counterpartyQuery.trim().toLowerCase();
@@ -72,13 +97,22 @@ export function FireLendingLoanWizard() {
       });
   }, [draft.counterpartyQuery, store.currentUserId, store.parties]);
 
-  const selected = partyById(draft.counterpartyId) ?? (connectedMember
-    ? {
-        id: connectedMember.id,
-        name: connectedMember.fullName,
-        fireNepalId: connectedMember.fireNepalId,
-      }
-    : undefined);
+  const isBorrowerSelected = computeIsBorrowerSelected({
+    counterpartyId: selection.counterpartyId || draft.counterpartyId,
+    requiresConnect,
+    borrowerLocked: selection.locked,
+    connectedMemberId: selection.member?.id,
+  });
+
+  const selected =
+    partyById(draft.counterpartyId) ??
+    (selection.member
+      ? {
+          id: selection.member.id,
+          name: selection.member.fullName,
+          fireNepalId: selection.member.fireNepalId,
+        }
+      : undefined);
   const createdLoan = store.loans.find((l) => l.id === createdLoanId);
   const createdAgreement = store.agreements.find((a) => a.loanId === createdLoanId);
 
@@ -86,7 +120,7 @@ export function FireLendingLoanWizard() {
     setDraft((d) => ({ ...d, [key]: value }));
 
   const canNext = () => {
-    if (step === 0) return Boolean(draft.counterpartyId) && (!useRealtimeMemberSearch || borrowerLocked);
+    if (step === 0) return isBorrowerSelected;
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
     if (step === 3) return approval === "accepted";
     return true;
@@ -107,18 +141,22 @@ export function FireLendingLoanWizard() {
 
   const handleConnectMember = (member: BorrowerMemberProfile) => {
     const party = upsertConnectedParty(member);
-    setConnectedMember(member);
-    setBorrowerLocked(true);
+    const counterpartyId = party.id || member.id;
+    // Atomic selection update so Continue enables in the same render as "Borrower Connected".
+    setSelection({
+      locked: true,
+      member,
+      counterpartyId,
+    });
     setDraft((d) => ({
       ...d,
-      counterpartyId: party.id,
+      counterpartyId,
       counterpartyQuery: member.fireNepalId,
     }));
   };
 
   const handleDisconnectMember = () => {
-    setBorrowerLocked(false);
-    setConnectedMember(null);
+    setSelection(EMPTY_SELECTION);
     setDraft((d) => ({ ...d, counterpartyId: "", counterpartyQuery: "" }));
   };
 
@@ -161,12 +199,16 @@ export function FireLendingLoanWizard() {
               <button
                 key={opt.method}
                 type="button"
-                disabled={borrowerLocked && useRealtimeMemberSearch}
+                disabled={selection.locked && requiresConnect}
                 onClick={() => {
-                  if (borrowerLocked) return;
-                  patch("connectionMethod", opt.method);
-                  setConnectedMember(null);
-                  setDraft((d) => ({ ...d, connectionMethod: opt.method, counterpartyId: "", counterpartyQuery: "" }));
+                  if (selection.locked) return;
+                  setSelection(EMPTY_SELECTION);
+                  setDraft((d) => ({
+                    ...d,
+                    connectionMethod: opt.method,
+                    counterpartyId: "",
+                    counterpartyQuery: "",
+                  }));
                 }}
                 className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-[10px] font-black transition disabled:opacity-60 ${
                   draft.connectionMethod === opt.method
@@ -184,10 +226,11 @@ export function FireLendingLoanWizard() {
             ))}
           </div>
 
-          {useRealtimeMemberSearch ? (
+          {requiresConnect ? (
             <FireLendingBorrowerSearchPanel
-              connectedMember={connectedMember}
-              locked={borrowerLocked}
+              connectedMember={selection.member}
+              locked={selection.locked}
+              localMembers={localMembers}
               onConnect={handleConnectMember}
               onDisconnect={handleDisconnectMember}
             />
@@ -210,7 +253,14 @@ export function FireLendingLoanWizard() {
                   <li key={party.id}>
                     <button
                       type="button"
-                      onClick={() => patch("counterpartyId", party.id)}
+                      onClick={() => {
+                        setSelection({
+                          locked: true,
+                          member: partyToBorrowerMember(party),
+                          counterpartyId: party.id,
+                        });
+                        patch("counterpartyId", party.id);
+                      }}
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${
                         draft.counterpartyId === party.id
                           ? light
@@ -234,6 +284,20 @@ export function FireLendingLoanWizard() {
               </ul>
             </>
           )}
+
+          {requiresConnect && !isBorrowerSelected ? (
+            <p className={`mt-3 text-center text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+              Search a member, then tap Connect Borrower to enable Continue.
+            </p>
+          ) : null}
+          {isBorrowerSelected ? (
+            <p
+              className={`mt-3 text-center text-[11px] font-black ${light ? "text-emerald-700" : "text-lime-300"}`}
+              data-testid="borrower-selected"
+            >
+              Borrower selected — Continue is enabled.
+            </p>
+          ) : null}
         </LendingGlassCard>
       ) : null}
 

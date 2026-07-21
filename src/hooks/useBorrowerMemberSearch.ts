@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { BorrowerMemberProfile } from "@/lib/fire-lending/borrower-member";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -15,13 +15,49 @@ type SearchState = {
   error: string | null;
 };
 
+type SearchAction =
+  | { type: "reset" }
+  | { type: "clear_short"; query: string }
+  | { type: "start"; query: string }
+  | { type: "success"; query: string; members: BorrowerMemberProfile[] }
+  | { type: "failure"; query: string; error: string };
+
+function searchReducer(state: SearchState, action: SearchAction): SearchState {
+  switch (action.type) {
+    case "reset":
+      return { query: "", members: [], loading: false, searched: false, error: null };
+    case "clear_short":
+      return { query: action.query, members: [], loading: false, searched: false, error: null };
+    case "start":
+      return { ...state, query: action.query, loading: true, error: null };
+    case "success":
+      return {
+        query: action.query,
+        members: action.members,
+        loading: false,
+        searched: true,
+        error: null,
+      };
+    case "failure":
+      return {
+        query: action.query,
+        members: [],
+        loading: false,
+        searched: true,
+        error: action.error,
+      };
+    default:
+      return state;
+  }
+}
+
 /**
  * Debounced FIRE Nepal member search (300–500ms) against public.user_profiles.
  * Re-runs when Supabase realtime reports user_profiles changes.
  */
 export function useBorrowerMemberSearch(enabled: boolean) {
   const [query, setQuery] = useState("");
-  const [state, setState] = useState<SearchState>({
+  const [state, dispatch] = useReducer(searchReducer, {
     query: "",
     members: [],
     loading: false,
@@ -42,11 +78,11 @@ export function useBorrowerMemberSearch(enabled: boolean) {
     abortRef.current?.abort();
 
     if (q.length < 2) {
-      setState({ query: q, members: [], loading: false, searched: false, error: null });
+      dispatch({ type: "clear_short", query: q });
       return;
     }
 
-    setState((prev) => ({ ...prev, query: q, loading: true, error: null }));
+    dispatch({ type: "start", query: q });
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -63,29 +99,19 @@ export function useBorrowerMemberSearch(enabled: boolean) {
       };
       if (requestId !== requestIdRef.current) return;
       if (!res.ok) {
-        setState({
+        dispatch({
+          type: "failure",
           query: q,
-          members: [],
-          loading: false,
-          searched: true,
           error: body.error || "Search failed",
         });
         return;
       }
-      setState({
-        query: q,
-        members: body.members ?? [],
-        loading: false,
-        searched: true,
-        error: null,
-      });
+      dispatch({ type: "success", query: q, members: body.members ?? [] });
     } catch (err) {
       if (controller.signal.aborted || requestId !== requestIdRef.current) return;
-      setState({
+      dispatch({
+        type: "failure",
         query: q,
-        members: [],
-        loading: false,
-        searched: true,
         error: err instanceof Error ? err.message : "Search failed",
       });
     }
@@ -94,7 +120,6 @@ export function useBorrowerMemberSearch(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const q = query.trim();
-    // Debounce all state updates (including clear) so we never sync-setState in the effect body.
     const delay = q.length < 2 ? 0 : DEBOUNCE_MS;
     const t = window.setTimeout(() => {
       void runSearch(q);
@@ -102,7 +127,6 @@ export function useBorrowerMemberSearch(enabled: boolean) {
     return () => window.clearTimeout(t);
   }, [query, enabled, runSearch]);
 
-  // Realtime: refresh the current debounced query when user_profiles rows change.
   useEffect(() => {
     if (!enabled || !isSupabaseConfigured()) return;
     let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null;
@@ -139,17 +163,20 @@ export function useBorrowerMemberSearch(enabled: boolean) {
   const searching =
     state.loading || (enabled && pendingQuery.length >= 2 && pendingQuery !== state.query);
 
-  return {
-    query,
-    setQuery,
-    members: state.members,
-    loading: searching,
-    searched: state.searched,
-    error: state.error,
-    refresh: () => void runSearch(query),
-    clear: () => {
-      setQuery("");
-      setState({ query: "", members: [], loading: false, searched: false, error: null });
-    },
-  };
+  return useMemo(
+    () => ({
+      query,
+      setQuery,
+      members: state.members,
+      loading: searching,
+      searched: state.searched,
+      error: state.error,
+      refresh: () => void runSearch(query),
+      clear: () => {
+        setQuery("");
+        dispatch({ type: "reset" });
+      },
+    }),
+    [query, state.members, searching, state.searched, state.error, runSearch],
+  );
 }

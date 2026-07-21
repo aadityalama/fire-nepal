@@ -145,3 +145,43 @@ export function filterMembersExcludingSelf(
     return id.includes(q) || name.includes(q);
   });
 }
+
+/** Map a local lending party into the borrower card model (offline / demo fallback). */
+export function partyToBorrowerMember(party: FireLendingParty): BorrowerMemberProfile {
+  const total = party.onTimePayments + party.latePayments;
+  const onTimeRepaymentPct =
+    total === 0 ? 70 : Math.round((party.onTimePayments / total) * 100);
+  const riskLevel: BorrowerMemberProfile["riskLevel"] =
+    party.trustScore >= 70 ? "Low" : party.trustScore >= 55 ? "Medium" : party.trustScore >= 40 ? "High" : "Critical";
+  return {
+    id: party.id,
+    fireNepalId: party.fireNepalId,
+    fullName: party.name,
+    avatarUrl: party.photoUrl ?? null,
+    country: "—",
+    verified: party.verified || party.identityVerified,
+    trustScore: party.trustScore,
+    trustLabel: trustLabel(party.trustScore),
+    memberSince: null,
+    activeLoans: 0,
+    onTimeRepaymentPct,
+    riskLevel,
+    membershipPlan: party.verified ? "premium" : "free",
+  };
+}
+
+/**
+ * Wizard Continue gate for step 0.
+ * Realtime FIRE ID/QR flow requires an explicit Connect (locked selection).
+ */
+export function isBorrowerSelected(input: {
+  counterpartyId: string;
+  requiresConnect: boolean;
+  borrowerLocked: boolean;
+  connectedMemberId: string | null | undefined;
+}): boolean {
+  const id = input.counterpartyId.trim();
+  if (!id) return false;
+  if (!input.requiresConnect) return true;
+  return Boolean(input.borrowerLocked && input.connectedMemberId && input.connectedMemberId === id);
+}

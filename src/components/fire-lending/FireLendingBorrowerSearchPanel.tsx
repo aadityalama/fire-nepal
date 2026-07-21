@@ -18,17 +18,36 @@ import type { BorrowerMemberProfile } from "@/lib/fire-lending/borrower-member";
 
 type Props = {
   connectedMember: BorrowerMemberProfile | null;
+  locked: boolean;
+  /** Extra local / demo matches when cloud search returns nothing. */
+  localMembers?: BorrowerMemberProfile[];
   onConnect: (member: BorrowerMemberProfile) => void;
   onDisconnect: () => void;
-  locked: boolean;
 };
 
-export function FireLendingBorrowerSearchPanel({ connectedMember, onConnect, onDisconnect, locked }: Props) {
+export function FireLendingBorrowerSearchPanel({
+  connectedMember,
+  locked,
+  localMembers = [],
+  onConnect,
+  onDisconnect,
+}: Props) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const { query, setQuery, members, loading, searched, error, clear } = useBorrowerMemberSearch(!locked);
+  const { query, setQuery, members: cloudMembers, loading, searched, error, clear } =
+    useBorrowerMemberSearch(!locked);
   const [listFilter, setListFilter] = useState("");
   const [previewId, setPreviewId] = useState<string | null>(null);
+
+  const members = useMemo(() => {
+    if (cloudMembers.length > 0) return cloudMembers;
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    // Offline / demo fallback while cloud is empty or unavailable.
+    return localMembers.filter(
+      (m) => m.fullName.toLowerCase().includes(q) || m.fireNepalId.toLowerCase().includes(q),
+    );
+  }, [cloudMembers, localMembers, query]);
 
   const filteredMembers = useMemo(() => {
     const f = listFilter.trim().toLowerCase();
@@ -45,8 +64,11 @@ export function FireLendingBorrowerSearchPanel({ connectedMember, onConnect, onD
     return null;
   }, [connectedMember, members, previewId]);
 
-  const showEmpty = searched && !loading && members.length === 0 && !connectedMember;
+  const showEmpty =
+    !connectedMember && !loading && searched && cloudMembers.length === 0 && members.length === 0;
   const showMultiList = !connectedMember && members.length > 1;
+  // Always keep the connected card visible — do not hide it behind loading.
+  const showCard = Boolean(connectedMember) || Boolean(previewMember && !loading);
 
   return (
     <div className="space-y-3">
@@ -63,27 +85,34 @@ export function FireLendingBorrowerSearchPanel({ connectedMember, onConnect, onD
         />
       ) : (
         <div
-          className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${
+          className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold ${
             light ? "border-emerald-200 bg-emerald-50/80 text-emerald-900" : "border-emerald-400/25 bg-emerald-500/10 text-lime-100"
           }`}
         >
-          Searching locked · connected to {connectedMember?.fireNepalId}
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+              light ? "bg-emerald-500 text-white" : "bg-lime-400 text-emerald-950"
+            }`}
+          >
+            Borrower Connected
+          </span>
+          <span>Locked · {connectedMember?.fireNepalId}</span>
         </div>
       )}
 
-      {error ? (
+      {error && !connectedMember ? (
         <p className={`text-xs font-bold ${light ? "text-rose-700" : "text-rose-300"}`} role="alert">
           {error}
         </p>
       ) : null}
 
-      {loading ? <LendingSkeletonCard className="h-40" /> : null}
+      {loading && !connectedMember ? <LendingSkeletonCard className="h-40" /> : null}
 
       {showEmpty ? (
         <LendingEmptyState
           icon={UserRoundSearch}
-          title="No FIRE Nepal member found."
-          message="Invite them to join FIRE Nepal, or try another FIRE ID / name."
+          title="Member not found"
+          message="No FIRE Nepal member found. Invite them to join, or try another FIRE ID / name."
         />
       ) : null}
 
@@ -178,10 +207,10 @@ export function FireLendingBorrowerSearchPanel({ connectedMember, onConnect, onD
         </div>
       ) : null}
 
-      {previewMember && !loading ? (
+      {showCard && previewMember ? (
         <FireLendingBorrowerMemberCard
           member={previewMember}
-          connected={Boolean(connectedMember && connectedMember.id === previewMember.id)}
+          connected={Boolean(locked && connectedMember && connectedMember.id === previewMember.id)}
           onConnect={
             locked
               ? undefined

@@ -1,6 +1,5 @@
 /**
- * Verifies mutual borrower search: User A can find User B and User B can find User A,
- * while each search excludes the searching account.
+ * Verifies mutual borrower search + Continue enablement after Connect.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -15,6 +14,14 @@ function filterMembersExcludingSelf(rows, query, excludeUserId) {
     const name = (row.full_name ?? "").toLowerCase();
     return id.includes(q) || name.includes(q);
   });
+}
+
+/** Mirrors src/lib/fire-lending/borrower-member.ts isBorrowerSelected */
+function isBorrowerSelected(input) {
+  const id = String(input.counterpartyId ?? "").trim();
+  if (!id) return false;
+  if (!input.requiresConnect) return true;
+  return Boolean(input.borrowerLocked && input.connectedMemberId && input.connectedMemberId === id);
 }
 
 test("User A can search User B and User B can search User A by FIRE Nepal ID", () => {
@@ -58,5 +65,66 @@ test("partial name and FIRE ID search works both directions", () => {
   assert.deepEqual(
     filterMembersExcludingSelf(rows, "FN-2025-10000", "u1").map((r) => r.id),
     ["u2"],
+  );
+});
+
+test("Continue stays disabled until Connect locks the borrower", () => {
+  const memberId = "bbb-bbb-bbb";
+
+  assert.equal(
+    isBorrowerSelected({
+      counterpartyId: "",
+      requiresConnect: true,
+      borrowerLocked: false,
+      connectedMemberId: null,
+    }),
+    false,
+  );
+
+  // Match found but not connected yet
+  assert.equal(
+    isBorrowerSelected({
+      counterpartyId: memberId,
+      requiresConnect: true,
+      borrowerLocked: false,
+      connectedMemberId: null,
+    }),
+    false,
+  );
+
+  // After Connect Borrower
+  assert.equal(
+    isBorrowerSelected({
+      counterpartyId: memberId,
+      requiresConnect: true,
+      borrowerLocked: true,
+      connectedMemberId: memberId,
+    }),
+    true,
+  );
+});
+
+test("A→B and B→A connect both enable Continue", () => {
+  const userA = { id: "aaa-aaa-aaa", fireNepalId: "FN-2024-000001" };
+  const userB = { id: "bbb-bbb-bbb", fireNepalId: "FN-2024-000002" };
+
+  assert.equal(
+    isBorrowerSelected({
+      counterpartyId: userB.id,
+      requiresConnect: true,
+      borrowerLocked: true,
+      connectedMemberId: userB.id,
+    }),
+    true,
+  );
+
+  assert.equal(
+    isBorrowerSelected({
+      counterpartyId: userA.id,
+      requiresConnect: true,
+      borrowerLocked: true,
+      connectedMemberId: userA.id,
+    }),
+    true,
   );
 });

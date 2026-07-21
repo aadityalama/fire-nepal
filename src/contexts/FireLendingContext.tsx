@@ -104,15 +104,18 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     const party = borrowerMemberToParty(member);
     setStore(
       persist((prev) => {
-        const existingIdx = prev.parties.findIndex(
+        // Avoid writing into the empty bootstrap store before localStorage hydration.
+        const base =
+          prev.parties.length === 0 && prev.loans.length === 0 ? loadLendingStore() : prev;
+        const existingIdx = base.parties.findIndex(
           (p) => p.id === party.id || p.fireNepalId === party.fireNepalId,
         );
         if (existingIdx === -1) {
-          return { ...prev, parties: [...prev.parties, party] };
+          return { ...base, parties: [...base.parties, party] };
         }
-        const parties = [...prev.parties];
+        const parties = [...base.parties];
         parties[existingIdx] = { ...parties[existingIdx], ...party, id: party.id };
-        return { ...prev, parties };
+        return { ...base, parties };
       }),
     );
     return party;
