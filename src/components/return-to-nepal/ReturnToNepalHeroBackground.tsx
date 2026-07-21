@@ -15,16 +15,16 @@ export function ReturnToNepalHeroBackground() {
       <img
         src="/membership/card-backdrop.jpg"
         alt=""
-        className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[68%_40%] sm:object-[72%_38%]"
+        className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[68%_40%] brightness-[1.1] saturate-[1.05] sm:object-[72%_38%]"
       />
 
-      {/* Soft emerald cinematic color grade — mountains remain visible */}
+      {/* Dark overlay lives on the background (not the glass card) — light enough to keep peaks visible */}
       <div
         className="absolute inset-0"
         style={{
           background: `
-            linear-gradient(105deg, rgba(6,18,14,0.42) 0%, rgba(8,22,18,0.18) 36%, rgba(4,14,12,0.08) 58%, rgba(6,16,14,0.28) 100%),
-            linear-gradient(180deg, rgba(4,12,10,0.22) 0%, transparent 38%, rgba(4,10,8,0.18) 70%, rgba(2,8,6,0.45) 100%)
+            linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.30) 100%),
+            linear-gradient(105deg, rgba(6,18,14,0.22) 0%, rgba(8,22,18,0.08) 40%, transparent 60%)
           `,
         }}
       />
@@ -49,8 +49,8 @@ export function ReturnToNepalHeroBackground() {
 
       {/* Subtle fog / depth layers */}
       <motion.div
-        className="absolute -left-[12%] bottom-[6%] h-[46%] w-[72%] rounded-[100%] bg-emerald-950/25 blur-3xl"
-        animate={reduced ? {} : { x: [0, 28, 0], opacity: [0.28, 0.48, 0.28] }}
+        className="absolute -left-[12%] bottom-[6%] h-[46%] w-[72%] rounded-[100%] bg-emerald-950/15 blur-3xl"
+        animate={reduced ? {} : { x: [0, 28, 0], opacity: [0.18, 0.34, 0.18] }}
         transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
@@ -66,9 +66,9 @@ export function ReturnToNepalHeroBackground() {
 
       {/* Soft ground fade — keeps temples readable without a dark panel */}
       <div
-        className="absolute inset-x-0 bottom-0 h-[34%]"
+        className="absolute inset-x-0 bottom-0 h-[30%]"
         style={{
-          background: "linear-gradient(180deg, transparent 0%, rgba(4,12,10,0.22) 50%, rgba(2,8,6,0.48) 100%)",
+          background: "linear-gradient(180deg, transparent 0%, rgba(4,12,10,0.14) 50%, rgba(2,8,6,0.32) 100%)",
         }}
       />
 

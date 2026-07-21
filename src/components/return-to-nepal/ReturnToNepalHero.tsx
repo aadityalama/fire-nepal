@@ -22,10 +22,10 @@ const SLIDE_INTERVAL_MS = 5000;
 const PROGRESS_SEGMENTS = 20;
 
 const GLASS_CARD_STYLE = {
-  background: "rgba(10,20,18,0.28)",
-  backdropFilter: "blur(14px)",
-  WebkitBackdropFilter: "blur(14px)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(12,20,18,0.42)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  border: "1px solid rgba(52,211,153,0.16)",
   borderRadius: 28,
 } as const;
 
@@ -83,10 +83,10 @@ function HeroSegmentedProgress({ pct }: { pct: number }) {
         className="relative grid gap-[3px] rounded-2xl p-1.5 sm:gap-1"
         style={{
           gridTemplateColumns: `repeat(${PROGRESS_SEGMENTS}, minmax(0, 1fr))`,
-          background: "rgba(10,20,18,0.28)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(12,20,18,0.42)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          border: "1px solid rgba(52,211,153,0.16)",
           boxShadow: "0 0 28px rgba(16,185,129,0.18)",
         }}
         animate={
@@ -127,9 +127,12 @@ function HeroSegmentedProgress({ pct }: { pct: number }) {
 }
 
 /** Realistic twin-engine jet silhouette (Nepal Airlines–inspired livery). */
-function NepalAirlinesJet({ x = 0, y = 0 }: { x?: number; y?: number }) {
+function NepalAirlinesJet({ x = 0, y = 0, scale = 1.2 }: { x?: number; y?: number; scale?: number }) {
   return (
-    <g transform={`translate(${x}, ${y})`}>
+    <g
+      transform={`translate(${x}, ${y}) scale(${scale})`}
+      style={{ filter: "drop-shadow(0 2px 5px rgba(2,10,8,0.55))" }}
+    >
       <defs>
         <linearGradient id="rtn-jet-body" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#ffffff" />
@@ -537,10 +540,10 @@ export function ReturnToNepalHero({
             <span
               className="mt-3 inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[clamp(0.75rem,2.5vw,0.8rem)] font-bold text-white/95 shadow-[0_0_20px_rgba(16,185,129,0.18)]"
               style={{
-                background: "rgba(10,20,18,0.35)",
+                background: "rgba(12,20,18,0.42)",
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
-                border: "1px solid rgba(255,255,255,0.14)",
+                border: "1px solid rgba(52,211,153,0.18)",
               }}
             >
               <Clock size={14} className="shrink-0 text-emerald-300" />
