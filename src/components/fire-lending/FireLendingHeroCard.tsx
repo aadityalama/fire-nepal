@@ -102,7 +102,7 @@ export function FireLendingHeroCard({ summary, loading }: { summary: PortfolioSu
             </span>
           </div>
           <h1 className={`mt-1.5 text-2xl font-black tracking-tight sm:text-3xl ${light ? "text-slate-900" : "text-white"}`}>
-            Portfolio command center
+            Loan & P2P Lending Portfolio
           </h1>
           <p className={`mt-2 max-w-2xl text-sm font-semibold leading-relaxed ${light ? "text-slate-600" : "text-emerald-100/75"}`}>
             {loading ? "Syncing portfolio intelligence…" : summary.aiSummary}
