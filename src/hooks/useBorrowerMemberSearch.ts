@@ -30,6 +30,11 @@ export function useBorrowerMemberSearch(enabled: boolean) {
   });
   const abortRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
+  const queryRef = useRef(query);
+
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
 
   const runSearch = useCallback(async (raw: string) => {
     const q = raw.trim();
@@ -89,15 +94,11 @@ export function useBorrowerMemberSearch(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const q = query.trim();
-    if (q.length < 2) {
-      setState({ query: q, members: [], loading: false, searched: false, error: null });
-      return;
-    }
-
-    setState((prev) => ({ ...prev, loading: true }));
+    // Debounce all state updates (including clear) so we never sync-setState in the effect body.
+    const delay = q.length < 2 ? 0 : DEBOUNCE_MS;
     const t = window.setTimeout(() => {
       void runSearch(q);
-    }, DEBOUNCE_MS);
+    }, delay);
     return () => window.clearTimeout(t);
   }, [query, enabled, runSearch]);
 
@@ -113,7 +114,7 @@ export function useBorrowerMemberSearch(enabled: boolean) {
           "postgres_changes",
           { event: "*", schema: "public", table: "user_profiles" },
           () => {
-            const q = query.trim();
+            const q = queryRef.current.trim();
             if (q.length >= 2) void runSearch(q);
           },
         )
@@ -123,18 +124,26 @@ export function useBorrowerMemberSearch(enabled: boolean) {
     }
     return () => {
       if (channel) {
-        void getSupabaseBrowserClient().removeChannel(channel);
+        try {
+          void getSupabaseBrowserClient().removeChannel(channel);
+        } catch {
+          /* ignore */
+        }
       }
     };
-  }, [enabled, query, runSearch]);
+  }, [enabled, runSearch]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  const pendingQuery = query.trim();
+  const searching =
+    state.loading || (enabled && pendingQuery.length >= 2 && pendingQuery !== state.query);
 
   return {
     query,
     setQuery,
     members: state.members,
-    loading: state.loading,
+    loading: searching,
     searched: state.searched,
     error: state.error,
     refresh: () => void runSearch(query),
