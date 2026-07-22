@@ -3,9 +3,11 @@
 import { ArrowRight, Flame, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useAuthModal } from "@/contexts/AuthModalContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { FORM_MESSAGES } from "@/lib/ux/form-messages";
 
 type LoginPhase = "idle" | "loading" | "signing";
 
@@ -13,6 +15,9 @@ export function AuthModal() {
   const { isOpen, tab, close, open } = useAuthModal();
   const { login, signup, user } = useProductAuth();
   const router = useRouter();
+  const titleId = useId();
+  const errorId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -22,6 +27,8 @@ export function AuthModal() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loginPhase, setLoginPhase] = useState<LoginPhase>("idle");
+
+  useFocusTrap(isOpen, panelRef);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -49,11 +56,16 @@ export function AuthModal() {
 
   useEffect(() => {
     if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [isOpen, close]);
 
   const onSubmit = useCallback(
@@ -61,8 +73,12 @@ export function AuthModal() {
       e.preventDefault();
       if (busy) return;
       setError(null);
+      if (tab === "signup" && password.length < 6) {
+        setError(FORM_MESSAGES.passwordTooShort);
+        return;
+      }
       if (tab === "signup" && password !== confirmPassword) {
-        setError("Passwords do not match.");
+        setError(FORM_MESSAGES.passwordsMismatch);
         return;
       }
       setBusy(true);
@@ -74,7 +90,7 @@ export function AuthModal() {
       setBusy(false);
       if (!r.ok) {
         setLoginPhase("idle");
-        setError(r.error ?? "Something went wrong.");
+        setError(r.error ?? "Something went wrong. Please try again.");
         return;
       }
       if (tab === "signup" && "needsVerification" in r && r.needsVerification) {
@@ -96,14 +112,20 @@ export function AuthModal() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[240] flex items-end justify-center sm:items-center" role="dialog" aria-modal>
+    <div className="fixed inset-0 z-[240] flex items-end justify-center sm:items-center" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-black/55 backdrop-blur-sm transition-opacity animate-fade-in"
         aria-label="Close authentication"
         onClick={close}
       />
-      <div className="relative mb-0 w-full max-w-md animate-fade-up rounded-t-[1.5rem] border border-emerald-400/20 bg-[#04140f]/95 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:mb-0 sm:rounded-[1.5rem] sm:border sm:p-6">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative mb-0 w-full max-w-md animate-fade-up rounded-t-[1.5rem] border border-emerald-400/20 bg-[#04140f]/95 p-5 shadow-[0_-20px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:mb-0 sm:rounded-[1.5rem] sm:border sm:p-6"
+      >
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-lime-400 text-emerald-950">
@@ -111,7 +133,9 @@ export function AuthModal() {
             </span>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/55">FIRE Nepal</p>
-              <p className="text-sm font-black text-white">{tab === "login" ? "Sign in" : "Create account"}</p>
+              <p id={titleId} className="text-sm font-black text-white">
+                {tab === "login" ? "Sign in" : "Create account"}
+              </p>
             </div>
           </div>
           <button
@@ -124,9 +148,11 @@ export function AuthModal() {
           </button>
         </div>
 
-        <div className="mb-4 flex rounded-xl border border-white/10 bg-black/30 p-1">
+        <div className="mb-4 flex rounded-xl border border-white/10 bg-black/30 p-1" role="tablist" aria-label="Authentication mode">
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "login"}
             onClick={() => open("login")}
             className={`flex-1 rounded-lg py-2 text-xs font-black uppercase tracking-wide transition ${
               tab === "login" ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950" : "text-zinc-400"
@@ -136,6 +162,8 @@ export function AuthModal() {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "signup"}
             onClick={() => open("signup")}
             className={`flex-1 rounded-lg py-2 text-xs font-black uppercase tracking-wide transition ${
               tab === "signup" ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950" : "text-zinc-400"
@@ -145,14 +173,18 @@ export function AuthModal() {
           </button>
         </div>
 
-        <form className="space-y-3" onSubmit={onSubmit}>
+        <form className="space-y-3" onSubmit={onSubmit} aria-busy={busy}>
           {tab === "signup" ? (
             <label className="block">
               <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-emerald-200/55">Full name</span>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={busy}
+                data-autofocus
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
                 placeholder="Sita Magar"
                 autoComplete="name"
@@ -165,8 +197,14 @@ export function AuthModal() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
               disabled={busy}
+              data-autofocus={tab === "login" ? true : undefined}
+              inputMode="email"
+              enterKeyHint="next"
               className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
               placeholder="you@company.com"
               autoComplete="email"
@@ -178,13 +216,17 @@ export function AuthModal() {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError(null);
+              }}
               disabled={busy}
+              enterKeyHint={tab === "login" ? "go" : "next"}
               className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
-              placeholder={tab === "login" ? "••••••" : "At least 6 characters"}
+              placeholder={tab === "login" ? "Your password" : "At least 6 characters"}
               autoComplete={tab === "login" ? "current-password" : "new-password"}
               required
-              minLength={tab === "login" ? 6 : 6}
+              minLength={6}
             />
           </label>
           {tab === "signup" ? (
@@ -195,10 +237,14 @@ export function AuthModal() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={busy}
+                enterKeyHint="go"
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
-                placeholder="Repeat password"
+                placeholder="Re-enter the same password"
                 autoComplete="new-password"
                 required
                 minLength={6}
@@ -222,7 +268,11 @@ export function AuthModal() {
               </Link>
             </div>
           ) : null}
-          {error ? <p className="text-xs font-semibold text-rose-300">{error}</p> : null}
+          {error ? (
+            <p id={errorId} role="alert" aria-live="assertive" className="text-xs font-semibold text-rose-300">
+              {error}
+            </p>
+          ) : null}
           <button
             type="submit"
             disabled={busy}

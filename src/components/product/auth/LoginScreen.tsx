@@ -3,10 +3,11 @@
 import { ArrowRight, Flame } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { DEFAULT_POST_LOGIN_PATH, sanitizeInternalNextPath } from "@/lib/auth-redirect";
+import { FORM_MESSAGES, focusFirstInvalid } from "@/lib/ux/form-messages";
 
 function decodeNext(raw: string | null): string {
   return sanitizeInternalNextPath(raw, DEFAULT_POST_LOGIN_PATH);
@@ -25,6 +26,8 @@ export function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loginPhase, setLoginPhase] = useState<LoginPhase>("idle");
   const busy = loginPhase !== "idle";
+  const errorId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -44,11 +47,21 @@ export function LoginScreen() {
     e.preventDefault();
     if (busy) return;
     setError(null);
+    if (!email.trim()) {
+      setError(FORM_MESSAGES.emailInvalid);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
+    if (password.length < 6) {
+      setError(FORM_MESSAGES.passwordTooShort);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setLoginPhase("loading");
     const r = await login(email, password, rememberMe);
     if (!r.ok) {
       setLoginPhase("idle");
-      setError(r.error ?? "Could not sign in.");
+      setError(r.error ?? "Could not sign in. Check your email and password, then try again.");
       return;
     }
     setLoginPhase("signing");
@@ -81,15 +94,22 @@ export function LoginScreen() {
             Encrypted session cookie, bank-grade transport, and local-first dashboards after authentication.
           </p>
 
-          <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+          <form ref={formRef} className="mt-8 space-y-4" onSubmit={onSubmit} aria-busy={busy}>
             <label className="block">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">Email</span>
               <input
                 type="email"
                 autoComplete="email"
+                inputMode="email"
+                enterKeyHint="next"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={busy}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="you@company.com"
                 required
@@ -100,14 +120,21 @@ export function LoginScreen() {
               <input
                 type="password"
                 autoComplete="current-password"
+                enterKeyHint="go"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 disabled={busy}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
-                placeholder="••••••••"
+                placeholder="Your password"
                 required
                 minLength={6}
               />
+              <span className="mt-1.5 block text-[11px] font-semibold text-emerald-200/40">Use the password for your FIRE Nepal account.</span>
             </label>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -126,7 +153,11 @@ export function LoginScreen() {
               </Link>
             </div>
 
-            {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+            {error ? (
+              <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={busy}

@@ -115,9 +115,12 @@ export function WriteReviewForm({
           value={form.full_name}
           disabled={disabled}
           maxLength={80}
+          required
+          aria-required="true"
           onChange={(e) => onChange({ full_name: e.target.value })}
           placeholder="Your name as it should appear"
         />
+        <p className="mt-1 text-[11px] font-semibold text-slate-400">At least 2 characters</p>
       </label>
 
       <label className="block">
@@ -129,7 +132,7 @@ export function WriteReviewForm({
           disabled={disabled}
           maxLength={80}
           onChange={(e) => onChange({ city: e.target.value })}
-          placeholder="e.g. Seoul"
+          placeholder="e.g. Kathmandu or Seoul"
         />
       </label>
 
@@ -142,13 +145,15 @@ export function WriteReviewForm({
           disabled={disabled}
           maxLength={80}
           onChange={(e) => onChange({ country: e.target.value })}
-          placeholder="e.g. Korea"
+          placeholder="e.g. Nepal or Korea"
         />
       </label>
 
       <div className="block sm:col-span-2">
-        <span className="text-xs font-bold text-slate-600">Rating *</span>
-        <div className="mt-2">
+        <span className="text-xs font-bold text-slate-600" id={`${idPrefix}-rating-label`}>
+          Rating *
+        </span>
+        <div className="mt-2" role="group" aria-labelledby={`${idPrefix}-rating-label`}>
           <StarRatingInput value={form.rating} onChange={(rating) => onChange({ rating })} disabled={disabled} />
         </div>
       </div>
@@ -161,9 +166,17 @@ export function WriteReviewForm({
           value={form.review_title}
           disabled={disabled}
           maxLength={120}
+          required
+          aria-required="true"
+          aria-describedby={`${idPrefix}-title-hint`}
           onChange={(e) => onChange({ review_title: e.target.value })}
           placeholder="Summarize your experience in one line"
         />
+        <p id={`${idPrefix}-title-hint`} className="mt-1 text-[11px] font-semibold text-slate-400">
+          {form.review_title.trim().length < 5
+            ? `${Math.max(0, 5 - form.review_title.trim().length)} more characters needed (min 5)`
+            : `${form.review_title.length}/120`}
+        </p>
       </label>
 
       <label className="block sm:col-span-2">
@@ -175,10 +188,17 @@ export function WriteReviewForm({
           value={form.review_text}
           disabled={disabled}
           maxLength={2000}
+          required
+          aria-required="true"
+          aria-describedby={`${idPrefix}-message-hint`}
           onChange={(e) => onChange({ review_text: e.target.value })}
           placeholder="Share how FIRE Nepal helped you plan, save, or invest…"
         />
-        <p className="mt-1 text-right text-[11px] font-semibold text-slate-400">{form.review_text.length}/2000</p>
+        <p id={`${idPrefix}-message-hint`} className="mt-1 text-right text-[11px] font-semibold text-slate-400">
+          {form.review_text.trim().length < 20
+            ? `${Math.max(0, 20 - form.review_text.trim().length)} more characters needed (min 20) · ${form.review_text.length}/2000`
+            : `${form.review_text.length}/2000`}
+        </p>
       </label>
     </div>
   );

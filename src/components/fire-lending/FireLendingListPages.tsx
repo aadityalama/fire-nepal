@@ -25,6 +25,7 @@ import {
   LendingPrimaryButton,
   LendingPrimaryLink,
   LendingSecondaryButton,
+  LendingSkeletonCard,
   LendingStatusPill,
   LendingInput,
   LendingSelect,
@@ -50,9 +51,16 @@ function LoanList({ filter }: { filter?: "borrowed" | "lent" | "all" }) {
   return (
     <LendingGlassCard title={filter === "borrowed" ? "Borrowed" : filter === "lent" ? "Lent" : "My Loans"} icon={Landmark}>
       {loading ? (
-        <LendingEmptyState message="Loading…" />
+        <div className="space-y-2" role="status" aria-live="polite" aria-busy="true" aria-label="Loading loans">
+          <LendingSkeletonCard className="h-16" />
+          <LendingSkeletonCard className="h-16" />
+          <LendingSkeletonCard className="h-16" />
+        </div>
       ) : loans.length === 0 ? (
-        <LendingEmptyState message="No loans in this view." />
+        <LendingEmptyState
+          title="No loans in this view"
+          message="Track borrowed and lent money with EMI schedules, payments, and agreements."
+        />
       ) : (
         <ul className="space-y-1.5">
           {loans.map((loan) => {
@@ -132,7 +140,10 @@ export function FireLendingRequestsPage() {
       <LendingCompactHeader eyebrow="Loan Requests" title="Incoming & outgoing" subtitle="Accept, reject or request changes." />
       <LendingGlassCard title="Requests" icon={Inbox}>
         {store.requests.length === 0 ? (
-          <LendingEmptyState message="No loan requests." />
+          <LendingEmptyState
+            title="No loan requests"
+            message="When someone sends a loan request, it will show up here for review."
+          />
         ) : (
           <ul className="space-y-2">
             {store.requests.map((req) => {
@@ -186,7 +197,10 @@ export function FireLendingPaymentsPage() {
       <LendingPrimaryLink href="/fire-lending/payments/new">Record Payment</LendingPrimaryLink>
       <LendingGlassCard title="History" icon={CreditCard}>
         {store.payments.length === 0 ? (
-          <LendingEmptyState message="No payments recorded." />
+          <LendingEmptyState
+            title="No payments recorded"
+            message="Record a payment to update outstanding balances and installment status."
+          />
         ) : (
           <ul className="space-y-1.5">
             {store.payments.map((p) => {
@@ -304,7 +318,10 @@ export function FireLendingInstallmentsPage() {
       <LendingCompactHeader eyebrow="Installments" title="EMI schedule" subtitle="Due, overdue and upcoming EMIs." />
       <LendingGlassCard title="Schedule" icon={CalendarClock}>
         {rows.length === 0 ? (
-          <LendingEmptyState message="No installments." />
+          <LendingEmptyState
+            title="No installments"
+            message="EMI schedules appear here after you create a loan with installments."
+          />
         ) : (
           <ul className="space-y-1.5">
             {rows.map((row) => {

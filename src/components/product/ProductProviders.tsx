@@ -22,7 +22,16 @@ export function ProductProviders({ children }: { children: ReactNode }) {
               <HomepageLanguageProvider>
                 {children}
                 <AuthModal />
-                <Toaster richColors theme="dark" position="top-center" closeButton />
+                <Toaster
+                  richColors
+                  theme="dark"
+                  position="top-center"
+                  closeButton
+                  visibleToasts={4}
+                  toastOptions={{
+                    duration: 3600,
+                  }}
+                />
               </HomepageLanguageProvider>
             </SmartRemindersProvider>
           </FireMembershipProvider>

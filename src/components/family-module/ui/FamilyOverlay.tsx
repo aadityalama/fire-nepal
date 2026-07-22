@@ -1,8 +1,9 @@
 "use client";
 
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type FamilyOverlayProps = {
   open: boolean;
@@ -17,6 +18,11 @@ type FamilyOverlayProps = {
 
 export function FamilyOverlay({ open, onClose, title, description, light, children, footer, wide }: FamilyOverlayProps) {
   const [mounted, setMounted] = useState(false);
+  const titleId = useId();
+  const descId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(open && mounted, panelRef);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
@@ -47,7 +53,7 @@ export function FamilyOverlay({ open, onClose, title, description, light, childr
     : "border-emerald-500/20 bg-gradient-to-b from-[#041a14]/98 via-[#030d0b]/98 to-black/95 text-zinc-100 shadow-[0_-16px_48px_-8px_rgba(0,0,0,0.55)] sm:shadow-[0_24px_80px_-12px_rgba(16,185,129,0.12)]";
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-black/55 backdrop-blur-[3px] transition-opacity duration-300 motion-reduce:transition-none"
@@ -55,6 +61,11 @@ export function FamilyOverlay({ open, onClose, title, description, light, childr
         onClick={onClose}
       />
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descId : undefined}
         className={`relative z-[101] flex max-h-[min(92dvh,920px)] w-full flex-col overflow-hidden rounded-t-2xl border shadow-2xl transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:rounded-2xl ${wide ? "sm:max-w-2xl" : "sm:max-w-lg"} ${panel}`}
       >
         <div
@@ -63,9 +74,13 @@ export function FamilyOverlay({ open, onClose, title, description, light, childr
           }`}
         >
           <div className="min-w-0">
-            <h2 className="text-base font-black tracking-tight sm:text-lg">{title}</h2>
+            <h2 id={titleId} className="text-base font-black tracking-tight sm:text-lg">
+              {title}
+            </h2>
             {description ? (
-              <p className={`mt-1 text-xs leading-relaxed sm:text-sm ${light ? "text-slate-600" : "text-zinc-400"}`}>{description}</p>
+              <p id={descId} className={`mt-1 text-xs leading-relaxed sm:text-sm ${light ? "text-slate-600" : "text-zinc-400"}`}>
+                {description}
+              </p>
             ) : null}
           </div>
           <button
@@ -78,7 +93,7 @@ export function FamilyOverlay({ open, onClose, title, description, light, childr
             }`}
             aria-label="Close"
           >
-            <X size={18} />
+            <X size={18} aria-hidden />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">{children}</div>

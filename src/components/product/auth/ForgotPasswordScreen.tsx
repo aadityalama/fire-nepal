@@ -3,9 +3,10 @@
 import { ArrowRight, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { FORM_MESSAGES } from "@/lib/ux/form-messages";
 
 export function ForgotPasswordScreen() {
   const router = useRouter();
@@ -13,13 +14,19 @@ export function ForgotPasswordScreen() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes("@")) {
+      setError(FORM_MESSAGES.emailInvalid);
+      return;
+    }
     setBusy(true);
     try {
-      const trimmed = email.trim().toLowerCase();
       if (isSupabaseConfigured()) {
         const r = await fetch("/api/auth/request-password-reset", {
           method: "POST",
@@ -28,7 +35,7 @@ export function ForgotPasswordScreen() {
         });
         const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
         if (!r.ok) {
-          setError(j.error ?? "Could not start password reset.");
+          setError(j.error ?? "Could not start password reset. Please try again.");
           return;
         }
         setDone(true);
@@ -48,7 +55,7 @@ export function ForgotPasswordScreen() {
         error?: string;
       };
       if (!r.ok) {
-        setError(j.error ?? "Request failed.");
+        setError(j.error ?? "Could not send reset instructions. Please try again.");
         return;
       }
       if (typeof j.expiresAt === "number") {
@@ -61,7 +68,7 @@ export function ForgotPasswordScreen() {
       }
       setDone(true);
     } catch {
-      setError("Network error. Try again.");
+      setError(FORM_MESSAGES.network);
     } finally {
       setBusy(false);
     }
@@ -84,7 +91,11 @@ export function ForgotPasswordScreen() {
         </div>
 
         {done ? (
-          <div className="mt-8 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-5 text-sm font-semibold leading-relaxed text-emerald-50">
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-8 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-5 text-sm font-semibold leading-relaxed text-emerald-50"
+          >
             {isSupabaseConfigured() ? (
               <>
                 If an account exists for that address, you will receive an email with a reset link. Open the link, then
@@ -105,7 +116,7 @@ export function ForgotPasswordScreen() {
             </Link>
           </div>
         ) : (
-          <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+          <form className="mt-8 space-y-4" onSubmit={onSubmit} aria-busy={busy}>
             <label className="block">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">
                 Email
@@ -114,20 +125,39 @@ export function ForgotPasswordScreen() {
                 type="email"
                 required
                 autoComplete="email"
+                inputMode="email"
+                enterKeyHint="go"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={busy}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="you@company.com"
               />
+              <span className="mt-1.5 block text-[11px] font-semibold text-emerald-200/40">
+                Use the same email you signed up with.
+              </span>
             </label>
-            {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+            {error ? (
+              <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={busy}
+              aria-busy={busy}
               className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition enabled:hover:-translate-y-0.5 disabled:opacity-50"
             >
+              {busy ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+              ) : null}
               {busy ? "Sending…" : "Send reset link"}
-              <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+              {!busy ? <ArrowRight size={18} className="transition group-hover:translate-x-0.5" /> : null}
             </button>
           </form>
         )}

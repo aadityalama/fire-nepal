@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { appToast } from "@/lib/toast";
 import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
 import { InsurancePolicyCard } from "@/components/insurance-workspace/InsurancePolicyCard";
 import { InsurancePolicySheet } from "@/components/insurance-workspace/InsurancePolicySheet";
@@ -167,11 +167,11 @@ export function InsuranceWorkspaceDashboard() {
             if (editingId) {
               await updateInsurancePolicy(editingId, input);
               await reloadPoliciesFromCloud();
-              toast.success("Policy updated");
+              appToast.success("Policy updated.", { id: "insurance-save" });
             } else {
               await createInsurancePolicy(input);
               await reloadPoliciesFromCloud();
-              toast.success("Policy saved");
+              appToast.success("Policy saved.", { id: "insurance-save" });
             }
             setSheetOpen(false);
             setEditingPolicy(null);
@@ -192,19 +192,21 @@ export function InsuranceWorkspaceDashboard() {
             version: 1,
             policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
           });
-          toast.success("Policy updated");
+          appToast.success("Policy updated.", { id: "insurance-save" });
         } else {
           persistLocalState({
             version: 1,
             policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
           });
-          toast.success("Policy saved");
+          appToast.success("Policy saved.", { id: "insurance-save" });
         }
         setSheetOpen(false);
         setEditingPolicy(null);
         recalculate();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save policy.");
+        appToast.error(error instanceof Error ? error.message : "Could not save policy. Please try again.", {
+          id: "insurance-save-error",
+        });
         throw error;
       } finally {
         setSaving(false);
@@ -220,7 +222,7 @@ export function InsuranceWorkspaceDashboard() {
           try {
             await deleteInsurancePolicy(policy.id);
             await reloadPoliciesFromCloud();
-            toast.success("Policy deleted");
+            appToast.success("Policy deleted.", { id: "insurance-delete" });
             recalculate();
             return;
           } catch (error) {
@@ -234,10 +236,12 @@ export function InsuranceWorkspaceDashboard() {
           version: 1,
           policies: state.policies.filter((item) => item.id !== policy.id),
         });
-        toast.success("Policy deleted");
+        appToast.success("Policy deleted.", { id: "insurance-delete" });
         recalculate();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not delete policy.");
+        appToast.error(error instanceof Error ? error.message : "Could not delete policy. Please try again.", {
+          id: "insurance-delete-error",
+        });
       }
     },
     [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
@@ -376,7 +380,7 @@ export function InsuranceWorkspaceDashboard() {
           </div>
           <div className="space-y-3">
             {policies.length === 0 ? (
-              <div className={`${glassCard} p-6 text-center`}>
+              <div className={`${glassCard} p-6 text-center`} role="status">
                 <p className="text-sm font-black text-white">No policies yet</p>
                 <p className="mt-1 text-xs font-semibold text-emerald-100/50">
                   Add health or life cover — FIRE AI fills the rest.

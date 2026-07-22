@@ -4,14 +4,14 @@ import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { appToast } from "@/lib/toast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase, saveWealthPortfolioToSupabase } from "@/services/portfolio-supabase";
 import { defaultWealthState } from "@/components/portfolio/storage";
-import { toast } from "sonner";
 
 /** Debounce cloud writes so typing does not trigger constant sync work; pairs with stale-save / echo guards below. */
-const CLOUD_SAVE_DEBOUNCE_MS = 1000;
+const CLOUD_SAVE_DEBOUNCE_MS = 900;
 
 function portfolioErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -60,7 +60,9 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
         }
       } catch (e) {
         console.error(e);
-        toast.error("Could not load portfolio from cloud.");
+        appToast.error("Could not load portfolio from cloud. Showing local data.", {
+          id: "portfolio-cloud-load",
+        });
       } finally {
         if (!cancelled) setRemoteLoaded(true);
       }
@@ -95,14 +97,16 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
           // If the user kept typing while the request was in flight, do not mark as saved or toast — a new debounced save will run.
           if (JSON.stringify(stateRef.current) === snapshot) {
             lastSavedRef.current = snapshot;
-            toast.success("Portfolio synced to cloud", { id: "portfolio-cloud-save", duration: 2200 });
+            appToast.success("Portfolio synced to cloud.", { id: "portfolio-cloud-save", duration: 2200 });
           }
         } else {
-          toast.error("Portfolio cloud sync failed.");
+          appToast.error("Portfolio cloud sync failed. Your changes are still saved on this device.", {
+            id: "portfolio-cloud-save-error",
+          });
         }
       } catch (error) {
         console.error("Portfolio save failed:", error);
-        toast.error(portfolioErrorMessage(error));
+        appToast.error(portfolioErrorMessage(error), { id: "portfolio-cloud-save-error" });
       }
     }, CLOUD_SAVE_DEBOUNCE_MS);
 
@@ -130,7 +134,10 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
             if (local !== lastSavedRef.current) return;
             setState(remote);
             lastSavedRef.current = incoming;
-            toast.message("Portfolio updated from another session.", { duration: 3200 });
+            appToast.info("Portfolio updated from another session.", {
+              id: "portfolio-cloud-remote",
+              duration: 3200,
+            });
           } catch {
             /* ignore */
           }

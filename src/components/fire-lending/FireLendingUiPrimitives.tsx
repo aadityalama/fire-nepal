@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatPct } from "@/lib/fire-lending/format";
 
@@ -260,6 +260,7 @@ export function LendingEmptyState({
   const light = resolvedTheme === "light";
   return (
     <div
+      role="status"
       className={`rounded-2xl border border-dashed px-4 py-10 text-center ${
         light ? "border-emerald-200/80 bg-gradient-to-b from-white to-emerald-50/40" : "border-emerald-400/20 bg-gradient-to-b from-black/20 to-emerald-950/20"
       }`}
@@ -352,15 +353,26 @@ export function LendingInput({
   onChange,
   type = "text",
   placeholder,
+  helperText,
+  error,
+  disabled,
+  autoComplete,
+  enterKeyHint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   placeholder?: string;
+  helperText?: string;
+  error?: string;
+  disabled?: boolean;
+  autoComplete?: string;
+  enterKeyHint?: HTMLAttributes<HTMLInputElement>["enterKeyHint"];
 }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const helperId = `lending-input-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <label className="block">
       <span className={`mb-1 block text-xs font-bold ${light ? "text-slate-700" : "text-emerald-200/80"}`}>{label}</span>
@@ -369,12 +381,26 @@ export function LendingInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition focus:ring-2 ${
+        disabled={disabled}
+        autoComplete={autoComplete}
+        enterKeyHint={enterKeyHint}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || helperText ? helperId : undefined}
+        className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition focus:ring-2 disabled:opacity-60 ${
           light
             ? "border-emerald-200/80 bg-white text-slate-900 focus:border-emerald-400 focus:ring-emerald-400/25"
             : "border-emerald-400/20 bg-black/30 text-white focus:border-emerald-400/50 focus:ring-emerald-400/20"
         }`}
       />
+      {error ? (
+        <span id={helperId} role="alert" className="mt-1 block text-[11px] font-semibold text-rose-400">
+          {error}
+        </span>
+      ) : helperText ? (
+        <span id={helperId} className={`mt-1 block text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/45"}`}>
+          {helperText}
+        </span>
+      ) : null}
     </label>
   );
 }

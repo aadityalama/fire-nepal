@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
 type FireBizGlassCardProps = {
@@ -235,13 +235,18 @@ export function FireBizHubTile({ label, description, href, icon: Icon }: HubTile
   );
 }
 
-export function FireBizEmptyState({ message }: { message: string }) {
+export function FireBizEmptyState({ message, loading }: { message: string; loading?: boolean }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   return (
-    <p className={`rounded-xl border border-dashed px-4 py-8 text-center text-sm font-semibold ${
-      light ? "border-emerald-200/80 text-slate-600" : "border-emerald-400/20 text-emerald-200/60"
-    }`}>
+    <p
+      role="status"
+      aria-live="polite"
+      aria-busy={loading || undefined}
+      className={`rounded-xl border border-dashed px-4 py-8 text-center text-sm font-semibold ${
+        light ? "border-emerald-200/80 text-slate-600" : "border-emerald-400/20 text-emerald-200/60"
+      }`}
+    >
       {message}
     </p>
   );
@@ -256,11 +261,13 @@ export function FireBizPrimaryButton({
   onClick,
   type = "button",
   disabled,
+  busy,
 }: {
   children: ReactNode;
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  busy?: boolean;
 }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -268,7 +275,8 @@ export function FireBizPrimaryButton({
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2.5 text-sm font-black transition active:scale-[0.98] disabled:opacity-50 ${
         light
           ? "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-lg shadow-emerald-500/20"
@@ -312,15 +320,26 @@ export function FireBizInput({
   onChange,
   type = "text",
   placeholder,
+  helperText,
+  error,
+  disabled,
+  autoComplete,
+  enterKeyHint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   placeholder?: string;
+  helperText?: string;
+  error?: string;
+  disabled?: boolean;
+  autoComplete?: string;
+  enterKeyHint?: HTMLAttributes<HTMLInputElement>["enterKeyHint"];
 }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const helperId = `fire-biz-input-${label.replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <label className="block">
       <span className={`mb-1 block text-xs font-bold ${light ? "text-slate-700" : "text-emerald-200/80"}`}>{label}</span>
@@ -329,12 +348,26 @@ export function FireBizInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition focus:ring-2 ${
+        disabled={disabled}
+        autoComplete={autoComplete}
+        enterKeyHint={enterKeyHint}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || helperText ? helperId : undefined}
+        className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition focus:ring-2 disabled:opacity-60 ${
           light
             ? "border-emerald-200/80 bg-white text-slate-900 focus:border-emerald-400 focus:ring-emerald-400/25"
             : "border-emerald-400/20 bg-black/30 text-white focus:border-emerald-400/50 focus:ring-emerald-400/20"
         }`}
       />
+      {error ? (
+        <span id={helperId} role="alert" className="mt-1 block text-[11px] font-semibold text-rose-400">
+          {error}
+        </span>
+      ) : helperText ? (
+        <span id={helperId} className={`mt-1 block text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/45"}`}>
+          {helperText}
+        </span>
+      ) : null}
     </label>
   );
 }

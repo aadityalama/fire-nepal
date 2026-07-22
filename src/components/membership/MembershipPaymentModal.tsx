@@ -1,8 +1,10 @@
 "use client";
 
 import { Building2, Smartphone, Wallet, X } from "lucide-react";
-import { useEffect, useId, useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useId, useRef, useState } from "react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { appToast } from "@/lib/toast";
+import { FORM_MESSAGES } from "@/lib/ux/form-messages";
 import { TIER_DISPLAY } from "@/lib/fire-membership";
 import {
   MEMBERSHIP_PLAN_PRICE_NPR,
@@ -48,30 +50,38 @@ function methodIcon(m: MembershipPaymentMethod) {
 
 export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }: MembershipPaymentModalProps) {
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [method, setMethod] = useState<MembershipPaymentMethod | null>(null);
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useFocusTrap(open, panelRef);
+
   useEffect(() => {
     if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
+      if (e.key === "Escape" && !busy) onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onOpenChange, busy]);
 
   const price = MEMBERSHIP_PLAN_PRICE_NPR[plan];
   const planLabel = TIER_DISPLAY[plan].label;
 
   const submit = async () => {
     if (!method) {
-      toast.error("Choose a payment method.");
+      appToast.validation(FORM_MESSAGES.paymentMethodRequired, "membership-method");
       return;
     }
     if (!file) {
-      toast.error("Upload a payment screenshot or receipt.");
+      appToast.validation(FORM_MESSAGES.paymentProofRequired, "membership-proof");
       return;
     }
     setBusy(true);
@@ -84,7 +94,7 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
       const r = await fetch("/api/membership-requests", { method: "POST", body: fd, credentials: "include" });
       if (!r.ok) {
         const msg = await membershipRequestErrorMessage(r);
-        toast.error(msg);
+        appToast.error(msg, { id: "membership-submit-error" });
         return;
       }
       const j = (await r.json().catch(() => ({}))) as {
@@ -97,8 +107,9 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
       };
       const row = j.request;
       if (!row?.id || !row.created_at || (row.plan_type !== "premium" && row.plan_type !== "elite")) {
-        toast.error(
+        appToast.error(
           "We received an unexpected response. Your payment may still have been saved — check membership status.",
+          { id: "membership-submit-error" },
         );
         onOpenChange(false);
         window.dispatchEvent(new Event("fn-membership-requests-reload"));
@@ -111,11 +122,14 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
         status: row.status === "approved" || row.status === "rejected" ? row.status : "pending",
       };
       onOpenChange(false);
-      toast.success("Payment submitted. We will review your membership request within 24 hours.");
+      appToast.success("Payment submitted. We will review your membership request within 24 hours.", {
+        id: "membership-submit-success",
+        duration: 5000,
+      });
       onSubmitted?.(payload);
     } catch (e) {
       console.error("MEMBERSHIP_CLIENT_SUBMIT_NETWORK", e);
-      toast.error("Network error — try again.");
+      appToast.networkError("Network error. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -132,8 +146,9 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
         onClick={() => onOpenChange(false)}
       />
       <div
+        ref={panelRef}
         role="dialog"
-        aria-modal
+        aria-modal="true"
         aria-labelledby={titleId}
         className="relative z-[201] flex max-h-[min(92vh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-[#04140f] shadow-[0_40px_120px_rgba(0,0,0,0.75)] sm:rounded-3xl"
       >
@@ -169,6 +184,7 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
                   key={m}
                   type="button"
                   onClick={() => setMethod(m)}
+                  aria-pressed={active}
                   className={`flex min-h-[44px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center transition ${
                     active
                       ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-50"
@@ -218,7 +234,11 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
                     accept="image/jpeg,image/png,image/webp"
                     className="mt-2 block w-full text-sm font-medium text-zinc-200 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-500 file:px-4 file:py-2 file:text-sm file:font-black file:text-emerald-950"
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    aria-required="true"
                   />
+                  <span className="mt-1.5 block text-[11px] font-semibold text-zinc-500">
+                    Clear photo of the success screen works best for faster review.
+                  </span>
                 </label>
                 <label className="block">
                   <span className="text-xs font-bold text-zinc-400">Reference (optional)</span>
@@ -226,9 +246,10 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
                     type="text"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    placeholder="Transaction ID, ref number, etc."
+                    placeholder="e.g. Khalti txn ID or last 6 digits"
                     className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/40 focus:outline-none focus:ring-1 focus:ring-emerald-500/30"
                     maxLength={500}
+                    enterKeyHint="done"
                   />
                 </label>
               </div>
@@ -249,6 +270,7 @@ export function MembershipPaymentModal({ open, onOpenChange, plan, onSubmitted }
           <button
             type="button"
             disabled={busy || !method || !file}
+            aria-busy={busy}
             onClick={() => void submit()}
             className="min-h-[44px] flex-[1.2] rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 text-sm font-black text-emerald-950 shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >

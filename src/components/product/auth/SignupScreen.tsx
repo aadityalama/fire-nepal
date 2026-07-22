@@ -3,11 +3,12 @@
 import { ArrowRight, Flame } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { AvatarUploadZone } from "@/components/product/auth/AvatarUploadZone";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { FORM_MESSAGES, focusFirstInvalid } from "@/lib/ux/form-messages";
 
 export function SignupScreen() {
   const { signup, user, loading } = useProductAuth();
@@ -19,6 +20,8 @@ export function SignupScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const errorId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -27,7 +30,18 @@ export function SignupScreen() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
+    if (password.length < 6) {
+      setError(FORM_MESSAGES.passwordTooShort);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(FORM_MESSAGES.passwordsMismatch);
+      focusFirstInvalid(formRef.current);
+      return;
+    }
     setBusy(true);
     const r = await signup(name, email, password, {
       confirmPassword,
@@ -35,7 +49,7 @@ export function SignupScreen() {
     });
     setBusy(false);
     if (!r.ok) {
-      setError(r.error ?? "Could not create account.");
+      setError(r.error ?? "Could not create account. Please try again.");
       return;
     }
     if ("needsVerification" in r && r.needsVerification) {
@@ -76,17 +90,22 @@ export function SignupScreen() {
             you confirm your email with a one-time code.
           </p>
 
-          <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+          <form ref={formRef} className="mt-8 space-y-4" onSubmit={onSubmit} aria-busy={busy}>
             <AvatarUploadZone value={avatarUrl} onChange={setAvatarUrl} disabled={busy} />
 
             <label className="block">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">Full name</span>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={busy}
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="Sita Magar"
                 autoComplete="name"
+                enterKeyHint="next"
                 required
               />
             </label>
@@ -95,24 +114,37 @@ export function SignupScreen() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={busy}
+                inputMode="email"
+                enterKeyHint="next"
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="you@company.com"
                 autoComplete="email"
                 required
               />
+              <span className="mt-1.5 block text-[11px] font-semibold text-emerald-200/40">We’ll send a one-time verification code here.</span>
             </label>
             <label className="block">
               <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">Password</span>
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={busy}
+                enterKeyHint="next"
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
                 placeholder="At least 6 characters"
                 autoComplete="new-password"
                 required
                 minLength={6}
+                aria-invalid={error?.toLowerCase().includes("password") ? true : undefined}
               />
             </label>
             <label className="block">
@@ -122,22 +154,37 @@ export function SignupScreen() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={busy}
+                enterKeyHint="go"
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
-                placeholder="Repeat password"
+                placeholder="Re-enter the same password"
                 autoComplete="new-password"
                 required
                 minLength={6}
+                aria-invalid={error?.toLowerCase().includes("match") ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
               />
             </label>
-            {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+            {error ? (
+              <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={busy}
+              aria-busy={busy}
               className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-emerald-400/35 disabled:opacity-60"
             >
+              {busy ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+              ) : null}
               {busy ? "Sending code…" : "Continue — verify email"}
-              <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+              {!busy ? <ArrowRight size={18} className="transition group-hover:translate-x-0.5" /> : null}
             </button>
           </form>
 

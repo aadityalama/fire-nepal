@@ -126,7 +126,7 @@ function mapAuthError(error: unknown): string {
     lower.includes("invalid login credentials") ||
     lower.includes("invalid email or password")
   ) {
-    return "Invalid email or password.";
+    return "Invalid email or password. Double-check and try again.";
   }
   if (
     error instanceof AuthRequestTimeoutError ||

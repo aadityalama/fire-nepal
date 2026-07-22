@@ -30,7 +30,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { toast } from "sonner";
+import { appToast } from "@/lib/toast";
 
 type InfoSection = {
   title: string;
@@ -201,7 +201,7 @@ export function ContactPageContent() {
   function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isReady) {
-      toast.error("Please complete all contact form fields.");
+      appToast.validation("Please complete all contact form fields before sending.");
       return;
     }
 
@@ -210,7 +210,7 @@ export function ContactPageContent() {
     );
     const subject = encodeURIComponent(form.subject);
     window.location.href = `mailto:support@firenepal.com?subject=${subject}&body=${body}`;
-    toast.success("Opening your email app to send the message.");
+    appToast.success("Opening your email app to send the message.", { id: "contact-mailto" });
   }
 
   return (

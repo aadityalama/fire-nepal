@@ -220,6 +220,8 @@ export function NumericMoneyInput({
           spellCheck={false}
           disabled={disabled}
           aria-label={ariaLabel ?? label}
+          aria-invalid={value != null && !Number.isFinite(value) ? true : undefined}
+          enterKeyHint="done"
           placeholder={placeholder}
           className={`fn-mobile-numeric-input block min-w-full w-max max-w-none bg-transparent text-right font-semibold tabular-nums tracking-tight outline-none placeholder:text-slate-500 ${mergedInputClass}`}
           value={show}

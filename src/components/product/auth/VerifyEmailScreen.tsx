@@ -3,7 +3,7 @@
 import { ArrowRight, Flame, RefreshCw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 
@@ -37,6 +37,8 @@ export function VerifyEmailScreen() {
   const [busy, setBusy] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [devHint, setDevHint] = useState<string | null>(null);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const errorId = useId();
 
   const email = emailRaw.trim().toLowerCase();
   const remainingMs = useCountdownMs(expiresAt);
@@ -65,12 +67,19 @@ export function VerifyEmailScreen() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
+    setResendNotice(null);
+    const digits = code.replace(/\D/g, "");
+    if (digits.length !== 6) {
+      setError("Enter the full 6-digit verification code.");
+      return;
+    }
     setBusy(true);
-    const r = await verifyEmail(email, code.replace(/\D/g, ""));
+    const r = await verifyEmail(email, digits);
     setBusy(false);
     if (!r.ok) {
-      setError(r.error ?? "Verification failed.");
+      setError(r.error ?? "Verification failed. Check the code and try again.");
       return;
     }
     sessionStorage.removeItem(`fn_dev_otp_${email}`);
@@ -79,11 +88,12 @@ export function VerifyEmailScreen() {
 
   const onResend = useCallback(async () => {
     setError(null);
+    setResendNotice(null);
     setResendBusy(true);
     const r = await resendVerification(email);
     setResendBusy(false);
     if (!r.ok) {
-      setError(r.error ?? "Could not resend code.");
+      setError(r.error ?? "Could not resend code. Please try again in a moment.");
       return;
     }
     if (r.expiresAt) setExpiresAt(r.expiresAt);
@@ -92,6 +102,7 @@ export function VerifyEmailScreen() {
       setDevHint(r.devCode);
     }
     setCode("");
+    setResendNotice("A new code was sent. It may take up to a minute to arrive.");
   }, [email, resendVerification]);
 
   if (!email || !email.includes("@")) {
@@ -162,10 +173,15 @@ export function VerifyEmailScreen() {
                 placeholder="••••••"
               />
             </label>
-            {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+            {error ? (
+              <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+                {error}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={busy || code.length !== 6}
+              aria-busy={busy}
               className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-white/[0.06] px-4 py-3 text-sm font-black text-emerald-50 transition enabled:hover:bg-white/10 disabled:opacity-50"
             >
               {busy ? "Verifying…" : "Verify with code"}
@@ -242,14 +258,27 @@ export function VerifyEmailScreen() {
               required
             />
           </label>
-          {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+          {error ? (
+            <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+              {error}
+            </p>
+          ) : null}
+          {resendNotice ? (
+            <p role="status" aria-live="polite" className="text-sm font-semibold text-emerald-200/80">
+              {resendNotice}
+            </p>
+          ) : null}
           <button
             type="submit"
             disabled={busy || code.length !== 6 || expired}
+            aria-busy={busy}
             className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-emerald-400/35 disabled:opacity-50"
           >
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+            ) : null}
             {busy ? "Verifying…" : "Activate account"}
-            <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+            {!busy ? <ArrowRight size={18} className="transition group-hover:translate-x-0.5" /> : null}
           </button>
         </form>
 
@@ -257,6 +286,7 @@ export function VerifyEmailScreen() {
           <button
             type="button"
             disabled={resendBusy}
+            aria-busy={resendBusy}
             onClick={() => void onResend()}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
           >

@@ -3,9 +3,10 @@
 import { ArrowRight, KeyRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, startTransition, type FormEvent } from "react";
+import { useEffect, useId, useState, startTransition, type FormEvent } from "react";
 import { AuthGlassShell } from "@/components/product/auth/AuthGlassShell";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { FORM_MESSAGES } from "@/lib/ux/form-messages";
 
 export function ResetPasswordScreen() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export function ResetPasswordScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [devHint, setDevHint] = useState<string | null>(null);
+  const errorId = useId();
 
   useEffect(() => {
     if (typeof window === "undefined" || !email) return;
@@ -39,9 +41,22 @@ export function ResetPasswordScreen() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     if (Number.isFinite(initialExpires) && Date.now() > initialExpires) {
       setError("This reset window expired. Request a new code from forgot password.");
+      return;
+    }
+    if (password.length < 6) {
+      setError(FORM_MESSAGES.passwordTooShort);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(FORM_MESSAGES.passwordsMismatch);
+      return;
+    }
+    if (code.replace(/\D/g, "").length !== 6) {
+      setError("Enter the 6-digit code from your email.");
       return;
     }
     setBusy(true);
@@ -59,13 +74,13 @@ export function ResetPasswordScreen() {
       });
       if (!r.ok) {
         const j = (await r.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? "Could not reset password.");
+        setError(j.error ?? "Could not reset password. Check the code and try again.");
         return;
       }
       sessionStorage.removeItem(`fn_dev_reset_${email}`);
       router.replace("/hub");
     } catch {
-      setError("Network error. Try again.");
+      setError(FORM_MESSAGES.network);
     } finally {
       setBusy(false);
     }
@@ -122,7 +137,7 @@ export function ResetPasswordScreen() {
           </div>
         ) : null}
 
-        <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-8 space-y-4" onSubmit={onSubmit} aria-busy={busy}>
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">
               6-digit code
@@ -132,11 +147,20 @@ export function ResetPasswordScreen() {
               autoComplete="one-time-code"
               maxLength={6}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                if (error) setError(null);
+              }}
+              disabled={busy}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
               className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3.5 text-center font-mono text-2xl font-black tracking-[0.35em] text-white outline-none ring-emerald-400/30 placeholder:text-zinc-600 focus:ring-2"
-              placeholder="••••••"
+              placeholder="000000"
               required
             />
+            <span className="mt-1.5 block text-center text-[11px] font-semibold text-emerald-200/40">
+              Digits only · check spam if the email hasn’t arrived
+            </span>
           </label>
           <label className="block">
             <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-emerald-200/55">
@@ -146,7 +170,11 @@ export function ResetPasswordScreen() {
               type="password"
               autoComplete="new-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError(null);
+              }}
+              disabled={busy}
               className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
               placeholder="At least 6 characters"
               required
@@ -161,21 +189,34 @@ export function ResetPasswordScreen() {
               type="password"
               autoComplete="new-password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (error) setError(null);
+              }}
+              disabled={busy}
+              enterKeyHint="go"
               className="w-full rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm font-semibold text-white outline-none ring-emerald-400/30 focus:ring-2"
-              placeholder="Repeat password"
+              placeholder="Re-enter the same password"
               required
               minLength={6}
             />
           </label>
-          {error ? <p className="text-sm font-semibold text-rose-300">{error}</p> : null}
+          {error ? (
+            <p id={errorId} role="alert" aria-live="assertive" className="text-sm font-semibold text-rose-300">
+              {error}
+            </p>
+          ) : null}
           <button
             type="submit"
             disabled={busy || code.length !== 6}
+            aria-busy={busy}
             className="group flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-3 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/25 transition enabled:hover:-translate-y-0.5 disabled:opacity-50"
           >
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-950/30 border-t-emerald-950" aria-hidden />
+            ) : null}
             {busy ? "Saving…" : "Update password & sign in"}
-            <ArrowRight size={18} className="transition group-hover:translate-x-0.5" />
+            {!busy ? <ArrowRight size={18} className="transition group-hover:translate-x-0.5" /> : null}
           </button>
         </form>
 
