@@ -92,6 +92,8 @@ type WorkspaceForm = {
   notes: string;
   reminderEnabled: boolean;
   reminderTiming: ExpenseReminderTiming;
+  /** HH:mm — native time input; default 09:00 AM */
+  reminderTime: string;
   reminderEmail: boolean;
 };
 
@@ -108,6 +110,7 @@ function emptyForm(today: string): WorkspaceForm {
     notes: "",
     reminderEnabled: true,
     reminderTiming: "1 Day Before",
+    reminderTime: "09:00",
     reminderEmail: true,
   };
 }
@@ -157,6 +160,7 @@ export type ExpenseWorkspaceDashboardProps = {
     notes: string;
     reminderEnabled: boolean;
     reminderTiming: ExpenseReminderTiming;
+    reminderTime: string;
     reminderEmail: boolean;
   }) => void | Promise<void>;
 };
@@ -638,6 +642,7 @@ export function ExpenseWorkspaceDashboard({
                   notes: form.notes,
                   reminderEnabled: form.reminderEnabled,
                   reminderTiming: form.reminderTiming,
+                  reminderTime: form.reminderTime,
                   reminderEmail: form.reminderEmail,
                 }),
               )
@@ -986,6 +991,24 @@ function ExpenseAddSheet({
                       {option}
                     </button>
                   ))}
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Reminder Time</p>
+                  <input
+                    type="time"
+                    lang="en-US"
+                    step={60}
+                    value={form.reminderTime}
+                    onChange={(event) => {
+                      const next = event.target.value || "09:00";
+                      setForm((current) => ({ ...current, reminderTime: next.slice(0, 5) }));
+                    }}
+                    className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+                    aria-describedby="expense-reminder-time-help"
+                  />
+                  <p id="expense-reminder-time-help" className="text-xs font-semibold text-emerald-100/65">
+                    Your reminder will be sent at the selected time.
+                  </p>
                 </div>
                 <ToggleSwitch
                   label="Send email reminder"

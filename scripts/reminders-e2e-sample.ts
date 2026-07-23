@@ -47,8 +47,21 @@ function main() {
   const inAppTomorrow = shouldDeliverExpenseInAppNotification({
     reminderEnabled: true,
     reminderTiming: "1 Day Before",
+    reminderTime: "09:00",
+    reminderTimezone: "Asia/Kathmandu",
     remainingDays: 1,
     tone: "tomorrow",
+    now: new Date("2026-07-22T04:00:00.000Z"), // 09:45 NPT
+  });
+
+  const inAppTooEarly = shouldDeliverExpenseInAppNotification({
+    reminderEnabled: true,
+    reminderTiming: "1 Day Before",
+    reminderTime: "09:00",
+    reminderTimezone: "Asia/Kathmandu",
+    remainingDays: 1,
+    tone: "tomorrow",
+    now: new Date("2026-07-22T02:00:00.000Z"), // 07:45 NPT — before 09:00
   });
 
   const report = {
@@ -62,6 +75,7 @@ function main() {
     })),
     nextEmailPreview: formatNextSendLabel(next, shape.timezone),
     inAppTomorrow,
+    inAppTooEarly,
     resendConfigured: isResendApiKeyConfigured(),
     fromAddress: resolveResendFromAddress(),
     vercelCronPath: "/api/cron/scheduled-reminders",
@@ -84,6 +98,11 @@ function main() {
   }
   if (!inAppTomorrow) {
     console.error("FAIL: expected in-app notification for 1-day-before sample");
+    process.exitCode = 1;
+    return;
+  }
+  if (inAppTooEarly) {
+    console.error("FAIL: in-app notification should wait until selected reminder time");
     process.exitCode = 1;
     return;
   }

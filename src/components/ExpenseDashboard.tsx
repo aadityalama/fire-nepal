@@ -1906,6 +1906,7 @@ export function ExpenseDashboard({
       notes: string;
       reminderEnabled: boolean;
       reminderTiming: ExpenseWorkspaceMeta["reminderTiming"];
+      reminderTime: string;
       reminderEmail: boolean;
     }) => {
       let payerId = members[0];
@@ -1947,6 +1948,14 @@ export function ExpenseDashboard({
       }
       setExpenses((current) => [nextExpense, ...current]);
 
+      const reminderTimezone =
+        typeof Intl !== "undefined"
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+          : undefined;
+      const reminderTime = /^\d{2}:\d{2}$/.test(payload.reminderTime?.trim() ?? "")
+        ? payload.reminderTime.trim()
+        : "09:00";
+
       const baseMeta: ExpenseWorkspaceMeta = {
         dueDate: payload.dueDate,
         account: payload.account,
@@ -1954,9 +1963,11 @@ export function ExpenseDashboard({
         repeat: payload.repeat,
         reminderEnabled: payload.reminderEnabled,
         reminderTiming: payload.reminderTiming,
+        reminderTime,
+        reminderTimezone,
         reminderEmail: payload.reminderEmail,
         reminderHistory: payload.reminderEnabled
-          ? [{ date: new Date().toISOString().slice(0, 10), type: `Scheduled: ${payload.reminderTiming}` }]
+          ? [{ date: new Date().toISOString().slice(0, 10), type: `Scheduled: ${payload.reminderTiming} at ${reminderTime}` }]
           : [],
       };
 

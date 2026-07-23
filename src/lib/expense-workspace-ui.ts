@@ -14,6 +14,10 @@ export type ExpenseWorkspaceMeta = {
   repeat?: ExpenseRepeat;
   reminderEnabled?: boolean;
   reminderTiming?: ExpenseReminderTiming;
+  /** Local wall time for reminders, HH:mm (24h storage; UI uses native 12h picker). Default 09:00. */
+  reminderTime?: string;
+  /** IANA timezone used when scheduling email + gating in-app notifications. */
+  reminderTimezone?: string;
   reminderEmail?: boolean;
   /** Cloud `scheduled_reminders.id` when email delivery is wired via cron/Resend. */
   scheduledReminderId?: string;

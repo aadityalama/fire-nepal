@@ -1,9 +1,43 @@
+import { formatInTimeZone } from "date-fns-tz";
 import type { ExpenseReminderTiming, ExpenseRepeat, ExpenseWorkspaceMeta } from "@/lib/expense-workspace-ui";
 import type { CreateScheduledReminderBody } from "@/lib/scheduled-reminders/api-mapper";
+import { normalizeDueTime } from "@/lib/scheduled-reminders/schedule-logic";
 import type { ReminderType, RepeatFrequency } from "@/lib/smart-reminders/types";
 
 export const EXPENSE_REMINDER_TIMEZONE = "Asia/Kathmandu";
+/** Default reminder time: 09:00 AM local. */
 export const EXPENSE_REMINDER_DUE_TIME = "09:00";
+
+export function normalizeExpenseReminderTime(raw: string | null | undefined): string {
+  return normalizeDueTime(raw?.trim() || EXPENSE_REMINDER_DUE_TIME);
+}
+
+/** Prefer stored timezone, then the browser/user locale timezone, then Kathmandu. */
+export function resolveExpenseReminderTimezone(raw?: string | null): string {
+  const trimmed = raw?.trim();
+  if (trimmed) return trimmed;
+  if (typeof Intl !== "undefined") {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) return tz;
+    } catch {
+      /* ignore */
+    }
+  }
+  return EXPENSE_REMINDER_TIMEZONE;
+}
+
+/** True once local wall-clock in `timezone` is at or past `reminderTime` (HH:mm). */
+export function hasReachedExpenseReminderTime(
+  now: Date,
+  reminderTime: string | null | undefined,
+  timezone: string | null | undefined,
+): boolean {
+  const tz = resolveExpenseReminderTimezone(timezone);
+  const t = normalizeExpenseReminderTime(reminderTime);
+  const localHm = formatInTimeZone(now, tz, "HH:mm");
+  return localHm >= t;
+}
 
 /** Notes marker so cron/admin can attribute sends to expense workspace rows. */
 export function expenseReminderNotes(expenseId: number): string {
@@ -83,6 +117,8 @@ export function buildExpenseScheduledReminderBody(input: {
   email: string;
   repeat?: ExpenseRepeat;
   reminderTiming?: ExpenseReminderTiming;
+  reminderTime?: string;
+  reminderTimezone?: string;
   expenseId: number;
 }): CreateScheduledReminderBody {
   const flags = mapExpenseTimingToNotifyFlags(input.reminderTiming);
@@ -90,8 +126,8 @@ export function buildExpenseScheduledReminderBody(input: {
     title: input.title.trim(),
     amountNpr: Math.max(0, Math.round(input.amountNpr)),
     dueDate: input.dueDate,
-    dueTime: EXPENSE_REMINDER_DUE_TIME,
-    timezone: EXPENSE_REMINDER_TIMEZONE,
+    dueTime: normalizeExpenseReminderTime(input.reminderTime),
+    timezone: resolveExpenseReminderTimezone(input.reminderTimezone),
     email: input.email.trim().toLowerCase(),
     repeatFrequency: mapExpenseRepeatToFrequency(input.repeat),
     ...flags,
@@ -116,7 +152,18 @@ export async function syncExpenseReminderToCloud(input: {
   category: string;
   dueDate: string;
   email: string | null | undefined;
-  meta: Pick<ExpenseWorkspaceMeta, "repeat" | "reminderEnabled" | "reminderTiming" | "reminderEmail" | "scheduledReminderId" | "paidAt" | "cancelled">;
+  meta: Pick<
+    ExpenseWorkspaceMeta,
+    | "repeat"
+    | "reminderEnabled"
+    | "reminderTiming"
+    | "reminderTime"
+    | "reminderTimezone"
+    | "reminderEmail"
+    | "scheduledReminderId"
+    | "paidAt"
+    | "cancelled"
+  >;
 }): Promise<SyncExpenseReminderResult> {
   const enabled = Boolean(input.meta.reminderEnabled && input.meta.reminderEmail);
   const existingId = input.meta.scheduledReminderId?.trim() || null;
@@ -154,6 +201,8 @@ export async function syncExpenseReminderToCloud(input: {
     email,
     repeat: input.meta.repeat,
     reminderTiming: input.meta.reminderTiming,
+    reminderTime: input.meta.reminderTime,
+    reminderTimezone: input.meta.reminderTimezone,
     expenseId: input.expenseId,
   });
 
@@ -191,29 +240,40 @@ export async function syncExpenseReminderToCloud(input: {
   }
 }
 
-/** Whether an in-app expense notification should fire today for the configured timing. */
+/** Whether an in-app expense notification should fire now for the configured timing + time. */
 export function shouldDeliverExpenseInAppNotification(input: {
   reminderEnabled?: boolean;
   reminderTiming?: ExpenseReminderTiming;
+  reminderTime?: string;
+  reminderTimezone?: string;
   remainingDays: number;
   tone: "overdue" | "today" | "tomorrow" | "upcoming" | "completed" | "cancelled";
+  now?: Date;
 }): boolean {
   if (!input.reminderEnabled) return false;
   if (input.tone === "completed" || input.tone === "cancelled") return false;
   if (input.tone === "overdue") return true;
 
   const timing = input.reminderTiming ?? "1 Day Before";
+  let dayMatch = false;
   switch (timing) {
     case "On Due Date":
     case "Custom":
-      return input.remainingDays === 0;
+      dayMatch = input.remainingDays === 0;
+      break;
     case "1 Day Before":
-      return input.remainingDays === 1 || input.remainingDays === 0;
+      dayMatch = input.remainingDays === 1 || input.remainingDays === 0;
+      break;
     case "3 Days Before":
-      return input.remainingDays === 3 || input.remainingDays === 0;
+      dayMatch = input.remainingDays === 3 || input.remainingDays === 0;
+      break;
     case "7 Days Before":
-      return input.remainingDays === 7 || input.remainingDays === 0;
+      dayMatch = input.remainingDays === 7 || input.remainingDays === 0;
+      break;
     default:
-      return input.remainingDays === 0;
+      dayMatch = input.remainingDays === 0;
   }
+  if (!dayMatch) return false;
+
+  return hasReachedExpenseReminderTime(input.now ?? new Date(), input.reminderTime, input.reminderTimezone);
 }

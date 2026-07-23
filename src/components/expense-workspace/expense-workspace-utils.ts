@@ -236,8 +236,11 @@ export function buildNotifications(
       !shouldDeliverExpenseInAppNotification({
         reminderEnabled,
         reminderTiming: meta?.reminderTiming,
+        reminderTime: meta?.reminderTime,
+        reminderTimezone: meta?.reminderTimezone,
         remainingDays: status.remainingDays,
         tone: status.tone,
+        now: today,
       })
     ) {
       continue;
