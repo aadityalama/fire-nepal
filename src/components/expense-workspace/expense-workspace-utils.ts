@@ -1,5 +1,6 @@
 import { getFinanceCategoryEmoji, normalizeFinanceCategory } from "@/lib/finance/categories";
 import type { ExpenseWorkspaceMeta, ExpenseWorkspaceNotification } from "@/lib/expense-workspace-ui";
+import { shouldDeliverExpenseInAppNotification } from "@/lib/expense-workspace/expense-reminder-sync";
 import type { Expense } from "@/lib/expense-utils";
 
 export type ExpenseFilter =
@@ -229,6 +230,19 @@ export function buildNotifications(
       continue;
     }
 
+    // Respect reminderEnabled + timing so the notification center matches scheduled delivery.
+    const reminderEnabled = meta?.reminderEnabled !== false;
+    if (
+      !shouldDeliverExpenseInAppNotification({
+        reminderEnabled,
+        reminderTiming: meta?.reminderTiming,
+        remainingDays: status.remainingDays,
+        tone: status.tone,
+      })
+    ) {
+      continue;
+    }
+
     let message = "";
     if (status.tone === "overdue") message = `${expense.title} is overdue`;
     else if (status.tone === "today") message = `${expense.title} due today`;
@@ -236,7 +250,7 @@ export function buildNotifications(
     else message = `${expense.title} due in ${status.remainingDays} days`;
 
     notifications.push({
-      id: `due-${expense.id}`,
+      id: `due-${expense.id}-${status.remainingDays}`,
       expenseId: expense.id,
       title: expense.title,
       message,

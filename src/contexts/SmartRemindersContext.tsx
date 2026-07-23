@@ -353,12 +353,39 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     [setStore, cloudEnabled],
   );
 
-  const updateReminder = useCallback((id: string, patch: Partial<Omit<Reminder, "id" | "createdAt">>) => {
-    setStore((prev) => ({
-      ...prev,
-      reminders: prev.reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    }));
-  }, [setStore]);
+  const updateReminder = useCallback(
+    (id: string, patch: Partial<Omit<Reminder, "id" | "createdAt">>) => {
+      setStore((prev) => ({
+        ...prev,
+        reminders: prev.reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      }));
+
+      if (cloudEnabled && cloudLoaded) {
+        setCloudReminders((prev) => (prev ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)));
+        void (async () => {
+          try {
+            const r = await fetch(`/api/scheduled-reminders/${id}`, {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(patch),
+            });
+            const j = (await r.json()) as { ok?: boolean; reminder?: Reminder; error?: string };
+            if (!r.ok || !j.ok || !j.reminder) {
+              toast.error(j.error ?? "Could not update reminder in cloud.");
+              await refreshCloudReminders();
+              return;
+            }
+            setCloudReminders((prev) => (prev ?? []).map((x) => (x.id === id ? j.reminder! : x)));
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Could not update reminder.");
+            await refreshCloudReminders();
+          }
+        })();
+      }
+    },
+    [setStore, cloudEnabled, cloudLoaded, refreshCloudReminders],
+  );
 
   const deleteReminder = useCallback(
     async (id: string) => {

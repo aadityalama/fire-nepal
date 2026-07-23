@@ -105,39 +105,56 @@ export function draftNotificationsForDay(input: {
     const today = startOfLocalDay(input.now);
     const diff = daysBetween(today, startOfLocalDay(parseYmd(r.dueDate)));
 
-    if (diff === 0) {
-      const dedupeKey = buildDedupeKey(r.id, "payment_due", todayYmd);
-      if (!input.existingDedupeKeys.has(dedupeKey)) {
-        drafts.push({
-          id: stableNotificationId([r.id, "due", todayYmd]),
-          dedupeKey,
-          reminderId: r.id,
-          kind: "payment_due",
-          title: "Payment due today",
-          body: `${r.title} · due ${r.dueDate}${r.amountNpr != null ? ` · NPR ${r.amountNpr.toLocaleString("en-IN")}` : ""}`,
-          createdAt: input.now.toISOString(),
-        });
-      }
-    }
+    const push = (kind: InAppNotification["kind"], title: string, body: string, dayKey = todayYmd) => {
+      const dedupeKey = buildDedupeKey(r.id, kind, dayKey);
+      if (input.existingDedupeKeys.has(dedupeKey)) return;
+      drafts.push({
+        id: stableNotificationId([r.id, kind, dayKey]),
+        dedupeKey,
+        reminderId: r.id,
+        kind,
+        title,
+        body,
+        createdAt: input.now.toISOString(),
+      });
+    };
+
+    const amountSuffix = r.amountNpr != null ? ` · NPR ${r.amountNpr.toLocaleString("en-IN")}` : "";
 
     if (diff < 0) {
-      const overdueYmd = todayYmd;
-      const dedupeKey = buildDedupeKey(r.id, "overdue", overdueYmd);
-      if (!input.existingDedupeKeys.has(dedupeKey)) {
-        drafts.push({
-          id: stableNotificationId([r.id, "overdue", overdueYmd]),
-          dedupeKey,
-          reminderId: r.id,
-          kind: "overdue",
-          title: "Overdue reminder",
-          body: `${r.title} was due ${r.dueDate}. Settle or mark paid to keep your family plan on track.`,
-          createdAt: input.now.toISOString(),
-        });
-      }
+      push("overdue", "Overdue reminder", `${r.title} was due ${r.dueDate}. Settle or mark paid to keep your family plan on track.`);
+      continue;
+    }
+
+    if (diff === 0 && (r.notifyAtDueTime || Boolean(r.emailNotify) || !reminderHasExplicitSlots(r))) {
+      push("payment_due", "Payment due today", `${r.title} · due ${r.dueDate}${amountSuffix}`);
+    }
+
+    if (diff === 1 && r.notify1DayBefore) {
+      push("payment_due", "Due tomorrow", `${r.title} · due ${r.dueDate}${amountSuffix}`);
+    }
+
+    if (diff === 3 && r.notify3DaysBefore) {
+      push("payment_due", "Due in 3 days", `${r.title} · due ${r.dueDate}${amountSuffix}`);
+    }
+
+    if (diff === 7 && r.notify7DaysBefore) {
+      push("payment_due", "Due in 7 days", `${r.title} · due ${r.dueDate}${amountSuffix}`);
     }
   }
 
   return drafts;
+}
+
+function reminderHasExplicitSlots(r: Reminder): boolean {
+  return (
+    r.notify7DaysBefore ||
+    r.notify3DaysBefore ||
+    r.notify1DayBefore ||
+    r.notifyAtDueTime ||
+    r.notifyOverdue ||
+    Boolean(r.emailNotify)
+  );
 }
 
 export { anyEmailChannelOn as reminderHasEmailNotifications };

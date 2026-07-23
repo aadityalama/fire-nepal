@@ -30,10 +30,16 @@ export function isResendApiKeyConfigured(): boolean {
 export async function sendEmailViaResend(payload: ResendEmailPayload): Promise<ResendSendResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
+    console.error("[resend] RESEND_API_KEY is not configured");
     return { ok: false, status: 0, message: "RESEND_API_KEY is not configured" };
   }
 
   try {
+    console.info("[resend] sending email", {
+      to: payload.to,
+      subject: payload.subject,
+      from: payload.from,
+    });
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -51,20 +57,24 @@ export async function sendEmailViaResend(payload: ResendEmailPayload): Promise<R
       } catch {
         /* ignore */
       }
+      console.info("[resend] email accepted", { id: id ?? null, status: response.status });
       return { ok: true, status: response.status, message: "Email sent", id };
     }
 
     const details = (await response.text()).slice(0, 500);
+    console.error("[resend] provider rejected email", { status: response.status, details });
     return {
       ok: false,
       status: response.status,
       message: details || "Email provider rejected the request",
     };
   } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown Resend network error";
+    console.error("[resend] network error", message);
     return {
       ok: false,
       status: 0,
-      message: e instanceof Error ? e.message : "Unknown Resend network error",
+      message,
     };
   }
 }

@@ -15,6 +15,8 @@ export type ExpenseWorkspaceMeta = {
   reminderEnabled?: boolean;
   reminderTiming?: ExpenseReminderTiming;
   reminderEmail?: boolean;
+  /** Cloud `scheduled_reminders.id` when email delivery is wired via cron/Resend. */
+  scheduledReminderId?: string;
   paidAt?: string;
   cancelled?: boolean;
   paymentHistory?: Array<{ date: string; amount: number }>;

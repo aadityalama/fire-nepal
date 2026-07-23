@@ -19,8 +19,9 @@ export type ScheduledReminderShape = ScheduleFlags & {
   repeatFrequency: RepeatFrequency;
 };
 
-function normalizeDueTime(dueTime: string): string {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(dueTime.trim());
+/** Normalize wall-clock times from UI (`HH:mm`) or PostgREST (`HH:mm:ss` / `HH:mm:ss.sss`). */
+export function normalizeDueTime(dueTime: string): string {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(dueTime.trim());
   if (!m) return "09:00";
   const hh = Math.min(23, Math.max(0, Number.parseInt(m[1], 10)));
   const mm = Math.min(59, Math.max(0, Number.parseInt(m[2], 10)));

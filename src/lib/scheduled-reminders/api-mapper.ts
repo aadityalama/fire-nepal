@@ -1,6 +1,7 @@
 import type { Reminder, ReminderType, RepeatFrequency } from "@/lib/smart-reminders/types";
 import { REMINDER_TYPES, REPEAT_FREQUENCIES } from "@/lib/smart-reminders/types";
 import type { Database } from "@/types/supabase-database";
+import { normalizeDueTime } from "@/lib/scheduled-reminders/schedule-logic";
 
 export type ScheduledReminderUpdate = Database["public"]["Tables"]["scheduled_reminders"]["Update"];
 
@@ -49,8 +50,8 @@ export function dbRowToReminder(row: ScheduledReminderDbRow): Reminder {
     reminderType: asReminderType(row.reminder_type),
     amountNpr: amountNpr != null && Number.isFinite(amountNpr) ? Math.max(0, amountNpr) : null,
     dueDate: row.due_date,
-    dueTime: row.due_time,
-    timezone: row.timezone,
+    dueTime: normalizeDueTime(row.due_time),
+    timezone: row.timezone?.trim() || "Asia/Kathmandu",
     email: row.email,
     repeatFrequency: asRepeatFrequency(row.repeat_frequency),
     notify7DaysBefore: row.notify_7d,
@@ -88,8 +89,8 @@ export function reminderToInsert(userId: string, body: CreateScheduledReminderBo
     title: body.title.trim(),
     amount: body.amountNpr == null ? null : body.amountNpr,
     due_date: body.dueDate,
-    due_time: body.dueTime,
-    timezone: body.timezone,
+    due_time: normalizeDueTime(body.dueTime),
+    timezone: body.timezone?.trim() || "Asia/Kathmandu",
     email: body.email.trim().toLowerCase(),
     repeat_frequency: body.repeatFrequency,
     notify_7d: body.notify7DaysBefore,
@@ -109,8 +110,8 @@ export function reminderPatchToUpdate(patch: Partial<CreateScheduledReminderBody
   if (patch.title != null) out.title = patch.title.trim();
   if (patch.amountNpr !== undefined) out.amount = patch.amountNpr;
   if (patch.dueDate != null) out.due_date = patch.dueDate;
-  if (patch.dueTime != null) out.due_time = patch.dueTime;
-  if (patch.timezone != null) out.timezone = patch.timezone;
+  if (patch.dueTime != null) out.due_time = normalizeDueTime(patch.dueTime);
+  if (patch.timezone != null) out.timezone = patch.timezone.trim() || "Asia/Kathmandu";
   if (patch.email != null) out.email = patch.email.trim().toLowerCase();
   if (patch.repeatFrequency != null) out.repeat_frequency = patch.repeatFrequency;
   if (patch.notify7DaysBefore !== undefined) out.notify_7d = patch.notify7DaysBefore;

@@ -65,6 +65,7 @@ import { SettlementCelebration } from "@/components/SettlementCelebration";
 import { SettlementShareModal } from "@/components/SettlementShareModal";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
+import { syncExpenseReminderToCloud } from "@/lib/expense-workspace/expense-reminder-sync";
 import {
   formatExpenseAmountForInput,
   krwToNpr,
@@ -1836,22 +1837,40 @@ export function ExpenseDashboard({
     });
   }, []);
 
-  const markExpensePaid = useCallback((expenseId: number, paidAt: string) => {
+  const markExpensePaid = useCallback(async (expenseId: number, paidAt: string) => {
     const current = loadExpenseWorkspaceUiState();
     const existing = current.meta[expenseId] ?? {};
+    const expense = expenses.find((e) => e.id === expenseId);
+    const nextMeta: ExpenseWorkspaceMeta = {
+      ...existing,
+      paidAt,
+      paymentHistory: [...(existing.paymentHistory ?? []), { date: paidAt, amount: expense?.amount ?? 0 }],
+    };
+
+    if (existing.scheduledReminderId || (existing.reminderEnabled && existing.reminderEmail)) {
+      const sync = await syncExpenseReminderToCloud({
+        expenseId,
+        title: expense?.title ?? "Expense",
+        amountNpr: expense?.amount ?? 0,
+        category: expense?.category ?? "Other",
+        dueDate: existing.dueDate ?? expense?.date ?? paidAt.slice(0, 10),
+        email: user?.email,
+        meta: nextMeta,
+      });
+      if (sync.ok && sync.action === "skipped") {
+        nextMeta.scheduledReminderId = undefined;
+      }
+    }
+
     saveExpenseWorkspaceUiState({
       ...current,
       meta: {
         ...current.meta,
-        [expenseId]: {
-          ...existing,
-          paidAt,
-          paymentHistory: [...(existing.paymentHistory ?? []), { date: paidAt, amount: expenses.find((e) => e.id === expenseId)?.amount ?? 0 }],
-        },
+        [expenseId]: nextMeta,
       },
     });
     toast.success("Expense marked as paid");
-  }, [expenses]);
+  }, [expenses, user?.email]);
 
   const duplicateExpense = useCallback((expense: Expense) => {
     const copy: Expense = {
@@ -1864,9 +1883,11 @@ export function ExpenseDashboard({
     const current = loadExpenseWorkspaceUiState();
     const sourceMeta = current.meta[expense.id];
     if (sourceMeta) {
+      const { scheduledReminderId: _drop, ...rest } = sourceMeta;
+      void _drop;
       saveExpenseWorkspaceUiState({
         ...current,
-        meta: { ...current.meta, [copy.id]: { ...sourceMeta, paidAt: undefined } },
+        meta: { ...current.meta, [copy.id]: { ...rest, paidAt: undefined, scheduledReminderId: undefined } },
       });
     }
     toast.success("Expense duplicated");
@@ -1925,7 +1946,8 @@ export function ExpenseDashboard({
         throw error;
       }
       setExpenses((current) => [nextExpense, ...current]);
-      saveWorkspaceMeta(nextExpense.id, {
+
+      const baseMeta: ExpenseWorkspaceMeta = {
         dueDate: payload.dueDate,
         account: payload.account,
         paymentMethod: payload.paymentMethod,
@@ -1936,6 +1958,38 @@ export function ExpenseDashboard({
         reminderHistory: payload.reminderEnabled
           ? [{ date: new Date().toISOString().slice(0, 10), type: `Scheduled: ${payload.reminderTiming}` }]
           : [],
+      };
+
+      let scheduledReminderId: string | undefined;
+      if (payload.reminderEnabled && payload.reminderEmail) {
+        const sync = await syncExpenseReminderToCloud({
+          expenseId: nextExpense.id,
+          title: payload.title,
+          amountNpr: payload.amountNpr,
+          category: payload.category,
+          dueDate: payload.dueDate,
+          email: user?.email,
+          meta: baseMeta,
+        });
+        if (sync.ok && sync.reminderId) {
+          scheduledReminderId = sync.reminderId;
+          baseMeta.reminderHistory = [
+            ...(baseMeta.reminderHistory ?? []),
+            {
+              date: new Date().toISOString().slice(0, 10),
+              type: sync.action === "created" ? "Email delivery queued (Resend cron)" : "Email delivery updated",
+            },
+          ];
+        } else if (!sync.ok) {
+          toast.message("Expense saved — email reminder pending", {
+            description: sync.error,
+          });
+        }
+      }
+
+      saveWorkspaceMeta(nextExpense.id, {
+        ...baseMeta,
+        scheduledReminderId,
       });
       appendActivity({
         type: "expense_added",
@@ -1948,7 +2002,7 @@ export function ExpenseDashboard({
       });
       toast.success("Expense saved");
     },
-    [members, profiles, saveWorkspaceMeta, recordTransaction],
+    [members, profiles, saveWorkspaceMeta, recordTransaction, user?.email],
   );
 
   if (personalMode && hydrated) {
