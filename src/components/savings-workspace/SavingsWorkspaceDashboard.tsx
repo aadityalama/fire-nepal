@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { EmeraldGlassVaultIllustration } from "@/components/savings-workspace/EmeraldGlassVaultIllustration";
 import { SavingsGoalCard } from "@/components/savings-workspace/SavingsGoalCard";
 import { SavingsGoalSheet } from "@/components/savings-workspace/SavingsGoalSheet";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
@@ -350,8 +351,8 @@ export function SavingsWorkspaceDashboard() {
             </div>
             <div className="relative mx-auto grid h-36 w-36 place-items-center sm:mx-0">
               <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-300/25 to-lime-300/10 blur-xl" />
-              <div className="relative grid h-full w-full place-items-center rounded-[2rem] border border-white/10 bg-white/[0.06] text-5xl shadow-inner">
-                🐷
+              <div className="relative grid h-full w-full place-items-center rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-inner">
+                <EmeraldGlassVaultIllustration />
               </div>
             </div>
           </div>
