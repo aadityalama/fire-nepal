@@ -89,6 +89,8 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const hideTotalsStrip =
     pathname === "/portfolio" || pathname === "/portfolio/gold" || pathname.startsWith("/portfolio/gold/");
+  const hideGlobalAddFab =
+    pathname === "/portfolio/investments" || pathname.startsWith("/portfolio/investments/");
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const muted = light ? "text-slate-800" : "text-gray-100";
@@ -121,7 +123,7 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
     >
       {hideTotalsStrip ? null : <PortfolioTotalsStrip />}
       {children}
-      <PortfolioAddAssetFab />
+      {hideGlobalAddFab ? null : <PortfolioAddAssetFab />}
     </WealthDashboardShell>
   );
 }
