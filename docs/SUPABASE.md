@@ -121,7 +121,7 @@ After migrations, insert the auth user’s UUID into **`public.admin_users`** (S
 2. Set **`CRON_SECRET`** in Vercel (recommended). Vercel will send `Authorization: Bearer <CRON_SECRET>` on cron invocations when this variable is set. Cron is declared in **`vercel.json`** (`/api/cron/scheduled-reminders`) with a **once-per-day** schedule so **Hobby** deploys succeed. The handler reconciles a multi-day lookback window each run (see `firesDueCatchUp` in `src/lib/scheduled-reminders/schedule-logic.ts`). On **Pro** and above you may switch `vercel.json` to a per-minute expression for tighter timing; keep the lookback behavior in mind if you do.
 3. Configure **`RESEND_API_KEY`** and **`RESEND_FROM_EMAIL`** (or `EMAIL_FROM`) so transactional emails can send.
 
-**GitHub Actions (optional backup ping):** add repo secrets **`CRON_TARGET_URL`** (full `https://…/api/cron/scheduled-reminders`) and **`CRON_SECRET`**, then enable the workflow in `.github/workflows/scheduled-reminders-cron.yml` (runs **once per day** UTC, offset from the Vercel job).
+**GitHub Actions (optional backup ping):** add repo secrets **`CRON_TARGET_URL`** (prefer the final host: `https://www.firenepal.com/api/cron/scheduled-reminders` — apex `firenepal.com` 307-redirects to `www` and would drop `Authorization`) and **`CRON_SECRET`** (exact same value as Vercel `CRON_SECRET`, no quotes / `Bearer` prefix / trailing newline), then enable the workflow in `.github/workflows/scheduled-reminders-cron.yml` (runs **once per day** UTC, offset from the Vercel job).
 
 ## Auth URLs in code
 
