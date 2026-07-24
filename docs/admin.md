@@ -46,7 +46,7 @@ npm run admin:grant -- --email you@example.com
 ## Smart reminders cron (`system_health`)
 
 - **Vercel** — `vercel.json` registers `GET /api/cron/scheduled-reminders` (see `crons[].schedule`). The handler writes `public.system_health` row `scheduled_reminders_cron` (`last_run_at`, `last_status`, `metadata`) so **Admin → System health → Last cron** stays accurate.
-- **`CRON_SECRET`** — Optional in dev; in production, set a random secret on Vercel. Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations; the route returns `401` if the header does not match.
+- **`CRON_SECRET`** — Optional in dev; in production, set a random secret on Vercel. Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations; the route returns `401` if the header does not match. The GitHub Actions backup workflow uses the same value: repo secret **`CRON_SECRET`** must match Vercel **exactly** (no quotes, no `Bearer` prefix, no trailing newline). Prefer **`CRON_TARGET_URL=https://www.firenepal.com/api/cron/scheduled-reminders`** (apex redirects to `www` and drops `Authorization`).
 - **Plan limits** — `vercel.json` uses a **once-per-day** schedule (Vercel **Hobby**). Each run processes a rolling lookback window so emails are not limited to that UTC minute. For per-minute scheduling, use **Pro** (or an external scheduler) and tighten `vercel.json` if desired.
 - **Database** — If “Last cron” shows an error or empty metrics, confirm migrations ran (including `system_health` seed / `20260608120000_system_health_cron_row.sql`) and that **`SUPABASE_SERVICE_ROLE_KEY`** is set on Vercel (the cron cannot log health or send without it).
 
