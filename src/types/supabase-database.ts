@@ -1818,6 +1818,18 @@ export type Database = {
         Args: { month_ym: string };
         Returns: string;
       };
+      get_public_member_verification: {
+        Args: { p_fire_nepal_id: string };
+        Returns: Json;
+      };
+      search_fire_nepal_members: {
+        Args: {
+          p_query: string;
+          p_exclude_user_id?: string | null;
+          p_limit?: number;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
   };
