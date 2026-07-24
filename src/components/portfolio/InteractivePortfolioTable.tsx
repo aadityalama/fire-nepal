@@ -561,7 +561,7 @@ export function InteractivePortfolioTable({
   );
 }
 
-function AssetEditorModal({
+export function AssetEditorModal({
   row,
   usdPerNpr,
   onClose,
@@ -774,7 +774,7 @@ function AssetEditorModal({
   );
 }
 
-function ConfirmDeleteModal({
+export function ConfirmDeleteModal({
   name,
   onCancel,
   onConfirm,
