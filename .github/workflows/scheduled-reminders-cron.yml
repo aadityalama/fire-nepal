@@ -1,8 +1,13 @@
 # FIRE Nepal — optional daily ping to production smart-reminder email cron (same cadence as Hobby `vercel.json`).
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
-#   CRON_TARGET_URL  — full URL, e.g. https://firenepal.com/api/cron/scheduled-reminders
-#   CRON_SECRET      — same value as Vercel env CRON_SECRET (Bearer token)
+#   CRON_TARGET_URL  — full URL to the final host (prefer www), e.g.
+#                      https://www.firenepal.com/api/cron/scheduled-reminders
+#                      Apex https://firenepal.com/… 307-redirects to www; this workflow
+#                      canonicalizes that so Authorization is not dropped on redirect.
+#   CRON_SECRET      — exact same value as Vercel env CRON_SECRET (no quotes, no Bearer prefix,
+#                      no leading/trailing whitespace or newlines). API checks:
+#                      Authorization: Bearer <CRON_SECRET>
 #
 # Optional: restrict which branches can run schedules (default branch only for schedule events).
 
@@ -29,18 +34,81 @@ jobs:
           TOKEN: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+
           if [ -z "${URL:-}" ] || [ -z "${TOKEN:-}" ]; then
             echo "Missing CRON_TARGET_URL or CRON_SECRET in repository secrets."
             exit 1
           fi
+
+          # Strip CR/LF and surrounding whitespace (common when pasting into GitHub Secrets).
+          URL="$(printf '%s' "$URL" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          TOKEN="$(printf '%s' "$TOKEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+          # Strip accidental wrapping quotes from .env-style pastes.
+          if [[ "$TOKEN" == \"*\" && "$TOKEN" == *\" ]]; then
+            TOKEN="${TOKEN:1:${#TOKEN}-2}"
+          fi
+          if [[ "$TOKEN" == \'*\' && "$TOKEN" == *\' ]]; then
+            TOKEN="${TOKEN:1:${#TOKEN}-2}"
+          fi
+          if [[ "$URL" == \"*\" && "$URL" == *\" ]]; then
+            URL="${URL:1:${#URL}-2}"
+          fi
+
+          # If the secret was stored as "Bearer …", avoid "Bearer Bearer …".
+          if [[ "$TOKEN" =~ ^[Bb]earer[[:space:]]+(.+)$ ]]; then
+            TOKEN="${BASH_REMATCH[1]}"
+            TOKEN="$(printf '%s' "$TOKEN" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          fi
+
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "CRON_TARGET_URL or CRON_SECRET is empty after trimming whitespace/newlines."
+            exit 1
+          fi
+
+          # Canonicalize apex → www so Authorization is sent to the host that serves the API.
+          # curl does not re-attach Authorization across cross-host redirects by default.
+          case "$URL" in
+            https://firenepal.com|https://firenepal.com/*)
+              URL="https://www.firenepal.com${URL#https://firenepal.com}"
+              echo "Canonicalized CRON_TARGET_URL host to www.firenepal.com"
+              ;;
+            http://firenepal.com|http://firenepal.com/*)
+              URL="https://www.firenepal.com${URL#http://firenepal.com}"
+              echo "Canonicalized CRON_TARGET_URL host to www.firenepal.com (https)"
+              ;;
+          esac
+
+          # Safe diagnostics (never print the secret).
+          echo "Target URL host: $(printf '%s' "$URL" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://([^/]+).*#\1#')"
+          echo "Target URL path: $(printf '%s' "$URL" | sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://[^/]+##')"
+          echo "CRON_SECRET length (chars): ${#TOKEN}"
+
+          # --oauth2-bearer sends exactly: Authorization: Bearer <token>
+          # (matches app/api/cron/scheduled-reminders route expectation).
           code="$(curl -sS -o /tmp/cron_body.txt -w "%{http_code}" \
+            --connect-timeout 15 \
+            --max-time 90 \
             -X GET \
-            -H "Authorization: Bearer ${TOKEN}" \
+            --oauth2-bearer "$TOKEN" \
             -H "Accept: application/json" \
-            "${URL}")"
+            "$URL")"
+
           echo "HTTP ${code}"
           head -c 2000 /tmp/cron_body.txt || true
           echo
+
+          if [ "$code" = "401" ]; then
+            echo "::error::Unauthorized — GitHub secret CRON_SECRET must match Vercel env CRON_SECRET exactly (same bytes after trim). Header format is Authorization: Bearer <secret>. Prefer CRON_TARGET_URL=https://www.firenepal.com/api/cron/scheduled-reminders"
+            exit 1
+          fi
+
           if [ "$code" != "200" ]; then
+            echo "::error::Expected HTTP 200 from scheduled-reminders cron, got HTTP ${code}"
+            exit 1
+          fi
+
+          if ! grep -q '"ok":true' /tmp/cron_body.txt; then
+            echo "::error::HTTP 200 but response body was not ok:true"
             exit 1
           fi
