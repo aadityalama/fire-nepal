@@ -349,9 +349,9 @@ export function SavingsWorkspaceDashboard() {
                 {formatPct(summary.growthPct)} growth
               </div>
             </div>
-            <div className="relative mx-auto grid h-36 w-36 place-items-center sm:mx-0">
-              <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-300/25 to-lime-300/10 blur-xl" />
-              <div className="relative grid h-full w-full place-items-center rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-inner">
+            <div className="relative mx-auto h-36 w-36 shrink-0 overflow-hidden rounded-[2rem] sm:mx-0">
+              <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-br from-emerald-300/25 to-lime-300/10 blur-xl" aria-hidden />
+              <div className="relative h-full w-full overflow-hidden rounded-[2rem]">
                 <EmeraldGlassVaultIllustration />
               </div>
             </div>
