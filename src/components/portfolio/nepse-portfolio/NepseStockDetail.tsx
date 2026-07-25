@@ -1,18 +1,29 @@
 "use client";
 
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { InvestmentRow, PortfolioLedgerEntry } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
 import {
+  buildNepsePerformanceSeries,
   CORPORATE_TX_TYPES,
   formatSignedPct,
   investmentLedgerEntries,
   isIpoOrFpo,
+  NEPSE_CHART_RANGES,
   TRADE_TX_TYPES,
+  type NepseChartRange,
   type NepseHoldingRow,
+  type NepsePortfolioSummary,
 } from "./nepse-portfolio-metrics";
-import { DetailMetric, NepseSymbolLogo } from "./NepsePortfolioUi";
+import {
+  DetailMetric,
+  NEPSE_GLASS,
+  NepseEmptyState,
+  NepsePerformanceChart,
+  NepseSectionTitle,
+  NepseSymbolLogo,
+} from "./NepsePortfolioUi";
 
 function txLabel(e: PortfolioLedgerEntry): string {
   if (isIpoOrFpo(e)) return e.notes?.toLowerCase().includes("fpo") ? "FPO" : "IPO";
@@ -33,27 +44,39 @@ function txLabel(e: PortfolioLedgerEntry): string {
   }
 }
 
+function units(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+}
+
 function LedgerList({ entries, empty }: { entries: PortfolioLedgerEntry[]; empty: string }) {
   if (entries.length === 0) {
-    return <p className="rounded-xl border border-dashed border-emerald-400/15 px-3 py-6 text-center text-xs font-bold text-emerald-200/45">{empty}</p>;
+    return (
+      <p className="rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.02] px-4 py-7 text-center text-xs font-bold text-emerald-100/35">
+        {empty}
+      </p>
+    );
   }
   return (
-    <ul className="divide-y divide-emerald-400/10 overflow-hidden rounded-2xl border border-emerald-400/12 bg-black/25">
+    <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.06] overflow-hidden`}>
       {entries.map((e) => (
-        <li key={e.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+        <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-xs font-black text-emerald-50">{txLabel(e)}</p>
-            <p className="mt-0.5 text-[11px] font-semibold text-emerald-100/45">
+            <p className="text-xs font-black tracking-tight text-emerald-50">{txLabel(e)}</p>
+            <p className="mt-0.5 truncate text-[11px] font-semibold text-emerald-100/40">
               {e.tradeDate}
               {e.notes ? ` · ${e.notes}` : ""}
             </p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-xs font-black tabular-nums text-white">
-              {e.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} @ {e.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+              {units(e.quantity)} @ {e.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
             </p>
             {typeof e.realizedGainNpr === "number" && Number.isFinite(e.realizedGainNpr) ? (
-              <p className={`mt-0.5 text-[11px] font-bold tabular-nums ${e.realizedGainNpr >= 0 ? "text-lime-300" : "text-rose-300"}`}>
+              <p
+                className={`mt-0.5 text-[11px] font-bold tabular-nums ${
+                  e.realizedGainNpr >= 0 ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
                 {formatMoney(e.realizedGainNpr, "NPR")}
               </p>
             ) : null}
@@ -61,6 +84,15 @@ function LedgerList({ entries, empty }: { entries: PortfolioLedgerEntry[]; empty
         </li>
       ))}
     </ul>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <NepseSectionTitle>{title}</NepseSectionTitle>
+      {children}
+    </section>
   );
 }
 
@@ -75,73 +107,145 @@ export function NepseStockDetail({
   onBack: () => void;
   onRemove: (id: string) => void;
 }) {
-  const entries = useMemo(() => investmentLedgerEntries(ledger, holding.row.id), [ledger, holding.row.id]);
-  const buys = entries.filter((e) => e.txType === "buy" || (e.txType === "right_share" && !isIpoOrFpo(e)));
+  const [range, setRange] = useState<NepseChartRange>("1M");
+  const entries = useMemo(
+    () => investmentLedgerEntries(ledger, holding.row.id),
+    [ledger, holding.row.id],
+  );
+
+  const buys = entries.filter((e) => e.txType === "buy" && !isIpoOrFpo(e));
   const sells = entries.filter((e) => e.txType === "sell");
   const dividends = entries.filter((e) => e.txType === "cash_dividend");
   const bonuses = entries.filter((e) => e.txType === "bonus_share");
   const rights = entries.filter((e) => e.txType === "right_share");
-  const ipoFpo = entries.filter(isIpoOrFpo);
-  const receivable = holding.dividendNpr; // cash dividends booked as receivable-style income
+  const ipo = entries.filter((e) => isIpoOrFpo(e) && !(e.notes ?? "").toLowerCase().includes("fpo"));
+  const fpo = entries.filter((e) => isIpoOrFpo(e) && (e.notes ?? "").toLowerCase().includes("fpo"));
+  const corporate = entries.filter((e) => CORPORATE_TX_TYPES.has(e.txType) || isIpoOrFpo(e));
+  const totalPnl = holding.pnlNpr + holding.realizedGainNpr;
+  const dayPos = (holding.dayChangePct ?? 0) >= 0;
+  const series = buildNepsePerformanceSeries(holding.liveNpr, range);
 
   return (
-    <div className="space-y-4 pb-8">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-5 pb-10">
+      <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-300"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-white/[0.09] bg-white/[0.045] px-3.5 text-xs font-black text-emerald-200 backdrop-blur-xl transition hover:bg-white/[0.09] hover:text-white"
         >
-          <ArrowLeft size={14} /> Back
+          <ArrowLeft size={15} strokeWidth={2.5} /> Back
         </button>
         <button
           type="button"
           onClick={() => {
             if (window.confirm(`Remove ${holding.symbol} from portfolio?`)) onRemove(holding.row.id);
           }}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-200"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-3.5 text-xs font-black text-rose-200 transition hover:bg-rose-500/20"
         >
-          <Trash2 size={14} /> Remove
+          <Trash2 size={15} strokeWidth={2.25} /> Remove
         </button>
       </div>
 
-      <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/15 bg-black/30 p-4">
-        <NepseSymbolLogo symbol={holding.symbol} />
-        <div className="min-w-0">
-          <p className="text-xl font-black text-white">{holding.symbol}</p>
-          <p className="truncate text-sm font-semibold text-emerald-100/55">{holding.companyName}</p>
+      <section className="relative overflow-hidden rounded-[1.5rem] border border-emerald-300/20 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.24),transparent_58%),linear-gradient(155deg,#03251d_0%,#071b17_48%,#020617_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.9)] sm:p-6">
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/45 to-transparent" />
+        <div className="flex items-center gap-4">
+          <NepseSymbolLogo symbol={holding.symbol} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xl font-black tracking-tight text-white sm:text-2xl">
+              {holding.symbol}
+            </p>
+            <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/45 sm:text-sm">
+              {holding.companyName}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-base font-black tabular-nums text-white sm:text-lg">
+              {formatMoney(holding.liveNpr, "NPR")}
+            </p>
+            <p
+              className={`mt-0.5 text-xs font-bold tabular-nums ${dayPos ? "text-emerald-300" : "text-rose-300"}`}
+            >
+              {formatSignedPct(holding.dayChangePct)} today
+            </p>
+          </div>
         </div>
-        <div className="ml-auto shrink-0 text-right">
-          <p className="text-sm font-black tabular-nums text-white">{formatMoney(holding.liveNpr, "NPR")}</p>
-          <p className={`text-xs font-bold tabular-nums ${(holding.dayChangePct ?? 0) >= 0 ? "text-lime-300" : "text-rose-300"}`}>
-            {formatSignedPct(holding.dayChangePct)} today
-          </p>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <DetailMetric label="WACC" value={formatMoney(holding.waccNpr, "NPR")} />
-        <DetailMetric label="Current units" value={holding.currentUnits.toLocaleString("en-US", { maximumFractionDigits: 4 })} />
-        <DetailMetric label="Sold units" value={holding.soldUnits.toLocaleString("en-US", { maximumFractionDigits: 4 })} />
-        <DetailMetric label="Sold value" value={formatMoney(holding.soldValueNpr, "NPR")} />
-        <DetailMetric
-          label="Unreal gain"
-          value={formatMoney(holding.pnlNpr, "NPR")}
-          tone={holding.pnlNpr >= 0 ? "pos" : "neg"}
-        />
-        <DetailMetric
-          label="Real gain"
-          value={formatMoney(holding.realizedGainNpr, "NPR")}
-          tone={holding.realizedGainNpr >= 0 ? "pos" : "neg"}
-        />
-        <DetailMetric label="Receivable amount" value={formatMoney(receivable, "NPR")} />
-        <DetailMetric label="Investment cost" value={formatMoney(holding.costNpr, "NPR")} />
-        <DetailMetric
-          label="Total P/L"
-          value={formatMoney(holding.pnlNpr + holding.realizedGainNpr, "NPR")}
-          tone={holding.pnlNpr + holding.realizedGainNpr >= 0 ? "pos" : "neg"}
-        />
-      </div>
+        <div className="mt-5 h-32 w-full sm:h-40">
+          <NepsePerformanceChart data={series} positive={holding.pnlNpr >= 0} />
+        </div>
+        <div
+          className="mt-3 flex gap-1 rounded-2xl border border-white/[0.08] bg-black/30 p-1"
+          role="group"
+          aria-label="Performance range"
+        >
+          {NEPSE_CHART_RANGES.map((r) => {
+            const on = r === range;
+            return (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setRange(r)}
+                className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-black tracking-wide transition-all duration-300 ${
+                  on
+                    ? "bg-emerald-400/95 text-slate-950 shadow-[0_6px_18px_-6px_rgba(16,185,129,0.8)]"
+                    : "text-emerald-100/50 hover:bg-white/[0.06] hover:text-emerald-50"
+                }`}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <Section title="Position">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <DetailMetric label="Units" value={units(holding.currentUnits)} />
+          <DetailMetric label="Average cost" value={formatMoney(holding.avgCostNpr, "NPR")} />
+          <DetailMetric label="WACC" value={formatMoney(holding.waccNpr, "NPR")} />
+          <DetailMetric label="Current value" value={formatMoney(holding.liveNpr, "NPR")} />
+          <DetailMetric label="Investment cost" value={formatMoney(holding.costNpr, "NPR")} />
+          <DetailMetric
+            label="Profit/loss"
+            value={formatMoney(totalPnl, "NPR")}
+            tone={totalPnl >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric
+            label="Unrealized gain"
+            value={formatMoney(holding.pnlNpr, "NPR")}
+            tone={holding.pnlNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric
+            label="Realized gain"
+            value={formatMoney(holding.realizedGainNpr, "NPR")}
+            tone={holding.realizedGainNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric label="Receivable" value={formatMoney(holding.dividendNpr, "NPR")} />
+          <DetailMetric label="Sold units" value={units(holding.soldUnits)} />
+          <DetailMetric label="Sold value" value={formatMoney(holding.soldValueNpr, "NPR")} />
+          <DetailMetric label="Dividend" value={formatMoney(holding.dividendNpr, "NPR")} />
+        </div>
+      </Section>
+
+      <Section title="Analytics">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <DetailMetric
+            label="Return on cost"
+            value={formatSignedPct(holding.costNpr > 0 ? (holding.pnlNpr / holding.costNpr) * 100 : null, 1)}
+            tone={holding.pnlNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric label="Today's change" value={formatSignedPct(holding.dayChangePct)} tone={dayPos ? "pos" : "neg"} />
+          <DetailMetric
+            label="Today's gain"
+            value={holding.dayChangeNpr == null ? "—" : formatMoney(holding.dayChangeNpr, "NPR")}
+            tone={(holding.dayChangeNpr ?? 0) >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric label="Category" value={holding.row.kind.replaceAll("_", " ")} />
+          <DetailMetric label="Currency" value={holding.row.currency} />
+          <DetailMetric label="Since" value={holding.row.purchaseDate?.trim() || "—"} />
+        </div>
+      </Section>
 
       <Section title="Buy history">
         <LedgerList entries={buys} empty="No buy history" />
@@ -149,33 +253,65 @@ export function NepseStockDetail({
       <Section title="Sell history">
         <LedgerList entries={sells} empty="No sell history" />
       </Section>
-      <Section title="Dividend">
+      <Section title="Dividend history">
         <LedgerList entries={dividends} empty="No dividends recorded" />
       </Section>
-      <Section title="Bonus">
+      <Section title="Bonus shares">
         <LedgerList entries={bonuses} empty="No bonus shares" />
       </Section>
       <Section title="Rights">
         <LedgerList entries={rights} empty="No rights issues" />
       </Section>
-      <Section title="IPO / FPO">
-        <LedgerList entries={ipoFpo} empty="No IPO/FPO entries" />
+      <Section title="IPO">
+        <LedgerList entries={ipo} empty="No IPO entries" />
+      </Section>
+      <Section title="FPO">
+        <LedgerList entries={fpo} empty="No FPO entries" />
       </Section>
       <Section title="Auction">
-        <p className="rounded-xl border border-dashed border-emerald-400/15 px-3 py-6 text-center text-xs font-bold text-emerald-200/45">
-          Auction lots are not tracked separately yet. Record them as buys when available.
+        <p className="rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.02] px-4 py-7 text-center text-xs font-bold text-emerald-100/35">
+          Auction lots are not tracked separately yet — record them as buys when allotted.
         </p>
+      </Section>
+      <Section title="Corporate actions">
+        <LedgerList entries={corporate} empty="No corporate actions yet" />
       </Section>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function LedgerFeed({
+  entries,
+  holdingsById,
+  showAmount,
+}: {
+  entries: PortfolioLedgerEntry[];
+  holdingsById: Map<string, NepseHoldingRow>;
+  showAmount?: boolean;
+}) {
   return (
-    <section>
-      <h3 className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/45">{title}</h3>
-      {children}
-    </section>
+    <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.06] overflow-hidden`}>
+      {entries.map((e) => {
+        const h = holdingsById.get(e.rowId);
+        const label = h?.symbol ?? e.assetLabel;
+        return (
+          <li key={e.id} className="flex items-center gap-3.5 px-4 py-3.5 sm:px-5">
+            <NepseSymbolLogo symbol={label.slice(0, 6)} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black tracking-tight text-white">
+                {txLabel(e)} · {label}
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-emerald-100/40">{e.tradeDate}</p>
+            </div>
+            <p className="shrink-0 text-right text-xs font-black tabular-nums text-emerald-50">
+              {showAmount
+                ? `${units(e.quantity)} × ${e.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                : units(e.quantity)}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -187,41 +323,15 @@ export function NepseTransactionsPanel({
   holdingsById: Map<string, NepseHoldingRow>;
 }) {
   const entries = useMemo(
-    () =>
-      investmentLedgerEntries(ledger).filter(
-        (e) => TRADE_TX_TYPES.has(e.txType) || isIpoOrFpo(e),
-      ),
+    () => investmentLedgerEntries(ledger).filter((e) => TRADE_TX_TYPES.has(e.txType) || isIpoOrFpo(e)),
     [ledger],
   );
 
   if (entries.length === 0) {
-    return <EmptyTab text="No buy or sell transactions yet." />;
+    return <NepseEmptyState text="No buy or sell transactions yet." />;
   }
 
-  return (
-    <ul className="divide-y divide-emerald-400/10 overflow-hidden rounded-2xl border border-emerald-400/15 bg-black/30">
-      {entries.map((e) => {
-        const h = holdingsById.get(e.rowId);
-        const label = h?.symbol ?? e.assetLabel;
-        return (
-          <li key={e.id} className="flex items-center gap-3 px-3 py-3 sm:px-4">
-            <NepseSymbolLogo symbol={(h?.symbol ?? label).slice(0, 6)} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-white">
-                {txLabel(e)} · {label}
-              </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-emerald-100/45">{e.tradeDate}</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-xs font-black tabular-nums text-emerald-50">
-                {e.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} × {e.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  return <LedgerFeed entries={entries} holdingsById={holdingsById} showAmount />;
 }
 
 export function NepseCorporateActionsPanel({
@@ -233,44 +343,21 @@ export function NepseCorporateActionsPanel({
 }) {
   const entries = useMemo(
     () =>
-      investmentLedgerEntries(ledger).filter(
-        (e) => CORPORATE_TX_TYPES.has(e.txType) || isIpoOrFpo(e),
-      ),
+      investmentLedgerEntries(ledger).filter((e) => CORPORATE_TX_TYPES.has(e.txType) || isIpoOrFpo(e)),
     [ledger],
   );
 
   if (entries.length === 0) {
-    return <EmptyTab text="No dividends, bonus, rights, or IPO/FPO actions yet." />;
+    return <NepseEmptyState text="No dividends, bonus, rights, or IPO/FPO actions yet." />;
   }
 
-  return (
-    <ul className="divide-y divide-emerald-400/10 overflow-hidden rounded-2xl border border-emerald-400/15 bg-black/30">
-      {entries.map((e) => {
-        const h = holdingsById.get(e.rowId);
-        const label = h?.symbol ?? e.assetLabel;
-        return (
-          <li key={e.id} className="flex items-center gap-3 px-3 py-3 sm:px-4">
-            <NepseSymbolLogo symbol={(h?.symbol ?? label).slice(0, 6)} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-white">
-                {txLabel(e)} · {label}
-              </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-emerald-100/45">{e.tradeDate}</p>
-            </div>
-            <p className="shrink-0 text-xs font-black tabular-nums text-emerald-50">
-              {e.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })}
-            </p>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  return <LedgerFeed entries={entries} holdingsById={holdingsById} />;
 }
 
 export function NepseAnalyticsPanel({
   summary,
 }: {
-  summary: import("./nepse-portfolio-metrics").NepsePortfolioSummary;
+  summary: NepsePortfolioSummary;
   rows: InvestmentRow[];
 }) {
   const byKind = useMemo(() => {
@@ -282,88 +369,97 @@ export function NepseAnalyticsPanel({
   }, [summary.holdings]);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2.5">
-        <DetailMetric label="Portfolio value" value={formatMoney(summary.portfolioValueNpr, "NPR")} />
-        <DetailMetric label="Investment cost" value={formatMoney(summary.costNpr, "NPR")} />
-        <DetailMetric
-          label="Unreal gain"
-          value={formatMoney(summary.unrealizedGainNpr, "NPR")}
-          tone={summary.unrealizedGainNpr >= 0 ? "pos" : "neg"}
-        />
-        <DetailMetric
-          label="Real gain"
-          value={formatMoney(summary.realizedGainNpr, "NPR")}
-          tone={summary.realizedGainNpr >= 0 ? "pos" : "neg"}
-        />
-        <DetailMetric
-          label="Portfolio return"
-          value={formatSignedPct(summary.portfolioReturnPct, 1)}
-          tone={(summary.portfolioReturnPct ?? 0) >= 0 ? "pos" : "neg"}
-        />
-        <DetailMetric
-          label="Today's gain"
-          value={formatMoney(summary.todayGainNpr, "NPR")}
-          tone={summary.todayGainNpr >= 0 ? "pos" : "neg"}
-        />
-      </div>
+    <div className="space-y-5">
+      <Section title="Portfolio metrics">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <DetailMetric label="Portfolio value" value={formatMoney(summary.portfolioValueNpr, "NPR")} />
+          <DetailMetric label="Investment cost" value={formatMoney(summary.costNpr, "NPR")} />
+          <DetailMetric
+            label="Unrealized gain"
+            value={formatMoney(summary.unrealizedGainNpr, "NPR")}
+            tone={summary.unrealizedGainNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric
+            label="Realized gain"
+            value={formatMoney(summary.realizedGainNpr, "NPR")}
+            tone={summary.realizedGainNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric
+            label="Portfolio return"
+            value={formatSignedPct(summary.portfolioReturnPct, 1)}
+            tone={(summary.portfolioReturnPct ?? 0) >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric
+            label="Today's gain"
+            value={formatMoney(summary.todayGainNpr, "NPR")}
+            tone={summary.todayGainNpr >= 0 ? "pos" : "neg"}
+          />
+          <DetailMetric label="Dividend received" value={formatMoney(summary.dividendNpr, "NPR")} />
+          <DetailMetric label="Holdings" value={String(summary.holdings.length)} />
+        </div>
+      </Section>
 
-      <section>
-        <h3 className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/45">
-          Investment breakdown
-        </h3>
+      <Section title="Investment breakdown">
         {byKind.length === 0 ? (
-          <EmptyTab text="No investment breakdown yet." />
+          <NepseEmptyState text="No investment breakdown yet." />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {byKind.map(([kind, value]) => {
               const pct = summary.portfolioValueNpr > 0 ? (value / summary.portfolioValueNpr) * 100 : 0;
               return (
-                <li key={kind} className="rounded-2xl border border-emerald-400/12 bg-black/25 px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2 text-xs font-black">
-                    <span className="uppercase tracking-wide text-emerald-100/70">{kind.replaceAll("_", " ")}</span>
-                    <span className="tabular-nums text-white">{formatMoney(value, "NPR")}</span>
+                <li key={kind} className={`${NEPSE_GLASS} px-4 py-3.5`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-100/60">
+                      {kind.replaceAll("_", " ")}
+                    </span>
+                    <span className="text-sm font-black tabular-nums text-white">
+                      {formatMoney(value, "NPR")}
+                    </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
-                    <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
+                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-[width] duration-700"
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
                   </div>
-                  <p className="mt-1 text-[10px] font-bold text-emerald-100/40">{pct.toFixed(1)}% of portfolio</p>
+                  <p className="mt-1.5 text-[10px] font-bold text-emerald-100/35">
+                    {pct.toFixed(1)}% of portfolio
+                  </p>
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <h3 className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/45">Holdings analytics</h3>
-        <ul className="divide-y divide-emerald-400/10 overflow-hidden rounded-2xl border border-emerald-400/15 bg-black/30">
-          {summary.holdings.map((h) => (
-            <li key={h.row.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="text-sm font-black text-white">{h.symbol}</p>
-                <p className="text-[11px] font-semibold text-emerald-100/45">
-                  WACC {formatMoney(h.waccNpr, "NPR")} · {h.currentUnits.toLocaleString("en-US", { maximumFractionDigits: 2 })} units
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className={`text-xs font-black tabular-nums ${h.pnlNpr >= 0 ? "text-lime-300" : "text-rose-300"}`}>
-                  {formatMoney(h.pnlNpr, "NPR")}
-                </p>
-                <p className="text-[11px] font-bold text-emerald-100/40">{formatSignedPct(h.dayChangePct)}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
-  );
-}
-
-function EmptyTab({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-emerald-400/20 bg-black/20 px-4 py-12 text-center text-sm font-bold text-emerald-200/50">
-      {text}
+      <Section title="Holdings analytics">
+        {summary.holdings.length === 0 ? (
+          <NepseEmptyState text="Add a holding to see analytics." />
+        ) : (
+          <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.06] overflow-hidden`}>
+            {summary.holdings.map((h) => (
+              <li key={h.row.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-black tracking-tight text-white">{h.symbol}</p>
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-emerald-100/40">
+                    WACC {formatMoney(h.waccNpr, "NPR")} · {units(h.currentUnits)} units
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p
+                    className={`text-xs font-black tabular-nums ${h.pnlNpr >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                  >
+                    {formatMoney(h.pnlNpr, "NPR")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-bold tabular-nums text-emerald-100/35">
+                    {formatSignedPct(h.dayChangePct)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </div>
   );
 }

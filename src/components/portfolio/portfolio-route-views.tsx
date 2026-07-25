@@ -72,12 +72,7 @@ export function PortfolioInvestmentsPage() {
     useWealthPortfolio();
   const { snapshot, overlay } = useRealtimeMarket();
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-4 sm:gap-5">
-      <DashboardSectionHeader
-        accent="emerald"
-        title="NEPSE Portfolio"
-        subtitle="Overview of holdings — tap a stock for WACC, history, and corporate actions."
-      />
+    <div className="flex min-w-0 max-w-full flex-col">
       <NepsePortfolioDashboard
         rows={state.investments}
         ledger={state.ledger}
