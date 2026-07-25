@@ -499,7 +499,7 @@ export function NepseHubDashboard() {
         </div>
 
         <section className="mt-7">
-          <SectionHeading icon={Grid3X3} title="Market Services" subtitle="Every NEPSE workflow, one tap away" />
+          <SectionHeading icon={Grid3X3} title="Quick Market Services" subtitle="Every NEPSE workflow, one tap away" />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {NEPSE_SERVICE_ITEMS.map((item) => {
               const Icon = ICONS[item.icon] ?? Activity;
@@ -529,7 +529,7 @@ export function NepseHubDashboard() {
           <section className={`${card} p-4 sm:p-5`}>
             <SectionHeading
               icon={Sparkles}
-              title="Market Intelligence"
+              title="AI Market Summary"
               subtitle="Automated breadth and sector signal"
               action={
                 <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
@@ -683,7 +683,7 @@ export function NepseHubDashboard() {
           <section className={`${card} p-4 sm:p-5`}>
             <SectionHeading
               icon={WalletCards}
-              title="Portfolio Snapshot"
+              title="Portfolio Summary"
               subtitle="Your existing FIRE Nepal calculations"
               action={
                 <Link href="/portfolio/investments" className="text-[10px] font-black text-emerald-700 dark:text-emerald-400">
@@ -789,7 +789,7 @@ export function NepseHubDashboard() {
 
       <Link
         href="/fire-ai/chat?context=nepse"
-        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-50 inline-flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 px-4 text-xs font-black text-white shadow-[0_18px_50px_-18px_rgba(16,185,129,0.9)] ring-1 ring-white/20 transition hover:-translate-y-0.5"
+        className="fixed bottom-[calc(4.85rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-50 inline-flex h-14 items-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 px-4 text-xs font-black text-white shadow-[0_18px_50px_-18px_rgba(16,185,129,0.9)] ring-1 ring-white/20 transition hover:-translate-y-0.5 lg:bottom-[max(1rem,env(safe-area-inset-bottom))]"
         aria-label="Ask FIRE AI about NEPSE"
       >
         <span className="grid h-8 w-8 place-items-center rounded-full bg-white/15">
