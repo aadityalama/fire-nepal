@@ -3,6 +3,7 @@
 import { ArrowLeft, BarChart3, RefreshCw, Star } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { useNepseNews } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import { formatCompactNpr, NEPSE_SERVICE_ITEMS, type NepseServiceSlug } from "@/lib/market/nepse-hub";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
@@ -29,6 +30,13 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
   const supportedTable = ["top-gainers", "top-losers", "top-turnover", "top-volume", "live-trades", "market-depth"].includes(slug);
   const sectorPage = slug === "sector-performance" || slug === "heat-map";
   const indexPage = slug === "market-indices";
+  const newsDrivenPage = slug === "corporate-actions" || slug === "ipo-results";
+  const news = useNepseNews();
+  const newsRows = useMemo(() => {
+    if (!newsDrivenPage) return [];
+    if (slug === "ipo-results") return news.corporateActions.filter((item) => item.category === "IPO");
+    return news.corporateActions;
+  }, [newsDrivenPage, slug, news.corporateActions]);
 
   return (
     <main className="min-h-screen bg-[#f4f8f6] px-3 py-4 text-slate-950 dark:bg-[#030a08] dark:text-white sm:px-6 lg:px-8">
@@ -131,6 +139,30 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
               </table>
             </div>
             {!rows.length ? <p className="p-10 text-center text-xs font-semibold text-slate-500">Waiting for market rows from the live feed.</p> : null}
+          </div>
+        ) : newsDrivenPage && newsRows.length ? (
+          <div className="space-y-2">
+            {newsRows.map((item) => (
+              <a
+                key={item.id}
+                href={item.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-emerald-400/35 dark:border-white/10 dark:bg-white/[0.035]"
+              >
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold leading-snug">{item.headline}</p>
+                  {item.summary ? (
+                    <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{item.summary}</p>
+                  ) : null}
+                  <p className="mt-2 text-[10px] font-bold text-slate-400 dark:text-zinc-600">
+                    {item.sourceName} · {item.category}
+                    {item.publishedAt ? ` · ${new Date(item.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                  </p>
+                </div>
+              </a>
+            ))}
           </div>
         ) : (
           <div className="grid min-h-72 place-items-center rounded-[1.5rem] border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-white/10 dark:bg-white/[0.025]">

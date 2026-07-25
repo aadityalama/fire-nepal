@@ -36,6 +36,7 @@ import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
+import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import {
   countCircuitStocks,
@@ -112,6 +113,26 @@ function AnimatedCount({ value, className }: { value: number; className?: string
   const reduced = usePrefersReducedMotion();
   const display = useCountUpNumber(value, { durationMs: 800, skipAnimation: reduced });
   return <span className={className}>{Math.round(display).toLocaleString("en-IN")}</span>;
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "Recently";
+  const diffMs = Date.now() - Date.parse(iso);
+  const minutes = Math.max(1, Math.round(diffMs / 60_000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function SentimentBadge({ sentiment }: { sentiment: NepseNewsItem["sentiment"] }) {
+  const styles =
+    sentiment === "positive"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+      : sentiment === "negative"
+        ? "bg-rose-100 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"
+        : "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-zinc-400";
+  return <span className={`rounded-full px-2 py-0.5 text-[9px] font-black capitalize ${styles}`}>{sentiment}</span>;
 }
 
 function Delta({ value }: { value?: number | null }) {
@@ -342,6 +363,7 @@ export function NepseHubDashboard() {
   const { state, krwPerNpr, usdPerNpr } = useWealthPortfolio();
   const { symbols: watchSymbols, toggle: toggleWatch } = useNepseWatchlist();
   const { triggered, removeAlert } = useNepseAlerts(snapshot?.nepseBySymbol);
+  const news = useNepseNews();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const term = snapshot?.nepseTerminal;
@@ -533,6 +555,13 @@ export function NepseHubDashboard() {
                   ))}
                 </div>
                 <p className="text-sm font-semibold leading-relaxed text-slate-700 dark:text-zinc-300">{sentiment.summary}</p>
+                {news.items.length ? (
+                  <p className="mt-2 text-xs font-bold text-slate-600 dark:text-zinc-400">
+                    News mood: {news.items.filter((item) => item.sentiment === "positive").length} positive ·{" "}
+                    {news.items.filter((item) => item.sentiment === "negative").length} negative ·{" "}
+                    {news.items.filter((item) => item.sentiment === "neutral").length} neutral
+                  </p>
+                ) : null}
                 <p className="mt-3 text-[10px] font-medium text-slate-400 dark:text-zinc-600">
                   Rules-based summary from live breadth and sectors. Not investment advice.
                 </p>
@@ -543,19 +572,39 @@ export function NepseHubDashboard() {
           <section id="market-alerts" className={`${card} p-4 sm:p-5`}>
             <SectionHeading icon={Bell} title="Smart Alerts" subtitle="Corporate actions and market notices" />
             <div className="space-y-2">
-              {[
-                ["Dividend & Bonus", "Corporate action monitor is ready for the official notice feed.", "emerald"],
-                ["Rights & Book Closure", "Date-aware alerts will appear after source ingestion is enabled.", "violet"],
-                ["IPO & Market Notices", "Official SEBON and NEPSE connectors are prepared.", "amber"],
-              ].map(([title, text, tone]) => (
-                <div key={title} className="flex gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                  <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${tone === "emerald" ? "bg-emerald-400" : tone === "violet" ? "bg-violet-400" : "bg-amber-400"}`} />
-                  <div>
-                    <p className="text-xs font-extrabold text-slate-900 dark:text-white">{title}</p>
-                    <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{text}</p>
+              {news.corporateActions.length ? (
+                news.corporateActions.slice(0, 5).map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 transition hover:border-emerald-400/35 dark:border-white/[0.06] dark:bg-white/[0.025]"
+                  >
+                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-extrabold text-slate-900 dark:text-white">{item.headline}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-zinc-500">
+                        {item.sourceName} · {relativeTime(item.publishedAt)}
+                      </p>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                [
+                  ["Dividend & Bonus", "Corporate action monitor is ready for the official notice feed.", "emerald"],
+                  ["Rights & Book Closure", "Date-aware alerts will appear after source ingestion is enabled.", "violet"],
+                  ["IPO & Market Notices", "Official SEBON and NEPSE connectors are prepared.", "amber"],
+                ].map(([title, text, tone]) => (
+                  <div key={title} className="flex gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                    <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${tone === "emerald" ? "bg-emerald-400" : tone === "violet" ? "bg-violet-400" : "bg-amber-400"}`} />
+                    <div>
+                      <p className="text-xs font-extrabold text-slate-900 dark:text-white">{title}</p>
+                      <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{text}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
         </div>
@@ -564,32 +613,64 @@ export function NepseHubDashboard() {
           <SectionHeading
             icon={Newspaper}
             title="AI Market News"
-            subtitle="Licensed-source metadata, deduplication and summaries"
-            action={<span className="text-[10px] font-bold text-amber-600 dark:text-amber-300">Connector setup required</span>}
+            subtitle={news.items.length ? "Aggregated, deduplicated and sentiment-scored automatically" : "Licensed-source metadata, deduplication and summaries"}
+            action={
+              news.items.length ? (
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Auto-updating</span>
+              ) : (
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-300">Connector setup required</span>
+              )
+            }
           />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {NEPSE_NEWS_SOURCES.slice(0, 6).map((source, index) => (
-              <a
-                key={source.name}
-                href={source.url}
-                target="_blank"
-                rel="noreferrer"
-                className={`${card} group p-4 transition hover:border-emerald-400/35`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-600 dark:bg-white/[0.06] dark:text-zinc-300">
-                    {source.name}
-                  </span>
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-zinc-600">Source {index + 1}</span>
-                </div>
-                <h3 className="mt-4 text-sm font-extrabold leading-snug text-slate-900 group-hover:text-emerald-700 dark:text-white dark:group-hover:text-emerald-300">
-                  Live headline feed awaiting a configured aggregation provider
-                </h3>
-                <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
-                  Headline, source link, publish time, category, deduplication fingerprint and AI sentiment are supported by the Hub contract.
-                </p>
-              </a>
-            ))}
+            {news.items.length
+              ? news.items.slice(0, 6).map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${card} group p-4 transition hover:border-emerald-400/35`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-600 dark:bg-white/[0.06] dark:text-zinc-300">
+                        {item.sourceName}
+                      </span>
+                      <SentimentBadge sentiment={item.sentiment} />
+                    </div>
+                    <h3 className="mt-4 text-sm font-extrabold leading-snug text-slate-900 group-hover:text-emerald-700 dark:text-white dark:group-hover:text-emerald-300">
+                      {item.headline}
+                    </h3>
+                    {item.summary ? (
+                      <p className="mt-2 line-clamp-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{item.summary}</p>
+                    ) : null}
+                    <p className="mt-3 text-[10px] font-bold text-slate-400 dark:text-zinc-600">
+                      {item.category} · {relativeTime(item.publishedAt)}
+                    </p>
+                  </a>
+                ))
+              : NEPSE_NEWS_SOURCES.slice(0, 6).map((source, index) => (
+                  <a
+                    key={source.name}
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${card} group p-4 transition hover:border-emerald-400/35`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-slate-600 dark:bg-white/[0.06] dark:text-zinc-300">
+                        {source.name}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-zinc-600">Source {index + 1}</span>
+                    </div>
+                    <h3 className="mt-4 text-sm font-extrabold leading-snug text-slate-900 group-hover:text-emerald-700 dark:text-white dark:group-hover:text-emerald-300">
+                      Live headline feed awaiting a configured aggregation provider
+                    </h3>
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
+                      Headline, source link, publish time, category, deduplication fingerprint and AI sentiment are supported by the Hub contract.
+                    </p>
+                  </a>
+                ))}
           </div>
         </section>
 

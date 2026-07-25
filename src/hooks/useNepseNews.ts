@@ -1,0 +1,52 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export type NepseNewsItem = {
+  id: string;
+  headline: string;
+  sourceName: string;
+  sourceUrl: string;
+  publishedAt: string | null;
+  category: string;
+  sentiment: "positive" | "neutral" | "negative";
+  summary: string | null;
+  isCorporateAction: boolean;
+};
+
+type NewsState = {
+  items: NepseNewsItem[];
+  corporateActions: NepseNewsItem[];
+  loaded: boolean;
+};
+
+const REFRESH_MS = 5 * 60_000;
+
+/** Aggregated market headlines persisted by the automatic data engine. */
+export function useNepseNews(): NewsState {
+  const [state, setState] = useState<NewsState>({ items: [], corporateActions: [], loaded: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/market/nepse/news?limit=12");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = (await response.json()) as { items?: NepseNewsItem[]; corporateActions?: NepseNewsItem[] };
+        if (!cancelled) {
+          setState({ items: payload.items ?? [], corporateActions: payload.corporateActions ?? [], loaded: true });
+        }
+      } catch {
+        if (!cancelled) setState((current) => ({ ...current, loaded: true }));
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return state;
+}
