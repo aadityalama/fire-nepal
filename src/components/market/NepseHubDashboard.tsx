@@ -35,6 +35,7 @@ import { buildNepsePortfolioSummary } from "@/components/portfolio/nepse-portfol
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
+import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import {
   countCircuitStocks,
@@ -340,6 +341,7 @@ export function NepseHubDashboard() {
   const { snapshot, status, error, reload, overlay } = useRealtimeMarket();
   const { state, krwPerNpr, usdPerNpr } = useWealthPortfolio();
   const { symbols: watchSymbols, toggle: toggleWatch } = useNepseWatchlist();
+  const { triggered, removeAlert } = useNepseAlerts(snapshot?.nepseBySymbol);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const term = snapshot?.nepseTerminal;
@@ -412,6 +414,32 @@ export function NepseHubDashboard() {
         {error ? (
           <div className="mb-3 rounded-xl border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-300/15 dark:bg-amber-300/[0.07] dark:text-amber-200">
             Live feed degraded: {error}. Cached and portfolio data remain available.
+          </div>
+        ) : null}
+
+        {triggered.length ? (
+          <div className="mb-3 space-y-1.5" aria-live="polite">
+            {triggered.map((alert) => (
+              <div
+                key={alert.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/40 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/[0.08] dark:text-emerald-200"
+              >
+                <span>
+                  <Link href={`/market/company/${alert.symbol}`} className="underline decoration-emerald-400/50 underline-offset-2">
+                    {alert.symbol}
+                  </Link>{" "}
+                  is {alert.direction} your रु {alert.targetNpr.toLocaleString("en-IN")} alert — now रु{" "}
+                  {alert.ltpNpr.toLocaleString("en-IN")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAlert(alert.id)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wide transition hover:bg-emerald-500/15"
+                >
+                  Dismiss
+                </button>
+              </div>
+            ))}
           </div>
         ) : null}
 
@@ -617,7 +645,11 @@ export function NepseHubDashboard() {
               icon={Star}
               title="Watchlist"
               subtitle={watchSymbols.length ? "Synced with your FIRE Nepal watchlist" : "Add symbols from market leaderboards"}
-              action={<span className="text-[10px] font-bold text-slate-400">{watchSymbols.length}/64</span>}
+              action={
+                <Link href="/market/watchlist" className="text-[10px] font-black text-emerald-700 dark:text-emerald-400">
+                  Manage ({watchSymbols.length}/64)
+                </Link>
+              }
             />
             {watched.length ? (
               <div className="divide-y divide-slate-200/70 dark:divide-white/[0.06]">
