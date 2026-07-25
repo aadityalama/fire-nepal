@@ -29,11 +29,12 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { buildNepsePortfolioSummary } from "@/components/portfolio/nepse-portfolio/nepse-portfolio-metrics";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import {
   countCircuitStocks,
@@ -91,6 +92,25 @@ function SectionHeading({
       {action}
     </div>
   );
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return reduced;
+}
+
+/** Count-up integer that re-animates whenever the live feed pushes a new value. */
+function AnimatedCount({ value, className }: { value: number; className?: string }) {
+  const reduced = usePrefersReducedMotion();
+  const display = useCountUpNumber(value, { durationMs: 800, skipAnimation: reduced });
+  return <span className={className}>{Math.round(display).toLocaleString("en-IN")}</span>;
 }
 
 function Delta({ value }: { value?: number | null }) {
@@ -240,6 +260,8 @@ function Hero({
   const status = getKathmanduMarketStatus();
   const change = index?.changePct;
   const positive = (change ?? 0) >= 0;
+  const reduced = usePrefersReducedMotion();
+  const animatedIndex = useCountUpNumber(index?.value ?? 0, { durationMs: 900, skipAnimation: reduced });
   return (
     <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-4 text-white shadow-[0_32px_90px_-40px_rgba(4,120,87,0.65)] sm:p-6">
       <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
@@ -263,8 +285,8 @@ function Hero({
                   {status.label}
                 </span>
               </div>
-              <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] sm:text-[3.4rem]">
-                {(index?.value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
+                {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <div className={`mt-2 flex items-center gap-2 text-sm font-extrabold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
                 {positive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
@@ -351,6 +373,19 @@ export function NepseHubDashboard() {
         .slice(0, 8),
     [watchSymbols, snapshot?.nepseBySymbol],
   );
+  const allocation = useMemo(() => {
+    const total = portfolio.portfolioValueNpr;
+    if (total <= 0 || portfolio.holdings.length === 0) return [];
+    const palette = ["bg-emerald-500", "bg-teal-400", "bg-cyan-400", "bg-amber-400"];
+    const top = portfolio.holdings.slice(0, 4).map((holding, index) => ({
+      label: holding.symbol,
+      pct: (holding.liveNpr / total) * 100,
+      color: palette[index],
+    }));
+    const rest = 100 - top.reduce((sum, slice) => sum + slice.pct, 0);
+    if (rest > 0.5) top.push({ label: "Others", pct: rest, color: "bg-slate-400 dark:bg-zinc-600" });
+    return top;
+  }, [portfolio.holdings, portfolio.portfolioValueNpr]);
   const volume = ticks.reduce((total, tick) => total + (tick.volume ?? 0), 0);
   const trades = ticks.reduce((total, tick) => total + (tick.trades ?? 0), 0);
   const marketCap = ticks.reduce((total, tick) => total + (tick.marketCap ?? 0), 0);
@@ -390,14 +425,16 @@ export function NepseHubDashboard() {
           refreshing={status === "loading"}
         />
 
-        <section className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <section className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Market breadth">
           {breadth.map(([label, value, tone, Icon]) => (
-            <div key={label} className={`${card} min-w-0 p-3.5`}>
+            <div key={label} className={`${card} min-w-0 p-3.5 transition duration-300 hover:border-emerald-400/30`}>
               <div className="flex items-center justify-between gap-2">
                 <p className={eyebrow}>{label}</p>
                 <Icon className={`h-3.5 w-3.5 ${tone}`} aria-hidden />
               </div>
-              <p className={`mt-2 text-xl font-black tabular-nums ${tone}`}>{value}</p>
+              <p className={`mt-2 text-xl font-black tabular-nums ${tone}`}>
+                <AnimatedCount value={value} />
+              </p>
             </div>
           ))}
         </section>
@@ -555,6 +592,24 @@ export function NepseHubDashboard() {
                 </div>
               ))}
             </div>
+            {allocation.length ? (
+              <div className="mt-4">
+                <p className={`${eyebrow} mb-2`}>Asset Allocation</p>
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.05]" role="img" aria-label="Portfolio allocation by holding">
+                  {allocation.map((slice) => (
+                    <div key={slice.label} className={`${slice.color} h-full`} style={{ width: `${slice.pct}%` }} />
+                  ))}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                  {allocation.map((slice) => (
+                    <span key={slice.label} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-zinc-400">
+                      <span className={`h-2 w-2 rounded-full ${slice.color}`} />
+                      {slice.label} · {slice.pct.toFixed(1)}%
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className={`${card} p-4 sm:p-5`}>
