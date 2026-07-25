@@ -1,7 +1,10 @@
-/**
- * Minimal layout: `/market` redirects to `/portfolio/investments` in `page.tsx`.
- * Kept so old bookmarks still land on the NEPSE Portfolio dashboard.
- */
+import { WealthPortfolioProvider } from "@/contexts/WealthPortfolioContext";
+import { RealtimeMarketProvider } from "@/providers/realtime-provider";
+
 export default function MarketLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <WealthPortfolioProvider>
+      <RealtimeMarketProvider>{children}</RealtimeMarketProvider>
+    </WealthPortfolioProvider>
+  );
 }

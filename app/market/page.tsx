@@ -1,6 +1,12 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { NepseHubDashboard } from "@/components/market/NepseHubDashboard";
 
-/** Legacy `/market` entry — open the NEPSE Portfolio dashboard directly. */
+export const metadata: Metadata = {
+  title: "NEPSE Hub | FIRE Nepal",
+  description:
+    "Live NEPSE market intelligence, charts, market breadth, watchlists, portfolio insights and professional research tools.",
+};
+
 export default function MarketPage() {
-  redirect("/portfolio/investments");
+  return <NepseHubDashboard />;
 }
