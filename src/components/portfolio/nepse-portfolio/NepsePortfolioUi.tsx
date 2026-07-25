@@ -166,68 +166,71 @@ export function NepseHeroCard({
   });
 
   return (
-    <section
-      className="animate-fade-up relative overflow-hidden rounded-[1.25rem] border border-white/[0.09] bg-[radial-gradient(ellipse_at_12%_0%,rgba(16,185,129,0.16),transparent_52%),linear-gradient(160deg,#041c17_0%,#071412_52%,#020617_100%)] p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.9)] sm:p-5"
-    >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/35 to-transparent" />
+    <section className="animate-fade-up relative overflow-hidden rounded-[1.25rem] border border-white/[0.09] bg-[radial-gradient(ellipse_at_12%_0%,rgba(16,185,129,0.16),transparent_52%),linear-gradient(160deg,#041c17_0%,#071412_52%,#020617_100%)] p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.9)]">
+      <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/35 to-transparent" />
 
-      {/* Mobile: metrics → compact chart below. Desktop: metrics left, chart right. */}
-      <div className="relative grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] md:items-end md:gap-6">
+      <div className="relative space-y-3">
         <div className="min-w-0">
-          <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${TONE_LABEL}`}>
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${TONE_LABEL}`}>
             Portfolio value
           </p>
-          <p className={`mt-1.5 truncate text-[1.85rem] font-semibold leading-none tracking-tight sm:text-[2.15rem] ${TONE_VALUE}`}>
+          <p
+            className={`mt-1 truncate text-[1.7rem] font-semibold leading-none tracking-tight sm:text-[1.95rem] ${TONE_VALUE}`}
+          >
             {formatMoney(animatedValue, "NPR")}
           </p>
-
-          <dl className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
-            <HeroMetric
-              label="Today's gain/loss"
-              value={formatMoney(summary.todayGainNpr, "NPR")}
-              hint={formatSignedPct(summary.todayGainPct)}
-              positive={summary.todayGainNpr >= 0}
-            />
-            <HeroMetric
-              label="Overall P/L"
-              value={formatMoney(summary.overallPnlNpr, "NPR")}
-              positive={overallPos}
-            />
-            <HeroMetric
-              label="Portfolio return"
-              value={formatSignedPct(summary.portfolioReturnPct, 1)}
-              positive={(summary.portfolioReturnPct ?? 0) >= 0}
-            />
-          </dl>
         </div>
 
-        <div className="min-w-0 md:pb-0.5">
-          <div className="h-[4.5rem] w-full transition-opacity duration-500 sm:h-[5.25rem] md:h-[5.75rem]">
-            <NepsePerformanceChart data={series} positive={overallPos} compact />
+        {/* Compact horizontal metrics — one row, no stacked blocks */}
+        <dl className="grid grid-cols-3 gap-2 border-y border-white/[0.06] py-2.5">
+          <HeroMetric
+            label="Today"
+            value={formatMoney(summary.todayGainNpr, "NPR")}
+            hint={formatSignedPct(summary.todayGainPct)}
+            positive={summary.todayGainNpr >= 0}
+          />
+          <HeroMetric
+            label="Overall P/L"
+            value={formatMoney(summary.overallPnlNpr, "NPR")}
+            positive={overallPos}
+          />
+          <HeroMetric
+            label="Return"
+            value={formatSignedPct(summary.portfolioReturnPct, 1)}
+            positive={(summary.portfolioReturnPct ?? 0) >= 0}
+          />
+        </dl>
+
+        <div className="min-w-0">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className={`text-[10px] font-medium ${TONE_LABEL}`}>Performance</p>
+            <div
+              className="flex shrink-0 gap-0.5 rounded-full border border-white/[0.07] bg-black/30 p-0.5"
+              role="group"
+              aria-label="Chart range"
+            >
+              {NEPSE_CHART_RANGES.map((r) => {
+                const on = r === range;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onRangeChange(r)}
+                    className={`rounded-full px-2 py-1 text-[9px] font-semibold tracking-wide transition-all duration-300 sm:text-[10px] ${
+                      on
+                        ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_3px_10px_-4px_rgba(16,185,129,0.55)]"
+                        : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div
-            className="mt-2.5 flex gap-1 rounded-full border border-white/[0.07] bg-black/25 p-0.5"
-            role="group"
-            aria-label="Chart range"
-          >
-            {NEPSE_CHART_RANGES.map((r) => {
-              const on = r === range;
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => onRangeChange(r)}
-                  className={`flex-1 rounded-full px-1.5 py-1.5 text-[10px] font-semibold tracking-wide transition-all duration-300 ${
-                    on
-                      ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_4px_14px_-6px_rgba(16,185,129,0.6)]"
-                      : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300"
-                  }`}
-                >
-                  {r}
-                </button>
-              );
-            })}
+          <div className="h-[7.5rem] w-full transition-opacity duration-500 sm:h-[8.75rem]">
+            <NepsePerformanceChart data={series} positive={overallPos} compact />
           </div>
         </div>
       </div>
@@ -247,13 +250,21 @@ function HeroMetric({
   positive: boolean;
 }) {
   return (
-    <div className="rounded-[0.9rem] border border-white/[0.06] bg-black/20 px-3 py-2.5">
-      <dt className={`text-[10px] font-medium ${TONE_LABEL}`}>{label}</dt>
-      <dd className="mt-1 flex flex-wrap items-baseline gap-1.5">
-        <span className={`text-[13px] font-semibold tabular-nums sm:text-sm ${positive ? TONE_POS : TONE_NEG}`}>
+    <div className="min-w-0 text-left">
+      <dt className={`truncate text-[9px] font-medium uppercase tracking-[0.08em] sm:text-[10px] ${TONE_LABEL}`}>
+        {label}
+      </dt>
+      <dd className="mt-0.5 min-w-0">
+        <p
+          className={`truncate text-[11px] font-semibold tabular-nums leading-tight sm:text-[13px] ${
+            positive ? TONE_POS : TONE_NEG
+          }`}
+        >
           {value}
-        </span>
-        {hint ? <span className={`text-[10px] font-medium tabular-nums ${TONE_LABEL}`}>{hint}</span> : null}
+        </p>
+        {hint ? (
+          <p className={`mt-0.5 truncate text-[9px] font-medium tabular-nums ${TONE_LABEL}`}>{hint}</p>
+        ) : null}
       </dd>
     </div>
   );

@@ -110,11 +110,11 @@ export function NepsePortfolioDashboard({
           <NepseTopTabs active={activeTab} onChange={(tab) => setView({ kind: "tabs", tab })} />
 
           {activeTab === "overview" ? (
-            <div className="animate-fade-in space-y-6">
+            <div className="animate-fade-in space-y-3 sm:space-y-3.5">
               <NepseHeroCard summary={summary} range={range} onRangeChange={setRange} />
               <NepseQuickStats summary={summary} />
               <section>
-                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
                   Holdings
                 </h2>
                 <NepseHoldingsList holdings={summary.holdings} onOpen={openHolding} />
