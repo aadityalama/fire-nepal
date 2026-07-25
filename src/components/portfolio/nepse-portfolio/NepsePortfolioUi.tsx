@@ -1,8 +1,9 @@
 "use client";
 
 import { Bell, ChevronRight, Plus, Search, X } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
+import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { formatMoney } from "@/lib/expense-utils";
 import {
   buildNepsePerformanceSeries,
@@ -25,25 +26,42 @@ export const NEPSE_TABS: { id: NepseTabId; label: string }[] = [
   { id: "analytics", label: "Analytics" },
 ];
 
-/** Shared glass surface: 24px radius, soft shadow, emerald-tinted border. */
+/** Premium glass — 20px radius, soft border, restrained shadow. */
 export const NEPSE_GLASS =
-  "rounded-[1.5rem] border border-white/[0.09] bg-white/[0.045] shadow-[0_18px_50px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl";
+  "rounded-[1.25rem] border border-white/[0.08] bg-white/[0.04] shadow-[0_12px_40px_-28px_rgba(0,0,0,0.85)] backdrop-blur-xl";
+
+const TONE_POS = "text-emerald-400";
+const TONE_NEG = "text-rose-400/90";
+const TONE_LABEL = "text-zinc-400";
+const TONE_VALUE = "text-white";
 
 const LOGO_PALETTE = [
-  "from-emerald-400/90 to-teal-600/90",
-  "from-cyan-400/90 to-blue-600/90",
-  "from-amber-400/90 to-orange-600/90",
-  "from-violet-400/90 to-indigo-600/90",
-  "from-rose-400/90 to-red-600/90",
-  "from-lime-400/90 to-green-600/90",
+  "from-emerald-500/85 to-teal-700/85",
+  "from-cyan-500/80 to-slate-700/85",
+  "from-amber-500/80 to-stone-700/85",
+  "from-violet-500/75 to-slate-700/85",
+  "from-rose-500/75 to-stone-700/85",
+  "from-lime-500/75 to-emerald-800/85",
 ];
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return reduced;
+}
 
 export function NepseSymbolLogo({ symbol, size = "md" }: { symbol: string; size?: "md" | "lg" }) {
   const idx = Math.abs([...symbol].reduce((a, c) => a + c.charCodeAt(0), 0)) % LOGO_PALETTE.length;
-  const box = size === "lg" ? "h-14 w-14 text-sm rounded-2xl" : "h-11 w-11 text-[11px] rounded-[0.9rem]";
+  const box = size === "lg" ? "h-12 w-12 text-xs rounded-[1rem]" : "h-10 w-10 text-[10px] rounded-[0.85rem]";
   return (
     <div
-      className={`grid ${box} shrink-0 place-items-center bg-gradient-to-br ${LOGO_PALETTE[idx]} font-black tracking-wide text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-white/20`}
+      className={`grid ${box} shrink-0 place-items-center bg-gradient-to-br ${LOGO_PALETTE[idx]} font-bold tracking-wide text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ring-1 ring-white/10`}
       aria-hidden
     >
       {symbol.slice(0, 3)}
@@ -59,32 +77,32 @@ export function NepseWorkspaceHeader({
   notificationCount: number;
 }) {
   return (
-    <header className="flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-[1.6rem] font-black leading-tight tracking-tight text-white sm:text-[2rem]">
+    <header className="flex items-center justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-[1.45rem] font-semibold leading-tight tracking-tight text-white sm:text-[1.75rem]">
           NEPSE Portfolio
         </h1>
-        <p className="mt-1 text-xs font-semibold text-emerald-100/50 sm:text-sm">
+        <p className={`mt-1 truncate text-xs font-medium sm:text-[13px] ${TONE_LABEL}`}>
           Track your investments in NEPSE
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 self-center">
         <button
           type="button"
           onClick={onSearch}
-          className="grid h-11 w-11 place-items-center rounded-2xl border border-white/[0.09] bg-white/[0.05] text-emerald-100/80 backdrop-blur-xl transition hover:border-emerald-300/30 hover:bg-emerald-400/10 hover:text-white active:scale-95"
+          className="grid h-10 w-10 place-items-center rounded-[1rem] border border-white/[0.08] bg-white/[0.04] text-zinc-300 backdrop-blur-xl transition duration-300 hover:border-white/[0.14] hover:bg-white/[0.07] hover:text-white active:scale-[0.96]"
           aria-label="Search holdings"
         >
-          <Search size={18} strokeWidth={2.25} />
+          <Search size={17} strokeWidth={2} />
         </button>
         <button
           type="button"
-          className="relative grid h-11 w-11 place-items-center rounded-2xl border border-white/[0.09] bg-white/[0.05] text-emerald-100/80 backdrop-blur-xl transition hover:border-emerald-300/30 hover:bg-emerald-400/10 hover:text-white active:scale-95"
+          className="relative grid h-10 w-10 place-items-center rounded-[1rem] border border-white/[0.08] bg-white/[0.04] text-zinc-300 backdrop-blur-xl transition duration-300 hover:border-white/[0.14] hover:bg-white/[0.07] hover:text-white active:scale-[0.96]"
           aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount})` : ""}`}
         >
-          <Bell size={18} strokeWidth={2.25} />
+          <Bell size={17} strokeWidth={2} />
           {notificationCount > 0 ? (
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]" />
+            <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
           ) : null}
         </button>
       </div>
@@ -100,9 +118,9 @@ export function NepseTopTabs({
   onChange: (id: NepseTabId) => void;
 }) {
   return (
-    <div className="sticky top-0 z-20 -mx-1 px-1 py-2">
+    <div className="sticky top-0 z-20 -mx-1 px-1 py-1.5">
       <div
-        className="no-scrollbar flex gap-1 overflow-x-auto rounded-[1.25rem] border border-white/[0.09] bg-slate-950/80 p-1.5 shadow-[0_14px_40px_-22px_rgba(0,0,0,0.9)] backdrop-blur-2xl"
+        className="no-scrollbar flex gap-1 overflow-x-auto rounded-[1.15rem] border border-white/[0.08] bg-slate-950/75 p-1 shadow-[0_10px_32px_-22px_rgba(0,0,0,0.9)] backdrop-blur-2xl"
         role="tablist"
         aria-label="NEPSE portfolio sections"
       >
@@ -115,10 +133,10 @@ export function NepseTopTabs({
               role="tab"
               aria-selected={on}
               onClick={() => onChange(t.id)}
-              className={`shrink-0 rounded-2xl px-3.5 py-2.5 text-xs font-bold tracking-tight transition-all duration-300 sm:px-5 sm:text-[13px] ${
+              className={`shrink-0 rounded-full px-3.5 py-2 text-[11px] font-semibold tracking-tight transition-all duration-300 ease-out sm:px-4 sm:text-xs ${
                 on
-                  ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_8px_24px_-8px_rgba(16,185,129,0.7)]"
-                  : "text-emerald-100/55 hover:bg-white/[0.06] hover:text-emerald-50"
+                  ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_6px_18px_-8px_rgba(16,185,129,0.55)]"
+                  : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
               }`}
             >
               {t.label}
@@ -139,35 +157,43 @@ export function NepseHeroCard({
   range: NepseChartRange;
   onRangeChange: (r: NepseChartRange) => void;
 }) {
+  const reduced = usePrefersReducedMotion();
   const overallPos = summary.overallPnlNpr >= 0;
   const series = buildNepsePerformanceSeries(summary.portfolioValueNpr, range);
+  const animatedValue = useCountUpNumber(summary.portfolioValueNpr, {
+    durationMs: 900,
+    skipAnimation: reduced,
+  });
 
   return (
-    <section className="relative overflow-hidden rounded-[1.5rem] border border-emerald-300/20 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.26),transparent_58%),radial-gradient(ellipse_at_bottom_right,rgba(20,184,166,0.14),transparent_55%),linear-gradient(155deg,#03251d_0%,#071b17_46%,#020617_100%)] p-5 shadow-[0_28px_70px_-28px_rgba(0,0,0,0.9)] sm:p-7">
-      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/50 to-transparent" />
+    <section
+      className="animate-fade-up relative overflow-hidden rounded-[1.25rem] border border-white/[0.09] bg-[radial-gradient(ellipse_at_12%_0%,rgba(16,185,129,0.16),transparent_52%),linear-gradient(160deg,#041c17_0%,#071412_52%,#020617_100%)] p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.9)] sm:p-5"
+    >
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/35 to-transparent" />
 
-      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-8">
+      {/* Mobile: metrics → compact chart below. Desktop: metrics left, chart right. */}
+      <div className="relative grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] md:items-end md:gap-6">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-200/50">
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${TONE_LABEL}`}>
             Portfolio value
           </p>
-          <p className="mt-2 truncate text-[2.1rem] font-black leading-none tracking-tight text-white sm:text-[2.75rem]">
-            {formatMoney(summary.portfolioValueNpr, "NPR")}
+          <p className={`mt-1.5 truncate text-[1.85rem] font-semibold leading-none tracking-tight sm:text-[2.15rem] ${TONE_VALUE}`}>
+            {formatMoney(animatedValue, "NPR")}
           </p>
 
-          <dl className="mt-6 space-y-3.5">
-            <HeroLine
-              label="Overall profit/loss"
-              value={formatMoney(summary.overallPnlNpr, "NPR")}
-              positive={overallPos}
-            />
-            <HeroLine
+          <dl className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
+            <HeroMetric
               label="Today's gain/loss"
               value={formatMoney(summary.todayGainNpr, "NPR")}
               hint={formatSignedPct(summary.todayGainPct)}
               positive={summary.todayGainNpr >= 0}
             />
-            <HeroLine
+            <HeroMetric
+              label="Overall P/L"
+              value={formatMoney(summary.overallPnlNpr, "NPR")}
+              positive={overallPos}
+            />
+            <HeroMetric
               label="Portfolio return"
               value={formatSignedPct(summary.portfolioReturnPct, 1)}
               positive={(summary.portfolioReturnPct ?? 0) >= 0}
@@ -175,12 +201,12 @@ export function NepseHeroCard({
           </dl>
         </div>
 
-        <div className="min-w-0">
-          <div className="h-36 w-full sm:h-44">
-            <NepsePerformanceChart data={series} positive={overallPos} />
+        <div className="min-w-0 md:pb-0.5">
+          <div className="h-[4.5rem] w-full transition-opacity duration-500 sm:h-[5.25rem] md:h-[5.75rem]">
+            <NepsePerformanceChart data={series} positive={overallPos} compact />
           </div>
           <div
-            className="mt-3 flex gap-1 rounded-2xl border border-white/[0.08] bg-black/30 p-1"
+            className="mt-2.5 flex gap-1 rounded-full border border-white/[0.07] bg-black/25 p-0.5"
             role="group"
             aria-label="Chart range"
           >
@@ -192,10 +218,10 @@ export function NepseHeroCard({
                   type="button"
                   aria-pressed={on}
                   onClick={() => onRangeChange(r)}
-                  className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-black tracking-wide transition-all duration-300 ${
+                  className={`flex-1 rounded-full px-1.5 py-1.5 text-[10px] font-semibold tracking-wide transition-all duration-300 ${
                     on
-                      ? "bg-emerald-400/95 text-slate-950 shadow-[0_6px_18px_-6px_rgba(16,185,129,0.8)]"
-                      : "text-emerald-100/50 hover:bg-white/[0.06] hover:text-emerald-50"
+                      ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_4px_14px_-6px_rgba(16,185,129,0.6)]"
+                      : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300"
                   }`}
                 >
                   {r}
@@ -209,7 +235,7 @@ export function NepseHeroCard({
   );
 }
 
-function HeroLine({
+function HeroMetric({
   label,
   value,
   hint,
@@ -221,17 +247,13 @@ function HeroLine({
   positive: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-white/[0.06] pb-3 last:border-0 last:pb-0">
-      <dt className="text-[11px] font-bold text-emerald-100/45 sm:text-xs">{label}</dt>
-      <dd className="flex items-baseline gap-2 text-right">
-        <span
-          className={`text-sm font-black tabular-nums sm:text-base ${positive ? "text-emerald-300" : "text-rose-300"}`}
-        >
+    <div className="rounded-[0.9rem] border border-white/[0.06] bg-black/20 px-3 py-2.5">
+      <dt className={`text-[10px] font-medium ${TONE_LABEL}`}>{label}</dt>
+      <dd className="mt-1 flex flex-wrap items-baseline gap-1.5">
+        <span className={`text-[13px] font-semibold tabular-nums sm:text-sm ${positive ? TONE_POS : TONE_NEG}`}>
           {value}
         </span>
-        {hint ? (
-          <span className="text-[11px] font-bold tabular-nums text-emerald-100/40">{hint}</span>
-        ) : null}
+        {hint ? <span className={`text-[10px] font-medium tabular-nums ${TONE_LABEL}`}>{hint}</span> : null}
       </dd>
     </div>
   );
@@ -247,29 +269,47 @@ export function NepsePerformanceChart({
   compact?: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
-  const stroke = positive ? "#34d399" : "#fb7185";
+  const stroke = positive ? "#34d399" : "#f87171";
+  const glowId = `nepse-glow-${uid}`;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id={`nepse-perf-${uid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={0.42} />
-            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <YAxis domain={["dataMin", "dataMax"]} hide />
-        <Area
-          type="monotone"
-          dataKey="v"
-          stroke={stroke}
-          strokeWidth={compact ? 2 : 2.75}
-          fill={`url(#nepse-perf-${uid})`}
-          isAnimationActive={false}
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="relative h-full w-full animate-fade-in">
+      <div
+        className="pointer-events-none absolute inset-x-[8%] bottom-0 top-[18%] rounded-full opacity-40 blur-2xl"
+        style={{ background: positive ? "rgba(52,211,153,0.22)" : "rgba(248,113,113,0.18)" }}
+        aria-hidden
+      />
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`nepse-perf-${uid}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity={0.32} />
+              <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+            </linearGradient>
+            <filter id={glowId} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <YAxis domain={["dataMin", "dataMax"]} hide />
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={stroke}
+            strokeWidth={compact ? 1.75 : 2.25}
+            fill={`url(#nepse-perf-${uid})`}
+            filter={`url(#${glowId})`}
+            isAnimationActive={!compact}
+            animationDuration={650}
+            animationEasing="ease-out"
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -290,15 +330,16 @@ export function NepseQuickStats({ summary }: { summary: NepsePortfolioSummary })
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       {stats.map((s) => (
-        <div key={s.label} className={`${NEPSE_GLASS} px-4 py-3.5`}>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/40">
-            {s.label}
-          </p>
+        <div
+          key={s.label}
+          className={`${NEPSE_GLASS} flex min-h-[4.75rem] flex-col justify-between p-4 transition duration-300 hover:border-white/[0.12] hover:bg-white/[0.055]`}
+        >
+          <p className={`text-[10px] font-medium uppercase tracking-[0.12em] ${TONE_LABEL}`}>{s.label}</p>
           <p
-            className={`mt-1.5 truncate text-[15px] font-black tabular-nums sm:text-lg ${
-              s.tone === "pos" ? "text-emerald-300" : s.tone === "neg" ? "text-rose-300" : "text-white"
+            className={`mt-2 truncate text-[15px] font-semibold tabular-nums sm:text-base ${
+              s.tone === "pos" ? TONE_POS : s.tone === "neg" ? TONE_NEG : TONE_VALUE
             }`}
           >
             {s.value}
@@ -326,9 +367,9 @@ export function NepseHoldingsFilterBar({
     <div className="space-y-3">
       <div className="relative">
         <Search
-          size={16}
-          strokeWidth={2.25}
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-emerald-200/40"
+          size={15}
+          strokeWidth={2}
+          className={`pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 ${TONE_LABEL}`}
           aria-hidden
         />
         <input
@@ -337,13 +378,13 @@ export function NepseHoldingsFilterBar({
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search by symbol"
           aria-label="Search holdings by symbol"
-          className="min-h-12 w-full rounded-2xl border border-white/[0.09] bg-white/[0.045] pl-11 pr-10 text-sm font-bold text-white placeholder:text-emerald-100/30 backdrop-blur-xl transition focus:border-emerald-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+          className="min-h-11 w-full rounded-[1.15rem] border border-white/[0.08] bg-white/[0.04] pl-10 pr-10 text-sm font-medium text-white placeholder:text-zinc-500 backdrop-blur-xl transition focus:border-emerald-400/30 focus:outline-none focus:ring-2 focus:ring-emerald-400/15"
         />
         {query ? (
           <button
             type="button"
             onClick={() => onQueryChange("")}
-            className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-emerald-100/50 transition hover:bg-white/[0.08] hover:text-white"
+            className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
             aria-label="Clear search"
           >
             <X size={14} />
@@ -360,10 +401,10 @@ export function NepseHoldingsFilterBar({
               type="button"
               aria-pressed={on}
               onClick={() => onFilterChange(f.id)}
-              className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black tracking-tight transition-all duration-300 sm:text-xs ${
+              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[11px] font-semibold tracking-tight transition-all duration-300 ${
                 on
-                  ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-50 shadow-[0_6px_20px_-10px_rgba(16,185,129,0.8)]"
-                  : "border-white/[0.09] bg-white/[0.035] text-emerald-100/50 hover:border-emerald-300/25 hover:text-emerald-50"
+                  ? "border-emerald-400/40 bg-gradient-to-b from-emerald-400/20 to-emerald-500/10 text-emerald-200"
+                  : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/[0.14] hover:text-zinc-200"
               }`}
             >
               {f.label}
@@ -389,7 +430,7 @@ export function NepseHoldingsList({
   }
 
   return (
-    <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.06] overflow-hidden`}>
+    <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.05] overflow-hidden`}>
       {holdings.map((h) => {
         const dayPos = (h.dayChangePct ?? 0) >= 0;
         const pnlPos = h.pnlNpr >= 0;
@@ -398,41 +439,33 @@ export function NepseHoldingsList({
             <button
               type="button"
               onClick={() => onOpen(h.row.id)}
-              className="group flex w-full items-center gap-3.5 px-4 py-4 text-left transition-colors duration-300 hover:bg-emerald-400/[0.07] active:bg-emerald-400/[0.11] sm:px-5"
+              className="group flex w-full items-center gap-3 px-4 py-3.5 text-left transition duration-300 hover:bg-white/[0.035] active:bg-white/[0.05]"
             >
               <NepseSymbolLogo symbol={h.symbol} />
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black tracking-tight text-white sm:text-[15px]">
-                  {h.symbol}
-                </p>
-                <p className="mt-0.5 truncate text-[11px] font-semibold text-emerald-100/40 sm:text-xs">
-                  {h.companyName}
-                </p>
+                <p className={`truncate text-sm font-semibold tracking-tight ${TONE_VALUE}`}>{h.symbol}</p>
+                <p className={`mt-0.5 truncate text-[11px] font-medium ${TONE_LABEL}`}>{h.companyName}</p>
               </div>
 
               <div className="shrink-0 text-right">
-                <p className="text-sm font-black tabular-nums text-white">
+                <p className={`text-sm font-semibold tabular-nums ${TONE_VALUE}`}>
                   {formatMoney(h.liveNpr, "NPR")}
                 </p>
                 <div className="mt-0.5 flex items-center justify-end gap-2">
-                  <span
-                    className={`text-[11px] font-black tabular-nums ${dayPos ? "text-emerald-300" : "text-rose-300"}`}
-                  >
+                  <span className={`text-[11px] font-semibold tabular-nums ${dayPos ? TONE_POS : TONE_NEG}`}>
                     {formatSignedPct(h.dayChangePct)}
                   </span>
-                  <span
-                    className={`text-[11px] font-bold tabular-nums ${pnlPos ? "text-emerald-300/75" : "text-rose-300/75"}`}
-                  >
+                  <span className={`text-[11px] font-medium tabular-nums ${pnlPos ? TONE_POS : TONE_NEG}`}>
                     {formatMoney(h.pnlNpr, "NPR")}
                   </span>
                 </div>
               </div>
 
               <ChevronRight
-                size={18}
-                strokeWidth={2.25}
-                className="shrink-0 text-emerald-100/25 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-emerald-200/60"
+                size={16}
+                strokeWidth={2}
+                className="shrink-0 text-zinc-600 transition duration-300 group-hover:translate-x-0.5 group-hover:text-zinc-400"
                 aria-hidden
               />
             </button>
@@ -448,10 +481,10 @@ export function NepseAddStockFab({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-40 inline-flex min-h-14 items-center gap-2 rounded-full bg-gradient-to-br from-emerald-300 via-emerald-400 to-teal-500 px-5 text-sm font-black tracking-tight text-slate-950 shadow-[0_18px_44px_-12px_rgba(16,185,129,0.75),0_0_0_1px_rgba(255,255,255,0.18)_inset] ring-1 ring-emerald-200/40 transition-all duration-300 hover:brightness-[1.06] active:scale-[0.97] sm:bottom-8 sm:right-8"
+      className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-40 inline-flex min-h-[3.25rem] items-center gap-2 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-500 px-5 text-sm font-semibold tracking-tight text-slate-950 shadow-[0_14px_36px_-14px_rgba(16,185,129,0.65)] ring-1 ring-white/15 transition duration-300 hover:brightness-[1.04] active:scale-[0.97] sm:bottom-8 sm:right-8"
       aria-label="Add stock"
     >
-      <Plus className="h-5 w-5" strokeWidth={2.75} aria-hidden />
+      <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
       Add Stock
     </button>
   );
@@ -478,20 +511,20 @@ export function NepseSheet({
     >
       <button
         type="button"
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+        className="absolute inset-0 bg-slate-950/75 backdrop-blur-md transition-opacity"
         aria-label="Close"
         onClick={onClose}
       />
-      <div className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[1.75rem] border border-emerald-300/20 bg-slate-950/95 p-4 shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:rounded-[1.75rem] sm:p-6">
+      <div className="animate-fade-up relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[1.5rem] border border-white/[0.1] bg-slate-950/96 p-4 shadow-[0_-16px_48px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:rounded-[1.5rem] sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-black tracking-tight text-white">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-2xl border border-white/[0.09] bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/[0.1] hover:text-white"
+            className="grid h-9 w-9 place-items-center rounded-[0.9rem] border border-white/[0.08] bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
             aria-label="Close sheet"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
         {children}
@@ -509,26 +542,22 @@ export function DetailMetric({
   value: string;
   tone?: "default" | "pos" | "neg";
 }) {
-  const color = tone === "pos" ? "text-emerald-300" : tone === "neg" ? "text-rose-300" : "text-white";
+  const color = tone === "pos" ? TONE_POS : tone === "neg" ? TONE_NEG : TONE_VALUE;
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-3.5 py-3 backdrop-blur-xl">
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-100/40">{label}</p>
-      <p className={`mt-1.5 truncate text-sm font-black tabular-nums ${color}`}>{value}</p>
+    <div className="rounded-[1rem] border border-white/[0.07] bg-white/[0.035] p-4 backdrop-blur-xl transition duration-300 hover:border-white/[0.11]">
+      <p className={`text-[10px] font-medium uppercase tracking-[0.1em] ${TONE_LABEL}`}>{label}</p>
+      <p className={`mt-1.5 truncate text-sm font-semibold tabular-nums ${color}`}>{value}</p>
     </div>
   );
 }
 
 export function NepseSectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="mb-2.5 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-100/40">
-      {children}
-    </h2>
-  );
+  return <h2 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] ${TONE_LABEL}`}>{children}</h2>;
 }
 
 export function NepseEmptyState({ text }: { text: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-white/[0.12] bg-white/[0.02] px-5 py-14 text-center text-sm font-bold text-emerald-100/40">
+    <div className="rounded-[1.25rem] border border-dashed border-white/[0.1] bg-white/[0.02] px-5 py-12 text-center text-sm font-medium text-zinc-500">
       {text}
     </div>
   );

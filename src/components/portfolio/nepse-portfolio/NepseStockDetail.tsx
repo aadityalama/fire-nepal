@@ -146,35 +146,35 @@ export function NepseStockDetail({
         </button>
       </div>
 
-      <section className="relative overflow-hidden rounded-[1.5rem] border border-emerald-300/20 bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.24),transparent_58%),linear-gradient(155deg,#03251d_0%,#071b17_48%,#020617_100%)] p-5 shadow-[0_24px_60px_-28px_rgba(0,0,0,0.9)] sm:p-6">
-        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/45 to-transparent" />
-        <div className="flex items-center gap-4">
+      <section className="relative overflow-hidden rounded-[1.25rem] border border-white/[0.09] bg-[radial-gradient(ellipse_at_top_left,rgba(16,185,129,0.14),transparent_55%),linear-gradient(155deg,#041c17_0%,#071412_48%,#020617_100%)] p-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.9)] sm:p-5">
+        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/30 to-transparent" />
+        <div className="flex items-center gap-3.5">
           <NepseSymbolLogo symbol={holding.symbol} size="lg" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xl font-black tracking-tight text-white sm:text-2xl">
+            <p className="truncate text-xl font-semibold tracking-tight text-white sm:text-[1.35rem]">
               {holding.symbol}
             </p>
-            <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/45 sm:text-sm">
+            <p className="mt-0.5 truncate text-xs font-medium text-zinc-400 sm:text-[13px]">
               {holding.companyName}
             </p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-base font-black tabular-nums text-white sm:text-lg">
+            <p className="text-base font-semibold tabular-nums text-white sm:text-lg">
               {formatMoney(holding.liveNpr, "NPR")}
             </p>
             <p
-              className={`mt-0.5 text-xs font-bold tabular-nums ${dayPos ? "text-emerald-300" : "text-rose-300"}`}
+              className={`mt-0.5 text-xs font-semibold tabular-nums ${dayPos ? "text-emerald-400" : "text-rose-400/90"}`}
             >
               {formatSignedPct(holding.dayChangePct)} today
             </p>
           </div>
         </div>
 
-        <div className="mt-5 h-32 w-full sm:h-40">
-          <NepsePerformanceChart data={series} positive={holding.pnlNpr >= 0} />
+        <div className="mt-4 h-28 w-full sm:h-32">
+          <NepsePerformanceChart data={series} positive={holding.pnlNpr >= 0} compact />
         </div>
         <div
-          className="mt-3 flex gap-1 rounded-2xl border border-white/[0.08] bg-black/30 p-1"
+          className="mt-2.5 flex gap-1 rounded-full border border-white/[0.07] bg-black/25 p-0.5"
           role="group"
           aria-label="Performance range"
         >
@@ -186,10 +186,10 @@ export function NepseStockDetail({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setRange(r)}
-                className={`flex-1 rounded-xl px-2 py-2 text-[11px] font-black tracking-wide transition-all duration-300 ${
+                className={`flex-1 rounded-full px-1.5 py-1.5 text-[10px] font-semibold tracking-wide transition-all duration-300 ${
                   on
-                    ? "bg-emerald-400/95 text-slate-950 shadow-[0_6px_18px_-6px_rgba(16,185,129,0.8)]"
-                    : "text-emerald-100/50 hover:bg-white/[0.06] hover:text-emerald-50"
+                    ? "bg-gradient-to-b from-emerald-400 to-emerald-500 text-slate-950 shadow-[0_4px_14px_-6px_rgba(16,185,129,0.6)]"
+                    : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300"
                 }`}
               >
                 {r}
@@ -447,11 +447,11 @@ export function NepseAnalyticsPanel({
                 </div>
                 <div className="shrink-0 text-right">
                   <p
-                    className={`text-xs font-black tabular-nums ${h.pnlNpr >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+                    className={`text-xs font-semibold tabular-nums ${h.pnlNpr >= 0 ? "text-emerald-400" : "text-rose-400/90"}`}
                   >
                     {formatMoney(h.pnlNpr, "NPR")}
                   </p>
-                  <p className="mt-0.5 text-[11px] font-bold tabular-nums text-emerald-100/35">
+                  <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-500">
                     {formatSignedPct(h.dayChangePct)}
                   </p>
                 </div>

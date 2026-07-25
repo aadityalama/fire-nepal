@@ -104,21 +104,26 @@ export function NepsePortfolioDashboard({
           }}
         />
       ) : (
-        <div className="space-y-5 sm:space-y-6">
+        <div className="space-y-6">
           <NepseWorkspaceHeader onSearch={focusSearch} notificationCount={0} />
 
           <NepseTopTabs active={activeTab} onChange={(tab) => setView({ kind: "tabs", tab })} />
 
           {activeTab === "overview" ? (
-            <div className="space-y-5 sm:space-y-6">
+            <div className="animate-fade-in space-y-6">
               <NepseHeroCard summary={summary} range={range} onRangeChange={setRange} />
               <NepseQuickStats summary={summary} />
-              <NepseHoldingsList holdings={summary.holdings} onOpen={openHolding} />
+              <section>
+                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Holdings
+                </h2>
+                <NepseHoldingsList holdings={summary.holdings} onOpen={openHolding} />
+              </section>
             </div>
           ) : null}
 
           {activeTab === "holdings" ? (
-            <div className="space-y-4">
+            <div className="animate-fade-in space-y-4">
               <NepseHoldingsFilterBar
                 query={query}
                 onQueryChange={setQuery}
@@ -135,14 +140,22 @@ export function NepsePortfolioDashboard({
           ) : null}
 
           {activeTab === "transactions" ? (
-            <NepseTransactionsPanel ledger={ledger} holdingsById={holdingsById} />
+            <div className="animate-fade-in">
+              <NepseTransactionsPanel ledger={ledger} holdingsById={holdingsById} />
+            </div>
           ) : null}
 
           {activeTab === "corporate" ? (
-            <NepseCorporateActionsPanel ledger={ledger} holdingsById={holdingsById} />
+            <div className="animate-fade-in">
+              <NepseCorporateActionsPanel ledger={ledger} holdingsById={holdingsById} />
+            </div>
           ) : null}
 
-          {activeTab === "analytics" ? <NepseAnalyticsPanel summary={summary} rows={rows} /> : null}
+          {activeTab === "analytics" ? (
+            <div className="animate-fade-in">
+              <NepseAnalyticsPanel summary={summary} rows={rows} />
+            </div>
+          ) : null}
         </div>
       )}
 
