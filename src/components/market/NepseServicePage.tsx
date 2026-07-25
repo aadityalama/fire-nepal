@@ -28,8 +28,20 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
   const ticks = useMemo(() => Object.values(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
   const rows = useMemo(() => rowsForService(slug, ticks, snapshot?.nepseTerminal), [slug, ticks, snapshot?.nepseTerminal]);
   const supportedTable = ["top-gainers", "top-losers", "top-turnover", "top-volume", "live-trades", "market-depth"].includes(slug);
-  const sectorPage = slug === "sector-performance" || slug === "heat-map";
+  const sectorPage = slug === "sector-performance";
+  const heatMapPage = slug === "heat-map";
   const indexPage = slug === "market-indices";
+  const heatTiles = useMemo(() => {
+    if (!heatMapPage) return [];
+    return [...ticks]
+      .filter((tick) => tick.ltpNpr > 0)
+      .sort((a, b) => (b.turnoverNpr ?? 0) - (a.turnoverNpr ?? 0))
+      .slice(0, 96);
+  }, [heatMapPage, ticks]);
+  const sectorTurnoverMax = useMemo(
+    () => Math.max(1, ...(snapshot?.nepseTerminal?.sectorPerformance ?? []).map((sector) => sector.turnoverNpr)),
+    [snapshot?.nepseTerminal?.sectorPerformance],
+  );
   const newsDrivenPage = slug === "corporate-actions" || slug === "ipo-results";
   const news = useNepseNews();
   const newsRows = useMemo(() => {
@@ -88,9 +100,57 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
                   <p className="mt-3 text-[10px] font-bold text-slate-500 dark:text-zinc-500">
                     {sector.constituents} companies · {formatCompactNpr(sector.turnoverNpr)}
                   </p>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60 dark:bg-white/[0.06]">
+                    <div
+                      className={positive ? "h-full rounded-full bg-emerald-400" : "h-full rounded-full bg-rose-400"}
+                      style={{ width: `${Math.max(4, (sector.turnoverNpr / sectorTurnoverMax) * 100)}%` }}
+                      aria-hidden
+                    />
+                  </div>
+                  <p className="mt-1 text-[9px] font-bold text-slate-400 dark:text-zinc-600">Turnover share vs top sector</p>
                 </div>
               );
             })}
+          </div>
+        ) : heatMapPage ? (
+          <div>
+            <div className="mb-3 flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-500 dark:text-zinc-500">
+              <span>Top {heatTiles.length} companies by turnover · color = today&apos;s change</span>
+              <span className="ml-auto inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> −3%+
+                <span className="ml-2 h-2.5 w-2.5 rounded-sm bg-slate-300 dark:bg-zinc-700" /> flat
+                <span className="ml-2 h-2.5 w-2.5 rounded-sm bg-emerald-500" /> +3%+
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
+              {heatTiles.map((tick) => {
+                const change = tick.changePct ?? 0;
+                const intensity = Math.min(Math.abs(change) / 3, 1);
+                const background =
+                  change >= 0
+                    ? `rgba(16, 185, 129, ${0.15 + intensity * 0.75})`
+                    : `rgba(244, 63, 94, ${0.15 + intensity * 0.75})`;
+                return (
+                  <Link
+                    key={tick.symbol}
+                    href={`/market/company/${tick.symbol}`}
+                    style={{ backgroundColor: background }}
+                    className="group rounded-lg p-2 transition hover:scale-[1.04] hover:shadow-lg"
+                    title={`${tick.symbol} · ${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
+                  >
+                    <p className={`truncate text-[10px] font-black ${intensity > 0.45 ? "text-white" : "text-slate-900 dark:text-white"}`}>{tick.symbol}</p>
+                    <p className={`text-[9px] font-bold tabular-nums ${intensity > 0.45 ? "text-white/85" : "text-slate-700 dark:text-zinc-300"}`}>
+                      {change >= 0 ? "+" : ""}{change.toFixed(1)}%
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+            {!heatTiles.length ? (
+              <p className="rounded-[1.5rem] border border-dashed border-slate-300 p-10 text-center text-xs font-semibold text-slate-500 dark:border-white/10">
+                Waiting for live quotes to paint the heat map.
+              </p>
+            ) : null}
           </div>
         ) : indexPage ? (
           <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
@@ -170,7 +230,7 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
               <BarChart3 className="mx-auto h-8 w-8 text-emerald-500" />
               <h2 className="mt-3 text-lg font-black">Module foundation ready</h2>
               <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
-                This dedicated route is ready for the configured floorsheet, IPO, corporate-action or order-book provider. FIRE Nepal does not fabricate unavailable exchange data.
+                This dedicated route is ready for the configured floorsheet, broker-activity, IPO, corporate-action or order-book provider. FIRE Nepal does not fabricate unavailable exchange data.
               </p>
             </div>
           </div>

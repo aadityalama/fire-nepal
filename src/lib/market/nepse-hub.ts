@@ -28,6 +28,9 @@ export const NEPSE_SERVICE_ITEMS = [
   { slug: "market-indices", label: "Market Indices", description: "All benchmarks", icon: "Activity" },
   { slug: "ipo-results", label: "IPO Results", description: "Issue outcomes", icon: "TicketCheck" },
   { slug: "corporate-actions", label: "Corporate Actions", description: "Dividend & rights", icon: "Landmark" },
+  { slug: "screener", label: "Stock Screener", description: "Filter the market", icon: "SlidersHorizontal" },
+  { slug: "top-brokers", label: "Top Brokers", description: "Broker activity", icon: "Users" },
+  { slug: "ai-assistant", label: "AI Assistant", description: "Ask the market", icon: "Bot" },
 ] as const;
 
 export type NepseServiceSlug = (typeof NEPSE_SERVICE_ITEMS)[number]["slug"];
