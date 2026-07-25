@@ -5,9 +5,12 @@
 #                      https://www.firenepal.com/api/cron/scheduled-reminders
 #                      Apex https://firenepal.com/… 307-redirects to www; this workflow
 #                      canonicalizes that so Authorization is not dropped on redirect.
-#   CRON_SECRET      — exact same value as Vercel env CRON_SECRET (no quotes, no Bearer prefix,
-#                      no leading/trailing whitespace or newlines). API checks:
-#                      Authorization: Bearer <CRON_SECRET>
+#   CRON_SECRET      — exact same value as Vercel project `fire-nepal` env CRON_SECRET
+#                      (no quotes, no Bearer prefix, no leading/trailing whitespace or newlines).
+#                      API checks: Authorization: Bearer <CRON_SECRET>
+#
+# After rotating CRON_SECRET on Vercel, update the GitHub Actions secret in the same change —
+# YAML/normalization alone cannot fix a stale repo secret (HTTP 401 Unauthorized).
 #
 # Optional: restrict which branches can run schedules (default branch only for schedule events).
 
@@ -49,6 +52,7 @@ jobs:
           import sys
           import urllib.error
           import urllib.request
+          from urllib.parse import urlparse
 
           def normalize(raw: str) -> str:
               # UTF-8 BOM, CR/LF, surrounding whitespace / NBSP / zero-width.
@@ -61,25 +65,28 @@ jobs:
               s = re.sub(r"^[Bb]earer\s+", "", s).strip()
               return s
 
-          url = normalize(os.environ.get("URL") or "")
+          def canonicalize_url(url: str) -> str:
+              # Prefer www so Authorization is not dropped on apex→www 307.
+              if url.startswith("https://firenepal.com/") or url == "https://firenepal.com":
+                  print("Canonicalized CRON_TARGET_URL host to www.firenepal.com")
+                  return "https://www.firenepal.com" + url[len("https://firenepal.com") :]
+              if url.startswith("http://firenepal.com/") or url == "http://firenepal.com":
+                  print("Canonicalized CRON_TARGET_URL host to www.firenepal.com (https)")
+                  return "https://www.firenepal.com" + url[len("http://firenepal.com") :]
+              return url
+
+          url = canonicalize_url(normalize(os.environ.get("URL") or ""))
           token = normalize(os.environ.get("TOKEN") or "")
 
           if not url or not token:
-              print("CRON_TARGET_URL or CRON_SECRET is empty after trimming whitespace/newlines.")
+              print("::error::CRON_TARGET_URL or CRON_SECRET is empty after trimming whitespace/newlines.")
               sys.exit(1)
 
-          # Canonicalize apex → www so Authorization is sent to the host that serves the API.
-          # urllib follows redirects but may drop Authorization across hosts; avoid that.
-          if url.startswith("https://firenepal.com/") or url == "https://firenepal.com":
-              url = "https://www.firenepal.com" + url[len("https://firenepal.com") :]
-              print("Canonicalized CRON_TARGET_URL host to www.firenepal.com")
-          elif url.startswith("http://firenepal.com/") or url == "http://firenepal.com":
-              url = "https://www.firenepal.com" + url[len("http://firenepal.com") :]
-              print("Canonicalized CRON_TARGET_URL host to www.firenepal.com (https)")
-
-          from urllib.parse import urlparse
-
           parsed = urlparse(url)
+          if parsed.scheme != "https" or not parsed.netloc or not parsed.path:
+              print(f"::error::CRON_TARGET_URL must be an https URL with a path, got host={parsed.netloc!r} path={parsed.path!r}")
+              sys.exit(1)
+
           print(f"Target URL host: {parsed.netloc}")
           print(f"Target URL path: {parsed.path}")
           print(f"CRON_SECRET length (chars): {len(token)}")
@@ -91,7 +98,7 @@ jobs:
               headers={
                   "Authorization": f"Bearer {token}",
                   "Accept": "application/json",
-                  "User-Agent": "fire-nepal-scheduled-reminders-cron/1.0",
+                  "User-Agent": "fire-nepal-scheduled-reminders-cron/1.1",
               },
           )
 
@@ -111,11 +118,11 @@ jobs:
 
           if code == 401:
               print(
-                  "::error::Unauthorized — GitHub secret CRON_SECRET must match Vercel env "
-                  "CRON_SECRET exactly (same bytes after trim). Header format is "
-                  "Authorization: Bearer <secret>. Prefer "
+                  "::error::Unauthorized — GitHub secret CRON_SECRET is out of sync with Vercel "
+                  "project fire-nepal env CRON_SECRET. Re-copy the Vercel value into the repo "
+                  "secret (no quotes / Bearer / newlines). Prefer "
                   "CRON_TARGET_URL=https://www.firenepal.com/api/cron/scheduled-reminders. "
-                  "Compare sha256 above with: printf %s \"$CRON_SECRET\" | sha256sum on Vercel."
+                  "Compare sha256 above with: printf %s \"$CRON_SECRET\" | sha256sum"
               )
               sys.exit(1)
 
