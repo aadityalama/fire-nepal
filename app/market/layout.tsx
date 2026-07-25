@@ -1,6 +1,6 @@
 /**
- * Minimal layout: `/market` redirects to `/portfolio` in `page.tsx`.
- * Keeps the route segment present for Next.js route typing after layout was removed.
+ * Minimal layout: `/market` redirects to `/portfolio/investments` in `page.tsx`.
+ * Kept so old bookmarks still land on the NEPSE Portfolio dashboard.
  */
 export default function MarketLayout({ children }: { children: React.ReactNode }) {
   return children;
