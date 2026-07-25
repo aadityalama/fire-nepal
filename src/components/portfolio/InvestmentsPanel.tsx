@@ -66,14 +66,19 @@ function defaultDraft(kind: InvestmentKind = "nepse"): InvestmentRow {
   };
 }
 
-function QuickInvestmentTransactionForm({
+export function QuickInvestmentTransactionForm({
   usdPerNpr,
   ledgerFx,
   onMutate,
+  onComplete,
+  compact,
 }: {
   usdPerNpr: number;
   ledgerFx: LedgerFx;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  onComplete?: () => void;
+  /** Omit outer marketing chrome when embedded in a sheet. */
+  compact?: boolean;
 }) {
   const { user } = useProductAuth();
   const [investmentType, setInvestmentType] = useState<QuickInvestmentType>("nepse");
@@ -229,12 +234,12 @@ function QuickInvestmentTransactionForm({
 
     resetForm();
     setSaved(true);
+    onComplete?.();
   };
 
-  return (
-    <section>
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-emerald-300/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.24),transparent_42%),linear-gradient(145deg,rgba(2,6,23,0.96),rgba(6,78,59,0.58))] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_70px_rgba(0,0,0,0.5)] sm:p-5">
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
+  const formBody = (
+        <>
+        {!compact ? (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100">
@@ -247,6 +252,7 @@ function QuickInvestmentTransactionForm({
           </div>
           {saved ? <CheckCircle2 className="mt-1 shrink-0 text-lime-300" size={22} /> : null}
         </div>
+        ) : null}
 
         <div className="space-y-3.5">
           <div>
@@ -377,7 +383,13 @@ function QuickInvestmentTransactionForm({
           ) : null}
         </div>
 
-        <div className="sticky bottom-0 z-20 -mx-4 mt-5 border-t border-emerald-300/10 bg-slate-950/80 px-4 pb-[calc(0.25rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+        <div
+          className={
+            compact
+              ? "sticky bottom-0 z-20 mt-5 border-t border-emerald-300/10 bg-slate-950/90 pt-3 backdrop-blur-xl"
+              : "sticky bottom-0 z-20 -mx-4 mt-5 border-t border-emerald-300/10 bg-slate-950/80 px-4 pb-[calc(0.25rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl"
+          }
+        >
           <button
             type="button"
             onClick={submit}
@@ -386,6 +398,18 @@ function QuickInvestmentTransactionForm({
             {submitLabel}
           </button>
         </div>
+        </>
+  );
+
+  if (compact) {
+    return <div className="relative">{formBody}</div>;
+  }
+
+  return (
+    <section>
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-emerald-300/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.24),transparent_42%),linear-gradient(145deg,rgba(2,6,23,0.96),rgba(6,78,59,0.58))] p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_24px_70px_rgba(0,0,0,0.5)] sm:p-5">
+        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
+        {formBody}
       </div>
     </section>
   );

@@ -9,11 +9,10 @@ import { SmartFinancialIntelligenceSection } from "@/components/financial-intell
 import { AiWealthIntelligenceSection } from "@/components/portfolio/AiWealthIntelligenceSection";
 import { GlobalRetirementAssetsPanel } from "@/components/portfolio/GlobalRetirementAssetsPanel";
 import { GlobalMasterLedgerPanel } from "@/components/portfolio/ledger-ui/GlobalMasterLedgerPanel";
-import { InteractivePortfolioTable } from "@/components/portfolio/InteractivePortfolioTable";
-import { InvestmentsPanel } from "@/components/portfolio/InvestmentsPanel";
 import { LiabilitiesPanel } from "@/components/portfolio/LiabilitiesPanel";
 import { LiquidCashPanel } from "@/components/portfolio/LiquidCashPanel";
 import { MetalsPanel } from "@/components/portfolio/MetalsPanel";
+import { NepsePortfolioDashboard } from "@/components/portfolio/nepse-portfolio";
 import { RealEstatePanel } from "@/components/portfolio/RealEstatePanel";
 import { VehiclesPanel } from "@/components/portfolio/VehiclesPanel";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
@@ -69,29 +68,25 @@ export function PortfolioBankingPage() {
 }
 
 export function PortfolioInvestmentsPage() {
-  const { state, krwPerNpr, usdPerNpr, ledgerFx, applyPortfolioMutate, updateInv, removeInv } =
+  const { state, krwPerNpr, usdPerNpr, ledgerFx, applyPortfolioMutate, removeInv } =
     useWealthPortfolio();
   const { snapshot, overlay } = useRealtimeMarket();
   return (
     <div className={flow}>
       <DashboardSectionHeader
         accent="emerald"
-        title="Investments"
-        subtitle="Nepse, global equities, funds, and crypto — live FX where applicable."
+        title="NEPSE Portfolio"
+        subtitle="Overview of holdings — tap a stock for WACC, history, and corporate actions."
       />
-      <InvestmentsPanel
-        ledger={state.ledger}
-        usdPerNpr={usdPerNpr}
-        ledgerFx={ledgerFx}
-        onMutate={applyPortfolioMutate}
-      />
-      <InteractivePortfolioTable
+      <NepsePortfolioDashboard
         rows={state.investments}
+        ledger={state.ledger}
         krwPerNpr={krwPerNpr}
         usdPerNpr={usdPerNpr}
+        ledgerFx={ledgerFx}
         liveMarket={snapshot}
         netWorthLiveNpr={overlay?.totalsLive.netWorthNpr ?? null}
-        onChange={updateInv}
+        onMutate={applyPortfolioMutate}
         onRemove={removeInv}
       />
     </div>
