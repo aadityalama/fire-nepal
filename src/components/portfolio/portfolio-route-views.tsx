@@ -72,7 +72,7 @@ export function PortfolioInvestmentsPage() {
     useWealthPortfolio();
   const { snapshot, overlay } = useRealtimeMarket();
   return (
-    <div className={flow}>
+    <div className="flex min-w-0 max-w-full flex-col gap-4 sm:gap-5">
       <DashboardSectionHeader
         accent="emerald"
         title="NEPSE Portfolio"

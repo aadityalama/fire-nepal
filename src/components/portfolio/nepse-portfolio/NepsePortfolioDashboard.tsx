@@ -70,14 +70,14 @@ export function NepsePortfolioDashboard({
           }}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5 sm:space-y-4">
           <NepseTopTabs
             active={activeTab}
             onChange={(tab) => setView({ kind: "tabs", tab })}
           />
 
           {activeTab === "overview" ? (
-            <div className="space-y-4">
+            <div className="space-y-3.5 sm:space-y-4">
               <NepseHeroCard summary={summary} />
               <div>
                 <h2 className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-100/45">
