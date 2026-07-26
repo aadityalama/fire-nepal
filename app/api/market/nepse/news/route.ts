@@ -66,12 +66,11 @@ export async function GET(request: Request) {
     isCorporateAction: Boolean(row.is_corporate_action),
   });
 
-  /** Exact symbol token match — `[NABIL]` yes, `NABILPNP` / `NADEP` no. */
+  /** Company pages only accept the ingest tag `[SYMBOL]` (avoids NABIL→NABILPNP and UPPER→Upper Mai). */
   const mentionsSymbol = (item: NepseNewsResponseItem): boolean => {
     if (!symbol) return true;
-    const hay = `${item.headline} ${item.summary ?? ""}`.toUpperCase();
-    if (hay.includes(`[${symbol}]`)) return true;
-    return new RegExp(`(?:^|[^A-Z0-9])${symbol}(?:[^A-Z0-9]|$)`).test(hay);
+    const hay = `${item.headline}\n${item.summary ?? ""}`.toUpperCase();
+    return hay.includes(`[${symbol}]`) || hay.startsWith(`${symbol} ·`) || hay.startsWith(`${symbol}\n`);
   };
 
   const items = (newsResult.data ?? []).map(toItem).filter(mentionsSymbol).slice(0, limit);
