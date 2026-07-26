@@ -12,7 +12,9 @@ import { fetchJson } from "@/lib/api/fetch-json";
 const FINANCIALS_URL = "https://shubhamnpk.github.io/yonepse/data/company/financials.json";
 const DIVIDENDS_URL = "https://shubhamnpk.github.io/yonepse/data/proposed_dividend/history_all_years.json";
 const SECURITIES_URL = "https://shubhamnpk.github.io/yonepse/data/all_securities.json";
-const DISCLOSURES_URL = "https://shubhamnpk.github.io/yonepse/data/disclosures.json";
+const DISCLOSURES_URL = "https://shubhamnpk.github.io/yonepse/data/notify/disclosures.json";
+/** Official NEPSE exchange notices (listings, book closures, bonus/rights) — symbol-tagged. */
+const EXCHANGE_MESSAGES_URL = "https://shubhamnpk.github.io/yonepse/data/notify/exchange_messages.json";
 
 /** Filings change at most a few times per quarter — cache aggressively. */
 const TTL_MS = 6 * 60 * 60 * 1000;
@@ -233,6 +235,39 @@ export async function getCompanyDisclosures(limit = 600): Promise<ProviderDisclo
       source: str(raw.source),
       publishedAt: str(raw.publishedAt),
       sourceUrl: fileUrl ?? `https://shubhamnpk.github.io/yonepse/disclosure/${id}`,
+    });
+    if (rows.length >= limit) break;
+  }
+  cache.set(key, rows, TTL_MS);
+  return rows;
+}
+
+/**
+ * Official NEPSE exchange notices (symbol-tagged): IPO/FPO listings, book closures,
+ * bonus/rights announcements. A second public disclosure stream distinct from company
+ * disclosures — merged into news + corporate actions to widen coverage.
+ */
+export async function getExchangeMessages(limit = 400): Promise<ProviderDisclosure[]> {
+  const key = `nepse-provider-exchange-messages-v1:${limit}`;
+  const hit = cache.get<ProviderDisclosure[]>(key);
+  if (hit) return hit;
+
+  const payload = await fetchJson<Record<string, unknown>[]>(EXCHANGE_MESSAGES_URL, { timeoutMs: 25_000, retries: 1 });
+  const rows: ProviderDisclosure[] = [];
+  for (const raw of Array.isArray(payload) ? payload : []) {
+    const symbol = str(raw.symbol)?.toUpperCase();
+    const title = str(raw.title);
+    if (!symbol || !title) continue;
+    const id = raw.id != null ? String(raw.id) : `${symbol}-${title}`.slice(0, 80);
+    const fileUrl = str(raw.fileUrl);
+    rows.push({
+      id: `exm-${id}`,
+      symbol,
+      title,
+      body: str(raw.body),
+      source: "NEPSE",
+      publishedAt: str(raw.publishedAt),
+      sourceUrl: fileUrl ?? `https://www.nepalstock.com.np/notice/${id}`,
     });
     if (rows.length >= limit) break;
   }

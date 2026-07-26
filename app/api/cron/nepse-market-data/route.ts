@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   backfillEodHistory,
   createMarketDataServiceClient,
+  ingestCompanyActions,
   ingestCompanyDisclosures,
   ingestCompanyFundamentals,
   ingestEodPrices,
@@ -12,8 +13,9 @@ import {
  * Vercel Cron (after NEPSE close):
  * 1) Snapshot today's validated live quotes into `nepse_eod_prices`
  * 2) Backfill multi-day OHLC for symbols still short on history
- * 3) Aggregate configured news feeds + company disclosures into `nepse_market_news`
+ * 3) Aggregate configured news feeds + company disclosures + exchange notices into `nepse_market_news`
  * 4) Refresh fundamentals from filings
+ * 5) Build typed corporate actions into `nepse_company_actions`
  *
  * Manual: GET /api/cron/nepse-market-data?backfill=1&limit=80&priority=NABIL,VLBS,UPPER
  * When `CRON_SECRET` is set, send `Authorization: Bearer <CRON_SECRET>`.
@@ -58,12 +60,17 @@ export async function GET(request: Request) {
     url.searchParams.get("disclosures") !== "0"
       ? await ingestCompanyDisclosures(sb)
       : { kind: "news" as const, status: "ok" as const, items: 0, message: "Skipped (disclosures=0)" };
+  const actions =
+    url.searchParams.get("actions") !== "0"
+      ? await ingestCompanyActions(sb)
+      : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (actions=0)" };
 
   const ok =
     eod.status !== "error" &&
     news.status !== "error" &&
     disclosures.status !== "error" &&
+    actions.status !== "error" &&
     backfill.status !== "error" &&
     fundamentals.status !== "error";
-  return NextResponse.json({ ok, eod, backfill, fundamentals, news, disclosures }, { status: ok ? 200 : 500 });
+  return NextResponse.json({ ok, eod, backfill, fundamentals, news, disclosures, actions }, { status: ok ? 200 : 500 });
 }

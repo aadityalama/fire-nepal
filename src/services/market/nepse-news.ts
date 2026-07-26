@@ -66,6 +66,37 @@ export function isCorporateActionHeadline(headline: string): boolean {
   return CORPORATE_ACTION_PATTERN.test(headline);
 }
 
+/**
+ * Maps a disclosure / notice headline to a structured corporate-action type used by the
+ * `nepse_company_actions` timeline. Returns null when the text is not a typed action
+ * (e.g. resignations, clarifications, general board news) so we never fabricate a type.
+ * Ordered most-specific → least-specific: mergers & rights before generic book-closure.
+ */
+export function classifyCorporateAction(
+  text: string,
+):
+  | "rights"
+  | "bonus"
+  | "dividend"
+  | "agm"
+  | "book_close"
+  | "fpo"
+  | "ipo"
+  | "merger"
+  | null {
+  const t = text.toLowerCase();
+  if (/\b(merger|amalgamat|acquisit|acquire)\b/.test(t)) return "merger";
+  if (/\b(right share|rights? issue|right shares)\b/.test(t)) return "rights";
+  if (/\bfpo\b|further public offer/.test(t)) return "fpo";
+  if (/\bipo\b|initial public offer|allotment/.test(t)) return "ipo";
+  if (/bonus share|bonus dividend/.test(t)) return "bonus";
+  if (/dividend/.test(t)) return "dividend";
+  if (/\bagm\b|\bsgm\b|annual general meeting|special general meeting/.test(t)) return "agm";
+  if (/book clos|book-clos/.test(t)) return "book_close";
+  if (/listing|listed .*shares?|commence.*trading/.test(t)) return "ipo";
+  return null;
+}
+
 function stripHtml(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")

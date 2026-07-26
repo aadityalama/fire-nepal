@@ -446,14 +446,24 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
   return result;
 }
 
-/** Ingest symbol-tagged NEPSE disclosures into the news table for company pages. */
+/** Ingest symbol-tagged NEPSE disclosures + official exchange notices into the news table. */
 export async function ingestCompanyDisclosures(sb: SupabaseClient): Promise<IngestResult> {
   const startedAt = new Date();
   let result: IngestResult;
   try {
-    const { getCompanyDisclosures } = await import("@/services/market/nepse-fundamentals-provider");
+    const { getCompanyDisclosures, getExchangeMessages } = await import("@/services/market/nepse-fundamentals-provider");
     const { categorizeHeadline, scoreSentiment, isCorporateActionHeadline } = await import("@/services/market/nepse-news");
-    const disclosures = await getCompanyDisclosures(600);
+    const [companyDisclosures, exchangeMessages] = await Promise.all([
+      getCompanyDisclosures(600),
+      getExchangeMessages(400).catch(() => []),
+    ]);
+    // Dedupe by source_url so the two official streams never double-post the same notice.
+    const seen = new Set<string>();
+    const disclosures = [...companyDisclosures, ...exchangeMessages].filter((row) => {
+      if (seen.has(row.sourceUrl)) return false;
+      seen.add(row.sourceUrl);
+      return true;
+    });
     if (!disclosures.length) {
       result = { kind: "news", status: "ok", items: 0, message: "No disclosures published by provider" };
     } else {
@@ -482,7 +492,7 @@ export async function ingestCompanyDisclosures(sb: SupabaseClient): Promise<Inge
         kind: "news",
         status: "ok",
         items: persisted,
-        message: `Upserted ${persisted} symbol-tagged disclosures`,
+        message: `Upserted ${persisted} symbol-tagged disclosures + exchange notices`,
       };
     }
   } catch (error) {
@@ -491,6 +501,145 @@ export async function ingestCompanyDisclosures(sb: SupabaseClient): Promise<Inge
       status: "error",
       items: 0,
       message: error instanceof Error ? error.message : "Disclosure ingest failed",
+    };
+  }
+  await logRun(sb, result, startedAt);
+  return result;
+}
+
+/**
+ * Build typed corporate actions (rights/bonus/dividend/agm/book_close/ipo/fpo/merger) from
+ * the official disclosure streams and the proposed-dividend history, then upsert them into
+ * `nepse_company_actions`. Only real, symbol-tagged events are stored — never synthesized.
+ */
+export async function ingestCompanyActions(sb: SupabaseClient): Promise<IngestResult> {
+  const startedAt = new Date();
+  let result: IngestResult;
+  try {
+    const { getCompanyDisclosures, getExchangeMessages, getDividendHistoryBySymbol } = await import(
+      "@/services/market/nepse-fundamentals-provider"
+    );
+    const { classifyCorporateAction } = await import("@/services/market/nepse-news");
+
+    const [companyDisclosures, exchangeMessages, dividendsBySymbol] = await Promise.all([
+      getCompanyDisclosures(600),
+      getExchangeMessages(400).catch(() => []),
+      getDividendHistoryBySymbol().catch(() => new Map()),
+    ]);
+
+    type ActionRow = {
+      symbol: string;
+      action_type: string;
+      title: string;
+      action_date: string | null;
+      details: string | null;
+      source_url: string | null;
+      source: string | null;
+      dedupe_key: string;
+    };
+
+    const rows: ActionRow[] = [];
+    const seen = new Set<string>();
+    const push = (row: Omit<ActionRow, "dedupe_key">) => {
+      const dedupe_key = `${row.symbol}|${row.action_type}|${row.action_date ?? ""}|${row.title.slice(0, 80)}`;
+      if (seen.has(dedupe_key)) return;
+      seen.add(dedupe_key);
+      rows.push({ ...row, dedupe_key });
+    };
+
+    const toDate = (value: string | null): string | null => {
+      if (!value) return null;
+      const iso = value.length >= 10 ? value.slice(0, 10) : value;
+      return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
+    };
+
+    // 1) Disclosures + official exchange notices → typed actions (skip untyped news).
+    for (const d of [...companyDisclosures, ...exchangeMessages]) {
+      const actionType = classifyCorporateAction(`${d.title} ${d.body ?? ""}`);
+      if (!actionType) continue;
+      push({
+        symbol: d.symbol,
+        action_type: actionType,
+        title: d.title.slice(0, 300),
+        action_date: toDate(d.publishedAt),
+        details: d.body ? d.body.slice(0, 400) : null,
+        source_url: d.sourceUrl,
+        source: d.source ?? "NEPSE",
+      });
+    }
+
+    // 2) Proposed-dividend history → dividend / bonus / book_close actions.
+    for (const [symbol, list] of dividendsBySymbol.entries()) {
+      for (const div of list as { fiscalYear: string; cashPct: number | null; bonusPct: number | null; totalPct: number | null; announcementDate: string | null; bookCloseDate: string | null }[]) {
+        const cash = div.cashPct ?? 0;
+        const bonus = div.bonusPct ?? 0;
+        const parts: string[] = [];
+        if (cash > 0) parts.push(`Cash ${cash}%`);
+        if (bonus > 0) parts.push(`Bonus ${bonus}%`);
+        const details = parts.length ? `FY ${div.fiscalYear} · ${parts.join(" · ")}` : `FY ${div.fiscalYear}`;
+        const annDate = toDate(div.announcementDate);
+        if ((div.totalPct ?? 0) > 0 && cash > 0) {
+          push({
+            symbol,
+            action_type: "dividend",
+            title: `Cash dividend ${cash}% (FY ${div.fiscalYear})`,
+            action_date: annDate,
+            details,
+            source_url: null,
+            source: "NEPSE proposed dividend",
+          });
+        }
+        if (bonus > 0) {
+          push({
+            symbol,
+            action_type: "bonus",
+            title: `Bonus share ${bonus}% (FY ${div.fiscalYear})`,
+            action_date: annDate,
+            details,
+            source_url: null,
+            source: "NEPSE proposed dividend",
+          });
+        }
+        const bookClose = toDate(div.bookCloseDate);
+        if (bookClose) {
+          push({
+            symbol,
+            action_type: "book_close",
+            title: `Book closure (FY ${div.fiscalYear})`,
+            action_date: bookClose,
+            details,
+            source_url: null,
+            source: "NEPSE proposed dividend",
+          });
+        }
+      }
+    }
+
+    if (!rows.length) {
+      result = { kind: "fundamentals", status: "ok", items: 0, message: "No typed corporate actions available" };
+    } else {
+      let persisted = 0;
+      for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        const { error } = await sb
+          .from("nepse_company_actions")
+          .upsert(chunk, { onConflict: "dedupe_key", ignoreDuplicates: true });
+        if (error) throw new Error(error.message);
+        persisted += chunk.length;
+      }
+      result = {
+        kind: "fundamentals",
+        status: "ok",
+        items: persisted,
+        message: `Upserted ${persisted} typed corporate actions across ${new Set(rows.map((r) => r.symbol)).size} symbols`,
+      };
+    }
+  } catch (error) {
+    result = {
+      kind: "fundamentals",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Corporate actions ingest failed",
     };
   }
   await logRun(sb, result, startedAt);
