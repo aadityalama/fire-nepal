@@ -10,6 +10,7 @@ import {
   Brain,
   Building2,
   Calculator,
+  CandlestickChart,
   CreditCard,
   Crown,
   FileText,
@@ -227,9 +228,9 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         plan: "premium",
       },
       {
-        href: "/market",
-        title: "NEPSE Hub",
-        body: "Live market, charts, watchlist & research",
+        href: "/portfolio/investments",
+        title: "My NEPSE Holdings",
+        body: "Track holdings, P/L & corporate actions",
         icon: BarChart3,
         accent: "from-blue-500/15 to-emerald-500/10",
         plan: "premium",
@@ -299,6 +300,16 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
     icon: Crown,
     tone: "elite",
     apps: [
+      {
+        href: "/market",
+        title: "NEPSE Hub",
+        body: "Live market, charts, screener, watchlist & AI research",
+        icon: CandlestickChart,
+        accent: "from-emerald-500/40 to-teal-300/15",
+        badge: "FLAGSHIP",
+        testId: "hub-nepse-hub-card",
+        plan: "elite",
+      },
       {
         href: "/fire-biz",
         title: "FIRE Biz",
