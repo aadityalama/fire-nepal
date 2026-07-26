@@ -13,7 +13,7 @@ import {
  */
 
 export type IngestResult = {
-  kind: "eod" | "news";
+  kind: "eod" | "news" | "fundamentals";
   status: "ok" | "partial" | "error";
   items: number;
   message: string;
@@ -142,6 +142,24 @@ export async function ingestMarketNews(sb: SupabaseClient): Promise<IngestResult
       message: error instanceof Error ? error.message : "News ingest failed",
     };
   }
+  await logRun(sb, result, startedAt);
+  return result;
+}
+
+/**
+ * Fundamentals ingest hook for future licensed providers.
+ * Tables (`nepse_company_*`) are ready; until a provider is configured this logs a no-op run.
+ * Use upsert helpers in `nepse-company-fundamentals.ts` to write rows.
+ */
+export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<IngestResult> {
+  const startedAt = new Date();
+  const result: IngestResult = {
+    kind: "fundamentals",
+    status: "ok",
+    items: 0,
+    message:
+      "No fundamentals provider configured — profile/valuation/financials/dividends/actions tables are ready for upsert",
+  };
   await logRun(sb, result, startedAt);
   return result;
 }

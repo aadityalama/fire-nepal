@@ -19,17 +19,28 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { CompanyActionsTimeline } from "@/components/market/company/CompanyActionsTimeline";
+import { CompanyDividendTable } from "@/components/market/company/CompanyDividendTable";
+import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinancialsTable";
+import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid";
+import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
+import { useNepseCompanyFundamentals } from "@/hooks/useNepseCompanyFundamentals";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import { buildCompanyInsight } from "@/lib/market/nepse-company-insights";
-import { buildIndexSeries, formatCompactNpr } from "@/lib/market/nepse-hub";
+import {
+  formatFundamentalText,
+  formatFundamentalValue,
+} from "@/lib/market/nepse-fundamentals-format";
+import { buildIndexSeries } from "@/lib/market/nepse-hub";
 import {
   buildIndicatorReadings,
   type Candle,
   type IndicatorSignal,
 } from "@/lib/market/technical-indicators";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
+import { DATA_UNAVAILABLE } from "@/types/market/nepse-company-fundamentals";
 import { NepseMarketChart } from "./NepseMarketChart";
 
 const SECTIONS = [
@@ -47,21 +58,6 @@ const SECTIONS = [
 const card =
   "rounded-[1.5rem] border border-slate-200/80 bg-white/88 shadow-[0_22px_70px_-44px_rgba(5,46,34,0.32)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-white/[0.035] dark:shadow-[0_22px_70px_-44px_rgba(0,0,0,0.9)]";
 const eyebrow = "text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500";
-
-const STATEMENT_ROWS = [
-  ["Revenue", "—", "—", "—"],
-  ["Operating Profit", "—", "—", "—"],
-  ["Net Profit", "—", "—", "—"],
-  ["Total Assets", "—", "—", "—"],
-  ["Equity", "—", "—", "—"],
-] as const;
-
-const OWNERSHIP_SLICES = [
-  { label: "Promoter", pct: null as number | null, color: "bg-emerald-500" },
-  { label: "Public", pct: null, color: "bg-teal-400" },
-  { label: "Institutions", pct: null, color: "bg-cyan-400" },
-  { label: "Others", pct: null, color: "bg-slate-400" },
-];
 
 function signalClasses(signal: IndicatorSignal): string {
   if (signal === "bullish") {
@@ -128,27 +124,6 @@ function SectionShell({
       </div>
       {children}
     </section>
-  );
-}
-
-function MetricTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
-      <p className={eyebrow}>{label}</p>
-      <p className="mt-2 truncate text-sm font-black tabular-nums text-slate-950 dark:text-white sm:text-base">{value}</p>
-      {hint ? <p className="mt-1 text-[10px] font-semibold text-slate-400 dark:text-zinc-600">{hint}</p> : null}
-    </div>
-  );
-}
-
-function PendingPanel({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="grid min-h-36 place-items-center rounded-2xl border border-dashed border-slate-300/90 bg-slate-50/60 p-6 text-center dark:border-white/10 dark:bg-white/[0.02]">
-      <div className="max-w-md">
-        <p className="text-sm font-black text-slate-800 dark:text-zinc-200">{title}</p>
-        <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{body}</p>
-      </div>
-    </div>
   );
 }
 
@@ -224,7 +199,14 @@ function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) 
 
 function NewsList({ items, empty }: { items: NepseNewsItem[]; empty: string }) {
   if (!items.length) {
-    return <PendingPanel title="No matching headlines yet" body={empty} />;
+    return (
+      <div className="grid min-h-36 place-items-center rounded-2xl border border-dashed border-slate-300/90 bg-slate-50/60 p-6 text-center dark:border-white/10 dark:bg-white/[0.02]">
+        <div className="max-w-md">
+          <p className="text-sm font-black text-slate-800 dark:text-zinc-200">No matching headlines yet</p>
+          <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{empty}</p>
+        </div>
+      </div>
+    );
   }
   return (
     <ul className="divide-y divide-slate-200/70 dark:divide-white/[0.06]">
@@ -256,13 +238,20 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { snapshot } = useRealtimeMarket();
   const { isWatched, toggle } = useNepseWatchlist();
   const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
+  const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
   const tick = snapshot?.nepseBySymbol[normalized];
+  const profile = fundamentals?.profile;
+  const valuation = fundamentals?.valuation;
+  const session = fundamentals?.session;
+  const range52w = fundamentals?.range52w;
   const positive = (tick?.changePct ?? 0) >= 0;
   const hasQuote = Boolean(tick && tick.ltpNpr > 0);
   const displayPrice = hasQuote ? tick!.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : null;
   const priceLabel = hasQuote ? "Live Price & Session" : displayPrice != null ? "Previous Close (live LTP unavailable)" : "Live Price & Session";
+  const companyName = profile?.companyName ?? tick?.companyName ?? null;
+  const sector = profile?.sector ?? tick?.sector ?? null;
 
   const candles = useMemo<Candle[]>(() => {
     const anchor = tick?.ltpNpr && tick.ltpNpr > 0 ? tick.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : 1_000;
@@ -281,7 +270,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
     () => newsItems.filter((item) => mentionsSymbol(item, normalized)).slice(0, 8),
     [newsItems, normalized],
   );
-  const companyActions = useMemo(() => {
+  const companyActionsNews = useMemo(() => {
     const matched = corporateActions.filter((item) => mentionsSymbol(item, normalized));
     if (matched.length) return matched.slice(0, 8);
     return corporateActions.slice(0, 6);
@@ -310,21 +299,46 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const keyMetrics = [
-    { label: "P/E Ratio", value: "—", hint: "Audited EPS required" },
-    { label: "EPS", value: "—", hint: "Quarterly report required" },
-    { label: "ROE", value: "—", hint: "Equity statement required" },
-    { label: "Book Value", value: "—", hint: "Balance sheet required" },
+  const overviewMetrics = [
+    { label: "Symbol", value: normalized, style: "text" as const },
+    { label: "Company Name", value: formatFundamentalText(companyName), style: "text" as const },
+    { label: "Sector", value: formatFundamentalText(sector), style: "text" as const },
+    { label: "Industry", value: formatFundamentalText(profile?.industry), style: "text" as const },
+    { label: "Market Cap", value: profile?.marketCapNpr ?? tick?.marketCap ?? null, style: "compactNpr" as const },
+    { label: "Paid-up Capital", value: profile?.paidUpCapitalNpr ?? null, style: "compactNpr" as const },
+    { label: "Listed Shares", value: profile?.listedShares ?? null, style: "shares" as const },
+    { label: "Public Shares", value: profile?.publicShares ?? null, style: "shares" as const },
+    { label: "Promoter Shares", value: profile?.promoterShares ?? null, style: "shares" as const },
+    { label: "52W High", value: range52w?.highNpr ?? null, style: "npr" as const },
+    { label: "52W Low", value: range52w?.lowNpr ?? null, style: "npr" as const },
     {
-      label: "Market Cap",
-      value: tick?.marketCap != null ? tick.marketCap.toLocaleString("en-IN") : "—",
-      hint: tick?.marketCap != null ? "From live market feed" : "Feed value unavailable",
+      label: "Intraday Range",
+      value: tick?.intradayRangePct ?? null,
+      style: "pct" as const,
     },
-    {
-      label: "Turnover",
-      value: formatCompactNpr(tick?.turnoverNpr),
-      hint: "Session",
-    },
+  ];
+
+  const sessionMetrics = [
+    { label: "Open", value: session?.openNpr ?? tick?.openNpr ?? null, style: "npr" as const },
+    { label: "Today's High", value: session?.highNpr ?? tick?.highNpr ?? null, style: "npr" as const },
+    { label: "Today's Low", value: session?.lowNpr ?? tick?.lowNpr ?? null, style: "npr" as const },
+    { label: "Close", value: session?.closeNpr ?? (hasQuote ? tick!.ltpNpr : null), style: "npr" as const },
+    { label: "Previous Close", value: session?.previousCloseNpr ?? tick?.previousCloseNpr ?? null, style: "npr" as const },
+    { label: "Volume", value: session?.volume ?? tick?.volume ?? null, style: "shares" as const },
+    { label: "Turnover", value: session?.turnoverNpr ?? tick?.turnoverNpr ?? null, style: "compactNpr" as const },
+    { label: "Trades", value: session?.trades ?? tick?.trades ?? null, style: "shares" as const },
+  ];
+
+  const valuationMetrics = [
+    { label: "EPS", value: valuation?.eps ?? null },
+    { label: "PE Ratio", value: valuation?.pe ?? null },
+    { label: "Book Value", value: valuation?.bookValueNpr ?? null, style: "npr" as const },
+    { label: "PB Ratio", value: valuation?.pb ?? null },
+    { label: "ROE", value: valuation?.roePct ?? null, style: "pct" as const },
+    { label: "ROA", value: valuation?.roaPct ?? null, style: "pct" as const },
+    { label: "Net Worth", value: valuation?.netWorthNpr ?? null, style: "compactNpr" as const },
+    { label: "Graham Number", value: valuation?.grahamNumber ?? null, style: "npr" as const },
+    { label: "Market Cap", value: profile?.marketCapNpr ?? tick?.marketCap ?? null, style: "compactNpr" as const },
   ];
 
   return (
@@ -342,7 +356,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             </Link>
             <div className="min-w-0">
               <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
-                {tick?.companyName ?? "NEPSE listed company"}
+                {formatFundamentalText(companyName) === DATA_UNAVAILABLE ? "NEPSE listed company" : companyName}
               </p>
               <h1 className="truncate text-xl font-black tracking-tight sm:text-2xl">{normalized}</h1>
             </div>
@@ -370,7 +384,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/55">{priceLabel}</p>
               <p className="mt-2 text-[2.4rem] font-black leading-none tracking-[-0.04em] tabular-nums sm:text-[3.25rem]">
-                {displayPrice != null ? `रु ${displayPrice.toLocaleString("en-IN")}` : "—"}
+                {displayPrice != null ? `रु ${displayPrice.toLocaleString("en-IN")}` : DATA_UNAVAILABLE}
               </p>
               <p className={`mt-3 text-sm font-black ${positive ? "text-emerald-300" : "text-rose-300"}`}>
                 {tick?.changePct == null
@@ -378,14 +392,14 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
                   : `${positive ? "+" : ""}${tick.changePct.toFixed(2)}%${tick.changeNpr != null ? ` · रु ${tick.changeNpr >= 0 ? "+" : ""}${tick.changeNpr.toLocaleString("en-IN")}` : ""} today`}
               </p>
               <p className="mt-2 text-[11px] font-semibold text-emerald-100/55">
-                {tick?.sector ?? "Sector unmapped"} · Updated {tick?.lastUpdated ? formatPublished(tick.lastUpdated) : snapshot?.fetchedAt ? formatPublished(snapshot.fetchedAt) : "—"}
+                {formatFundamentalText(sector)} · Updated {tick?.lastUpdated ? formatPublished(tick.lastUpdated) : snapshot?.fetchedAt ? formatPublished(snapshot.fetchedAt) : DATA_UNAVAILABLE}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-right sm:gap-3">
               {[
-                ["High", tick?.highNpr ? `रु ${tick.highNpr.toLocaleString("en-IN")}` : "—"],
-                ["Low", tick?.lowNpr ? `रु ${tick.lowNpr.toLocaleString("en-IN")}` : "—"],
-                ["Volume", tick?.volume?.toLocaleString("en-IN") ?? "—"],
+                ["High", formatFundamentalValue(session?.highNpr ?? tick?.highNpr, { style: "npr" })],
+                ["Low", formatFundamentalValue(session?.lowNpr ?? tick?.lowNpr, { style: "npr" })],
+                ["Volume", formatFundamentalValue(session?.volume ?? tick?.volume, { style: "shares" })],
               ].map(([label, value]) => (
                 <div key={label} className="min-w-[4.5rem] rounded-xl bg-white/5 px-2.5 py-2 ring-1 ring-white/10">
                   <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/45">{label}</p>
@@ -419,24 +433,14 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
 
         <div className="mt-4 space-y-4">
           {/* 1. Company Overview */}
-          <SectionShell id="overview" icon={Building2} title="Company Overview" subtitle="Identity, session context and risk posture">
+          <SectionShell id="overview" icon={Building2} title="Company Overview" subtitle="Identity, capital structure, session stats and 52-week range">
             <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[
-                  ["Symbol", normalized],
-                  ["Company", tick?.companyName ?? "—"],
-                  ["Sector", tick?.sector ?? "—"],
-                  ["Previous Close", tick?.previousCloseNpr ? `रु ${tick.previousCloseNpr.toLocaleString("en-IN")}` : "—"],
-                  ["Trades", tick?.trades?.toLocaleString("en-IN") ?? "—"],
-                  ["Range", tick?.intradayRangePct == null ? "—" : `${tick.intradayRangePct.toFixed(2)}%`],
-                  ["52W High", "History required"],
-                  ["52W Low", "History required"],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                    <p className={eyebrow}>{label}</p>
-                    <p className="mt-1.5 truncate text-xs font-black text-slate-950 dark:text-white">{value}</p>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                <CompanyMetricGrid items={overviewMetrics} className="grid grid-cols-2 gap-2 sm:grid-cols-3" />
+                <div>
+                  <p className={`${eyebrow} mb-2`}>Session</p>
+                  <CompanyMetricGrid items={sessionMetrics} className="grid grid-cols-2 gap-2 sm:grid-cols-4" />
+                </div>
               </div>
               <div className="space-y-3">
                 <AlertComposer symbol={normalized} ltpNpr={tick?.ltpNpr} />
@@ -473,62 +477,27 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             </div>
           </SectionShell>
 
-          {/* 3. Key Metrics */}
-          <SectionShell id="key-metrics" icon={PieChart} title="Key Metrics" subtitle="PE, EPS, ROE, Book Value and Market Cap">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="company-key-metrics">
-              {keyMetrics.map((metric) => (
-                <MetricTile key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} />
-              ))}
-            </div>
+          {/* 3. Key Metrics / Valuation */}
+          <SectionShell
+            id="key-metrics"
+            icon={PieChart}
+            title="Key Metrics"
+            subtitle={fundamentalsLoaded ? "Valuation from the fundamental data engine" : "Loading valuation…"}
+          >
+            <CompanyMetricGrid items={valuationMetrics} testId="company-key-metrics" />
           </SectionShell>
 
           {/* 4. Financial Statements */}
-          <SectionShell id="financials" icon={FileSpreadsheet} title="Financial Statements" subtitle="Income, balance sheet and cash-flow ready slots">
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06]" data-testid="company-financials">
-              <table className="min-w-full text-left text-xs">
-                <thead className="bg-slate-50/90 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:bg-white/[0.03] dark:text-zinc-500">
-                  <tr>
-                    <th className="px-3 py-2.5">Line item</th>
-                    <th className="px-3 py-2.5">FY-2</th>
-                    <th className="px-3 py-2.5">FY-1</th>
-                    <th className="px-3 py-2.5">Latest</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {STATEMENT_ROWS.map(([label, a, b, c]) => (
-                    <tr key={label} className="border-t border-slate-200/70 dark:border-white/[0.06]">
-                      <td className="px-3 py-2.5 font-bold text-slate-800 dark:text-zinc-200">{label}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{a}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{b}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{c}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <SectionShell id="financials" icon={FileSpreadsheet} title="Financial Statements" subtitle="Revenue, profit, reserves, cash, borrowings, assets and liabilities">
+            <CompanyFinancialsTable rows={fundamentals?.financials ?? []} />
             <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-zinc-500">
-              Statement figures populate automatically after the audited company-data provider is connected. Empty cells are intentional — not estimates.
+              Missing cells show “{DATA_UNAVAILABLE}”. Figures appear only after audited statement rows are ingested — never estimated.
             </p>
           </SectionShell>
 
           {/* 5. Dividend / Bonus / Rights */}
-          <SectionShell id="dividends" icon={Gift} title="Dividend / Bonus / Rights History" subtitle="Corporate distributions and capital actions">
-            <div className="grid gap-2 sm:grid-cols-3" data-testid="company-dividends">
-              {[
-                ["Cash Dividend", "No history loaded"],
-                ["Bonus Share", "No history loaded"],
-                ["Rights Issue", "No history loaded"],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                  <p className={eyebrow}>{label}</p>
-                  <p className="mt-2 text-xs font-black text-slate-500 dark:text-zinc-500">{value}</p>
-                </div>
-              ))}
-            </div>
-            <PendingPanel
-              title="Distribution ledger pending"
-              body="Dividend, bonus and rights rows will render chronologically once corporate-action history is ingested for this symbol."
-            />
+          <SectionShell id="dividends" icon={Gift} title="Dividend / Bonus / Rights History" subtitle="Fiscal year, bonus %, cash %, book close and AGM">
+            <CompanyDividendTable rows={fundamentals?.dividends ?? []} />
           </SectionShell>
 
           {/* 6. Corporate Actions Timeline */}
@@ -536,60 +505,41 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             id="actions"
             icon={CalendarClock}
             title="Corporate Actions Timeline"
-            subtitle={newsLoaded ? "From aggregated market headlines tagged as corporate actions" : "Loading corporate action feed…"}
+            subtitle={
+              fundamentals?.actions.length
+                ? "Structured rights, bonus, dividend, AGM, book close, FPO, IPO and merger events"
+                : newsLoaded
+                  ? "Fallback headlines tagged as corporate actions until structured events are ingested"
+                  : "Loading corporate action feed…"
+            }
           >
-            <div data-testid="company-actions-timeline">
-              {companyActions.length ? (
-                <ol className="relative space-y-0 border-l border-emerald-300/40 pl-4 dark:border-emerald-400/25">
-                  {companyActions.map((item) => (
-                    <li key={item.id} className="relative pb-4 last:pb-0">
-                      <span className="absolute -left-[1.28rem] top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-[#f4f8f6] dark:ring-[#030a08]" />
-                      <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-500">
-                        {formatPublished(item.publishedAt)} · {item.sourceName}
-                        {!mentionsSymbol(item, normalized) ? " · Market-wide" : ""}
-                      </p>
-                      <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm font-black leading-snug text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">
-                        {item.headline}
-                      </a>
-                      {item.summary ? <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-zinc-500">{item.summary}</p> : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <PendingPanel
-                  title="No corporate actions in feed"
-                  body="When dividend, bonus, rights or AGM notices are ingested, they will appear here as a timeline."
-                />
-              )}
-            </div>
+            <CompanyActionsTimeline
+              actions={fundamentals?.actions ?? []}
+              fallbackNews={companyActionsNews.map((item) => ({
+                id: item.id,
+                title: item.headline,
+                date: item.publishedAt,
+                source: item.sourceName,
+                url: item.sourceUrl,
+                marketWide: !mentionsSymbol(item, normalized),
+              }))}
+            />
           </SectionShell>
 
           {/* 7. Shareholding Structure */}
-          <SectionShell id="shareholding" icon={Users} title="Shareholding Structure" subtitle="Promoter, public and institutional ownership">
-            <div className="grid gap-4 sm:grid-cols-[1fr_0.9fr]" data-testid="company-shareholding">
-              <div>
-                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.05]" aria-hidden>
-                  {OWNERSHIP_SLICES.map((slice) => (
-                    <div key={slice.label} className={`${slice.color} h-full opacity-35`} style={{ width: "25%" }} />
-                  ))}
-                </div>
-                <ul className="mt-3 grid grid-cols-2 gap-2">
-                  {OWNERSHIP_SLICES.map((slice) => (
-                    <li key={slice.label} className="rounded-xl border border-slate-200/70 bg-slate-50/70 px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${slice.color}`} />
-                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{slice.label}</span>
-                      </div>
-                      <p className="mt-1 text-sm font-black text-slate-400 dark:text-zinc-600">—</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <PendingPanel
-                title="Ownership registry pending"
-                body="Shareholding percentages and major holders will populate from the official ownership feed — never estimated from price action."
-              />
-            </div>
+          <SectionShell id="shareholding" icon={Users} title="Shareholding Structure" subtitle="Promoter, public and listed share counts">
+            <CompanyShareholdingPanel
+              shareholding={
+                fundamentals?.shareholding ?? {
+                  promoterShares: null,
+                  publicShares: null,
+                  listedShares: null,
+                  promoterPct: null,
+                  publicPct: null,
+                  otherPct: null,
+                }
+              }
+            />
           </SectionShell>
 
           {/* 8. Company News */}

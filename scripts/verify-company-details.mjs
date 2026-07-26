@@ -8,16 +8,16 @@ const SYMBOL = (process.argv[3] ?? "NABIL").toUpperCase();
 const OUT = "tmp-company-details";
 mkdirSync(OUT, { recursive: true });
 
-const REQUIRED = [
-  { id: "overview", testId: null, title: "Company Overview" },
-  { id: "price-chart", testId: "company-live-price", title: "Live Price & Chart" },
-  { id: "key-metrics", testId: "company-key-metrics", title: "Key Metrics" },
-  { id: "financials", testId: "company-financials", title: "Financial Statements" },
-  { id: "dividends", testId: "company-dividends", title: "Dividend / Bonus / Rights History" },
-  { id: "actions", testId: "company-actions-timeline", title: "Corporate Actions Timeline" },
-  { id: "shareholding", testId: "company-shareholding", title: "Shareholding Structure" },
-  { id: "news", testId: "company-news", title: "Company News" },
-  { id: "ai-analysis", testId: "company-ai-analysis", title: "AI Company Analysis" },
+  const REQUIRED = [
+  { id: "overview", testId: null, title: "Company Overview", needles: ["Paid-up Capital", "Listed Shares", "52W High"] },
+  { id: "price-chart", testId: "company-live-price", title: "Live Price & Chart", needles: [] },
+  { id: "key-metrics", testId: "company-key-metrics", title: "Key Metrics", needles: ["EPS", "PE Ratio", "Graham Number", "ROE", "ROA"] },
+  { id: "financials", testId: "company-financials", title: "Financial Statements", needles: ["Revenue", "Borrowings", "Assets", "Liabilities"] },
+  { id: "dividends", testId: "company-dividends", title: "Dividend / Bonus / Rights History", needles: ["Fiscal Year", "Bonus %", "Cash %"] },
+  { id: "actions", testId: "company-actions-timeline", title: "Corporate Actions Timeline", needles: [] },
+  { id: "shareholding", testId: "company-shareholding", title: "Shareholding Structure", needles: ["Promoter", "Public"] },
+  { id: "news", testId: "company-news", title: "Company News", needles: [] },
+  { id: "ai-analysis", testId: "company-ai-analysis", title: "AI Company Analysis", needles: [] },
 ];
 
 const report = { base: BASE, symbol: SYMBOL, checks: [] };
@@ -46,7 +46,14 @@ async function inspect(viewport, label) {
       check(`${label}: ${section.testId}`, (await page.locator(`[data-testid="${section.testId}"]`).count()) >= 1);
     }
     const text = count ? await el.innerText() : "";
+    const textLower = text.toLowerCase();
     check(`${label}: ${section.title} visible`, text.includes(section.title.split(" ")[0]) || text.length > 20, text.slice(0, 60));
+    for (const needle of section.needles ?? []) {
+      check(`${label}: has "${needle}"`, textLower.includes(needle.toLowerCase()));
+    }
+    if (section.id === "key-metrics" || section.id === "financials" || section.id === "dividends") {
+      check(`${label}: uses Data unavailable for empty fields`, textLower.includes("data unavailable"));
+    }
   }
 
   const navCount = await page.locator('[data-testid="company-section-nav"] button').count();

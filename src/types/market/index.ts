@@ -29,6 +29,8 @@ export type NepseSecurityTick = {
   /** Absolute day change in NPR (vs previous close) when known. */
   changeNpr?: number;
   previousCloseNpr?: number;
+  /** Session open when provided by the feed. */
+  openNpr?: number;
   highNpr?: number;
   lowNpr?: number;
   /** Intraday range as % of previous close: (high − low) / prevClose × 100. */

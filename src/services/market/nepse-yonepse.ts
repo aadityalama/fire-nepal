@@ -40,6 +40,7 @@ function rowToTick(o: Record<string, unknown>): NepseSecurityTick | null {
   const symbol = normalizeNepseSymbol(symRaw);
   const companyName = pickStr(o, ["name", "company_name", "security_name", "company", "Company"]);
   const previousCloseNpr = pickNum(o, ["previous_close", "prev_close", "yesterday_close", "prevClose"]);
+  const openNpr = pickNum(o, ["open", "Open", "opening_price", "open_price"]);
   const changeNpr = pickNum(o, ["change", "point_change", "absolute_change"]);
   let changePct = pickNum(o, ["percent_change", "change_percent", "pct_change"]);
   if (changePct == null && changeNpr != null && previousCloseNpr != null && previousCloseNpr > 0) {
@@ -68,6 +69,7 @@ function rowToTick(o: Record<string, unknown>): NepseSecurityTick | null {
     changePct,
     changeNpr,
     previousCloseNpr,
+    openNpr,
     highNpr,
     lowNpr,
     intradayRangePct,
