@@ -207,14 +207,6 @@ export function buildNepsePerformanceSeriesFromCurve(
   return filtered.map((p, i) => ({ i, v: p.portfolioValueNpr, date: p.date }));
 }
 
-/** @deprecated Use buildNepsePerformanceSeriesFromCurve — synthetic series removed. */
-export function buildNepsePerformanceSeries(
-  _endValueNpr: number,
-  _range: NepseChartRange,
-): { i: number; v: number }[] {
-  return [];
-}
-
 export type NepseHoldingFilter = "all" | "profit" | "loss" | "dividend_pending";
 
 export const NEPSE_HOLDING_FILTERS: { id: NepseHoldingFilter; label: string }[] = [

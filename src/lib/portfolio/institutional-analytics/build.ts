@@ -33,9 +33,6 @@ import type {
   SymbolDividendContext,
 } from "./types";
 
-const SLICE_COLORS_UNUSED = true; // keep file focused on calculation
-void SLICE_COLORS_UNUSED;
-
 function weightSlices(raw: Map<string, number>, total: number): AllocationSlice[] {
   if (total <= 0) return [];
   return [...raw.entries()]
@@ -193,7 +190,7 @@ function diversificationFromWeights(weights: number[]): number | null {
 function buildRisk(
   allocation: ReturnType<typeof buildAllocation>,
   curve: ReturnType<typeof buildEquityCurve>,
-  indexReturns: number[] | null,
+  alignedBench: { asset: number[]; bench: number[] } | null,
 ): RiskAnalysis {
   const daily = dailyReturnsFromCurve(curve);
   const volDaily = sampleStdev(daily);
@@ -205,8 +202,8 @@ function buildRisk(
   const diversificationScore = diversificationFromWeights(weights);
   const concentrationRiskPct = allocation.topConcentrationPct;
   const beta =
-    indexReturns && indexReturns.length >= 20 && daily.length >= 20
-      ? linearRegressionBeta(daily.slice(-indexReturns.length), indexReturns.slice(-daily.length))
+    alignedBench && alignedBench.asset.length >= 20
+      ? linearRegressionBeta(alignedBench.asset, alignedBench.bench)
       : null;
 
   // Risk score 0–100 from concentration, vol, drawdown (deterministic).
@@ -481,26 +478,36 @@ function buildScenarios(portfolioValueNpr: number): ScenarioAnalysis {
   };
 }
 
-function indexReturnsAligned(
+/**
+ * Pair portfolio and index daily returns on shared trade dates only.
+ * Skips gaps instead of truncating early (avoids misaligned beta).
+ * Requires ≥20 paired observations — otherwise null (Data unavailable).
+ */
+function alignedBenchmarkReturns(
   curve: ReturnType<typeof buildEquityCurve>,
   bars: { tradeDate: string; closeValue: number }[],
-): number[] | null {
-  if (curve.length < 21 || bars.length < 21) return null;
+): { asset: number[]; bench: number[] } | null {
+  if (curve.length < 21 || bars.length < 2) return null;
   const byDate = new Map(bars.map((b) => [b.tradeDate, b.closeValue]));
-  const returns: number[] = [];
+  const asset: number[] = [];
+  const bench: number[] = [];
   for (let i = 1; i < curve.length; i++) {
     const d0 = curve[i - 1]!.date;
     const d1 = curve[i]!.date;
     const v0 = byDate.get(d0);
     const v1 = byDate.get(d1);
-    if (v0 == null || v1 == null || v0 <= 0) {
-      // require contiguous overlap; break series quality
-      return returns.length >= 20 ? returns : null;
-    }
-    returns.push((v1 - v0) / v0);
+    const p0 = curve[i - 1]!.portfolioValueNpr;
+    const p1 = curve[i]!.portfolioValueNpr;
+    if (v0 == null || v1 == null || v0 <= 0 || p0 <= 0 || !Number.isFinite(p1)) continue;
+    asset.push((p1 - p0) / p0);
+    bench.push((v1 - v0) / v0);
   }
-  return returns.length >= 20 ? returns : null;
+  if (asset.length < 20) return null;
+  return { asset, bench };
 }
+
+/** Minimum overlapping index bars to treat a benchmark window as historical (not session). */
+const MIN_HISTORY_BARS = 5;
 
 function buildBenchmarks(
   input: BuildAnalyticsInput,
@@ -520,17 +527,13 @@ function buildBenchmarks(
     {
       label: "Sensitive Index",
       indexKey: "SENSITIVE",
-      match: (n) => /sensitive/i.test(n),
+      match: (n) => /sensitive/i.test(n) && !/float/i.test(n),
     },
   ];
 
-  // Sector index: dominant sector name match against live/eod index names.
-  const topSector = input.market
-    ? (Object.values(input.market.profiles).find((p) => p.sector)?.sector ?? null)
-    : null;
   const dominantSector = (() => {
     const slices = buildAllocation(input).sector;
-    return slices[0]?.label && slices[0].label !== "Unclassified" ? slices[0].label : topSector;
+    return slices[0]?.label && slices[0].label !== "Unclassified" ? slices[0].label : null;
   })();
   if (dominantSector) {
     specs.push({
@@ -560,30 +563,34 @@ function buildBenchmarks(
 
     const liveTick = live.find((t) => spec.match(t.indexName) || t.indexKey === spec.indexKey);
 
-    // Prefer period return over overlapping equity curve dates when history exists.
     let indexReturnPct: number | null = null;
-    let portfolioReturnPct: number | null = performance.monthlyChangePct;
+    let portfolioReturnPct: number | null = null;
     let window: "history" | "session" | "none" = "none";
 
     if (series && curve.length >= 2) {
       const startDate = curve[0]!.date;
       const endDate = curve[curve.length - 1]!.date;
       const bars = series.bars.filter((b) => b.tradeDate >= startDate && b.tradeDate <= endDate);
-      if (bars.length >= 2) {
+      if (bars.length >= MIN_HISTORY_BARS) {
+        // Align portfolio endpoints to first/last overlapping index dates.
+        const firstIdx = bars[0]!.tradeDate;
+        const lastIdx = bars[bars.length - 1]!.tradeDate;
+        const portStart = curve.find((p) => p.date >= firstIdx) ?? curve[0]!;
+        const portEnd = [...curve].reverse().find((p) => p.date <= lastIdx) ?? curve[curve.length - 1]!;
         indexReturnPct = pctChange(bars[0]!.closeValue, bars[bars.length - 1]!.closeValue);
-        portfolioReturnPct = pctChange(curve[0]!.portfolioValueNpr, curve[curve.length - 1]!.portfolioValueNpr);
-        window = "history";
+        portfolioReturnPct = pctChange(portStart.portfolioValueNpr, portEnd.portfolioValueNpr);
+        if (indexReturnPct != null && portfolioReturnPct != null) window = "history";
       }
     }
 
     // Session-only relative return when history missing but live change published.
-    if (indexReturnPct == null && liveTick?.changePct != null && performance.dailyChangePct != null) {
+    if (window === "none" && liveTick?.changePct != null && performance.dailyChangePct != null) {
       indexReturnPct = liveTick.changePct;
       portfolioReturnPct = performance.dailyChangePct;
       window = "session";
     }
 
-    if (indexReturnPct == null || portfolioReturnPct == null) {
+    if (indexReturnPct == null || portfolioReturnPct == null || window === "none") {
       out.push({
         label: spec.label,
         indexKey: spec.indexKey,
@@ -605,10 +612,15 @@ function buildBenchmarks(
       indexReturnPct,
       portfolioReturnPct,
       relativeReturnPct: relative,
-      alphaPct: relative, // without risk-free / CAPM inputs, alpha ≡ relative return on available window
+      // Without risk-free / CAPM beta-adjusted alpha inputs, reported alpha ≡ relative return
+      // on the same verified window (history or session).
+      alphaPct: relative,
       outperformance: relative > 0,
       status: "ok",
-      message: window === "session" ? "Compared on today's published session change only." : undefined,
+      message:
+        window === "session"
+          ? "Compared on today's published session change only — historical index EOD insufficient."
+          : undefined,
     });
   }
 
@@ -644,9 +656,9 @@ export function buildInstitutionalPortfolioAnalytics(input: BuildAnalyticsInput)
   const allocation = buildAllocation(input);
   const performance = buildPerformance(input, curve);
 
-  const nepseBars = input.market?.indexEod.NEPSE?.bars ?? input.market?.indexEod["nepse"]?.bars ?? null;
-  const benchReturns = nepseBars ? indexReturnsAligned(curve, nepseBars) : null;
-  const risk = buildRisk(allocation, curve, benchReturns);
+  const nepseBars = input.market?.indexEod.NEPSE?.bars ?? null;
+  const alignedBench = nepseBars ? alignedBenchmarkReturns(curve, nepseBars) : null;
+  const risk = buildRisk(allocation, curve, alignedBench);
   const income = buildIncome(input);
   const intelligence = buildIntelligence(input, allocation, risk, income, performance);
   const scenarios = buildScenarios(input.summary.portfolioValueNpr);

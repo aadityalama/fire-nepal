@@ -1,6 +1,6 @@
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
-import { loadIndexEodSeries } from "@/services/market/nepse-index-eod";
+import { indexKeyFromName, loadIndexEodSeries } from "@/services/market/nepse-index-eod";
 import type { PortfolioMarketContext } from "@/lib/portfolio/institutional-analytics";
 
 function num(value: unknown): number | null {
@@ -12,18 +12,6 @@ function num(value: unknown): number | null {
 function str(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value.trim();
   return null;
-}
-
-function indexKeyFromName(name: string): string {
-  const n = name.trim();
-  if (/nepse/i.test(n) && !/sensitive|float|sub/i.test(n)) return "NEPSE";
-  if (/sensitive/i.test(n)) return "SENSITIVE";
-  if (/float/i.test(n)) return "FLOAT";
-  return n
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 64);
 }
 
 /**

@@ -86,6 +86,7 @@ export async function GET(request: Request) {
     ownership.status !== "error" &&
     backfill.status !== "error" &&
     fundamentals.status !== "error";
+  // indexEod may be "partial" when the migration is not yet applied — do not fail the whole cron.
   return NextResponse.json(
     { ok, eod, indexEod, backfill, fundamentals, news, disclosures, actions, ownership },
     { status: ok ? 200 : 500 },
