@@ -227,9 +227,9 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         plan: "premium",
       },
       {
-        href: "/portfolio/investments",
-        title: "NEPSE",
-        body: "Track holdings, P/L & corporate actions",
+        href: "/market",
+        title: "NEPSE Hub",
+        body: "Live market, charts, watchlist & research",
         icon: BarChart3,
         accent: "from-blue-500/15 to-emerald-500/10",
         plan: "premium",

@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, ChevronRight, Plus, Search, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
@@ -83,10 +84,19 @@ export function NepseWorkspaceHeader({
           NEPSE Portfolio
         </h1>
         <p className={`mt-1 truncate text-xs font-medium sm:text-[13px] ${TONE_LABEL}`}>
-          Track your investments in NEPSE
+          Track your holdings ·{" "}
+          <Link href="/market" className="font-semibold text-emerald-400 underline-offset-2 hover:underline">
+            Open Premium NEPSE Hub
+          </Link>
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2 self-center">
+        <Link
+          href="/market"
+          className="hidden h-10 items-center rounded-[1rem] border border-emerald-400/25 bg-emerald-400/10 px-3 text-[11px] font-black uppercase tracking-wide text-emerald-300 transition hover:bg-emerald-400/15 sm:inline-flex"
+        >
+          NEPSE Hub
+        </Link>
         <button
           type="button"
           onClick={onSearch}

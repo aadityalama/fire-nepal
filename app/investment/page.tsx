@@ -6,7 +6,8 @@ import { EcosystemWorkspacePanel, type EcosystemWorkspaceItem } from "@/componen
 
 const INVESTMENT_ITEMS: EcosystemWorkspaceItem[] = [
   { href: "/portfolio", label: "Portfolio", description: "Net worth, assets, and wealth analytics.", icon: Target },
-  { href: "/portfolio/investments", label: "NEPSE", description: "Track holdings, P/L, and corporate actions.", icon: BarChart3 },
+  { href: "/market", label: "NEPSE Hub", description: "Live market, charts, watchlist, and research.", icon: BarChart3 },
+  { href: "/portfolio/investments", label: "My Holdings", description: "Track your NEPSE positions, P/L, and trades.", icon: LineChart },
   { href: "/sip-calculator", label: "SIP", description: "Monthly investing projection and growth path.", icon: TrendingUp },
   { href: "/swp-calculator", label: "SWP", description: "Withdrawal planning and passive income runway.", icon: LineChart },
   { href: "/portfolio/gold", label: "Gold", description: "Gold and silver holdings inside portfolio.", icon: Gem },
