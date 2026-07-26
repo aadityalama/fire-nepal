@@ -267,18 +267,98 @@ export async function ingestMarketNews(sb: SupabaseClient): Promise<IngestResult
 }
 
 /**
- * Fundamentals ingest hook for future licensed providers.
- * Tables (`nepse_company_*`) are ready; until a provider is configured this logs a no-op run.
+ * Fundamentals ingest from the real filings mirror (Yonepse): company identity,
+ * latest valuation (EPS / PE / net worth per share) and full dividend history.
+ * Only published values are written — fields the provider omits stay null.
  */
 export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<IngestResult> {
   const startedAt = new Date();
-  const result: IngestResult = {
-    kind: "fundamentals",
-    status: "ok",
-    items: 0,
-    message:
-      "No fundamentals provider configured — profile/valuation/financials/dividends/actions tables are ready for upsert",
-  };
+  let result: IngestResult;
+  try {
+    const { getCompanyReportsBySymbol, getDividendHistoryBySymbol, getSecuritiesBySymbol, fiscalYearStart, quarterRank } =
+      await import("@/services/market/nepse-fundamentals-provider");
+    const [reportsBySymbol, dividendsBySymbol, securities] = await Promise.all([
+      getCompanyReportsBySymbol(),
+      getDividendHistoryBySymbol(),
+      getSecuritiesBySymbol(),
+    ]);
+
+    const failures: string[] = [];
+    let items = 0;
+
+    const profileRows = [...securities.values()].map((sec) => ({
+      symbol: sec.symbol,
+      company_name: sec.companyName,
+      sector: sec.sector,
+      industry: sec.instrumentType,
+      source: "yonepse:all_securities",
+      updated_at: new Date().toISOString(),
+    }));
+    for (let i = 0; i < profileRows.length; i += 500) {
+      const { error } = await sb.from("nepse_company_profiles").upsert(profileRows.slice(i, i + 500), { onConflict: "symbol" });
+      if (error) failures.push(`profiles: ${error.message}`);
+      else items += Math.min(500, profileRows.length - i);
+    }
+
+    const valuationRows: Record<string, unknown>[] = [];
+    for (const [symbol, reports] of reportsBySymbol) {
+      const latest = [...reports].sort((a, b) => {
+        const diff = (fiscalYearStart(b.fiscalYear) ?? 0) - (fiscalYearStart(a.fiscalYear) ?? 0);
+        return diff !== 0 ? diff : quarterRank(b.quarter) - quarterRank(a.quarter);
+      })[0];
+      if (!latest) continue;
+      valuationRows.push({
+        symbol,
+        as_of_date: latest.submittedDate,
+        eps: latest.eps,
+        pe: latest.pe,
+        book_value_npr: latest.netWorthPerShareNpr,
+        source: `yonepse:${latest.type}:${latest.fiscalYear}${latest.quarter ? ` ${latest.quarter}` : ""}`,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    for (let i = 0; i < valuationRows.length; i += 500) {
+      const { error } = await sb.from("nepse_company_valuation").upsert(valuationRows.slice(i, i + 500), { onConflict: "symbol" });
+      if (error) failures.push(`valuation: ${error.message}`);
+      else items += Math.min(500, valuationRows.length - i);
+    }
+
+    const dividendRows: Record<string, unknown>[] = [];
+    for (const rows of dividendsBySymbol.values()) {
+      for (const row of rows) {
+        dividendRows.push({
+          symbol: row.symbol,
+          fiscal_year: row.fiscalYear,
+          bonus_pct: row.bonusPct,
+          cash_pct: row.cashPct,
+          book_close_date: row.bookCloseDate,
+          source: "yonepse:proposed_dividend",
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+    for (let i = 0; i < dividendRows.length; i += 500) {
+      const { error } = await sb.from("nepse_company_dividends").upsert(dividendRows.slice(i, i + 500), { onConflict: "symbol,fiscal_year" });
+      if (error) failures.push(`dividends: ${error.message}`);
+      else items += Math.min(500, dividendRows.length - i);
+    }
+
+    result = {
+      kind: "fundamentals",
+      status: failures.length === 0 ? "ok" : items > 0 ? "partial" : "error",
+      items,
+      message: failures.length
+        ? failures.slice(0, 3).join("; ")
+        : `Upserted ${profileRows.length} profiles, ${valuationRows.length} valuations, ${dividendRows.length} dividend rows`,
+    };
+  } catch (error) {
+    result = {
+      kind: "fundamentals",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Fundamentals ingest failed",
+    };
+  }
   await logRun(sb, result, startedAt);
   return result;
 }

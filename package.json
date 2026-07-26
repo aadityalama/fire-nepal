@@ -36,7 +36,8 @@
     "db:apply-verify:membership": "node scripts/apply-and-verify-supabase-membership.mjs",
     "revenue:backfill-membership": "node scripts/backfill-membership-revenue-events.mjs",
     "revenue:verify-membership": "node scripts/backfill-membership-revenue-events.mjs --verify-only",
-    "nepse:backfill-eod": "node scripts/backfill-nepse-eod.mjs"
+    "nepse:backfill-eod": "node scripts/backfill-nepse-eod.mjs",
+    "nepse:ingest-fundamentals": "node scripts/ingest-nepse-fundamentals.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

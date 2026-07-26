@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   backfillEodHistory,
   createMarketDataServiceClient,
+  ingestCompanyFundamentals,
   ingestEodPrices,
   ingestMarketNews,
 } from "@/services/market/nepse-market-data-engine";
@@ -46,8 +47,13 @@ export async function GET(request: Request) {
   const backfill = wantBackfill
     ? await backfillEodHistory(sb, { symbolLimit, prioritize: priority, minBars: 60 })
     : { kind: "eod_backfill" as const, status: "ok" as const, items: 0, message: "Skipped (backfill=0)" };
+  const fundamentals =
+    url.searchParams.get("fundamentals") !== "0"
+      ? await ingestCompanyFundamentals(sb)
+      : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (fundamentals=0)" };
   const news = await ingestMarketNews(sb);
 
-  const ok = eod.status !== "error" && news.status !== "error" && backfill.status !== "error";
-  return NextResponse.json({ ok, eod, backfill, news }, { status: ok ? 200 : 500 });
+  const ok =
+    eod.status !== "error" && news.status !== "error" && backfill.status !== "error" && fundamentals.status !== "error";
+  return NextResponse.json({ ok, eod, backfill, fundamentals, news }, { status: ok ? 200 : 500 });
 }

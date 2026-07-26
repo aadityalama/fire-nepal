@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BellPlus,
   Bot,
+  BrainCircuit,
   Building2,
   CalendarClock,
   ChevronRight,
@@ -21,6 +22,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { CompanyActionsTimeline } from "@/components/market/company/CompanyActionsTimeline";
 import { CompanyDividendTable } from "@/components/market/company/CompanyDividendTable";
+import { CompanyFinancialIntelligence } from "@/components/market/company/CompanyFinancialIntelligence";
 import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinancialsTable";
 import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid";
 import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
@@ -29,6 +31,7 @@ import { CompanyTechnicalChart } from "@/components/market/company/CompanyTechni
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseCompanyFundamentals } from "@/hooks/useNepseCompanyFundamentals";
 import { useNepseCompanyOhlc } from "@/hooks/useNepseCompanyOhlc";
+import { useNepseFinancialIntelligence } from "@/hooks/useNepseFinancialIntelligence";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import { buildCompanyInsight } from "@/lib/market/nepse-company-insights";
@@ -45,6 +48,7 @@ const SECTIONS = [
   { id: "overview", label: "Overview", icon: Building2 },
   { id: "price-chart", label: "Price & Chart", icon: LineChart },
   { id: "key-metrics", label: "Key Metrics", icon: PieChart },
+  { id: "financial-intelligence", label: "Intelligence", icon: BrainCircuit },
   { id: "financials", label: "Financials", icon: FileSpreadsheet },
   { id: "dividends", label: "Dividends", icon: Gift },
   { id: "actions", label: "Actions", icon: CalendarClock },
@@ -227,6 +231,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { isWatched, toggle } = useNepseWatchlist();
   const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
+  const { data: intelligence, loaded: intelligenceLoaded } = useNepseFinancialIntelligence(symbol);
   const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
@@ -482,7 +487,21 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             <CompanyMetricGrid items={valuationMetrics} testId="company-key-metrics" />
           </SectionShell>
 
-          {/* 4. Financial Statements */}
+          {/* 4. Premium Financial Intelligence */}
+          <SectionShell
+            id="financial-intelligence"
+            icon={BrainCircuit}
+            title="Financial Intelligence"
+            subtitle={
+              intelligenceLoaded
+                ? "Quarterly & annual filings, ratios, dividend analytics, ownership, peers and growth — real data only"
+                : "Loading filings, dividends and peer data…"
+            }
+          >
+            <CompanyFinancialIntelligence data={intelligence} loaded={intelligenceLoaded} />
+          </SectionShell>
+
+          {/* 5. Financial Statements */}
           <SectionShell id="financials" icon={FileSpreadsheet} title="Financial Statements" subtitle="Revenue, profit, reserves, cash, borrowings, assets and liabilities">
             <CompanyFinancialsTable rows={fundamentals?.financials ?? []} />
             <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-zinc-500">
