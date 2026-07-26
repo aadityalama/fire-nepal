@@ -166,6 +166,9 @@ export async function runAdvancedScreener(filters: ScreenerFilters = {}): Promis
       const book = valuation?.book_value_npr ?? null;
       const pe = computePe(tick.ltpNpr, eps) ?? valuation?.pe ?? null;
       const pb = computePb(tick.ltpNpr, book) ?? valuation?.pb ?? null;
+      const roePct =
+        valuation?.roe_pct ??
+        (eps != null && book != null && book > 0 ? (eps / book) * 100 : null);
       const totalDiv = dividend?.total ?? null;
       const dividendYieldPct = totalDiv != null && tick.ltpNpr > 0 ? (totalDiv / tick.ltpNpr) * 100 : null;
       return {
@@ -181,7 +184,7 @@ export async function runAdvancedScreener(filters: ScreenerFilters = {}): Promis
         pe,
         pb,
         eps,
-        roePct: valuation?.roe_pct ?? null,
+        roePct,
         bookValueNpr: book,
         dividendYieldPct,
         rsi: null,
