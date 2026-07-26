@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { CompanyActionsTimeline } from "@/components/market/company/CompanyActionsTimeline";
+import { CompanyAiIntelligence } from "@/components/market/company/CompanyAiIntelligence";
 import { CompanyDividendTable } from "@/components/market/company/CompanyDividendTable";
 import { CompanyFinancialIntelligence } from "@/components/market/company/CompanyFinancialIntelligence";
 import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinancialsTable";
@@ -28,13 +29,13 @@ import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid
 import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
 import { CompanyTechnicalAnalysis } from "@/components/market/company/CompanyTechnicalAnalysis";
 import { CompanyTechnicalChart } from "@/components/market/company/CompanyTechnicalChart";
+import { useNepseAiIntelligence } from "@/hooks/useNepseAiIntelligence";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseCompanyFundamentals } from "@/hooks/useNepseCompanyFundamentals";
 import { useNepseCompanyOhlc } from "@/hooks/useNepseCompanyOhlc";
 import { useNepseFinancialIntelligence } from "@/hooks/useNepseFinancialIntelligence";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
-import { buildCompanyInsight } from "@/lib/market/nepse-company-insights";
 import {
   formatFundamentalText,
   formatFundamentalValue,
@@ -60,12 +61,6 @@ const SECTIONS = [
 const card =
   "rounded-[1.5rem] border border-slate-200/80 bg-white/88 shadow-[0_22px_70px_-44px_rgba(5,46,34,0.32)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-white/[0.035] dark:shadow-[0_22px_70px_-44px_rgba(0,0,0,0.9)]";
 const eyebrow = "text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500";
-
-function stanceClasses(stance: string): string {
-  if (stance === "Constructive") return "border-emerald-300/50 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
-  if (stance === "Cautious") return "border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100";
-  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300";
-}
 
 function sentimentBadge(sentiment: NepseNewsItem["sentiment"]): string {
   if (sentiment === "positive") return "border-emerald-300/50 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300";
@@ -232,6 +227,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
   const { data: intelligence, loaded: intelligenceLoaded } = useNepseFinancialIntelligence(symbol);
+  const { data: aiIntelligence, loaded: aiLoaded } = useNepseAiIntelligence(symbol);
   const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
@@ -259,10 +255,6 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
     [ohlc?.bars],
   );
   const technical = useMemo(() => buildTechnicalAnalysis(candles), [candles]);
-  const insight = useMemo(
-    () => buildCompanyInsight(tick, snapshot ?? null, technical.readings),
-    [tick, snapshot, technical.readings],
-  );
 
   const companyNews = useMemo(
     () => newsItems.filter((item) => mentionsSymbol(item, normalized)).slice(0, 8),
@@ -570,12 +562,16 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             </div>
           </SectionShell>
 
-          {/* 9. AI Company Analysis */}
+          {/* 9. AI Company Intelligence */}
           <SectionShell
             id="ai-analysis"
             icon={Bot}
-            title="AI Company Analysis"
-            subtitle="Deterministic session intelligence — not investment advice"
+            title="AI Company Intelligence"
+            subtitle={
+              aiLoaded
+                ? "Deterministic scores, fair value, risk, growth, recommendation and checklist — real data only, not investment advice"
+                : "Assembling scorecard from filings, dividends and EOD technicals…"
+            }
             action={
               <Link
                 href={`/fire-ai/chat?context=nepse&symbol=${encodeURIComponent(normalized)}`}
@@ -585,39 +581,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
               </Link>
             }
           >
-            <div data-testid="company-ai-analysis">
-              <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${stanceClasses(insight.stance)}`}>
-                {insight.stance}
-              </div>
-              <p className="mt-3 text-sm font-bold leading-relaxed text-slate-800 dark:text-zinc-200">{insight.summary}</p>
-              <ul className="mt-3 space-y-2">
-                {insight.bullets.map((bullet) => (
-                  <li key={bullet} className="flex gap-2 text-[12px] font-medium leading-relaxed text-slate-600 dark:text-zinc-400">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                    <span>{bullet}</span>
-                  </li>
-                ))}
-              </ul>
-              {insight.peers.length ? (
-                <div className="mt-4">
-                  <p className={eyebrow}>Same-sector movers</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {insight.peers.map((peer) => (
-                      <Link
-                        key={peer.symbol}
-                        href={`/market/company/${encodeURIComponent(peer.symbol)}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/80 px-3 py-1.5 text-[11px] font-black transition hover:border-emerald-400/40 dark:border-white/10 dark:bg-white/[0.04]"
-                      >
-                        {peer.symbol}
-                        <span className={(peer.changePct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
-                          {peer.changePct == null ? "—" : `${peer.changePct >= 0 ? "+" : ""}${peer.changePct.toFixed(2)}%`}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            <CompanyAiIntelligence data={aiIntelligence} loaded={aiLoaded} />
           </SectionShell>
         </div>
       </div>
