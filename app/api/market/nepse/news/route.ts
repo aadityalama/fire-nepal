@@ -28,11 +28,13 @@ export async function GET(request: Request) {
     .from("nepse_market_news")
     .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action");
 
+  // Prefer the ingest tag `[SYMBOL]` so NABIL does not match NABILPNP / NADEP substrings.
+  // Fall back to a broad ilike, then post-filter with a word-boundary check.
   const newsQuery = symbol
     ? base
-        .or(`headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
+        .or(`headline.ilike.%[${symbol}]%,headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(limit)
+        .limit(Math.min(limit * 4, 80))
     : base.order("published_at", { ascending: false, nullsFirst: false }).limit(limit);
 
   const actionsQuery = symbol
@@ -40,9 +42,9 @@ export async function GET(request: Request) {
         .from("nepse_market_news")
         .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
         .eq("is_corporate_action", true)
-        .or(`headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
+        .or(`headline.ilike.%[${symbol}]%,headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(12)
+        .limit(48)
     : sb
         .from("nepse_market_news")
         .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
@@ -64,11 +66,19 @@ export async function GET(request: Request) {
     isCorporateAction: Boolean(row.is_corporate_action),
   });
 
+  /** Exact symbol token match — `[NABIL]` yes, `NABILPNP` / `NADEP` no. */
+  const mentionsSymbol = (item: NepseNewsResponseItem): boolean => {
+    if (!symbol) return true;
+    const hay = `${item.headline} ${item.summary ?? ""}`.toUpperCase();
+    if (hay.includes(`[${symbol}]`)) return true;
+    return new RegExp(`(?:^|[^A-Z0-9])${symbol}(?:[^A-Z0-9]|$)`).test(hay);
+  };
+
+  const items = (newsResult.data ?? []).map(toItem).filter(mentionsSymbol).slice(0, limit);
+  const corporateActions = (actionsResult.data ?? []).map(toItem).filter(mentionsSymbol).slice(0, symbol ? 12 : 8);
+
   return NextResponse.json(
-    {
-      items: (newsResult.data ?? []).map(toItem),
-      corporateActions: (actionsResult.data ?? []).map(toItem),
-    },
+    { items, corporateActions },
     { headers: { "cache-control": "public, max-age=120, stale-while-revalidate=600" } },
   );
 }
