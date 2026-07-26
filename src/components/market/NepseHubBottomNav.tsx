@@ -12,10 +12,11 @@ const NAV = [
     match: (path: string) => path === "/market",
   },
   {
-    href: "/market/top-gainers",
-    label: "Markets",
+    href: "/market/terminal",
+    label: "Terminal",
     icon: LineChart,
     match: (path: string) =>
+      path.startsWith("/market/terminal") ||
       path.startsWith("/market/top-") ||
       path.startsWith("/market/live-") ||
       path.startsWith("/market/sector") ||

@@ -35,6 +35,7 @@ import { useNepseCompanyFundamentals } from "@/hooks/useNepseCompanyFundamentals
 import { useNepseCompanyOhlc } from "@/hooks/useNepseCompanyOhlc";
 import { useNepseFinancialIntelligence } from "@/hooks/useNepseFinancialIntelligence";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
+import { useNepseRecentlyViewed } from "@/hooks/useNepseRecentlyViewed";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import {
   formatFundamentalText,
@@ -224,6 +225,7 @@ function NewsList({ items, empty }: { items: NepseNewsItem[]; empty: string }) {
 export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { snapshot } = useRealtimeMarket();
   const { isWatched, toggle } = useNepseWatchlist();
+  const { track } = useNepseRecentlyViewed();
   const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
   const { data: intelligence, loaded: intelligenceLoaded } = useNepseFinancialIntelligence(symbol);
@@ -231,6 +233,9 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
+  useEffect(() => {
+    track(normalized);
+  }, [normalized, track]);
   const tick = snapshot?.nepseBySymbol[normalized];
   const profile = fundamentals?.profile;
   const valuation = fundamentals?.valuation;

@@ -198,6 +198,12 @@ function Header({
         </span>
       </Link>
       <div className="flex items-center gap-1.5">
+        <Link
+          href="/market/terminal"
+          className="hidden h-10 items-center rounded-xl border border-emerald-300/40 bg-emerald-50 px-3 text-[10px] font-black text-emerald-800 transition hover:brightness-105 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200 sm:inline-flex"
+        >
+          Terminal
+        </Link>
         <FireThemeToggle />
         <button
           type="button"

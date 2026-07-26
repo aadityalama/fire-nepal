@@ -153,13 +153,21 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
             ) : null}
           </div>
         ) : indexPage ? (
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">NEPSE Index</p>
-            <p className="mt-2 text-4xl font-black tabular-nums">{snapshot?.nepseIndex?.value.toLocaleString("en-IN", { minimumFractionDigits: 2 }) ?? "—"}</p>
-            <p className={`mt-2 text-sm font-black ${(snapshot?.nepseIndex?.changePct ?? 0) >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-              {snapshot?.nepseIndex?.changePct == null ? "Change unavailable" : `${snapshot.nepseIndex.changePct >= 0 ? "+" : ""}${snapshot.nepseIndex.changePct.toFixed(2)}%`}
-            </p>
-            <p className="mt-8 text-xs text-slate-500 dark:text-zinc-500">Sub-index history will populate when the configured provider exposes normalized index constituents.</p>
+          <div className="space-y-4">
+            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-50/80 p-4 text-sm font-semibold text-emerald-900 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-100">
+              Full multi-index board, sector pulse and breadth now live in the{" "}
+              <Link href="/market/terminal" className="font-black underline underline-offset-2">
+                Professional Market Terminal
+              </Link>
+              .
+            </div>
+            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">NEPSE Index</p>
+              <p className="mt-2 text-4xl font-black tabular-nums">{snapshot?.nepseIndex?.value.toLocaleString("en-IN", { minimumFractionDigits: 2 }) ?? "Data unavailable"}</p>
+              <p className={`mt-2 text-sm font-black ${(snapshot?.nepseIndex?.changePct ?? 0) >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                {snapshot?.nepseIndex?.changePct == null ? "Data unavailable" : `${snapshot.nepseIndex.changePct >= 0 ? "+" : ""}${snapshot.nepseIndex.changePct.toFixed(2)}%`}
+              </p>
+            </div>
           </div>
         ) : supportedTable ? (
           <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.035]">

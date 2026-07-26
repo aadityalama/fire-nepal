@@ -36,6 +36,9 @@ export function NepseWatchlistPage() {
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">FIRE Nepal · NEPSE Hub</p>
               <h1 className="text-xl font-black tracking-tight sm:text-2xl">Watchlist</h1>
+              <Link href="/market/terminal" className="mt-1 inline-block text-[10px] font-black text-emerald-700 dark:text-emerald-400">
+                Open smart watchlists in Terminal →
+              </Link>
             </div>
           </div>
           <div className="flex items-center gap-2">
