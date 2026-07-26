@@ -55,6 +55,14 @@ async function inspect(viewport, label) {
   await card.waitFor({ timeout: 30000 }).catch(() => {});
   check(`${label}: NEPSE Hub card present`, (await card.count()) === 1);
 
+  // Membership entitlement loads asynchronously; wait for the card to unlock.
+  await page
+    .waitForFunction(
+      () => document.querySelector('[data-testid="hub-nepse-hub-card"]')?.getAttribute("href") === "/market",
+      { timeout: 20000 }
+    )
+    .catch(() => {});
+
   const info = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="hub-nepse-hub-card"]');
     if (!el) return null;
