@@ -133,7 +133,7 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
                 return (
                   <Link
                     key={tick.symbol}
-                    href={`/market/company/${tick.symbol}`}
+                    href={`/market/company/${encodeURIComponent(tick.symbol)}`}
                     style={{ backgroundColor: background }}
                     className="group rounded-lg p-2 transition hover:scale-[1.04] hover:shadow-lg"
                     title={`${tick.symbol} · ${change >= 0 ? "+" : ""}${change.toFixed(2)}%`}
@@ -179,7 +179,7 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
                   {rows.map((tick) => (
                     <tr key={tick.symbol} className="text-xs transition hover:bg-emerald-500/[0.04]">
                       <td className="px-4 py-3">
-                        <Link href={`/market/company/${tick.symbol}`} className="font-black text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">{tick.symbol}</Link>
+                        <Link href={`/market/company/${encodeURIComponent(tick.symbol)}`} className="font-black text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">{tick.symbol}</Link>
                         <p className="mt-0.5 max-w-52 truncate text-[10px] font-medium text-slate-500 dark:text-zinc-500">{tick.companyName}</p>
                       </td>
                       <td className="px-3 py-3 text-right font-bold tabular-nums">रु {tick.ltpNpr.toLocaleString("en-IN")}</td>

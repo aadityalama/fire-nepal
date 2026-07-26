@@ -61,7 +61,7 @@ export function NepseWatchlistPage() {
             <div className="absolute inset-x-0 top-[3.4rem] z-20 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-2xl dark:border-white/10 dark:bg-[#07110f]">
               {searchResults.map((tick) => (
                 <div key={tick.symbol} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs transition hover:bg-emerald-500/10">
-                  <Link href={`/market/company/${tick.symbol}`} className="min-w-0 flex-1">
+                  <Link href={`/market/company/${encodeURIComponent(tick.symbol)}`} className="min-w-0 flex-1">
                     <span className="font-black text-slate-950 dark:text-white">{tick.symbol}</span>
                     <span className="ml-2 truncate text-slate-500 dark:text-zinc-500">{tick.companyName}</span>
                   </Link>
@@ -86,7 +86,7 @@ export function NepseWatchlistPage() {
                 const positive = (tick?.changePct ?? 0) >= 0;
                 return (
                   <li key={symbol} className="flex items-center gap-3 px-4 py-3 transition hover:bg-emerald-500/[0.04]">
-                    <Link href={`/market/company/${symbol}`} className="min-w-0 flex-1">
+                    <Link href={`/market/company/${encodeURIComponent(symbol)}`} className="min-w-0 flex-1">
                       <p className="text-sm font-black">{symbol}</p>
                       <p className="truncate text-[11px] font-medium text-slate-500 dark:text-zinc-500">
                         {tick?.companyName ?? "Awaiting live quote"}

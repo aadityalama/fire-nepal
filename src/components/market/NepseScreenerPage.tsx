@@ -154,7 +154,7 @@ export function NepseScreenerPage() {
                 {rows.map((tick) => (
                   <tr key={tick.symbol} className="text-xs transition hover:bg-emerald-500/[0.04]">
                     <td className="px-4 py-3">
-                      <Link href={`/market/company/${tick.symbol}`} className="font-black text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">{tick.symbol}</Link>
+                      <Link href={`/market/company/${encodeURIComponent(tick.symbol)}`} className="font-black text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">{tick.symbol}</Link>
                       <p className="mt-0.5 max-w-48 truncate text-[10px] font-medium text-slate-500 dark:text-zinc-500">{tick.companyName}</p>
                     </td>
                     <td className="px-3 py-3 text-[10px] font-bold text-slate-500 dark:text-zinc-500">{tick.sector ?? "—"}</td>

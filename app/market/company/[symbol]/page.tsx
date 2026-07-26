@@ -8,7 +8,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const normalized = decodeURIComponent(symbol).toUpperCase();
   return {
     title: `${normalized} Analysis | FIRE Nepal NEPSE Hub`,
-    description: `${normalized} quote, chart, technical analysis, fundamentals and market intelligence.`,
+    description: `${normalized} company overview, live price & chart, key metrics, financials, dividends, corporate actions, shareholding, news and AI analysis.`,
   };
 }
 

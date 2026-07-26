@@ -452,7 +452,7 @@ export function NepseHubDashboard() {
                 className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/40 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/[0.08] dark:text-emerald-200"
               >
                 <span>
-                  <Link href={`/market/company/${alert.symbol}`} className="underline decoration-emerald-400/50 underline-offset-2">
+                  <Link href={`/market/company/${encodeURIComponent(alert.symbol)}`} className="underline decoration-emerald-400/50 underline-offset-2">
                     {alert.symbol}
                   </Link>{" "}
                   is {alert.direction} your रु {alert.targetNpr.toLocaleString("en-IN")} alert — now रु{" "}
@@ -715,12 +715,23 @@ export function NepseHubDashboard() {
                   ))}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                  {allocation.map((slice) => (
-                    <span key={slice.label} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-zinc-400">
-                      <span className={`h-2 w-2 rounded-full ${slice.color}`} />
-                      {slice.label} · {slice.pct.toFixed(1)}%
-                    </span>
-                  ))}
+                  {allocation.map((slice) =>
+                    slice.label === "Others" ? (
+                      <span key={slice.label} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-zinc-400">
+                        <span className={`h-2 w-2 rounded-full ${slice.color}`} />
+                        {slice.label} · {slice.pct.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <Link
+                        key={slice.label}
+                        href={`/market/company/${encodeURIComponent(slice.label)}`}
+                        className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 transition hover:text-emerald-700 dark:text-zinc-400 dark:hover:text-emerald-300"
+                      >
+                        <span className={`h-2 w-2 rounded-full ${slice.color}`} />
+                        {slice.label} · {slice.pct.toFixed(1)}%
+                      </Link>
+                    ),
+                  )}
                 </div>
               </div>
             ) : null}
@@ -741,7 +752,7 @@ export function NepseHubDashboard() {
               <div className="divide-y divide-slate-200/70 dark:divide-white/[0.06]">
                 {watched.slice(0, 5).map((tick) => (
                   <div key={tick.symbol} className="flex items-center gap-3 py-2.5">
-                    <Link href={`/market/company/${tick.symbol}`} className="min-w-0 flex-1">
+                    <Link href={`/market/company/${encodeURIComponent(tick.symbol)}`} className="min-w-0 flex-1">
                       <p className="text-xs font-black text-slate-950 dark:text-white">{tick.symbol}</p>
                       <p className="truncate text-[10px] font-medium text-slate-500 dark:text-zinc-500">{tick.companyName}</p>
                     </Link>

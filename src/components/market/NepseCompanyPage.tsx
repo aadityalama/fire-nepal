@@ -1,46 +1,67 @@
 "use client";
 
-import { ArrowLeft, BellPlus, Bot, Building2, ShieldAlert, Star, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BellPlus,
+  Bot,
+  Building2,
+  CalendarClock,
+  ChevronRight,
+  FileSpreadsheet,
+  Gift,
+  LineChart,
+  Newspaper,
+  PieChart,
+  ShieldAlert,
+  Star,
+  Trash2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
+import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
+import { buildCompanyInsight } from "@/lib/market/nepse-company-insights";
 import { buildIndexSeries, formatCompactNpr } from "@/lib/market/nepse-hub";
 import {
   buildIndicatorReadings,
-  fibonacciLevels,
-  pivotPoints,
   type Candle,
   type IndicatorSignal,
 } from "@/lib/market/technical-indicators";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 import { NepseMarketChart } from "./NepseMarketChart";
 
-const TABS = [
-  "Overview",
-  "Technical Analysis",
-  "Fundamentals",
-  "Financials",
-  "Corporate Actions",
-  "Dividends",
-  "Shareholding",
-  "News",
-  "Peers",
-  "AI Analysis",
+const SECTIONS = [
+  { id: "overview", label: "Overview", icon: Building2 },
+  { id: "price-chart", label: "Price & Chart", icon: LineChart },
+  { id: "key-metrics", label: "Key Metrics", icon: PieChart },
+  { id: "financials", label: "Financials", icon: FileSpreadsheet },
+  { id: "dividends", label: "Dividends", icon: Gift },
+  { id: "actions", label: "Actions", icon: CalendarClock },
+  { id: "shareholding", label: "Ownership", icon: Users },
+  { id: "news", label: "News", icon: Newspaper },
+  { id: "ai-analysis", label: "AI Analysis", icon: Bot },
 ] as const;
 
-const FUNDAMENTAL_FIELDS = [
-  "EPS",
-  "P/E Ratio",
-  "P/B Ratio",
-  "ROE",
-  "ROA",
-  "Book Value",
-  "Revenue",
-  "Net Profit",
-  "Operating Cash Flow",
-  "Quarterly Reports",
+const card =
+  "rounded-[1.5rem] border border-slate-200/80 bg-white/88 shadow-[0_22px_70px_-44px_rgba(5,46,34,0.32)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-white/[0.035] dark:shadow-[0_22px_70px_-44px_rgba(0,0,0,0.9)]";
+const eyebrow = "text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500";
+
+const STATEMENT_ROWS = [
+  ["Revenue", "—", "—", "—"],
+  ["Operating Profit", "—", "—", "—"],
+  ["Net Profit", "—", "—", "—"],
+  ["Total Assets", "—", "—", "—"],
+  ["Equity", "—", "—", "—"],
 ] as const;
+
+const OWNERSHIP_SLICES = [
+  { label: "Promoter", pct: null as number | null, color: "bg-emerald-500" },
+  { label: "Public", pct: null, color: "bg-teal-400" },
+  { label: "Institutions", pct: null, color: "bg-cyan-400" },
+  { label: "Others", pct: null, color: "bg-slate-400" },
+];
 
 function signalClasses(signal: IndicatorSignal): string {
   if (signal === "bullish") {
@@ -52,6 +73,85 @@ function signalClasses(signal: IndicatorSignal): string {
   return "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400";
 }
 
+function stanceClasses(stance: string): string {
+  if (stance === "Constructive") return "border-emerald-300/50 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
+  if (stance === "Cautious") return "border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100";
+  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-300";
+}
+
+function sentimentBadge(sentiment: NepseNewsItem["sentiment"]): string {
+  if (sentiment === "positive") return "border-emerald-300/50 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300";
+  if (sentiment === "negative") return "border-rose-300/50 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300";
+  return "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-400";
+}
+
+function formatPublished(value: string | null): string {
+  if (!value) return "Recently";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return date.toLocaleString("en-NP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function mentionsSymbol(item: NepseNewsItem, symbol: string): boolean {
+  const needle = symbol.toUpperCase();
+  return `${item.headline} ${item.summary ?? ""}`.toUpperCase().includes(needle);
+}
+
+function SectionShell({
+  id,
+  icon: Icon,
+  title,
+  subtitle,
+  children,
+  action,
+}: {
+  id: string;
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section id={id} className={`${card} scroll-mt-28 p-4 sm:p-5 lg:scroll-mt-32`}>
+      <div className="mb-3.5 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+            </span>
+            <h2 className="text-base font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-lg">{title}</h2>
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-zinc-500 sm:text-xs">{subtitle}</p>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MetricTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
+      <p className={eyebrow}>{label}</p>
+      <p className="mt-2 truncate text-sm font-black tabular-nums text-slate-950 dark:text-white sm:text-base">{value}</p>
+      {hint ? <p className="mt-1 text-[10px] font-semibold text-slate-400 dark:text-zinc-600">{hint}</p> : null}
+    </div>
+  );
+}
+
+function PendingPanel({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="grid min-h-36 place-items-center rounded-2xl border border-dashed border-slate-300/90 bg-slate-50/60 p-6 text-center dark:border-white/10 dark:bg-white/[0.02]">
+      <div className="max-w-md">
+        <p className="text-sm font-black text-slate-800 dark:text-zinc-200">{title}</p>
+        <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{body}</p>
+      </div>
+    </div>
+  );
+}
+
 function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) {
   const { alerts, addAlert, removeAlert } = useNepseAlerts();
   const [direction, setDirection] = useState<"above" | "below">("above");
@@ -59,14 +159,11 @@ function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) 
   const mine = alerts.filter((alert) => alert.symbol === symbol);
 
   return (
-    <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
+    <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
       <div className="flex items-center gap-2">
         <BellPlus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
-        <h2 className="text-base font-black">Price Alerts</h2>
+        <h3 className="text-sm font-black">Price Alerts</h3>
       </div>
-      <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-zinc-500">
-        Stored on this device and checked against every live refresh.
-      </p>
       <form
         className="mt-3 flex flex-wrap items-center gap-2"
         onSubmit={(event) => {
@@ -78,7 +175,7 @@ function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) 
           }
         }}
       >
-        <div className="flex rounded-xl bg-slate-100 p-0.5 dark:bg-black/25" role="group" aria-label="Alert direction">
+        <div className="flex rounded-xl bg-white p-0.5 dark:bg-black/25" role="group" aria-label="Alert direction">
           {(["above", "below"] as const).map((option) => (
             <button
               type="button"
@@ -87,7 +184,7 @@ function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) 
               aria-pressed={direction === option}
               className={`rounded-[0.65rem] px-3 py-1.5 text-[10px] font-black capitalize transition ${
                 direction === option
-                  ? "bg-white text-slate-950 shadow-sm dark:bg-white/10 dark:text-white"
+                  ? "bg-emerald-500 text-white shadow-sm"
                   : "text-slate-500 dark:text-zinc-500"
               }`}
             >
@@ -99,93 +196,164 @@ function AlertComposer({ symbol, ltpNpr }: { symbol: string; ltpNpr?: number }) 
           value={price}
           onChange={(event) => setPrice(event.target.value)}
           inputMode="decimal"
-          placeholder={ltpNpr ? `e.g. ${Math.round(ltpNpr)}` : "Target NPR"}
+          placeholder={ltpNpr && ltpNpr > 0 ? `e.g. ${Math.round(ltpNpr)}` : "Target NPR"}
           aria-label="Alert target price in NPR"
-          className="fn-mobile-numeric-input h-10 w-36 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400 dark:border-white/10 dark:bg-white/[0.05] dark:text-white"
+          className="fn-mobile-numeric-input h-10 w-32 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400 dark:border-white/10 dark:bg-white/[0.05] dark:text-white"
         />
-        <button
-          type="submit"
-          className="h-10 rounded-xl bg-emerald-500 px-4 text-xs font-black text-white shadow-sm transition hover:brightness-105"
-        >
-          Add Alert
+        <button type="submit" className="h-10 rounded-xl bg-emerald-500 px-4 text-xs font-black text-white shadow-sm transition hover:brightness-105">
+          Add
         </button>
       </form>
       {mine.length ? (
         <ul className="mt-3 space-y-1.5">
           {mine.map((alert) => (
-            <li
-              key={alert.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-slate-50/70 px-3 py-2 text-xs dark:border-white/[0.06] dark:bg-white/[0.025]"
-            >
+            <li key={alert.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/80 px-3 py-2 text-xs dark:bg-black/20">
               <span className="font-bold text-slate-800 dark:text-zinc-200">
-                Notify when price is {alert.direction}{" "}
-                <span className="tabular-nums">रु {alert.targetNpr.toLocaleString("en-IN")}</span>
+                {alert.direction} <span className="tabular-nums">रु {alert.targetNpr.toLocaleString("en-IN")}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => removeAlert(alert.id)}
-                className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10"
-                aria-label="Remove alert"
-              >
+              <button type="button" onClick={() => removeAlert(alert.id)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-400/10" aria-label="Remove alert">
                 <Trash2 size={13} />
               </button>
             </li>
           ))}
         </ul>
       ) : null}
-    </section>
+    </div>
+  );
+}
+
+function NewsList({ items, empty }: { items: NepseNewsItem[]; empty: string }) {
+  if (!items.length) {
+    return <PendingPanel title="No matching headlines yet" body={empty} />;
+  }
+  return (
+    <ul className="divide-y divide-slate-200/70 dark:divide-white/[0.06]">
+      {items.map((item) => (
+        <li key={item.id} className="py-3 first:pt-0 last:pb-0">
+          <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="group block">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${sentimentBadge(item.sentiment)}`}>
+                {item.sentiment}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-zinc-500">
+                {item.sourceName} · {formatPublished(item.publishedAt)}
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm font-black leading-snug text-slate-950 transition group-hover:text-emerald-700 dark:text-white dark:group-hover:text-emerald-300">
+              {item.headline}
+            </p>
+            {item.summary ? (
+              <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">{item.summary}</p>
+            ) : null}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { snapshot } = useRealtimeMarket();
   const { isWatched, toggle } = useNepseWatchlist();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Overview");
+  const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
+  const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
   const tick = snapshot?.nepseBySymbol[normalized];
   const positive = (tick?.changePct ?? 0) >= 0;
+  const hasQuote = Boolean(tick && tick.ltpNpr > 0);
+  const displayPrice = hasQuote ? tick!.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : null;
+  const priceLabel = hasQuote ? "Live Price & Session" : displayPrice != null ? "Previous Close (live LTP unavailable)" : "Live Price & Session";
 
-  const candles = useMemo<Candle[]>(
-    () =>
-      buildIndexSeries(tick?.ltpNpr ?? 1_000, "1Y").map((point) => ({
-        open: point.open,
-        high: point.high,
-        low: point.low,
-        close: point.value,
-        volume: point.volume,
-      })),
-    [tick?.ltpNpr],
-  );
+  const candles = useMemo<Candle[]>(() => {
+    const anchor = tick?.ltpNpr && tick.ltpNpr > 0 ? tick.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : 1_000;
+    return buildIndexSeries(anchor, "1Y").map((point) => ({
+      open: point.open,
+      high: point.high,
+      low: point.low,
+      close: point.value,
+      volume: point.volume,
+    }));
+  }, [tick]);
   const readings = useMemo(() => buildIndicatorReadings(candles), [candles]);
-  const pivots = useMemo(() => pivotPoints(candles[candles.length - 1]), [candles]);
-  const fib = useMemo(() => {
-    const highs = candles.map((candle) => candle.high);
-    const lows = candles.map((candle) => candle.low);
-    return fibonacciLevels(Math.max(...highs), Math.min(...lows));
-  }, [candles]);
-  const bullishCount = readings.filter((reading) => reading.signal === "bullish").length;
-  const bearishCount = readings.filter((reading) => reading.signal === "bearish").length;
+  const insight = useMemo(() => buildCompanyInsight(tick, snapshot ?? null, readings), [tick, snapshot, readings]);
+
+  const companyNews = useMemo(
+    () => newsItems.filter((item) => mentionsSymbol(item, normalized)).slice(0, 8),
+    [newsItems, normalized],
+  );
+  const companyActions = useMemo(() => {
+    const matched = corporateActions.filter((item) => mentionsSymbol(item, normalized));
+    if (matched.length) return matched.slice(0, 8);
+    return corporateActions.slice(0, 6);
+  }, [corporateActions, normalized]);
+
+  useEffect(() => {
+    const nodes = SECTIONS.map((section) => document.getElementById(section.id)).filter(Boolean) as HTMLElement[];
+    if (!nodes.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target?.id) {
+          setActiveSection(visible.target.id as (typeof SECTIONS)[number]["id"]);
+        }
+      },
+      { rootMargin: "-20% 0px -55% 0px", threshold: [0.15, 0.35, 0.6] },
+    );
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  function scrollToSection(id: (typeof SECTIONS)[number]["id"]) {
+    setActiveSection(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const keyMetrics = [
+    { label: "P/E Ratio", value: "—", hint: "Audited EPS required" },
+    { label: "EPS", value: "—", hint: "Quarterly report required" },
+    { label: "ROE", value: "—", hint: "Equity statement required" },
+    { label: "Book Value", value: "—", hint: "Balance sheet required" },
+    {
+      label: "Market Cap",
+      value: tick?.marketCap != null ? tick.marketCap.toLocaleString("en-IN") : "—",
+      hint: tick?.marketCap != null ? "From live market feed" : "Feed value unavailable",
+    },
+    {
+      label: "Turnover",
+      value: formatCompactNpr(tick?.turnoverNpr),
+      hint: "Session",
+    },
+  ];
 
   return (
-    <main className="min-h-screen bg-[#f4f8f6] px-3 py-4 text-slate-950 dark:bg-[#030a08] dark:text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-5 flex items-center justify-between gap-3">
+    <main className="min-h-screen bg-[#f4f8f6] text-slate-950 dark:bg-[#030a08] dark:text-white" data-testid="nepse-company-page">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(16,185,129,0.12),transparent_28rem),radial-gradient(circle_at_92%_18%,rgba(20,184,166,0.08),transparent_22rem)]" />
+      <div className="relative mx-auto w-full max-w-7xl px-3 pb-28 pt-4 sm:px-5 lg:px-8">
+        <header className="mb-4 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/market" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.05]" aria-label="Back to NEPSE Hub">
+            <Link
+              href="/market"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200/80 bg-white/90 dark:border-white/10 dark:bg-white/[0.05]"
+              aria-label="Back to NEPSE Hub"
+            >
               <ArrowLeft size={17} />
             </Link>
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">{tick?.companyName ?? "NEPSE Company"}</p>
-              <h1 className="text-xl font-black tracking-tight sm:text-2xl">{normalized}</h1>
+              <p className="truncate text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
+                {tick?.companyName ?? "NEPSE listed company"}
+              </p>
+              <h1 className="truncate text-xl font-black tracking-tight sm:text-2xl">{normalized}</h1>
             </div>
           </div>
           <button
             type="button"
             onClick={() => toggle(normalized)}
-            className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black ${
+            className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black transition ${
               isWatched(normalized)
                 ? "border-amber-300/50 bg-amber-50 text-amber-700 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-200"
-                : "border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300"
+                : "border-slate-200/80 bg-white/90 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300"
             }`}
           >
             <Star size={15} fill={isWatched(normalized) ? "currentColor" : "none"} />
@@ -193,24 +361,33 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
           </button>
         </header>
 
-        <section className="rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_4%_0%,rgba(52,211,153,0.2),transparent_35%),linear-gradient(145deg,#063126,#06120f)] p-5 text-white sm:p-7">
+        {/* Live Price hero */}
+        <section
+          className="overflow-hidden rounded-[1.75rem] border border-emerald-400/20 bg-[radial-gradient(circle_at_6%_0%,rgba(52,211,153,0.22),transparent_38%),linear-gradient(145deg,#063126,#05110e)] p-5 text-white shadow-[0_30px_80px_-40px_rgba(16,185,129,0.55)] sm:p-7"
+          data-testid="company-live-price"
+        >
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
-              <p className="text-xs font-bold text-emerald-100/55">Last traded price</p>
-              <p className="mt-1 text-4xl font-black tracking-tight sm:text-5xl">
-                {tick && tick.ltpNpr > 0 ? `रु ${tick.ltpNpr.toLocaleString("en-IN")}` : "—"}
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/55">{priceLabel}</p>
+              <p className="mt-2 text-[2.4rem] font-black leading-none tracking-[-0.04em] tabular-nums sm:text-[3.25rem]">
+                {displayPrice != null ? `रु ${displayPrice.toLocaleString("en-IN")}` : "—"}
               </p>
-              <p className={`mt-2 text-sm font-black ${positive ? "text-emerald-300" : "text-rose-300"}`}>
-                {tick?.changePct == null ? "Live quote unavailable" : `${positive ? "+" : ""}${tick.changePct.toFixed(2)}% today`}
+              <p className={`mt-3 text-sm font-black ${positive ? "text-emerald-300" : "text-rose-300"}`}>
+                {tick?.changePct == null
+                  ? "Live quote unavailable"
+                  : `${positive ? "+" : ""}${tick.changePct.toFixed(2)}%${tick.changeNpr != null ? ` · रु ${tick.changeNpr >= 0 ? "+" : ""}${tick.changeNpr.toLocaleString("en-IN")}` : ""} today`}
+              </p>
+              <p className="mt-2 text-[11px] font-semibold text-emerald-100/55">
+                {tick?.sector ?? "Sector unmapped"} · Updated {tick?.lastUpdated ? formatPublished(tick.lastUpdated) : snapshot?.fetchedAt ? formatPublished(snapshot.fetchedAt) : "—"}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-right">
+            <div className="grid grid-cols-3 gap-2 text-right sm:gap-3">
               {[
                 ["High", tick?.highNpr ? `रु ${tick.highNpr.toLocaleString("en-IN")}` : "—"],
                 ["Low", tick?.lowNpr ? `रु ${tick.lowNpr.toLocaleString("en-IN")}` : "—"],
                 ["Volume", tick?.volume?.toLocaleString("en-IN") ?? "—"],
               ].map(([label, value]) => (
-                <div key={label}>
+                <div key={label} className="min-w-[4.5rem] rounded-xl bg-white/5 px-2.5 py-2 ring-1 ring-white/10">
                   <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/45">{label}</p>
                   <p className="mt-1 text-xs font-black tabular-nums">{value}</p>
                 </div>
@@ -219,156 +396,265 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
           </div>
         </section>
 
-        <nav className="no-scrollbar sticky top-0 z-30 mt-3 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white/90 p-1 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-[#07110f]/90" aria-label="Company research sections">
-          {TABS.map((item) => (
+        <nav
+          className="no-scrollbar sticky top-0 z-30 mt-3 -mx-1 flex gap-1 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90 p-1 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-[#07110f]/92"
+          aria-label="Company detail sections"
+          data-testid="company-section-nav"
+        >
+          {SECTIONS.map((section) => (
             <button
               type="button"
-              key={item}
-              onClick={() => setTab(item)}
+              key={section.id}
+              onClick={() => scrollToSection(section.id)}
               className={`shrink-0 rounded-xl px-3 py-2 text-[10px] font-black transition ${
-                tab === item ? "bg-emerald-500 text-white" : "text-slate-500 hover:bg-slate-100 dark:text-zinc-500 dark:hover:bg-white/[0.05]"
+                activeSection === section.id
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-slate-500 hover:bg-slate-100 dark:text-zinc-500 dark:hover:bg-white/[0.05]"
               }`}
             >
-              {item}
+              {section.label}
             </button>
           ))}
         </nav>
 
-        <div className="mt-4">
-          {(tab === "Overview" || tab === "Technical Analysis") && (
-            <NepseMarketChart value={tick?.ltpNpr ?? 1_000} changePct={tick?.changePct} />
-          )}
-
-          {tab === "Overview" ? (
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.42fr]">
-              <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-                <h2 className="text-base font-black">Market Overview</h2>
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {[
-                    ["Previous Close", tick?.previousCloseNpr ? `रु ${tick.previousCloseNpr.toLocaleString("en-IN")}` : "—"],
-                    ["Turnover", formatCompactNpr(tick?.turnoverNpr)],
-                    ["Trades", tick?.trades?.toLocaleString("en-IN") ?? "—"],
-                    ["Sector", tick?.sector ?? "—"],
-                    ["Market Cap", tick?.marketCap?.toLocaleString("en-IN") ?? "—"],
-                    ["Range", tick?.intradayRangePct == null ? "—" : `${tick.intradayRangePct.toFixed(2)}%`],
-                    ["52W High", "History required"],
-                    ["52W Low", "History required"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.03]">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{label}</p>
-                      <p className="mt-1.5 truncate text-xs font-black">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <div className="space-y-4">
-                <AlertComposer symbol={normalized} ltpNpr={tick?.ltpNpr} />
-                <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-amber-500" />
-                    <h2 className="text-base font-black">Risk & Rating</h2>
-                  </div>
-                  <p className="mt-5 text-3xl font-black">Not rated</p>
-                  <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
-                    Buy / Hold / Sell and risk scoring remain disabled until audited fundamentals and sufficient OHLC history are available.
-                  </p>
-                </section>
-              </div>
-            </div>
-          ) : null}
-
-          {tab === "Technical Analysis" ? (
-            <div className="mt-4 space-y-4">
-              <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-black">Technical Indicator Engine</h2>
-                  <span className="rounded-full border border-amber-300/40 bg-amber-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700 dark:border-amber-300/15 dark:bg-amber-300/[0.07] dark:text-amber-200">
-                    Indicative series until EOD history is live
-                  </span>
-                </div>
-                <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-500">
-                  {bullishCount} bullish · {bearishCount} bearish · {readings.length - bullishCount - bearishCount} neutral signals from a 1-year curve anchored to the live price.
-                </p>
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {readings.map((reading) => (
-                    <div key={reading.name} className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-black">{reading.name}</p>
-                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black capitalize ${signalClasses(reading.signal)}`}>
-                          {reading.signal}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm font-black tabular-nums">{reading.value}</p>
-                      <p className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-zinc-500">{reading.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-                  <h2 className="text-sm font-black">Pivot Points</h2>
-                  <dl className="mt-3 space-y-1.5">
-                    {[
-                      ["Resistance 2", pivots.r2],
-                      ["Resistance 1", pivots.r1],
-                      ["Pivot", pivots.pivot],
-                      ["Support 1", pivots.s1],
-                      ["Support 2", pivots.s2],
-                    ].map(([label, value]) => (
-                      <div key={label as string} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-white/[0.03]">
-                        <dt className="font-bold text-slate-500 dark:text-zinc-500">{label}</dt>
-                        <dd className="font-black tabular-nums">{(value as number).toFixed(2)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-                <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-                  <h2 className="text-sm font-black">Fibonacci Retracement</h2>
-                  <dl className="mt-3 space-y-1.5">
-                    {fib.map((level) => (
-                      <div key={level.label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-white/[0.03]">
-                        <dt className="font-bold text-slate-500 dark:text-zinc-500">{level.label}</dt>
-                        <dd className="font-black tabular-nums">{level.value.toFixed(2)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-              </div>
-            </div>
-          ) : null}
-
-          {tab === "Fundamentals" ? (
-            <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.035] sm:p-5">
-              <h2 className="text-base font-black">Fundamental Engine</h2>
-              <p className="mt-1 text-xs font-medium text-slate-500 dark:text-zinc-500">
-                Ratios populate automatically once the audited company-data provider is connected. Live feed values are shown where available.
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                <div className="rounded-xl border border-emerald-300/40 bg-emerald-50/70 p-3 dark:border-emerald-400/15 dark:bg-emerald-400/[0.06]">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Market Cap (feed)</p>
-                  <p className="mt-1.5 text-xs font-black tabular-nums">{tick?.marketCap?.toLocaleString("en-IN") ?? "—"}</p>
-                </div>
-                {FUNDAMENTAL_FIELDS.map((field) => (
-                  <div key={field} className="rounded-xl border border-slate-200/80 bg-slate-50 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{field}</p>
-                    <p className="mt-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-600">Provider required</p>
+        <div className="mt-4 space-y-4">
+          {/* 1. Company Overview */}
+          <SectionShell id="overview" icon={Building2} title="Company Overview" subtitle="Identity, session context and risk posture">
+            <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  ["Symbol", normalized],
+                  ["Company", tick?.companyName ?? "—"],
+                  ["Sector", tick?.sector ?? "—"],
+                  ["Previous Close", tick?.previousCloseNpr ? `रु ${tick.previousCloseNpr.toLocaleString("en-IN")}` : "—"],
+                  ["Trades", tick?.trades?.toLocaleString("en-IN") ?? "—"],
+                  ["Range", tick?.intradayRangePct == null ? "—" : `${tick.intradayRangePct.toFixed(2)}%`],
+                  ["52W High", "History required"],
+                  ["52W Low", "History required"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                    <p className={eyebrow}>{label}</p>
+                    <p className="mt-1.5 truncate text-xs font-black text-slate-950 dark:text-white">{value}</p>
                   </div>
                 ))}
               </div>
-            </section>
-          ) : null}
-
-          {tab !== "Overview" && tab !== "Technical Analysis" && tab !== "Fundamentals" ? (
-            <section className="grid min-h-80 place-items-center rounded-[1.5rem] border border-dashed border-slate-300 bg-white/60 p-8 text-center dark:border-white/10 dark:bg-white/[0.025]">
-              <div className="max-w-md">
-                {tab === "AI Analysis" ? <Bot className="mx-auto h-8 w-8 text-emerald-500" /> : <Building2 className="mx-auto h-8 w-8 text-emerald-500" />}
-                <h2 className="mt-3 text-lg font-black">{tab}</h2>
-                <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
-                  This module is wired for the future audited company-data provider. It will never infer financial statements, ownership, dividends or recommendations from incomplete quotes.
-                </p>
+              <div className="space-y-3">
+                <AlertComposer symbol={normalized} ltpNpr={tick?.ltpNpr} />
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4 text-amber-500" aria-hidden />
+                    <h3 className="text-sm font-black">Risk & Rating</h3>
+                  </div>
+                  <p className="mt-3 text-2xl font-black">Not rated</p>
+                  <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
+                    Buy / Hold / Sell scoring stays off until audited fundamentals and sufficient OHLC history are available.
+                  </p>
+                </div>
               </div>
-            </section>
-          ) : null}
+            </div>
+          </SectionShell>
+
+          {/* 2. Live Price & Chart */}
+          <SectionShell id="price-chart" icon={LineChart} title="Live Price & Chart" subtitle="Interactive session chart with indicative technical overlays">
+            <NepseMarketChart value={displayPrice ?? 1_000} changePct={tick?.changePct} />
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {readings.slice(0, 6).map((reading) => (
+                <div key={reading.name} className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-black">{reading.name}</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black capitalize ${signalClasses(reading.signal)}`}>
+                      {reading.signal}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm font-black tabular-nums">{reading.value}</p>
+                  <p className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-zinc-500">{reading.detail}</p>
+                </div>
+              ))}
+            </div>
+          </SectionShell>
+
+          {/* 3. Key Metrics */}
+          <SectionShell id="key-metrics" icon={PieChart} title="Key Metrics" subtitle="PE, EPS, ROE, Book Value and Market Cap">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="company-key-metrics">
+              {keyMetrics.map((metric) => (
+                <MetricTile key={metric.label} label={metric.label} value={metric.value} hint={metric.hint} />
+              ))}
+            </div>
+          </SectionShell>
+
+          {/* 4. Financial Statements */}
+          <SectionShell id="financials" icon={FileSpreadsheet} title="Financial Statements" subtitle="Income, balance sheet and cash-flow ready slots">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06]" data-testid="company-financials">
+              <table className="min-w-full text-left text-xs">
+                <thead className="bg-slate-50/90 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:bg-white/[0.03] dark:text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2.5">Line item</th>
+                    <th className="px-3 py-2.5">FY-2</th>
+                    <th className="px-3 py-2.5">FY-1</th>
+                    <th className="px-3 py-2.5">Latest</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {STATEMENT_ROWS.map(([label, a, b, c]) => (
+                    <tr key={label} className="border-t border-slate-200/70 dark:border-white/[0.06]">
+                      <td className="px-3 py-2.5 font-bold text-slate-800 dark:text-zinc-200">{label}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{a}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{b}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-slate-400 dark:text-zinc-600">{c}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-zinc-500">
+              Statement figures populate automatically after the audited company-data provider is connected. Empty cells are intentional — not estimates.
+            </p>
+          </SectionShell>
+
+          {/* 5. Dividend / Bonus / Rights */}
+          <SectionShell id="dividends" icon={Gift} title="Dividend / Bonus / Rights History" subtitle="Corporate distributions and capital actions">
+            <div className="grid gap-2 sm:grid-cols-3" data-testid="company-dividends">
+              {[
+                ["Cash Dividend", "No history loaded"],
+                ["Bonus Share", "No history loaded"],
+                ["Rights Issue", "No history loaded"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                  <p className={eyebrow}>{label}</p>
+                  <p className="mt-2 text-xs font-black text-slate-500 dark:text-zinc-500">{value}</p>
+                </div>
+              ))}
+            </div>
+            <PendingPanel
+              title="Distribution ledger pending"
+              body="Dividend, bonus and rights rows will render chronologically once corporate-action history is ingested for this symbol."
+            />
+          </SectionShell>
+
+          {/* 6. Corporate Actions Timeline */}
+          <SectionShell
+            id="actions"
+            icon={CalendarClock}
+            title="Corporate Actions Timeline"
+            subtitle={newsLoaded ? "From aggregated market headlines tagged as corporate actions" : "Loading corporate action feed…"}
+          >
+            <div data-testid="company-actions-timeline">
+              {companyActions.length ? (
+                <ol className="relative space-y-0 border-l border-emerald-300/40 pl-4 dark:border-emerald-400/25">
+                  {companyActions.map((item) => (
+                    <li key={item.id} className="relative pb-4 last:pb-0">
+                      <span className="absolute -left-[1.28rem] top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-[#f4f8f6] dark:ring-[#030a08]" />
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-500">
+                        {formatPublished(item.publishedAt)} · {item.sourceName}
+                        {!mentionsSymbol(item, normalized) ? " · Market-wide" : ""}
+                      </p>
+                      <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm font-black leading-snug text-slate-950 hover:text-emerald-700 dark:text-white dark:hover:text-emerald-300">
+                        {item.headline}
+                      </a>
+                      {item.summary ? <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-zinc-500">{item.summary}</p> : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <PendingPanel
+                  title="No corporate actions in feed"
+                  body="When dividend, bonus, rights or AGM notices are ingested, they will appear here as a timeline."
+                />
+              )}
+            </div>
+          </SectionShell>
+
+          {/* 7. Shareholding Structure */}
+          <SectionShell id="shareholding" icon={Users} title="Shareholding Structure" subtitle="Promoter, public and institutional ownership">
+            <div className="grid gap-4 sm:grid-cols-[1fr_0.9fr]" data-testid="company-shareholding">
+              <div>
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.05]" aria-hidden>
+                  {OWNERSHIP_SLICES.map((slice) => (
+                    <div key={slice.label} className={`${slice.color} h-full opacity-35`} style={{ width: "25%" }} />
+                  ))}
+                </div>
+                <ul className="mt-3 grid grid-cols-2 gap-2">
+                  {OWNERSHIP_SLICES.map((slice) => (
+                    <li key={slice.label} className="rounded-xl border border-slate-200/70 bg-slate-50/70 px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${slice.color}`} />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{slice.label}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-black text-slate-400 dark:text-zinc-600">—</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <PendingPanel
+                title="Ownership registry pending"
+                body="Shareholding percentages and major holders will populate from the official ownership feed — never estimated from price action."
+              />
+            </div>
+          </SectionShell>
+
+          {/* 8. Company News */}
+          <SectionShell id="news" icon={Newspaper} title="Company News" subtitle={`Headlines mentioning ${normalized} from the NEPSE news engine`}>
+            <div data-testid="company-news">
+              <NewsList
+                items={companyNews}
+                empty={
+                  newsLoaded
+                    ? `No recent aggregated headlines mention ${normalized}. Market-wide news still updates on the hub home.`
+                    : "Loading news feed…"
+                }
+              />
+            </div>
+          </SectionShell>
+
+          {/* 9. AI Company Analysis */}
+          <SectionShell
+            id="ai-analysis"
+            icon={Bot}
+            title="AI Company Analysis"
+            subtitle="Deterministic session intelligence — not investment advice"
+            action={
+              <Link
+                href={`/fire-ai/chat?context=nepse&symbol=${encodeURIComponent(normalized)}`}
+                className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 dark:text-emerald-400"
+              >
+                Ask FIRE AI <ChevronRight size={12} />
+              </Link>
+            }
+          >
+            <div data-testid="company-ai-analysis">
+              <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${stanceClasses(insight.stance)}`}>
+                {insight.stance}
+              </div>
+              <p className="mt-3 text-sm font-bold leading-relaxed text-slate-800 dark:text-zinc-200">{insight.summary}</p>
+              <ul className="mt-3 space-y-2">
+                {insight.bullets.map((bullet) => (
+                  <li key={bullet} className="flex gap-2 text-[12px] font-medium leading-relaxed text-slate-600 dark:text-zinc-400">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+              {insight.peers.length ? (
+                <div className="mt-4">
+                  <p className={eyebrow}>Same-sector movers</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {insight.peers.map((peer) => (
+                      <Link
+                        key={peer.symbol}
+                        href={`/market/company/${encodeURIComponent(peer.symbol)}`}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/80 px-3 py-1.5 text-[11px] font-black transition hover:border-emerald-400/40 dark:border-white/10 dark:bg-white/[0.04]"
+                      >
+                        {peer.symbol}
+                        <span className={(peer.changePct ?? 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                          {peer.changePct == null ? "—" : `${peer.changePct >= 0 ? "+" : ""}${peer.changePct.toFixed(2)}%`}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </SectionShell>
         </div>
       </div>
     </main>

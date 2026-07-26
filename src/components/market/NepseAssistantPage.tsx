@@ -97,7 +97,7 @@ export function NepseAssistantPage() {
                 {exchange.answer.symbols.length ? (
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {exchange.answer.symbols.map((symbol) => (
-                      <Link key={symbol} href={`/market/company/${symbol}`} className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-black text-emerald-800 transition hover:bg-emerald-500/25 dark:text-emerald-300">
+                      <Link key={symbol} href={`/market/company/${encodeURIComponent(symbol)}`} className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-black text-emerald-800 transition hover:bg-emerald-500/25 dark:text-emerald-300">
                         Open {symbol}
                       </Link>
                     ))}
