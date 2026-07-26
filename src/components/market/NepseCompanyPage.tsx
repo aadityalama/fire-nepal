@@ -25,6 +25,7 @@ import { CompanyAiIntelligence } from "@/components/market/company/CompanyAiInte
 import { CompanyDividendTable } from "@/components/market/company/CompanyDividendTable";
 import { CompanyFinancialIntelligence } from "@/components/market/company/CompanyFinancialIntelligence";
 import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinancialsTable";
+import { CompanyFreeFloatPanel } from "@/components/market/company/CompanyFreeFloatPanel";
 import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid";
 import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
 import { CompanyTechnicalAnalysis } from "@/components/market/company/CompanyTechnicalAnalysis";
@@ -428,7 +429,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
 
         <div className="mt-4 space-y-4">
           {/* 1. Company Overview */}
-          <SectionShell id="overview" icon={Building2} title="Company Overview" subtitle="Identity, capital structure, session stats and 52-week range">
+          <SectionShell id="overview" icon={Building2} title="Company Overview" subtitle="Identity, capital structure, free float, session stats and 52-week range">
             <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
               <div className="space-y-3">
                 <CompanyMetricGrid items={overviewMetrics} className="grid grid-cols-2 gap-2 sm:grid-cols-3" />
@@ -452,6 +453,18 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
                   </p>
                 </div>
               </div>
+            </div>
+            <div className="mt-4 border-t border-slate-200/70 pt-4 dark:border-white/[0.06]">
+              <CompanyFreeFloatPanel
+                input={{
+                  listedShares: fundamentals?.shareholding.listedShares ?? profile?.listedShares ?? null,
+                  promoterShares: fundamentals?.shareholding.promoterShares ?? profile?.promoterShares ?? null,
+                  publicShares: fundamentals?.shareholding.publicShares ?? profile?.publicShares ?? null,
+                  promoterPct: fundamentals?.shareholding.promoterPct ?? null,
+                  publicPct: fundamentals?.shareholding.publicPct ?? null,
+                  todayVolume: session?.volume ?? tick?.volume ?? null,
+                }}
+              />
             </div>
           </SectionShell>
 
