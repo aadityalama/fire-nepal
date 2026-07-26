@@ -24,8 +24,11 @@ import { CompanyDividendTable } from "@/components/market/company/CompanyDividen
 import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinancialsTable";
 import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid";
 import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
+import { CompanyTechnicalAnalysis } from "@/components/market/company/CompanyTechnicalAnalysis";
+import { CompanyTechnicalChart } from "@/components/market/company/CompanyTechnicalChart";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseCompanyFundamentals } from "@/hooks/useNepseCompanyFundamentals";
+import { useNepseCompanyOhlc } from "@/hooks/useNepseCompanyOhlc";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import { buildCompanyInsight } from "@/lib/market/nepse-company-insights";
@@ -33,15 +36,10 @@ import {
   formatFundamentalText,
   formatFundamentalValue,
 } from "@/lib/market/nepse-fundamentals-format";
-import { buildIndexSeries } from "@/lib/market/nepse-hub";
-import {
-  buildIndicatorReadings,
-  type Candle,
-  type IndicatorSignal,
-} from "@/lib/market/technical-indicators";
+import { buildTechnicalAnalysis, stanceClass as techStanceClass } from "@/lib/market/nepse-technical-summary";
+import type { Candle } from "@/lib/market/technical-indicators";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 import { DATA_UNAVAILABLE } from "@/types/market/nepse-company-fundamentals";
-import { NepseMarketChart } from "./NepseMarketChart";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", icon: Building2 },
@@ -58,16 +56,6 @@ const SECTIONS = [
 const card =
   "rounded-[1.5rem] border border-slate-200/80 bg-white/88 shadow-[0_22px_70px_-44px_rgba(5,46,34,0.32)] backdrop-blur-2xl dark:border-white/[0.08] dark:bg-white/[0.035] dark:shadow-[0_22px_70px_-44px_rgba(0,0,0,0.9)]";
 const eyebrow = "text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500";
-
-function signalClasses(signal: IndicatorSignal): string {
-  if (signal === "bullish") {
-    return "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/[0.08] dark:text-emerald-300";
-  }
-  if (signal === "bearish") {
-    return "border-rose-300/60 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/[0.08] dark:text-rose-300";
-  }
-  return "border-slate-200 bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-zinc-400";
-}
 
 function stanceClasses(stance: string): string {
   if (stance === "Constructive") return "border-emerald-300/50 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200";
@@ -239,6 +227,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { isWatched, toggle } = useNepseWatchlist();
   const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
+  const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   const normalized = decodeURIComponent(symbol).toUpperCase();
   const tick = snapshot?.nepseBySymbol[normalized];
@@ -253,18 +242,22 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const companyName = profile?.companyName ?? tick?.companyName ?? null;
   const sector = profile?.sector ?? tick?.sector ?? null;
 
-  const candles = useMemo<Candle[]>(() => {
-    const anchor = tick?.ltpNpr && tick.ltpNpr > 0 ? tick.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : 1_000;
-    return buildIndexSeries(anchor, "1Y").map((point) => ({
-      open: point.open,
-      high: point.high,
-      low: point.low,
-      close: point.value,
-      volume: point.volume,
-    }));
-  }, [tick]);
-  const readings = useMemo(() => buildIndicatorReadings(candles), [candles]);
-  const insight = useMemo(() => buildCompanyInsight(tick, snapshot ?? null, readings), [tick, snapshot, readings]);
+  const candles = useMemo<Candle[]>(
+    () =>
+      (ohlc?.bars ?? []).map((bar) => ({
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume,
+      })),
+    [ohlc?.bars],
+  );
+  const technical = useMemo(() => buildTechnicalAnalysis(candles), [candles]);
+  const insight = useMemo(
+    () => buildCompanyInsight(tick, snapshot ?? null, technical.readings),
+    [tick, snapshot, technical.readings],
+  );
 
   const companyNews = useMemo(
     () => newsItems.filter((item) => mentionsSymbol(item, normalized)).slice(0, 8),
@@ -449,31 +442,33 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
                     <ShieldAlert className="h-4 w-4 text-amber-500" aria-hidden />
                     <h3 className="text-sm font-black">Risk & Rating</h3>
                   </div>
-                  <p className="mt-3 text-2xl font-black">Not rated</p>
-                  <p className="mt-1.5 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
-                    Buy / Hold / Sell scoring stays off until audited fundamentals and sufficient OHLC history are available.
+                  <p className={`mt-3 inline-flex rounded-full border px-3 py-1 text-sm font-black uppercase tracking-[0.12em] ${techStanceClass(technical.stance)}`}>
+                    {technical.stance}
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500">
+                    {technical.stanceDetail}
                   </p>
                 </div>
               </div>
             </div>
           </SectionShell>
 
-          {/* 2. Live Price & Chart */}
-          <SectionShell id="price-chart" icon={LineChart} title="Live Price & Chart" subtitle="Interactive session chart with indicative technical overlays">
-            <NepseMarketChart value={displayPrice ?? 1_000} changePct={tick?.changePct} />
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {readings.slice(0, 6).map((reading) => (
-                <div key={reading.name} className="rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black">{reading.name}</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[9px] font-black capitalize ${signalClasses(reading.signal)}`}>
-                      {reading.signal}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm font-black tabular-nums">{reading.value}</p>
-                  <p className="mt-0.5 text-[10px] font-semibold text-slate-500 dark:text-zinc-500">{reading.detail}</p>
-                </div>
-              ))}
+          {/* 2. Live Price & Chart + Technical Analysis */}
+          <SectionShell
+            id="price-chart"
+            icon={LineChart}
+            title="Live Price & Chart"
+            subtitle={
+              ohlcLoaded
+                ? candles.length
+                  ? "Candlestick / line chart, OHLC, volume and technicals from nepse_eod_prices"
+                  : "Waiting for EOD history in nepse_eod_prices — no synthetic series"
+                : "Loading EOD history…"
+            }
+          >
+            <CompanyTechnicalChart bars={ohlc?.bars ?? []} loaded={ohlcLoaded} />
+            <div className="mt-4">
+              <CompanyTechnicalAnalysis candles={candles} />
             </div>
           </SectionShell>
 
