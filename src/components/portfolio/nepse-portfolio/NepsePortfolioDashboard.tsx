@@ -23,11 +23,11 @@ import {
   type NepseTabId,
 } from "./NepsePortfolioUi";
 import {
-  NepseAnalyticsPanel,
   NepseCorporateActionsPanel,
   NepseStockDetail,
   NepseTransactionsPanel,
 } from "./NepseStockDetail";
+import { InstitutionalAnalyticsPanel, useInstitutionalAnalytics } from "./InstitutionalAnalyticsPanel";
 
 type View = { kind: "tabs"; tab: NepseTabId } | { kind: "detail"; id: string };
 
@@ -64,6 +64,13 @@ export function NepsePortfolioDashboard({
     [rows, ledger, krwPerNpr, usdPerNpr, liveMarket, netWorthLiveNpr],
   );
 
+  const { analytics, loading: analyticsLoading } = useInstitutionalAnalytics({
+    summary,
+    holdings: summary.holdings,
+    rows,
+    ledger,
+  });
+
   const holdingsById = useMemo(
     () => new Map(summary.holdings.map((h) => [h.row.id, h])),
     [summary.holdings],
@@ -82,7 +89,6 @@ export function NepsePortfolioDashboard({
 
   const focusSearch = useCallback(() => {
     setView({ kind: "tabs", tab: "holdings" });
-    // Search input mounts with the Holdings tab.
     window.requestAnimationFrame(() => searchRef.current?.focus());
   }, []);
 
@@ -97,6 +103,7 @@ export function NepsePortfolioDashboard({
         <NepseStockDetail
           holding={detailHolding}
           ledger={ledger}
+          equityCurve={analytics?.charts.growth}
           onBack={() => setView({ kind: "tabs", tab: "holdings" })}
           onRemove={(id) => {
             onRemove(id);
@@ -111,7 +118,12 @@ export function NepsePortfolioDashboard({
 
           {activeTab === "overview" ? (
             <div className="animate-fade-in space-y-3 sm:space-y-3.5">
-              <NepseHeroCard summary={summary} range={range} onRangeChange={setRange} />
+              <NepseHeroCard
+                summary={summary}
+                range={range}
+                onRangeChange={setRange}
+                equityCurve={analytics?.charts.growth}
+              />
               <NepseQuickStats summary={summary} />
               <section>
                 <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
@@ -153,7 +165,7 @@ export function NepsePortfolioDashboard({
 
           {activeTab === "analytics" ? (
             <div className="animate-fade-in">
-              <NepseAnalyticsPanel summary={summary} rows={rows} />
+              <InstitutionalAnalyticsPanel analytics={analytics} loading={analyticsLoading} />
             </div>
           ) : null}
         </div>

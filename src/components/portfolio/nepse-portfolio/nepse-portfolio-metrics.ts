@@ -157,20 +157,10 @@ export function buildNepsePortfolioSummary(
 
   const realizedGainNpr = holdings.reduce((a, h) => a + h.realizedGainNpr, 0);
   const dividendNpr = holdings.reduce((a, h) => a + h.dividendNpr, 0);
-  const prior = portfolioValueNpr - (todayGainKnown ? todayGainNpr : 0);
-  const sparkline =
-    holdings.length === 0
-      ? [0, 0, 0, 0, 0, 0, 0, 0]
-      : [
-          prior * 0.97,
-          prior * 0.985,
-          prior * 0.99,
-          prior * 1.002,
-          prior * 0.998,
-          prior * 1.01,
-          prior,
-          portfolioValueNpr,
-        ];
+
+  // Sparkline stays empty until a real equity curve is supplied by analytics.
+  // Never fabricate illustrative points from live value.
+  const sparkline: number[] = [];
 
   return {
     portfolioValueNpr,
@@ -191,44 +181,38 @@ export type NepseChartRange = "7D" | "1M" | "3M" | "1Y" | "ALL";
 
 export const NEPSE_CHART_RANGES: NepseChartRange[] = ["7D", "1M", "3M", "1Y", "ALL"];
 
-const RANGE_POINTS: Record<NepseChartRange, number> = {
-  "7D": 8,
-  "1M": 16,
-  "3M": 20,
-  "1Y": 24,
-  ALL: 28,
-};
-
-/** Illustrative drawdown depth per window — the series is anchored to the real live value. */
-const RANGE_DEPTH: Record<NepseChartRange, number> = {
-  "7D": 0.035,
-  "1M": 0.08,
-  "3M": 0.14,
-  "1Y": 0.26,
-  ALL: 0.36,
-};
 
 /**
- * Presentation-only performance shape for the hero chart. NEPSE history is not stored per day,
- * so the curve trends from an implied start to the live portfolio value (same approach as the
- * existing sparkline) — it never feeds any calculation.
+ * Map a real equity curve into the hero chart series for a selected window.
+ * Returns an empty array when historical EOD coverage is insufficient — never fabricates.
  */
-export function buildNepsePerformanceSeries(
-  endValueNpr: number,
+export function buildNepsePerformanceSeriesFromCurve(
+  curve: { date: string; portfolioValueNpr: number }[],
   range: NepseChartRange,
+): { i: number; v: number; date?: string }[] {
+  if (!curve.length) return [];
+  const end = curve[curve.length - 1]!.date;
+  const days = range === "7D" ? 7 : range === "1M" ? 31 : range === "3M" ? 93 : range === "1Y" ? 366 : null;
+  const filtered =
+    days == null
+      ? curve
+      : (() => {
+          const [y, m, d] = end.split("-").map(Number);
+          const dt = new Date(Date.UTC(y, m - 1, d));
+          dt.setUTCDate(dt.getUTCDate() - days);
+          const fromIso = dt.toISOString().slice(0, 10);
+          return curve.filter((p) => p.date >= fromIso);
+        })();
+  if (filtered.length < 2) return [];
+  return filtered.map((p, i) => ({ i, v: p.portfolioValueNpr, date: p.date }));
+}
+
+/** @deprecated Use buildNepsePerformanceSeriesFromCurve — synthetic series removed. */
+export function buildNepsePerformanceSeries(
+  _endValueNpr: number,
+  _range: NepseChartRange,
 ): { i: number; v: number }[] {
-  const points = RANGE_POINTS[range];
-  const depth = RANGE_DEPTH[range];
-  if (!Number.isFinite(endValueNpr) || endValueNpr <= 0) {
-    return Array.from({ length: points }, (_, i) => ({ i, v: 0 }));
-  }
-  const start = endValueNpr * (1 - depth);
-  return Array.from({ length: points }, (_, i) => {
-    const t = points <= 1 ? 1 : i / (points - 1);
-    const trend = start + (endValueNpr - start) * t;
-    const wobble = Math.sin(i * 1.7 + depth * 12) * endValueNpr * depth * 0.14 * (1 - t);
-    return { i, v: Math.max(0, trend + wobble) };
-  });
+  return [];
 }
 
 export type NepseHoldingFilter = "all" | "profit" | "loss" | "dividend_pending";

@@ -2,10 +2,10 @@
 
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import type { InvestmentRow, PortfolioLedgerEntry } from "@/components/portfolio/types";
+import type { PortfolioLedgerEntry } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
 import {
-  buildNepsePerformanceSeries,
+  buildNepsePerformanceSeriesFromCurve,
   CORPORATE_TX_TYPES,
   formatSignedPct,
   investmentLedgerEntries,
@@ -14,8 +14,8 @@ import {
   TRADE_TX_TYPES,
   type NepseChartRange,
   type NepseHoldingRow,
-  type NepsePortfolioSummary,
 } from "./nepse-portfolio-metrics";
+import { DATA_UNAVAILABLE } from "@/types/market/nepse-company-fundamentals";
 import {
   DetailMetric,
   NEPSE_GLASS,
@@ -99,11 +99,14 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export function NepseStockDetail({
   holding,
   ledger,
+  equityCurve,
   onBack,
   onRemove,
 }: {
   holding: NepseHoldingRow;
   ledger: readonly PortfolioLedgerEntry[];
+  /** Portfolio equity curve (shared); holding chart uses live mark only when curve unavailable. */
+  equityCurve?: { date: string; portfolioValueNpr: number }[];
   onBack: () => void;
   onRemove: (id: string) => void;
 }) {
@@ -123,7 +126,7 @@ export function NepseStockDetail({
   const corporate = entries.filter((e) => CORPORATE_TX_TYPES.has(e.txType) || isIpoOrFpo(e));
   const totalPnl = holding.pnlNpr + holding.realizedGainNpr;
   const dayPos = (holding.dayChangePct ?? 0) >= 0;
-  const series = buildNepsePerformanceSeries(holding.liveNpr, range);
+  const series = buildNepsePerformanceSeriesFromCurve(equityCurve ?? [], range);
 
   return (
     <div className="space-y-5 pb-10">
@@ -171,7 +174,13 @@ export function NepseStockDetail({
         </div>
 
         <div className="mt-4 h-28 w-full sm:h-32">
-          <NepsePerformanceChart data={series} positive={holding.pnlNpr >= 0} compact />
+          {series.length >= 2 ? (
+            <NepsePerformanceChart data={series} positive={holding.pnlNpr >= 0} compact />
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/20">
+              <p className="px-3 text-center text-[11px] font-semibold text-zinc-500">{DATA_UNAVAILABLE}</p>
+            </div>
+          )}
         </div>
         <div
           className="mt-2.5 flex gap-1 rounded-full border border-white/[0.07] bg-black/25 p-0.5"
@@ -352,114 +361,4 @@ export function NepseCorporateActionsPanel({
   }
 
   return <LedgerFeed entries={entries} holdingsById={holdingsById} />;
-}
-
-export function NepseAnalyticsPanel({
-  summary,
-}: {
-  summary: NepsePortfolioSummary;
-  rows: InvestmentRow[];
-}) {
-  const byKind = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const h of summary.holdings) {
-      map.set(h.row.kind, (map.get(h.row.kind) ?? 0) + h.liveNpr);
-    }
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [summary.holdings]);
-
-  return (
-    <div className="space-y-5">
-      <Section title="Portfolio metrics">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <DetailMetric label="Portfolio value" value={formatMoney(summary.portfolioValueNpr, "NPR")} />
-          <DetailMetric label="Investment cost" value={formatMoney(summary.costNpr, "NPR")} />
-          <DetailMetric
-            label="Unrealized gain"
-            value={formatMoney(summary.unrealizedGainNpr, "NPR")}
-            tone={summary.unrealizedGainNpr >= 0 ? "pos" : "neg"}
-          />
-          <DetailMetric
-            label="Realized gain"
-            value={formatMoney(summary.realizedGainNpr, "NPR")}
-            tone={summary.realizedGainNpr >= 0 ? "pos" : "neg"}
-          />
-          <DetailMetric
-            label="Portfolio return"
-            value={formatSignedPct(summary.portfolioReturnPct, 1)}
-            tone={(summary.portfolioReturnPct ?? 0) >= 0 ? "pos" : "neg"}
-          />
-          <DetailMetric
-            label="Today's gain"
-            value={formatMoney(summary.todayGainNpr, "NPR")}
-            tone={summary.todayGainNpr >= 0 ? "pos" : "neg"}
-          />
-          <DetailMetric label="Dividend received" value={formatMoney(summary.dividendNpr, "NPR")} />
-          <DetailMetric label="Holdings" value={String(summary.holdings.length)} />
-        </div>
-      </Section>
-
-      <Section title="Investment breakdown">
-        {byKind.length === 0 ? (
-          <NepseEmptyState text="No investment breakdown yet." />
-        ) : (
-          <ul className="space-y-2.5">
-            {byKind.map(([kind, value]) => {
-              const pct = summary.portfolioValueNpr > 0 ? (value / summary.portfolioValueNpr) * 100 : 0;
-              return (
-                <li key={kind} className={`${NEPSE_GLASS} px-4 py-3.5`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-100/60">
-                      {kind.replaceAll("_", " ")}
-                    </span>
-                    <span className="text-sm font-black tabular-nums text-white">
-                      {formatMoney(value, "NPR")}
-                    </span>
-                  </div>
-                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 transition-[width] duration-700"
-                      style={{ width: `${Math.min(100, pct)}%` }}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-[10px] font-bold text-emerald-100/35">
-                    {pct.toFixed(1)}% of portfolio
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Holdings analytics">
-        {summary.holdings.length === 0 ? (
-          <NepseEmptyState text="Add a holding to see analytics." />
-        ) : (
-          <ul className={`${NEPSE_GLASS} divide-y divide-white/[0.06] overflow-hidden`}>
-            {summary.holdings.map((h) => (
-              <li key={h.row.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-black tracking-tight text-white">{h.symbol}</p>
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-emerald-100/40">
-                    WACC {formatMoney(h.waccNpr, "NPR")} · {units(h.currentUnits)} units
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p
-                    className={`text-xs font-semibold tabular-nums ${h.pnlNpr >= 0 ? "text-emerald-400" : "text-rose-400/90"}`}
-                  >
-                    {formatMoney(h.pnlNpr, "NPR")}
-                  </p>
-                  <p className="mt-0.5 text-[11px] font-medium tabular-nums text-zinc-500">
-                    {formatSignedPct(h.dayChangePct)}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-    </div>
-  );
 }

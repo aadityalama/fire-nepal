@@ -7,7 +7,7 @@ import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { formatMoney } from "@/lib/expense-utils";
 import {
-  buildNepsePerformanceSeries,
+  buildNepsePerformanceSeriesFromCurve,
   formatSignedPct,
   NEPSE_CHART_RANGES,
   NEPSE_HOLDING_FILTERS,
@@ -162,14 +162,17 @@ export function NepseHeroCard({
   summary,
   range,
   onRangeChange,
+  equityCurve,
 }: {
   summary: NepsePortfolioSummary;
   range: NepseChartRange;
   onRangeChange: (r: NepseChartRange) => void;
+  /** Real reconstructed equity curve — never synthetic. */
+  equityCurve?: { date: string; portfolioValueNpr: number }[];
 }) {
   const reduced = usePrefersReducedMotion();
   const overallPos = summary.overallPnlNpr >= 0;
-  const series = buildNepsePerformanceSeries(summary.portfolioValueNpr, range);
+  const series = buildNepsePerformanceSeriesFromCurve(equityCurve ?? [], range);
   const animatedValue = useCountUpNumber(summary.portfolioValueNpr, {
     durationMs: 900,
     skipAnimation: reduced,
@@ -239,9 +242,17 @@ export function NepseHeroCard({
               })}
             </div>
           </div>
-          <div className="h-[7.5rem] w-full transition-opacity duration-500 sm:h-[8.75rem]">
-            <NepsePerformanceChart data={series} positive={overallPos} compact />
-          </div>
+          {series.length >= 2 ? (
+            <div className="h-[7.5rem] w-full transition-opacity duration-500 sm:h-[8.75rem]">
+              <NepsePerformanceChart data={series} positive={overallPos} compact />
+            </div>
+          ) : (
+            <div className="flex h-[7.5rem] items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-black/20 sm:h-[8.75rem]">
+              <p className="px-4 text-center text-[11px] font-semibold text-zinc-500">
+                Data unavailable — equity curve needs EOD history for your holdings
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>
