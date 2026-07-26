@@ -484,14 +484,14 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
             <CompanyMetricGrid items={valuationMetrics} testId="company-key-metrics" />
           </SectionShell>
 
-          {/* 4. Premium Financial Intelligence */}
+          {/* 4. Premium Financial Intelligence Dashboard */}
           <SectionShell
             id="financial-intelligence"
             icon={BrainCircuit}
-            title="Financial Intelligence"
+            title="Financial Intelligence Dashboard"
             subtitle={
               intelligenceLoaded
-                ? "Quarterly & annual filings, ratios, dividend analytics, ownership, peers and growth — real data only"
+                ? "Research terminal — statements, ratios, dividends, ownership, peers and growth from real filings only"
                 : "Loading filings, dividends and peer data…"
             }
           >

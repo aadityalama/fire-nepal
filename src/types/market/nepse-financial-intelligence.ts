@@ -2,7 +2,7 @@
  * Premium Financial Intelligence contracts for Company Details (Phase 3).
  * Every nullable field means the value is not published by any configured real
  * provider/table — the UI must render "Data unavailable". Values are never invented;
- * derived ratios (PE, PB, ROE, yield, CAGR) are computed only from real inputs.
+ * derived ratios (PE, PB, ROE, yield, CAGR, margins) are computed only from real inputs.
  */
 
 export type NepseQuarterlyReportRow = {
@@ -28,13 +28,38 @@ export type NepseAnnualReportRow = {
   netProfitNpr: number | null;
   netWorthPerShareNpr: number | null;
   paidUpCapitalNpr: number | null;
-  /** Provider does not publish these — merged from nepse_company_financials when ingested. */
+  /** Merged from nepse_company_financials when ingested. */
   revenueNpr: number | null;
+  operatingProfitNpr: number | null;
   assetsNpr: number | null;
   liabilitiesNpr: number | null;
   equityNpr: number | null;
+  cashNpr: number | null;
+  borrowingsNpr: number | null;
   submittedDate: string | null;
   profitYoyPct: number | null;
+  revenueYoyPct: number | null;
+  epsYoyPct: number | null;
+};
+
+export type StatementPeriod = {
+  id: string;
+  label: string;
+};
+
+export type StatementLine = {
+  id: string;
+  label: string;
+  /** Values aligned to StatementBlock.periods — null → Data unavailable. */
+  values: (number | null)[];
+  format: "compactNpr" | "npr" | "number";
+};
+
+export type StatementBlock = {
+  kind: "income" | "balance" | "cashflow";
+  title: string;
+  periods: StatementPeriod[];
+  lines: StatementLine[];
 };
 
 export type NepseFinancialRatios = {
@@ -42,6 +67,10 @@ export type NepseFinancialRatios = {
   pe: number | null;
   pb: number | null;
   bookValuePerShareNpr: number | null;
+  /** Latest annual YoY revenue change when both years publish revenue. */
+  revenueGrowthPct: number | null;
+  /** Latest annual YoY EPS change when both years publish EPS. */
+  epsGrowthPct: number | null;
   roePct: number | null;
   roaPct: number | null;
   netProfitMarginPct: number | null;
@@ -60,12 +89,19 @@ export type NepseDividendHistoryRow = {
   totalPct: number | null;
   announcementDate: string | null;
   bookCloseDate: string | null;
+  /** Cash yield vs EOD close near book-close / announcement — null when price history missing. */
+  cashYieldPct: number | null;
+  totalYieldPct: number | null;
 };
 
 export type NepseDividendAnalytics = {
   rows: NepseDividendHistoryRow[];
+  /** Bonus-only rows (bonusPct published and > 0). */
+  bonusHistory: { fiscalYear: string; bonusPct: number; announcementDate: string | null; bookCloseDate: string | null }[];
   /** Rights share events from structured corporate actions (empty until ingested). */
   rightsEvents: { fiscalYear: string | null; title: string; date: string | null }[];
+  /** Yield history series for charts (newest → oldest). */
+  yieldHistory: { fiscalYear: string; cashYieldPct: number | null; totalYieldPct: number | null }[];
   /** Cash dividend of the latest FY as % of live price (face value NPR 100 convention). */
   cashYieldPct: number | null;
   totalYieldPct: number | null;
@@ -119,6 +155,10 @@ export type NepseFinancialIntelligencePayload = {
   sector: string | null;
   quarterly: NepseQuarterlyReportRow[];
   annual: NepseAnnualReportRow[];
+  /** Structured statement views (Income / Balance / Cash Flow) for quarterly periods. */
+  quarterlyStatements: StatementBlock[];
+  /** Structured statement views for up to 10 annual fiscal years. */
+  annualStatements: StatementBlock[];
   ratios: NepseFinancialRatios;
   dividends: NepseDividendAnalytics;
   shareholding: NepseShareholdingBreakdown;

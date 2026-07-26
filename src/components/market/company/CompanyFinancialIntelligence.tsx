@@ -9,6 +9,7 @@ import type {
   NepseAnnualReportRow,
   NepseFinancialIntelligencePayload,
   NepseQuarterlyReportRow,
+  StatementBlock,
 } from "@/types/market/nepse-financial-intelligence";
 
 const TABS = [
@@ -22,6 +23,7 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+type StatementKind = "income" | "balance" | "cashflow";
 
 const tableWrap = "overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06]";
 const theadCls =
@@ -104,63 +106,163 @@ function fyShort(fiscalYear: string): string {
   return fiscalYear.length > 7 ? fiscalYear.slice(2) : fiscalYear;
 }
 
-function QuarterlyTab({ rows }: { rows: NepseQuarterlyReportRow[] }) {
-  if (!rows.length) {
-    return (
-      <EmptyState
-        title="No quarterly filings published yet"
-        detail="Quarterly income statement detail (revenue, cash flow) appears once the company files reports with NEPSE. Nothing is estimated."
-      />
-    );
+function StatementTable({ block }: { block: StatementBlock }) {
+  const hasAny = block.lines.some((line) => line.values.some((value) => value != null && Number.isFinite(value)));
+  if (!block.periods.length) {
+    return <EmptyState title={`No ${block.title.toLowerCase()} periods`} detail="Statement columns appear once filings or audited rows exist." />;
   }
   return (
     <div>
-      <div className={tableWrap} data-testid="fi-quarterly-table">
+      <div className={tableWrap} data-testid={`fi-statement-${block.kind}`}>
         <table className="min-w-full text-left text-xs">
           <thead className={theadCls}>
             <tr>
-              <th className="px-3 py-2.5">Period</th>
-              <th className="px-3 py-2.5">EPS</th>
-              <th className="px-3 py-2.5">EPS YoY</th>
-              <th className="px-3 py-2.5">Net Profit</th>
-              <th className="px-3 py-2.5">Profit YoY</th>
-              <th className="px-3 py-2.5">Net Worth / Share</th>
-              <th className="px-3 py-2.5">PE</th>
-              <th className="px-3 py-2.5">Filed</th>
+              <th className="px-3 py-2.5">{block.title}</th>
+              {block.periods.map((period) => (
+                <th key={period.id} className="px-3 py-2.5">
+                  {period.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={`${row.fiscalYear}-${row.quarter}`} className={rowCls}>
-                <td className={labelCellCls}>
-                  {row.quarter} {fyShort(row.fiscalYear)}
-                </td>
-                <td className={cellCls}>{formatFundamentalValue(row.eps)}</td>
-                <td className={cellCls}>
-                  <GrowthBadge value={row.yoyEpsPct} />
-                </td>
-                <td className={cellCls}>{formatFundamentalValue(row.netProfitNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>
-                  <GrowthBadge value={row.yoyProfitPct} />
-                </td>
-                <td className={cellCls}>{formatFundamentalValue(row.netWorthPerShareNpr, { style: "npr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.pe)}</td>
-                <td className={cellCls}>{formatFundamentalDate(row.submittedDate)}</td>
+            {block.lines.map((row) => (
+              <tr key={row.id} className={rowCls}>
+                <td className={labelCellCls}>{row.label}</td>
+                {row.values.map((value, index) => (
+                  <td key={`${row.id}-${block.periods[index]?.id ?? index}`} className={cellCls}>
+                    {formatFundamentalValue(value, { style: row.format === "number" ? undefined : row.format })}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {!hasAny ? (
+        <p className={noteCls}>
+          All line items currently show “{DATA_UNAVAILABLE}”. Figures appear only from published filings or ingested audited rows —
+          never estimated.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function StatementExplorer({
+  statements,
+  emptyTitle,
+}: {
+  statements: StatementBlock[];
+  emptyTitle: string;
+}) {
+  const [kind, setKind] = useState<StatementKind>("income");
+  if (!statements.length) {
+    return <EmptyState title={emptyTitle} detail="Nothing is estimated. Statement views unlock when filings or audited rows exist." />;
+  }
+  const active = statements.find((block) => block.kind === kind) ?? statements[0];
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100/80 p-1 dark:bg-white/[0.04]">
+        {(
+          [
+            ["income", "Income Statement"],
+            ["balance", "Balance Sheet"],
+            ["cashflow", "Cash Flow"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setKind(id)}
+            className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition ${
+              kind === id ? "bg-emerald-500 text-white" : "text-slate-500 hover:bg-white/70 dark:text-zinc-500"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <StatementTable block={active} />
+    </div>
+  );
+}
+
+function QuarterlyTab({
+  rows,
+  statements,
+}: {
+  rows: NepseQuarterlyReportRow[];
+  statements: StatementBlock[];
+}) {
+  if (!rows.length && !statements.length) {
+    return (
+      <EmptyState
+        title="No quarterly filings published yet"
+        detail="Quarterly income statement, balance sheet and cash flow appear once the company files reports with NEPSE. Nothing is estimated."
+      />
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <StatementExplorer statements={statements} emptyTitle="No quarterly statement periods" />
+      {rows.length ? (
+        <div>
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Filing summary</p>
+          <div className={tableWrap} data-testid="fi-quarterly-table">
+            <table className="min-w-full text-left text-xs">
+              <thead className={theadCls}>
+                <tr>
+                  <th className="px-3 py-2.5">Period</th>
+                  <th className="px-3 py-2.5">EPS</th>
+                  <th className="px-3 py-2.5">EPS YoY</th>
+                  <th className="px-3 py-2.5">Net Profit</th>
+                  <th className="px-3 py-2.5">Profit YoY</th>
+                  <th className="px-3 py-2.5">Net Worth / Share</th>
+                  <th className="px-3 py-2.5">PE</th>
+                  <th className="px-3 py-2.5">Filed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={`${row.fiscalYear}-${row.quarter}`} className={rowCls}>
+                    <td className={labelCellCls}>
+                      {row.quarter} {fyShort(row.fiscalYear)}
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.eps)}</td>
+                    <td className={cellCls}>
+                      <GrowthBadge value={row.yoyEpsPct} />
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.netProfitNpr, { style: "compactNpr" })}</td>
+                    <td className={cellCls}>
+                      <GrowthBadge value={row.yoyProfitPct} />
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.netWorthPerShareNpr, { style: "npr" })}</td>
+                    <td className={cellCls}>{formatFundamentalValue(row.pe)}</td>
+                    <td className={cellCls}>{formatFundamentalDate(row.submittedDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       <p className={noteCls}>
-        YoY compares the same quarter of the previous fiscal year — computed only when both filings exist. Line-item income
-        statement, balance sheet and cash flow detail is not published by the configured provider, so it shows “{DATA_UNAVAILABLE}”.
+        YoY compares the same quarter of the previous fiscal year — computed only when both filings exist. Line items without a
+        published source stay “{DATA_UNAVAILABLE}”.
       </p>
     </div>
   );
 }
 
-function AnnualTab({ rows }: { rows: NepseAnnualReportRow[] }) {
-  if (!rows.length) {
+function AnnualTab({
+  rows,
+  statements,
+}: {
+  rows: NepseAnnualReportRow[];
+  statements: StatementBlock[];
+}) {
+  if (!rows.length && !statements.length) {
     return (
       <EmptyState
         title="No annual reports published yet"
@@ -170,7 +272,7 @@ function AnnualTab({ rows }: { rows: NepseAnnualReportRow[] }) {
   }
   const chronological = [...rows].reverse();
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-3">
         <TrendBars title="EPS trend" points={chronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.eps }))} />
         <TrendBars
@@ -178,49 +280,59 @@ function AnnualTab({ rows }: { rows: NepseAnnualReportRow[] }) {
           points={chronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.netProfitNpr }))}
         />
         <TrendBars
-          title="Net worth / share trend"
-          points={chronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.netWorthPerShareNpr }))}
+          title="Revenue trend"
+          points={chronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.revenueNpr }))}
         />
       </div>
-      <div className={tableWrap} data-testid="fi-annual-table">
-        <table className="min-w-full text-left text-xs">
-          <thead className={theadCls}>
-            <tr>
-              <th className="px-3 py-2.5">Fiscal Year</th>
-              <th className="px-3 py-2.5">Revenue</th>
-              <th className="px-3 py-2.5">Net Profit</th>
-              <th className="px-3 py-2.5">Profit YoY</th>
-              <th className="px-3 py-2.5">EPS</th>
-              <th className="px-3 py-2.5">Net Worth / Share</th>
-              <th className="px-3 py-2.5">Assets</th>
-              <th className="px-3 py-2.5">Liabilities</th>
-              <th className="px-3 py-2.5">Equity / Reserves</th>
-              <th className="px-3 py-2.5">Paid-up Capital</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.fiscalYear} className={rowCls}>
-                <td className={labelCellCls}>{row.fiscalYear}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.revenueNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.netProfitNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>
-                  <GrowthBadge value={row.profitYoyPct} />
-                </td>
-                <td className={cellCls}>{formatFundamentalValue(row.eps)}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.netWorthPerShareNpr, { style: "npr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.assetsNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.liabilitiesNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.equityNpr, { style: "compactNpr" })}</td>
-                <td className={cellCls}>{formatFundamentalValue(row.paidUpCapitalNpr, { style: "compactNpr" })}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <StatementExplorer statements={statements} emptyTitle="No annual statement periods" />
+      {rows.length ? (
+        <div>
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Annual summary · last {rows.length} fiscal years</p>
+          <div className={tableWrap} data-testid="fi-annual-table">
+            <table className="min-w-full text-left text-xs">
+              <thead className={theadCls}>
+                <tr>
+                  <th className="px-3 py-2.5">Fiscal Year</th>
+                  <th className="px-3 py-2.5">Revenue</th>
+                  <th className="px-3 py-2.5">Rev YoY</th>
+                  <th className="px-3 py-2.5">Net Profit</th>
+                  <th className="px-3 py-2.5">Profit YoY</th>
+                  <th className="px-3 py-2.5">EPS</th>
+                  <th className="px-3 py-2.5">EPS YoY</th>
+                  <th className="px-3 py-2.5">Assets</th>
+                  <th className="px-3 py-2.5">Liabilities</th>
+                  <th className="px-3 py-2.5">Equity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.fiscalYear} className={rowCls}>
+                    <td className={labelCellCls}>{row.fiscalYear}</td>
+                    <td className={cellCls}>{formatFundamentalValue(row.revenueNpr, { style: "compactNpr" })}</td>
+                    <td className={cellCls}>
+                      <GrowthBadge value={row.revenueYoyPct} />
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.netProfitNpr, { style: "compactNpr" })}</td>
+                    <td className={cellCls}>
+                      <GrowthBadge value={row.profitYoyPct} />
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.eps)}</td>
+                    <td className={cellCls}>
+                      <GrowthBadge value={row.epsYoyPct} />
+                    </td>
+                    <td className={cellCls}>{formatFundamentalValue(row.assetsNpr, { style: "compactNpr" })}</td>
+                    <td className={cellCls}>{formatFundamentalValue(row.liabilitiesNpr, { style: "compactNpr" })}</td>
+                    <td className={cellCls}>{formatFundamentalValue(row.equityNpr, { style: "compactNpr" })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       <p className={noteCls}>
-        Revenue, assets, liabilities and equity totals are not part of the filing summary feed; those columns fill in once audited
-        statement rows are ingested into the fundamental tables — never estimated.
+        Revenue, assets, liabilities, cash and borrowings fill from audited fundamental tables when ingested. Filing summaries
+        always show published EPS / profit / net worth — never estimated.
       </p>
     </div>
   );
@@ -242,13 +354,14 @@ export function CompanyFinancialIntelligence({
       { label: "PE Ratio", value: ratios?.pe ?? null },
       { label: "PB Ratio", value: ratios?.pb ?? null },
       { label: "Book Value / Share", value: ratios?.bookValuePerShareNpr ?? null, style: "npr" },
+      { label: "Revenue Growth", value: ratios?.revenueGrowthPct ?? null, style: "pct", hint: "Latest annual YoY" },
+      { label: "EPS Growth", value: ratios?.epsGrowthPct ?? null, style: "pct", hint: "Latest annual YoY" },
       { label: "ROE", value: ratios?.roePct ?? null, style: "pct" },
       { label: "ROA", value: ratios?.roaPct ?? null, style: "pct" },
       { label: "Net Profit Margin", value: ratios?.netProfitMarginPct ?? null, style: "pct" },
       { label: "Operating Margin", value: ratios?.operatingMarginPct ?? null, style: "pct" },
       { label: "Debt to Equity", value: ratios?.debtToEquity ?? null },
       { label: "Current Ratio", value: ratios?.currentRatio ?? null },
-      { label: "Quick Ratio", value: ratios?.quickRatio ?? null },
     ];
   }, [data?.ratios]);
 
@@ -259,7 +372,7 @@ export function CompanyFinancialIntelligence({
         label: "Cash Dividend Yield",
         value: dividends?.cashYieldPct ?? null,
         style: "pct",
-        hint: dividends?.latestFiscalYear ? `FY ${dividends.latestFiscalYear} vs live price` : undefined,
+        hint: dividends?.latestFiscalYear ? `FY ${dividends.latestFiscalYear}` : undefined,
       },
       { label: "Total Dividend Yield", value: dividends?.totalYieldPct ?? null, style: "pct" },
       { label: "Dividend CAGR (5Y)", value: dividends?.dividendCagr5yPct ?? null, style: "pct" },
@@ -294,10 +407,12 @@ export function CompanyFinancialIntelligence({
     ];
   }, [data?.growth]);
 
+  const yieldChronological = useMemo(() => [...(data?.dividends.yieldHistory ?? [])].reverse(), [data?.dividends.yieldHistory]);
+
   if (!loaded) {
     return (
-      <div className="grid min-h-40 place-items-center rounded-2xl border border-slate-200/70 bg-slate-50/60 dark:border-white/[0.06] dark:bg-white/[0.02]">
-        <p className="text-xs font-bold text-slate-500 dark:text-zinc-500">Loading financial intelligence…</p>
+      <div className="grid min-h-40 place-items-center rounded-2xl border border-slate-200/70 bg-slate-50/60 dark:border-white/[0.06] dark:bg-white/[0.02]" data-testid="fi-dashboard-loading">
+        <p className="text-xs font-bold text-slate-500 dark:text-zinc-500">Loading financial intelligence dashboard…</p>
       </div>
     );
   }
@@ -322,16 +437,19 @@ export function CompanyFinancialIntelligence({
       </div>
 
       <div className="mt-3.5">
-        {tab === "quarterly" ? <QuarterlyTab rows={data?.quarterly ?? []} /> : null}
+        {tab === "quarterly" ? (
+          <QuarterlyTab rows={data?.quarterly ?? []} statements={data?.quarterlyStatements ?? []} />
+        ) : null}
 
-        {tab === "annual" ? <AnnualTab rows={data?.annual ?? []} /> : null}
+        {tab === "annual" ? <AnnualTab rows={data?.annual ?? []} statements={data?.annualStatements ?? []} /> : null}
 
         {tab === "ratios" ? (
           <div>
             <CompanyMetricGrid items={ratioItems} className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4" testId="fi-ratios" />
             <p className={noteCls}>
-              EPS, PE, PB, book value and ROE come from the latest published filing and the live price. Margin, leverage and
-              liquidity ratios need full statement detail no configured provider publishes — “{DATA_UNAVAILABLE}” until ingested.
+              Revenue growth, EPS growth, margins and debt-to-equity are derived only when both numerator and denominator exist in
+              published filings or audited tables. Current / quick ratios stay “{DATA_UNAVAILABLE}” until current assets and current
+              liabilities are ingested.
             </p>
           </div>
         ) : null}
@@ -339,6 +457,16 @@ export function CompanyFinancialIntelligence({
         {tab === "dividends" ? (
           <div className="space-y-3">
             <CompanyMetricGrid items={dividendTiles} className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" testId="fi-dividend-tiles" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <TrendBars
+                title="Total yield history"
+                points={yieldChronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.totalYieldPct }))}
+              />
+              <TrendBars
+                title="Cash yield history"
+                points={yieldChronological.map((row) => ({ label: fyShort(row.fiscalYear), value: row.cashYieldPct }))}
+              />
+            </div>
             {data?.dividends.rows.length ? (
               <div className={tableWrap} data-testid="fi-dividend-table">
                 <table className="min-w-full text-left text-xs">
@@ -348,6 +476,8 @@ export function CompanyFinancialIntelligence({
                       <th className="px-3 py-2.5">Cash %</th>
                       <th className="px-3 py-2.5">Bonus %</th>
                       <th className="px-3 py-2.5">Total %</th>
+                      <th className="px-3 py-2.5">Cash Yield</th>
+                      <th className="px-3 py-2.5">Total Yield</th>
                       <th className="px-3 py-2.5">Announced</th>
                       <th className="px-3 py-2.5">Book Close</th>
                     </tr>
@@ -359,6 +489,8 @@ export function CompanyFinancialIntelligence({
                         <td className={cellCls}>{formatFundamentalValue(row.cashPct, { style: "pct" })}</td>
                         <td className={cellCls}>{formatFundamentalValue(row.bonusPct, { style: "pct" })}</td>
                         <td className={cellCls}>{formatFundamentalValue(row.totalPct, { style: "pct" })}</td>
+                        <td className={cellCls}>{formatFundamentalValue(row.cashYieldPct, { style: "pct" })}</td>
+                        <td className={cellCls}>{formatFundamentalValue(row.totalYieldPct, { style: "pct" })}</td>
                         <td className={cellCls}>{formatFundamentalDate(row.announcementDate)}</td>
                         <td className={cellCls}>{formatFundamentalDate(row.bookCloseDate)}</td>
                       </tr>
@@ -369,6 +501,37 @@ export function CompanyFinancialIntelligence({
             ) : (
               <EmptyState title="No dividend announcements found" detail="Cash and bonus history appears from real NEPSE announcements only." />
             )}
+
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Bonus history</p>
+              {data?.dividends.bonusHistory.length ? (
+                <div className={`${tableWrap} mt-2`}>
+                  <table className="min-w-full text-left text-xs">
+                    <thead className={theadCls}>
+                      <tr>
+                        <th className="px-3 py-2.5">Fiscal Year</th>
+                        <th className="px-3 py-2.5">Bonus %</th>
+                        <th className="px-3 py-2.5">Announced</th>
+                        <th className="px-3 py-2.5">Book Close</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.dividends.bonusHistory.map((row) => (
+                        <tr key={`bonus-${row.fiscalYear}`} className={rowCls}>
+                          <td className={labelCellCls}>{row.fiscalYear}</td>
+                          <td className={cellCls}>{formatFundamentalValue(row.bonusPct, { style: "pct" })}</td>
+                          <td className={cellCls}>{formatFundamentalDate(row.announcementDate)}</td>
+                          <td className={cellCls}>{formatFundamentalDate(row.bookCloseDate)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-bold text-slate-400 dark:text-zinc-600">{DATA_UNAVAILABLE}</p>
+              )}
+            </div>
+
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500 dark:text-zinc-500">Rights share history</p>
               {data?.dividends.rightsEvents.length ? (
@@ -385,8 +548,8 @@ export function CompanyFinancialIntelligence({
               )}
             </div>
             <p className={noteCls}>
-              Dividend percentages follow the NEPSE convention (% of NPR 100 face value), so 12.5% equals रु 12.5 per share. Yield,
-              CAGR and payout are derived only from those real announcements plus the live price.
+              Dividend percentages follow the NEPSE convention (% of NPR 100 face value). Historical yield uses the EOD close nearest
+              the book-close (or announcement) date when available; otherwise the live price is used for the latest year only.
             </p>
           </div>
         ) : null}
@@ -412,11 +575,11 @@ export function CompanyFinancialIntelligence({
                       <th className="px-3 py-2.5">Market Cap</th>
                       <th className="px-3 py-2.5">LTP</th>
                       <th className="px-3 py-2.5">PE</th>
-                      <th className="px-3 py-2.5">PB</th>
                       <th className="px-3 py-2.5">EPS</th>
                       <th className="px-3 py-2.5">ROE</th>
-                      <th className="px-3 py-2.5">Div Yield</th>
                       <th className="px-3 py-2.5">Book Value</th>
+                      <th className="px-3 py-2.5">PB</th>
+                      <th className="px-3 py-2.5">Div Yield</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -437,18 +600,18 @@ export function CompanyFinancialIntelligence({
                         <td className={cellCls}>{formatFundamentalValue(peer.marketCapNpr, { style: "compactNpr" })}</td>
                         <td className={cellCls}>{formatFundamentalValue(peer.ltpNpr, { style: "npr" })}</td>
                         <td className={cellCls}>{formatFundamentalValue(peer.pe)}</td>
-                        <td className={cellCls}>{formatFundamentalValue(peer.pb)}</td>
                         <td className={cellCls}>{formatFundamentalValue(peer.eps)}</td>
                         <td className={cellCls}>{formatFundamentalValue(peer.roePct, { style: "pct" })}</td>
-                        <td className={cellCls}>{formatFundamentalValue(peer.dividendYieldPct, { style: "pct" })}</td>
                         <td className={cellCls}>{formatFundamentalValue(peer.bookValuePerShareNpr, { style: "npr" })}</td>
+                        <td className={cellCls}>{formatFundamentalValue(peer.pb)}</td>
+                        <td className={cellCls}>{formatFundamentalValue(peer.dividendYieldPct, { style: "pct" })}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className={noteCls}>
-                Same-sector peers ranked by market cap{data?.sector ? ` (${data.sector})` : ""}. Ratios use each peer's latest real
+                Same-sector peers ranked by market cap{data?.sector ? ` (${data.sector})` : ""}. Ratios use each peer&apos;s latest real
                 filing and live price — cells without filings show “{DATA_UNAVAILABLE}”.
               </p>
             </div>
