@@ -97,8 +97,7 @@ const profileRows = securities
       paid_up_capital_npr: paidUp,
       listed_shares: listed,
       market_cap_npr: feedCap && feedCap > 0 ? feedCap : price != null && listed != null ? price * listed : null,
-      public_shares: null,
-      promoter_shares: null,
+      // Ownership written by ownership ingest — do not null these out here.
       source: paidUp != null ? "yonepse:all_securities+filings" : "yonepse:all_securities",
       updated_at: now,
     };

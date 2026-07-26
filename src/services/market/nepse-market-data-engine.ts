@@ -324,9 +324,8 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
         paid_up_capital_npr: paidUp,
         listed_shares: listed,
         market_cap_npr: marketCap,
-        // Promoter / public splits are not published by the configured securities feed.
-        public_shares: null,
-        promoter_shares: null,
+        // Ownership (promoter/public) is written by ingestCompanyOwnership — omit here
+        // so upserts do not wipe previously ingested official NEPSE capital-structure fields.
         source: paidUp != null ? "yonepse:all_securities+filings" : "yonepse:all_securities",
         updated_at: now,
       });
@@ -640,6 +639,54 @@ export async function ingestCompanyActions(sb: SupabaseClient): Promise<IngestRe
       status: "error",
       items: 0,
       message: error instanceof Error ? error.message : "Corporate actions ingest failed",
+    };
+  }
+  await logRun(sb, result, startedAt);
+  return result;
+}
+
+/**
+ * Ingest official NEPSE promoter / public ownership into `nepse_company_profiles`.
+ * Mutual-fund / institutional / foreign holdings are not published by NEPSE and stay null.
+ */
+export async function ingestCompanyOwnership(sb: SupabaseClient): Promise<IngestResult> {
+  const startedAt = new Date();
+  let result: IngestResult;
+  try {
+    const { getOwnershipBySymbol } = await import("@/services/market/nepse-ownership-provider");
+    const bySymbol = await getOwnershipBySymbol({ concurrency: 3 });
+    if (!bySymbol.size) {
+      result = { kind: "fundamentals", status: "ok", items: 0, message: "No ownership rows published by NEPSE" };
+    } else {
+      const now = new Date().toISOString();
+      const rows = [...bySymbol.values()].map((row) => ({
+        symbol: row.symbol,
+        promoter_shares: row.promoterShares,
+        public_shares: row.publicShares,
+        listed_shares: row.listedShares,
+        source: "nepse:security-detail",
+        updated_at: now,
+      }));
+      let persisted = 0;
+      for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        const { error } = await sb.from("nepse_company_profiles").upsert(chunk, { onConflict: "symbol" });
+        if (error) throw new Error(error.message);
+        persisted += chunk.length;
+      }
+      result = {
+        kind: "fundamentals",
+        status: "ok",
+        items: persisted,
+        message: `Upserted promoter/public ownership for ${persisted} symbols from NEPSE security-detail`,
+      };
+    }
+  } catch (error) {
+    result = {
+      kind: "fundamentals",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Ownership ingest failed",
     };
   }
   await logRun(sb, result, startedAt);

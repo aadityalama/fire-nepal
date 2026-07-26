@@ -5,6 +5,7 @@ import {
   ingestCompanyActions,
   ingestCompanyDisclosures,
   ingestCompanyFundamentals,
+  ingestCompanyOwnership,
   ingestEodPrices,
   ingestMarketNews,
 } from "@/services/market/nepse-market-data-engine";
@@ -16,6 +17,7 @@ import {
  * 3) Aggregate configured news feeds + company disclosures + exchange notices into `nepse_market_news`
  * 4) Refresh fundamentals from filings
  * 5) Build typed corporate actions into `nepse_company_actions`
+ * 6) Refresh official NEPSE promoter/public ownership into `nepse_company_profiles`
  *
  * Manual: GET /api/cron/nepse-market-data?backfill=1&limit=80&priority=NABIL,VLBS,UPPER
  * When `CRON_SECRET` is set, send `Authorization: Bearer <CRON_SECRET>`.
@@ -64,13 +66,21 @@ export async function GET(request: Request) {
     url.searchParams.get("actions") !== "0"
       ? await ingestCompanyActions(sb)
       : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (actions=0)" };
+  const ownership =
+    url.searchParams.get("ownership") !== "0"
+      ? await ingestCompanyOwnership(sb)
+      : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (ownership=0)" };
 
   const ok =
     eod.status !== "error" &&
     news.status !== "error" &&
     disclosures.status !== "error" &&
     actions.status !== "error" &&
+    ownership.status !== "error" &&
     backfill.status !== "error" &&
     fundamentals.status !== "error";
-  return NextResponse.json({ ok, eod, backfill, fundamentals, news, disclosures, actions }, { status: ok ? 200 : 500 });
+  return NextResponse.json(
+    { ok, eod, backfill, fundamentals, news, disclosures, actions, ownership },
+    { status: ok ? 200 : 500 },
+  );
 }

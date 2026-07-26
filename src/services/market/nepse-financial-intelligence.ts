@@ -463,7 +463,8 @@ function buildShareholding(profile: DbProfileRow | null, latest: ProviderReport 
   return {
     promoterPct: sharePct(promoter, listed),
     publicPct: sharePct(pub, listed),
-    // No configured real provider publishes these ownership splits yet.
+    // NEPSE publishes promoter/public only. Mutual-fund / institutional / foreign
+    // splits are not in any configured official feed — never estimate them.
     mutualFundsPct: null,
     institutionsPct: null,
     foreignPct: null,

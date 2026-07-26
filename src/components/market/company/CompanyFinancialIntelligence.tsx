@@ -558,8 +558,9 @@ export function CompanyFinancialIntelligence({
           <div>
             <CompanyMetricGrid items={ownershipTiles} className="grid grid-cols-2 gap-2 sm:grid-cols-3" testId="fi-ownership" />
             <p className={noteCls}>
-              Promoter/public splits appear once the capital-structure feed is ingested. Mutual fund, institutional and foreign
-              ownership breakdowns are not published by any configured provider — shown as “{DATA_UNAVAILABLE}”, never estimated.
+              Promoter and public splits come from official NEPSE company security-detail
+              disclosures. Mutual fund, institutional and foreign ownership breakdowns are
+              not published by NEPSE — shown as “{DATA_UNAVAILABLE}”, never estimated.
             </p>
           </div>
         ) : null}
