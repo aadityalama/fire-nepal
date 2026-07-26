@@ -106,7 +106,7 @@ function num(value: unknown): number | null {
   return null;
 }
 
-async function authenticate(): Promise<{ authorization: string; payloadId: number }> {
+export async function authenticateNepsePublicApi(): Promise<{ authorization: string; payloadId: number }> {
   const wasm = await loadWasm();
   const prove = await fetchJson<Record<string, unknown>>(`${ROOT}/api/authenticate/prove`);
   const access = parseAccessToken(prove, wasm);
@@ -136,7 +136,7 @@ export async function getOwnershipBySymbol(options?: {
   const hit = cache.get<Map<string, ProviderOwnership>>(key);
   if (hit) return hit;
 
-  const { authorization, payloadId } = await authenticate();
+  const { authorization, payloadId } = await authenticateNepsePublicApi();
   const securities = await fetchJson<{ id: number; symbol: string; activeStatus?: string }[]>(
     `${ROOT}/api/nots/security?nonDelisting=true`,
     { headers: { authorization } },
