@@ -23,15 +23,18 @@ type NewsState = {
 const REFRESH_MS = 5 * 60_000;
 
 /** Aggregated market headlines persisted by the automatic data engine. */
-export function useNepseNews(options?: { limit?: number }): NewsState {
-  const limit = Math.min(Math.max(options?.limit ?? 12, 1), 40);
+export function useNepseNews(options?: { limit?: number; symbol?: string }): NewsState {
+  const limit = Math.min(Math.max(options?.limit ?? 12, 1), 80);
+  const symbol = options?.symbol?.trim().toUpperCase() ?? "";
   const [state, setState] = useState<NewsState>({ items: [], corporateActions: [], loaded: false });
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch(`/api/market/nepse/news?limit=${limit}`);
+        const params = new URLSearchParams({ limit: String(limit) });
+        if (symbol) params.set("symbol", symbol);
+        const response = await fetch(`/api/market/nepse/news?${params.toString()}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = (await response.json()) as { items?: NepseNewsItem[]; corporateActions?: NepseNewsItem[] };
         if (!cancelled) {
@@ -47,7 +50,7 @@ export function useNepseNews(options?: { limit?: number }): NewsState {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [limit]);
+  }, [limit, symbol]);
 
   return state;
 }

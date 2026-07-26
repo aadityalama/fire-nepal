@@ -21,21 +21,36 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 12, 1), 40);
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 12, 1), 80);
+  const symbol = (url.searchParams.get("symbol") ?? "").trim().toUpperCase();
 
-  const [newsResult, actionsResult] = await Promise.all([
-    sb
-      .from("nepse_market_news")
-      .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .limit(limit),
-    sb
-      .from("nepse_market_news")
-      .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
-      .eq("is_corporate_action", true)
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .limit(8),
-  ]);
+  const base = sb
+    .from("nepse_market_news")
+    .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action");
+
+  const newsQuery = symbol
+    ? base
+        .or(`headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(limit)
+    : base.order("published_at", { ascending: false, nullsFirst: false }).limit(limit);
+
+  const actionsQuery = symbol
+    ? sb
+        .from("nepse_market_news")
+        .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
+        .eq("is_corporate_action", true)
+        .or(`headline.ilike.%${symbol}%,summary.ilike.%${symbol}%`)
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(12)
+    : sb
+        .from("nepse_market_news")
+        .select("id, headline, source_name, source_url, published_at, category, sentiment, summary, is_corporate_action")
+        .eq("is_corporate_action", true)
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(8);
+
+  const [newsResult, actionsResult] = await Promise.all([newsQuery, actionsQuery]);
 
   const toItem = (row: Record<string, unknown>): NepseNewsResponseItem => ({
     id: String(row.id),

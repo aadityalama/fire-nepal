@@ -223,16 +223,16 @@ function NewsList({ items, empty }: { items: NepseNewsItem[]; empty: string }) {
 }
 
 export function NepseCompanyPage({ symbol }: { symbol: string }) {
+  const normalized = decodeURIComponent(symbol).toUpperCase();
   const { snapshot } = useRealtimeMarket();
   const { isWatched, toggle } = useNepseWatchlist();
   const { track } = useNepseRecentlyViewed();
-  const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40 });
+  const { items: newsItems, corporateActions, loaded: newsLoaded } = useNepseNews({ limit: 40, symbol: normalized });
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
   const { data: intelligence, loaded: intelligenceLoaded } = useNepseFinancialIntelligence(symbol);
   const { data: aiIntelligence, loaded: aiLoaded } = useNepseAiIntelligence(symbol);
   const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
-  const normalized = decodeURIComponent(symbol).toUpperCase();
   useEffect(() => {
     track(normalized);
   }, [normalized, track]);

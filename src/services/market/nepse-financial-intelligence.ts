@@ -1,4 +1,4 @@
-import { computePb, computePe, sharePct } from "@/lib/market/nepse-fundamentals-format";
+import { computePb, computePe, deriveListedShares, deriveNetWorthTotal, deriveRoePct, sharePct } from "@/lib/market/nepse-fundamentals-format";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
 import {
   cagrPct,
@@ -7,6 +7,7 @@ import {
   getDividendHistoryBySymbol,
   getSecuritiesBySymbol,
   normalizeFiscalYear,
+  pickLatestReport,
   quarterRank,
   shortQuarterLabel,
   type ProviderDividend,
@@ -41,12 +42,6 @@ import type {
 function pctChange(current: number | null, previous: number | null): number | null {
   if (current == null || previous == null || previous === 0) return null;
   return ((current - previous) / Math.abs(previous)) * 100;
-}
-
-/** ROE ≈ EPS ÷ book value per share — accounting identity on two real published inputs. */
-function deriveRoePct(eps: number | null, bookValue: number | null): number | null {
-  if (eps == null || bookValue == null || bookValue <= 0) return null;
-  return (eps / bookValue) * 100;
 }
 
 function sortReportsDesc(reports: ProviderReport[]): ProviderReport[] {
@@ -143,6 +138,8 @@ function buildAnnual(reports: ProviderReport[], dbFinancials: DbFinancialRow[]):
 
   const rows = combinedSources.slice(0, 10).map(({ fiscalYear, filing, db }) => {
     const netProfit = filing?.profitNpr ?? toNum(db?.net_profit_npr);
+    const listed = deriveListedShares(filing?.paidUpCapitalNpr ?? null, "Equity");
+    const equityFromFiling = deriveNetWorthTotal(filing?.netWorthPerShareNpr ?? null, listed);
     return {
       fiscalYear,
       fiscalYearNepali: filing?.fiscalYearNepali ?? null,
@@ -155,7 +152,7 @@ function buildAnnual(reports: ProviderReport[], dbFinancials: DbFinancialRow[]):
       operatingProfitNpr: toNum(db?.operating_profit_npr),
       assetsNpr: toNum(db?.assets_npr),
       liabilitiesNpr: toNum(db?.liabilities_npr),
-      equityNpr: toNum(db?.reserves_npr),
+      equityNpr: toNum(db?.reserves_npr) ?? equityFromFiling,
       cashNpr: toNum(db?.cash_npr),
       borrowingsNpr: toNum(db?.borrowings_npr),
       submittedDate: filing?.submittedDate ?? null,
@@ -456,10 +453,13 @@ type DbProfileRow = {
   listed_shares?: unknown;
 };
 
-function buildShareholding(profile: DbProfileRow | null): NepseShareholdingBreakdown {
+function buildShareholding(profile: DbProfileRow | null, latest: ProviderReport | null, industry: string | null): NepseShareholdingBreakdown {
+  let listed = toNum(profile?.listed_shares);
   const promoter = toNum(profile?.promoter_shares);
   const pub = toNum(profile?.public_shares);
-  const listed = toNum(profile?.listed_shares);
+  if (listed == null) {
+    listed = deriveListedShares(latest?.paidUpCapitalNpr ?? null, industry);
+  }
   return {
     promoterPct: sharePct(promoter, listed),
     publicPct: sharePct(pub, listed),
@@ -596,6 +596,7 @@ export async function loadFinancialIntelligence(symbolRaw: string): Promise<Neps
 
   const reports = reportsBySymbol.get(symbol) ?? [];
   const dividends = dividendsBySymbol.get(symbol) ?? [];
+  const latest = pickLatestReport(reports);
 
   const quarterly = buildQuarterly(reports);
   const annual = buildAnnual(reports, dbFinancials);
@@ -603,7 +604,7 @@ export async function loadFinancialIntelligence(symbolRaw: string): Promise<Neps
   const annualStatements = buildAnnualStatements(annual);
   const ratios = buildRatios(reports, annual, livePrice, dbValuation);
   const dividendAnalytics = await buildDividendAnalytics(symbol, dividends, annual, livePrice, rightsRows);
-  const shareholding = buildShareholding(dbProfile);
+  const shareholding = buildShareholding(dbProfile, latest, securities.get(symbol)?.instrumentType ?? sector);
   const growth = buildGrowth(annual);
   const peers = await buildPeers(
     symbol,

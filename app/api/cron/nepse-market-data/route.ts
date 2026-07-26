@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   backfillEodHistory,
   createMarketDataServiceClient,
+  ingestCompanyDisclosures,
   ingestCompanyFundamentals,
   ingestEodPrices,
   ingestMarketNews,
@@ -11,9 +12,10 @@ import {
  * Vercel Cron (after NEPSE close):
  * 1) Snapshot today's validated live quotes into `nepse_eod_prices`
  * 2) Backfill multi-day OHLC for symbols still short on history
- * 3) Aggregate configured news feeds into `nepse_market_news`
+ * 3) Aggregate configured news feeds + company disclosures into `nepse_market_news`
+ * 4) Refresh fundamentals from filings
  *
- * Manual: GET /api/cron/nepse-market-data?backfill=1&limit=80&priority=NABIL,NICA
+ * Manual: GET /api/cron/nepse-market-data?backfill=1&limit=80&priority=NABIL,VLBS,UPPER
  * When `CRON_SECRET` is set, send `Authorization: Bearer <CRON_SECRET>`.
  */
 export const maxDuration = 300;
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const wantBackfill = url.searchParams.get("backfill") !== "0";
   const symbolLimit = Number(url.searchParams.get("limit")) || 80;
-  const priority = (url.searchParams.get("priority") ?? "NABIL,NICA,HDL,UPPER,SHIVM")
+  const priority = (url.searchParams.get("priority") ?? "NABIL,VLBS,UPPER,NICA,HDL,SHIVM")
     .split(",")
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
@@ -52,8 +54,16 @@ export async function GET(request: Request) {
       ? await ingestCompanyFundamentals(sb)
       : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (fundamentals=0)" };
   const news = await ingestMarketNews(sb);
+  const disclosures =
+    url.searchParams.get("disclosures") !== "0"
+      ? await ingestCompanyDisclosures(sb)
+      : { kind: "news" as const, status: "ok" as const, items: 0, message: "Skipped (disclosures=0)" };
 
   const ok =
-    eod.status !== "error" && news.status !== "error" && backfill.status !== "error" && fundamentals.status !== "error";
-  return NextResponse.json({ ok, eod, backfill, fundamentals, news }, { status: ok ? 200 : 500 });
+    eod.status !== "error" &&
+    news.status !== "error" &&
+    disclosures.status !== "error" &&
+    backfill.status !== "error" &&
+    fundamentals.status !== "error";
+  return NextResponse.json({ ok, eod, backfill, fundamentals, news, disclosures }, { status: ok ? 200 : 500 });
 }

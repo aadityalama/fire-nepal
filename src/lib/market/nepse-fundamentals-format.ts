@@ -56,3 +56,45 @@ export function sharePct(part: number | null | undefined, total: number | null |
   if (part == null || total == null || total <= 0 || part < 0) return null;
   return (part / total) * 100;
 }
+
+/** NEPSE face-value convention: equity NPR 100, open-ended mutual funds NPR 10. */
+export function faceValueNpr(instrumentType: string | null | undefined): number {
+  const type = (instrumentType ?? "").toLowerCase();
+  if (type.includes("mutual")) return 10;
+  return 100;
+}
+
+/** Listed shares = paid-up capital ÷ face value when paid-up is published. */
+export function deriveListedShares(
+  paidUpCapitalNpr: number | null | undefined,
+  instrumentType?: string | null,
+): number | null {
+  if (paidUpCapitalNpr == null || !Number.isFinite(paidUpCapitalNpr) || paidUpCapitalNpr <= 0) return null;
+  return paidUpCapitalNpr / faceValueNpr(instrumentType);
+}
+
+/** Market cap = live price × listed shares when both are real. */
+export function deriveMarketCap(
+  priceNpr: number | null | undefined,
+  listedShares: number | null | undefined,
+): number | null {
+  if (priceNpr == null || listedShares == null || priceNpr <= 0 || listedShares <= 0) return null;
+  return priceNpr * listedShares;
+}
+
+/** ROE = EPS ÷ book value per share (accounting identity on two published inputs). */
+export function deriveRoePct(eps: number | null | undefined, bookValueNpr: number | null | undefined): number | null {
+  if (eps == null || bookValueNpr == null || !Number.isFinite(eps) || !Number.isFinite(bookValueNpr) || bookValueNpr <= 0) {
+    return null;
+  }
+  return (eps / bookValueNpr) * 100;
+}
+
+/** Total net worth = book value per share × listed shares. */
+export function deriveNetWorthTotal(
+  bookValueNpr: number | null | undefined,
+  listedShares: number | null | undefined,
+): number | null {
+  if (bookValueNpr == null || listedShares == null || bookValueNpr <= 0 || listedShares <= 0) return null;
+  return bookValueNpr * listedShares;
+}

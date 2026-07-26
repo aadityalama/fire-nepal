@@ -12,6 +12,7 @@ import { fetchJson } from "@/lib/api/fetch-json";
 const FINANCIALS_URL = "https://shubhamnpk.github.io/yonepse/data/company/financials.json";
 const DIVIDENDS_URL = "https://shubhamnpk.github.io/yonepse/data/proposed_dividend/history_all_years.json";
 const SECURITIES_URL = "https://shubhamnpk.github.io/yonepse/data/all_securities.json";
+const DISCLOSURES_URL = "https://shubhamnpk.github.io/yonepse/data/disclosures.json";
 
 /** Filings change at most a few times per quarter — cache aggressively. */
 const TTL_MS = 6 * 60 * 60 * 1000;
@@ -189,4 +190,52 @@ export function normalizeFiscalYear(fiscalYear: string): string {
 export function cagrPct(startValue: number | null, endValue: number | null, years: number): number | null {
   if (startValue == null || endValue == null || startValue <= 0 || endValue <= 0 || years <= 0) return null;
   return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
+}
+
+export function pickLatestReport(reports: ProviderReport[]): ProviderReport | null {
+  if (!reports.length) return null;
+  return [...reports].sort((a, b) => {
+    const diff = (fiscalYearStart(b.fiscalYear) ?? 0) - (fiscalYearStart(a.fiscalYear) ?? 0);
+    return diff !== 0 ? diff : quarterRank(b.quarter) - quarterRank(a.quarter);
+  })[0];
+}
+
+export type ProviderDisclosure = {
+  id: string;
+  symbol: string;
+  title: string;
+  body: string | null;
+  source: string | null;
+  publishedAt: string | null;
+  sourceUrl: string;
+};
+
+/** NEPSE company disclosures (symbol-tagged) from the Yonepse mirror. */
+export async function getCompanyDisclosures(limit = 600): Promise<ProviderDisclosure[]> {
+  const key = `nepse-provider-disclosures-v1:${limit}`;
+  const hit = cache.get<ProviderDisclosure[]>(key);
+  if (hit) return hit;
+
+  const payload = await fetchJson<Record<string, unknown>[]>(DISCLOSURES_URL, { timeoutMs: 25_000, retries: 1 });
+  const rows: ProviderDisclosure[] = [];
+  for (const raw of Array.isArray(payload) ? payload : []) {
+    const symbol = str(raw.symbol)?.toUpperCase();
+    const title = str(raw.title);
+    if (!symbol || !title) continue;
+    const id = raw.id != null ? String(raw.id) : `${symbol}-${title}`.slice(0, 80);
+    const docs = Array.isArray(raw.documents) ? (raw.documents as Record<string, unknown>[]) : [];
+    const fileUrl = docs.map((doc) => str(doc.fileUrl)).find(Boolean) ?? null;
+    rows.push({
+      id,
+      symbol,
+      title,
+      body: str(raw.body),
+      source: str(raw.source),
+      publishedAt: str(raw.publishedAt),
+      sourceUrl: fileUrl ?? `https://shubhamnpk.github.io/yonepse/disclosure/${id}`,
+    });
+    if (rows.length >= limit) break;
+  }
+  cache.set(key, rows, TTL_MS);
+  return rows;
 }

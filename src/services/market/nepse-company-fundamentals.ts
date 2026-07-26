@@ -3,10 +3,19 @@ import {
   computeGrahamNumber,
   computePb,
   computePe,
+  deriveListedShares,
+  deriveMarketCap,
+  deriveNetWorthTotal,
+  deriveRoePct,
   sharePct,
 } from "@/lib/market/nepse-fundamentals-format";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
+import {
+  getCompanyReportsBySymbol,
+  pickLatestReport,
+  type ProviderReport,
+} from "@/services/market/nepse-fundamentals-provider";
 import type { NepseSecurityTick } from "@/types/market";
 import type {
   NepseCompanyActionRow,
@@ -103,7 +112,6 @@ function mapProfile(symbol: string, row: Record<string, unknown> | null, tick?: 
     base.source = str(row.source);
     base.updatedAt = str(row.updated_at);
   }
-  // Live feed fills identity gaps only — never invents capital structure.
   if (!base.companyName && tick?.companyName) base.companyName = tick.companyName;
   if (!base.sector && tick?.sector) base.sector = tick.sector;
   if (base.marketCapNpr == null && tick?.marketCap != null && Number.isFinite(tick.marketCap)) {
@@ -112,7 +120,12 @@ function mapProfile(symbol: string, row: Record<string, unknown> | null, tick?: 
   return base;
 }
 
-function mapValuation(symbol: string, row: Record<string, unknown> | null, livePrice: number | null): NepseCompanyValuation {
+function mapValuation(
+  symbol: string,
+  row: Record<string, unknown> | null,
+  livePrice: number | null,
+  listedShares: number | null,
+): NepseCompanyValuation {
   const base = emptyValuation(symbol);
   if (row) {
     base.asOfDate = str(row.as_of_date);
@@ -127,10 +140,11 @@ function mapValuation(symbol: string, row: Record<string, unknown> | null, liveP
     base.source = str(row.source);
     base.updatedAt = str(row.updated_at);
   }
-  // Derive ratios only from real stored EPS / book value + live price — never invent inputs.
   if (base.pe == null) base.pe = computePe(livePrice, base.eps);
   if (base.pb == null) base.pb = computePb(livePrice, base.bookValueNpr);
   if (base.grahamNumber == null) base.grahamNumber = computeGrahamNumber(base.eps, base.bookValueNpr);
+  if (base.roePct == null) base.roePct = deriveRoePct(base.eps, base.bookValueNpr);
+  if (base.netWorthNpr == null) base.netWorthNpr = deriveNetWorthTotal(base.bookValueNpr, listedShares);
   return base;
 }
 
@@ -215,6 +229,55 @@ function shareholdingFromProfile(profile: NepseCompanyProfile): NepseCompanyShar
   };
 }
 
+/** Enrich profile with published paid-up capital and derived listed shares / market cap. */
+function enrichProfileFromFiling(
+  profile: NepseCompanyProfile,
+  latest: ProviderReport | null,
+  livePrice: number | null,
+): NepseCompanyProfile {
+  const next = { ...profile };
+  if (next.paidUpCapitalNpr == null && latest?.paidUpCapitalNpr != null) {
+    next.paidUpCapitalNpr = latest.paidUpCapitalNpr;
+    next.source = next.source ? `${next.source}+filings` : "yonepse:filings";
+  }
+  if (next.listedShares == null) {
+    next.listedShares = deriveListedShares(next.paidUpCapitalNpr, next.industry);
+  }
+  if (next.marketCapNpr == null) {
+    next.marketCapNpr = deriveMarketCap(livePrice, next.listedShares);
+  }
+  return next;
+}
+
+function financialsFromAnnualFilings(symbol: string, reports: ProviderReport[]): NepseCompanyFinancialRow[] {
+  const annual = reports.filter((row) => row.type === "annual");
+  const seen = new Set<string>();
+  const rows: NepseCompanyFinancialRow[] = [];
+  for (const report of annual) {
+    if (seen.has(report.fiscalYear)) continue;
+    seen.add(report.fiscalYear);
+    const listed = deriveListedShares(report.paidUpCapitalNpr, "Equity");
+    const equity = deriveNetWorthTotal(report.netWorthPerShareNpr, listed);
+    rows.push({
+      symbol,
+      fiscalYear: report.fiscalYear,
+      periodLabel: `FY ${report.fiscalYear}`,
+      revenueNpr: null,
+      operatingProfitNpr: null,
+      netProfitNpr: report.profitNpr,
+      // Total equity ≈ BVPS × listed shares when both are published (NEPSE filing identity).
+      reservesNpr: equity,
+      cashNpr: null,
+      borrowingsNpr: null,
+      assetsNpr: null,
+      liabilitiesNpr: null,
+      source: `yonepse:annual:${report.fiscalYear}`,
+    });
+    if (rows.length >= 10) break;
+  }
+  return rows;
+}
+
 async function loadRange52w(sb: SupabaseClient, symbol: string): Promise<NepseCompanyRange52W> {
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - 370);
@@ -248,8 +311,8 @@ async function loadRange52w(sb: SupabaseClient, symbol: string): Promise<NepseCo
 }
 
 /**
- * Assemble the company fundamentals payload from Supabase + live session tick.
- * Missing DB rows resolve to null fields — never fabricated company-specific values.
+ * Assemble the company fundamentals payload from Supabase + live session tick + filings.
+ * Missing values stay null — never fabricated. Published filing fields fill profile gaps.
  */
 export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseCompanyFundamentalsPayload> {
   const symbol = decodeURIComponent(symbolRaw).trim().toUpperCase();
@@ -263,15 +326,20 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     tick = undefined;
   }
 
-  const livePrice = tick && tick.ltpNpr > 0 ? tick.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : null;
+  const livePrice =
+    tick && tick.ltpNpr > 0 ? tick.ltpNpr : tick?.previousCloseNpr && tick.previousCloseNpr > 0 ? tick.previousCloseNpr : null;
+
+  const reportsBySymbol = await getCompanyReportsBySymbol().catch(() => new Map<string, ProviderReport[]>());
+  const reports = reportsBySymbol.get(symbol) ?? [];
+  const latest = pickLatestReport(reports);
 
   if (!sb) {
-    const profile = mapProfile(symbol, null, tick);
+    const profile = enrichProfileFromFiling(mapProfile(symbol, null, tick), latest, livePrice);
     return {
       symbol,
       profile,
-      valuation: mapValuation(symbol, null, livePrice),
-      financials: [],
+      valuation: mapValuation(symbol, null, livePrice, profile.listedShares),
+      financials: financialsFromAnnualFilings(symbol, reports),
       dividends: [],
       actions: [],
       session: sessionFromTick(tick),
@@ -290,9 +358,52 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     loadRange52w(sb, symbol),
   ]);
 
-  const profile = mapProfile(symbol, (profileRes.data as Record<string, unknown> | null) ?? null, tick);
-  const valuation = mapValuation(symbol, (valuationRes.data as Record<string, unknown> | null) ?? null, livePrice);
-  const financials = ((financialsRes.data as Record<string, unknown>[] | null) ?? []).map(mapFinancial);
+  const profile = enrichProfileFromFiling(
+    mapProfile(symbol, (profileRes.data as Record<string, unknown> | null) ?? null, tick),
+    latest,
+    livePrice,
+  );
+
+  let valuation = mapValuation(
+    symbol,
+    (valuationRes.data as Record<string, unknown> | null) ?? null,
+    livePrice,
+    profile.listedShares,
+  );
+  // Prefer live filing EPS / BV when valuation row is empty or incomplete.
+  if (latest) {
+    if (valuation.eps == null && latest.eps != null) valuation = { ...valuation, eps: latest.eps };
+    if (valuation.bookValueNpr == null && latest.netWorthPerShareNpr != null) {
+      valuation = { ...valuation, bookValueNpr: latest.netWorthPerShareNpr };
+    }
+    if (valuation.pe == null) valuation = { ...valuation, pe: computePe(livePrice, valuation.eps) ?? latest.pe };
+    if (valuation.pb == null) valuation = { ...valuation, pb: computePb(livePrice, valuation.bookValueNpr) };
+    if (valuation.roePct == null) valuation = { ...valuation, roePct: deriveRoePct(valuation.eps, valuation.bookValueNpr) };
+    if (valuation.netWorthNpr == null) {
+      valuation = { ...valuation, netWorthNpr: deriveNetWorthTotal(valuation.bookValueNpr, profile.listedShares) };
+    }
+    if (valuation.grahamNumber == null) {
+      valuation = { ...valuation, grahamNumber: computeGrahamNumber(valuation.eps, valuation.bookValueNpr) };
+    }
+  }
+
+  let financials = ((financialsRes.data as Record<string, unknown>[] | null) ?? []).map(mapFinancial);
+  if (!financials.length) {
+    financials = financialsFromAnnualFilings(symbol, reports);
+  } else {
+    // Merge published net profit into DB rows that still lack it.
+    const byYear = new Map(financialsFromAnnualFilings(symbol, reports).map((row) => [row.fiscalYear, row]));
+    financials = financials.map((row) => {
+      const filing = byYear.get(row.fiscalYear);
+      if (!filing) return row;
+      return {
+        ...row,
+        netProfitNpr: row.netProfitNpr ?? filing.netProfitNpr,
+        reservesNpr: row.reservesNpr ?? filing.reservesNpr,
+      };
+    });
+  }
+
   const dividends = ((dividendsRes.data as Record<string, unknown>[] | null) ?? []).map(mapDividend);
   const actions = ((actionsRes.data as Record<string, unknown>[] | null) ?? [])
     .map(mapAction)

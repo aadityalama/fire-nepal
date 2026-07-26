@@ -268,32 +268,69 @@ export async function ingestMarketNews(sb: SupabaseClient): Promise<IngestResult
 
 /**
  * Fundamentals ingest from the real filings mirror (Yonepse): company identity,
- * latest valuation (EPS / PE / net worth per share) and full dividend history.
- * Only published values are written — fields the provider omits stay null.
+ * paid-up / derived listed shares / market cap, valuation (EPS/PE/BV/ROE),
+ * annual statement rows (published profit + equity), and dividend history.
+ * Only published values (or identities derived from them) are written.
  */
 export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<IngestResult> {
   const startedAt = new Date();
   let result: IngestResult;
   try {
-    const { getCompanyReportsBySymbol, getDividendHistoryBySymbol, getSecuritiesBySymbol, fiscalYearStart, quarterRank } =
+    const {
+      deriveListedShares,
+      deriveMarketCap,
+      deriveNetWorthTotal,
+      deriveRoePct,
+      computeGrahamNumber,
+      computePe,
+      computePb,
+    } = await import("@/lib/market/nepse-fundamentals-format");
+    const { getCompanyReportsBySymbol, getDividendHistoryBySymbol, getSecuritiesBySymbol, pickLatestReport } =
       await import("@/services/market/nepse-fundamentals-provider");
-    const [reportsBySymbol, dividendsBySymbol, securities] = await Promise.all([
+    const { getCachedNepseYonepseBundle } = await import("@/services/market/nepse-bundle-cache");
+
+    const [reportsBySymbol, dividendsBySymbol, securities, bundle] = await Promise.all([
       getCompanyReportsBySymbol(),
       getDividendHistoryBySymbol(),
       getSecuritiesBySymbol(),
+      getCachedNepseYonepseBundle().catch(() => null),
     ]);
 
     const failures: string[] = [];
     let items = 0;
+    const now = new Date().toISOString();
 
-    const profileRows = [...securities.values()].map((sec) => ({
-      symbol: sec.symbol,
-      company_name: sec.companyName,
-      sector: sec.sector,
-      industry: sec.instrumentType,
-      source: "yonepse:all_securities",
-      updated_at: new Date().toISOString(),
-    }));
+    const profileRows: Record<string, unknown>[] = [];
+    for (const sec of securities.values()) {
+      const latest = pickLatestReport(reportsBySymbol.get(sec.symbol) ?? []);
+      const tick = bundle?.bySymbol[sec.symbol];
+      const livePrice =
+        tick && tick.ltpNpr > 0
+          ? tick.ltpNpr
+          : tick?.previousCloseNpr && tick.previousCloseNpr > 0
+            ? tick.previousCloseNpr
+            : null;
+      const paidUp = latest?.paidUpCapitalNpr ?? null;
+      const listed = deriveListedShares(paidUp, sec.instrumentType);
+      const marketCap =
+        tick?.marketCap != null && Number.isFinite(tick.marketCap) && tick.marketCap > 0
+          ? tick.marketCap
+          : deriveMarketCap(livePrice, listed);
+      profileRows.push({
+        symbol: sec.symbol,
+        company_name: sec.companyName,
+        sector: sec.sector,
+        industry: sec.instrumentType,
+        paid_up_capital_npr: paidUp,
+        listed_shares: listed,
+        market_cap_npr: marketCap,
+        // Promoter / public splits are not published by the configured securities feed.
+        public_shares: null,
+        promoter_shares: null,
+        source: paidUp != null ? "yonepse:all_securities+filings" : "yonepse:all_securities",
+        updated_at: now,
+      });
+    }
     for (let i = 0; i < profileRows.length; i += 500) {
       const { error } = await sb.from("nepse_company_profiles").upsert(profileRows.slice(i, i + 500), { onConflict: "symbol" });
       if (error) failures.push(`profiles: ${error.message}`);
@@ -302,25 +339,69 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
 
     const valuationRows: Record<string, unknown>[] = [];
     for (const [symbol, reports] of reportsBySymbol) {
-      const latest = [...reports].sort((a, b) => {
-        const diff = (fiscalYearStart(b.fiscalYear) ?? 0) - (fiscalYearStart(a.fiscalYear) ?? 0);
-        return diff !== 0 ? diff : quarterRank(b.quarter) - quarterRank(a.quarter);
-      })[0];
+      const latest = pickLatestReport(reports);
       if (!latest) continue;
+      const tick = bundle?.bySymbol[symbol];
+      const livePrice =
+        tick && tick.ltpNpr > 0
+          ? tick.ltpNpr
+          : tick?.previousCloseNpr && tick.previousCloseNpr > 0
+            ? tick.previousCloseNpr
+            : null;
+      const listed = deriveListedShares(latest.paidUpCapitalNpr, securities.get(symbol)?.instrumentType);
+      const eps = latest.eps;
+      const book = latest.netWorthPerShareNpr;
       valuationRows.push({
         symbol,
         as_of_date: latest.submittedDate,
-        eps: latest.eps,
-        pe: latest.pe,
-        book_value_npr: latest.netWorthPerShareNpr,
+        eps,
+        pe: computePe(livePrice, eps) ?? latest.pe,
+        book_value_npr: book,
+        pb: computePb(livePrice, book),
+        roe_pct: deriveRoePct(eps, book),
+        roa_pct: null,
+        net_worth_npr: deriveNetWorthTotal(book, listed),
+        graham_number: computeGrahamNumber(eps, book),
         source: `yonepse:${latest.type}:${latest.fiscalYear}${latest.quarter ? ` ${latest.quarter}` : ""}`,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       });
     }
     for (let i = 0; i < valuationRows.length; i += 500) {
       const { error } = await sb.from("nepse_company_valuation").upsert(valuationRows.slice(i, i + 500), { onConflict: "symbol" });
       if (error) failures.push(`valuation: ${error.message}`);
       else items += Math.min(500, valuationRows.length - i);
+    }
+
+    const financialRows: Record<string, unknown>[] = [];
+    for (const [symbol, reports] of reportsBySymbol) {
+      const seen = new Set<string>();
+      for (const report of reports.filter((row) => row.type === "annual")) {
+        if (seen.has(report.fiscalYear)) continue;
+        seen.add(report.fiscalYear);
+        const listed = deriveListedShares(report.paidUpCapitalNpr, securities.get(symbol)?.instrumentType ?? "Equity");
+        financialRows.push({
+          symbol,
+          fiscal_year: report.fiscalYear,
+          period_label: `FY ${report.fiscalYear}`,
+          revenue_npr: null,
+          operating_profit_npr: null,
+          net_profit_npr: report.profitNpr,
+          reserves_npr: deriveNetWorthTotal(report.netWorthPerShareNpr, listed),
+          cash_npr: null,
+          borrowings_npr: null,
+          assets_npr: null,
+          liabilities_npr: null,
+          source: `yonepse:annual:${report.fiscalYear}`,
+          updated_at: now,
+        });
+      }
+    }
+    for (let i = 0; i < financialRows.length; i += 500) {
+      const { error } = await sb.from("nepse_company_financials").upsert(financialRows.slice(i, i + 500), {
+        onConflict: "symbol,fiscal_year",
+      });
+      if (error) failures.push(`financials: ${error.message}`);
+      else items += Math.min(500, financialRows.length - i);
     }
 
     const dividendRows: Record<string, unknown>[] = [];
@@ -333,12 +414,14 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
           cash_pct: row.cashPct,
           book_close_date: row.bookCloseDate,
           source: "yonepse:proposed_dividend",
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         });
       }
     }
     for (let i = 0; i < dividendRows.length; i += 500) {
-      const { error } = await sb.from("nepse_company_dividends").upsert(dividendRows.slice(i, i + 500), { onConflict: "symbol,fiscal_year" });
+      const { error } = await sb.from("nepse_company_dividends").upsert(dividendRows.slice(i, i + 500), {
+        onConflict: "symbol,fiscal_year",
+      });
       if (error) failures.push(`dividends: ${error.message}`);
       else items += Math.min(500, dividendRows.length - i);
     }
@@ -349,7 +432,7 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
       items,
       message: failures.length
         ? failures.slice(0, 3).join("; ")
-        : `Upserted ${profileRows.length} profiles, ${valuationRows.length} valuations, ${dividendRows.length} dividend rows`,
+        : `Upserted ${profileRows.length} profiles, ${valuationRows.length} valuations, ${financialRows.length} financial rows, ${dividendRows.length} dividend rows`,
     };
   } catch (error) {
     result = {
@@ -357,6 +440,57 @@ export async function ingestCompanyFundamentals(sb: SupabaseClient): Promise<Ing
       status: "error",
       items: 0,
       message: error instanceof Error ? error.message : "Fundamentals ingest failed",
+    };
+  }
+  await logRun(sb, result, startedAt);
+  return result;
+}
+
+/** Ingest symbol-tagged NEPSE disclosures into the news table for company pages. */
+export async function ingestCompanyDisclosures(sb: SupabaseClient): Promise<IngestResult> {
+  const startedAt = new Date();
+  let result: IngestResult;
+  try {
+    const { getCompanyDisclosures } = await import("@/services/market/nepse-fundamentals-provider");
+    const { categorizeHeadline, scoreSentiment, isCorporateActionHeadline } = await import("@/services/market/nepse-news");
+    const disclosures = await getCompanyDisclosures(600);
+    if (!disclosures.length) {
+      result = { kind: "news", status: "ok", items: 0, message: "No disclosures published by provider" };
+    } else {
+      const rows = disclosures.map((row) => {
+        const headline = `[${row.symbol}] ${row.title}`.slice(0, 400);
+        const summary = `${row.symbol}${row.body ? ` · ${row.body}` : ""}`.slice(0, 500);
+        return {
+          headline,
+          source_name: row.source ?? "NEPSE disclosure",
+          source_url: row.sourceUrl,
+          published_at: row.publishedAt,
+          category: categorizeHeadline(row.title),
+          sentiment: scoreSentiment(`${row.title} ${row.body ?? ""}`),
+          summary,
+          is_corporate_action: isCorporateActionHeadline(row.title),
+        };
+      });
+      let persisted = 0;
+      for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        const { error } = await sb.from("nepse_market_news").upsert(chunk, { onConflict: "source_url", ignoreDuplicates: true });
+        if (error) throw new Error(error.message);
+        persisted += chunk.length;
+      }
+      result = {
+        kind: "news",
+        status: "ok",
+        items: persisted,
+        message: `Upserted ${persisted} symbol-tagged disclosures`,
+      };
+    }
+  } catch (error) {
+    result = {
+      kind: "news",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Disclosure ingest failed",
     };
   }
   await logRun(sb, result, startedAt);
