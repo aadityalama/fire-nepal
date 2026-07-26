@@ -1,5 +1,5 @@
 /**
- * Professional Market Terminal contracts (Phase 5).
+ * Institutional Market Terminal contracts (Phase 5).
  * All values come from live/provider feeds or DB — never fabricated.
  */
 
@@ -31,6 +31,19 @@ export type TerminalSummaryStats = {
   totalVolume: number | null;
   totalTrades: number | null;
   scripsTraded: number | null;
+  /** Sum of published market-cap fields only — null when none are available. */
+  totalMarketCapNpr: number | null;
+  marketCapCoverage: number;
+};
+
+export type TerminalRange52W = {
+  symbol: string;
+  companyName: string | null;
+  sector: string | null;
+  ltpNpr: number;
+  high52wNpr: number | null;
+  low52wNpr: number | null;
+  distancePct: number | null;
 };
 
 export type TerminalMovers = {
@@ -40,6 +53,8 @@ export type TerminalMovers = {
   topVolume: NepseSecurityTick[];
   topTransactions: NepseSecurityTick[];
   mostActive: NepseSecurityTick[];
+  near52wHigh: TerminalRange52W[];
+  near52wLow: TerminalRange52W[];
 };
 
 export type TerminalHeatCell = {
@@ -62,7 +77,27 @@ export type TerminalHeatmap = {
   }[];
 };
 
+export type TerminalBrokerRow = {
+  memberCode: string;
+  memberName: string;
+  latestTurnoverNpr: number | null;
+  thirtyDayTurnoverNpr: number | null;
+  buyAmountNpr: number | null;
+  sellAmountNpr: number | null;
+  buyQtyPct: number | null;
+  sellQtyPct: number | null;
+  rating: number | null;
+};
+
+export type TerminalBrokerBoard = {
+  topByTurnover: TerminalBrokerRow[];
+  buySellLeaders: TerminalBrokerRow[];
+  asOf: string | null;
+};
+
 export type ScreenerMaTrend = "bullish" | "bearish" | "neutral" | typeof DATA_UNAVAILABLE;
+export type ScreenerTechRating = "bullish" | "bearish" | "neutral" | typeof DATA_UNAVAILABLE;
+export type ScreenerBollingerPos = "above_upper" | "below_lower" | "upper_half" | "lower_half" | typeof DATA_UNAVAILABLE;
 
 export type ScreenerRow = {
   symbol: string;
@@ -78,11 +113,22 @@ export type ScreenerRow = {
   pb: number | null;
   eps: number | null;
   roePct: number | null;
+  roaPct: number | null;
   bookValueNpr: number | null;
   dividendYieldPct: number | null;
   rsi: number | null;
   macdHistogram: number | null;
+  smaTrend: ScreenerMaTrend;
+  emaTrend: ScreenerMaTrend;
+  /** @deprecated prefer smaTrend / emaTrend */
   maTrend: ScreenerMaTrend;
+  bollingerPos: ScreenerBollingerPos;
+  high52wNpr: number | null;
+  low52wNpr: number | null;
+  near52wHigh: boolean;
+  near52wLow: boolean;
+  technicalRating: ScreenerTechRating;
+  aiScore: number | null;
 };
 
 export type CalendarEventType =
@@ -94,7 +140,8 @@ export type CalendarEventType =
   | "ipo"
   | "fpo"
   | "auction"
-  | "financial_report";
+  | "financial_report"
+  | "trading_holiday";
 
 export type MarketCalendarEvent = {
   id: string;
@@ -121,6 +168,8 @@ export type NepseTerminalBoardPayload = {
   sectorPerformance: NepseSectorPerformance[];
   movers: TerminalMovers;
   heatmap: TerminalHeatmap;
+  brokers: TerminalBrokerBoard;
+  marketDistribution: { sector: string; turnoverSharePct: number; turnoverNpr: number; constituents: number }[];
   loadedAt: string;
   sources: string[];
 };

@@ -11,11 +11,16 @@ export type NepseSmartAlertKind =
   | "price"
   | "change_pct"
   | "volume"
+  | "volume_spike"
   | "rsi"
   | "macd_cross"
+  | "ma_cross"
   | "dividend"
+  | "bonus"
+  | "rights"
   | "corporate_action"
-  | "financial_report";
+  | "financial_report"
+  | "ai_rating_change";
 
 export type NepseSmartAlert = {
   id: string;
@@ -141,9 +146,11 @@ export function useNepseSmartAlerts(bySymbol?: Record<string, NepseSecurityTick>
     }) => {
       const symbol = input.symbol.replace(/\s+/g, "").toUpperCase();
       if (!symbol) return;
-      const direction = input.direction ?? (input.kind === "price" || input.kind === "change_pct" || input.kind === "volume" || input.kind === "rsi" ? "above" : "either");
+      const numericKinds: NepseSmartAlertKind[] = ["price", "change_pct", "volume", "volume_spike", "rsi"];
+      const direction =
+        input.direction ?? (numericKinds.includes(input.kind) ? "above" : "either");
       const target = input.target ?? null;
-      if ((input.kind === "price" || input.kind === "change_pct" || input.kind === "volume" || input.kind === "rsi") && (target == null || !Number.isFinite(target))) {
+      if (numericKinds.includes(input.kind) && (target == null || !Number.isFinite(target))) {
         return;
       }
       const current = getSnapshot();
@@ -186,13 +193,13 @@ export function useNepseSmartAlerts(bySymbol?: Record<string, NepseSecurityTick>
           ? [{ ...alert, liveValue: tick.changePct, message: `${alert.symbol} session change ${tick.changePct.toFixed(2)}% is ${alert.direction} ${alert.target}%` }]
           : [];
       }
-      if (alert.kind === "volume" && alert.target != null && tick.volume != null) {
+      if ((alert.kind === "volume" || alert.kind === "volume_spike") && alert.target != null && tick.volume != null) {
         const hit = alert.direction === "above" ? tick.volume >= alert.target : tick.volume <= alert.target;
         return hit
           ? [{ ...alert, liveValue: tick.volume, message: `${alert.symbol} volume ${tick.volume.toLocaleString("en-IN")} is ${alert.direction} ${alert.target.toLocaleString("en-IN")}` }]
           : [];
       }
-      // RSI / MACD / event alerts need enriched feeds — surfaced in UI as armed, not false-triggered.
+      // RSI / MACD / MA / AI / corporate event alerts need enriched feeds — armed in UI, never false-triggered.
       return [];
     });
   }, [alerts, bySymbol]);

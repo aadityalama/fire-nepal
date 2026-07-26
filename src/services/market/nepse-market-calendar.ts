@@ -127,7 +127,8 @@ export async function loadMarketCalendar(limit = 120): Promise<{ events: MarketC
     });
   }
 
-  // Auction: no configured free feed publishes auction calendars — omit rather than invent.
+  // Auction + trading holidays: no configured free JSON feed is wired — omit rather than invent.
+  // UI surfaces these types as "Data unavailable" when the filter is selected and no rows exist.
 
   events.sort((a, b) => {
     if (!a.date && !b.date) return 0;
