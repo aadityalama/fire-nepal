@@ -66,7 +66,9 @@ function closestCloseOnOrBefore(bars: EodCloseBar[], date: string): number | nul
 
 /**
  * Reconstruct daily portfolio equity from real holdings + EOD closes.
- * Skips dates where every open holding lacks a usable close (no fabrication).
+ * Skips dates where any open holding lacks a usable close (no fabrication).
+ * Open units come from ledger replay — callers should pass `resolveAnalyticsLedger`
+ * so holdings without buy rows still reconstruct from declared lots / purchase dates.
  */
 export function buildEquityCurve(args: {
   holdings: NepseHoldingRow[];

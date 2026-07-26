@@ -45,19 +45,27 @@ function MetricCard({
   label,
   value,
   tone,
+  unavailableReason,
 }: {
   label: string;
   value: string;
   tone?: "pos" | "neg" | "neutral";
+  /** Shown under the value when the metric could not be calculated from real history. */
+  unavailableReason?: string | null;
 }) {
+  const isUnavailable = value === DATA_UNAVAILABLE;
   const color =
     tone === "pos" ? "text-emerald-400" : tone === "neg" ? "text-rose-400/90" : "text-white";
   return (
     <div className={`${NEPSE_GLASS} px-3 py-3`}>
       <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{label}</p>
-      <p className={`mt-1.5 truncate text-sm font-black tabular-nums tracking-tight sm:text-[15px] ${color}`}>
-        {value}
-      </p>
+      {isUnavailable && unavailableReason ? (
+        <p className="mt-1.5 text-[11px] font-semibold leading-snug text-zinc-500">{unavailableReason}</p>
+      ) : (
+        <p className={`mt-1.5 truncate text-sm font-black tabular-nums tracking-tight sm:text-[15px] ${color}`}>
+          {value}
+        </p>
+      )}
     </div>
   );
 }
@@ -153,7 +161,9 @@ function LineBlock({
     <div className={`${NEPSE_GLASS} p-4`}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
       {data.length < 2 ? (
-        <p className="mt-6 text-center text-xs font-semibold text-zinc-500">{empty ?? DATA_UNAVAILABLE}</p>
+        <p className="mt-6 px-2 text-center text-xs font-semibold leading-snug text-zinc-500">
+          {empty ?? DATA_UNAVAILABLE}
+        </p>
       ) : (
         <div className="mt-3 h-40 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -260,14 +270,38 @@ export function InstitutionalAnalyticsPanel({
 
       <Section title="Risk analysis" hint="Volatility, drawdown and ratios require a reconstructed equity curve from EOD history.">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          <MetricCard label="Portfolio beta" value={fmtMetric(r.portfolioBeta, "ratio")} />
-          <MetricCard label="Volatility (ann.)" value={fmtMetric(r.portfolioVolatilityPct, "pct")} />
-          <MetricCard label="Max drawdown" value={fmtMetric(r.maximumDrawdownPct, "pct")} />
-          <MetricCard label="Sharpe ratio" value={fmtMetric(r.sharpeRatio, "ratio")} />
-          <MetricCard label="Sortino ratio" value={fmtMetric(r.sortinoRatio, "ratio")} />
+          <MetricCard
+            label="Portfolio beta"
+            value={fmtMetric(r.portfolioBeta, "ratio")}
+            unavailableReason={analytics.history.riskUnavailable.portfolioBeta}
+          />
+          <MetricCard
+            label="Volatility (ann.)"
+            value={fmtMetric(r.portfolioVolatilityPct, "pct")}
+            unavailableReason={analytics.history.riskUnavailable.portfolioVolatilityPct}
+          />
+          <MetricCard
+            label="Max drawdown"
+            value={fmtMetric(r.maximumDrawdownPct, "pct")}
+            unavailableReason={analytics.history.riskUnavailable.maximumDrawdownPct}
+          />
+          <MetricCard
+            label="Sharpe ratio"
+            value={fmtMetric(r.sharpeRatio, "ratio")}
+            unavailableReason={analytics.history.riskUnavailable.sharpeRatio}
+          />
+          <MetricCard
+            label="Sortino ratio"
+            value={fmtMetric(r.sortinoRatio, "ratio")}
+            unavailableReason={analytics.history.riskUnavailable.sortinoRatio}
+          />
           <MetricCard label="Diversification score" value={fmtMetric(r.diversificationScore, "num")} />
           <MetricCard label="Concentration risk" value={fmtMetric(r.concentrationRiskPct, "pct")} />
-          <MetricCard label="Risk score (0–100)" value={fmtMetric(r.riskScore, "num")} />
+          <MetricCard
+            label="Risk score (0–100)"
+            value={fmtMetric(r.riskScore, "num")}
+            unavailableReason={analytics.history.riskUnavailable.riskScore}
+          />
         </div>
       </Section>
 
@@ -278,11 +312,14 @@ export function InstitutionalAnalyticsPanel({
             seriesId="growth"
             data={analytics.charts.growth.map((pt) => ({ date: pt.date, value: pt.portfolioValueNpr }))}
             dataKey="value"
+            empty={analytics.history.chartsUnavailableMessage}
           />
           <div className={`${NEPSE_GLASS} p-4`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">Invested vs current</p>
             {analytics.charts.investedVsCurrent.length < 2 ? (
-              <p className="mt-6 text-center text-xs font-semibold text-zinc-500">{DATA_UNAVAILABLE}</p>
+              <p className="mt-6 text-center text-xs font-semibold text-zinc-500">
+                {analytics.history.chartsUnavailableMessage}
+              </p>
             ) : (
               <div className="mt-3 h-40 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -309,25 +346,28 @@ export function InstitutionalAnalyticsPanel({
             seriesId="pnl"
             data={analytics.charts.pnlHistory.map((pt) => ({ date: pt.date, value: pt.pnlNpr }))}
             dataKey="value"
+            empty={analytics.history.chartsUnavailableMessage}
           />
           <LineBlock
             title="Daily equity curve"
             seriesId="equity"
             data={analytics.charts.dailyEquity.map((pt) => ({ date: pt.date, value: pt.portfolioValueNpr }))}
             dataKey="value"
+            empty={analytics.history.chartsUnavailableMessage}
           />
           <LineBlock
             title="Drawdown"
             seriesId="drawdown"
             data={analytics.charts.drawdown.map((pt) => ({ date: pt.date, value: -pt.drawdownPct }))}
             dataKey="value"
+            empty={analytics.history.chartsUnavailableMessage}
           />
           <LineBlock
             title="Dividend income history"
             seriesId="div"
             data={analytics.charts.dividendIncome.map((pt) => ({ date: pt.period, value: pt.amountNpr }))}
             dataKey="value"
-            empty={DATA_UNAVAILABLE}
+            empty="No booked cash dividend transactions in the portfolio ledger yet."
           />
         </div>
       </Section>

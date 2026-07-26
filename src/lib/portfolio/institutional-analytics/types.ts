@@ -153,6 +153,27 @@ export type BenchmarkComparison = {
   message?: string;
 };
 
+/** Why a history-dependent metric/chart is unavailable (never fabricated). */
+export type AnalyticsHistoryCoverage = {
+  equityPointCount: number;
+  dailyReturnCount: number;
+  synthesizedBuyCount: number;
+  missingEodSymbols: string[];
+  hasMarketContext: boolean;
+  /** Shared copy for Sharpe / Sortino / Beta when history is too short. */
+  needMoreHistoryMessage: string;
+  /** Shared copy for performance charts when <2 equity points. */
+  chartsUnavailableMessage: string;
+  riskUnavailable: {
+    portfolioBeta: string | null;
+    portfolioVolatilityPct: string | null;
+    maximumDrawdownPct: string | null;
+    sharpeRatio: string | null;
+    sortinoRatio: string | null;
+    riskScore: string | null;
+  };
+};
+
 export type InstitutionalPortfolioAnalytics = {
   asOf: string;
   performance: PerformanceDashboard;
@@ -177,6 +198,7 @@ export type InstitutionalPortfolioAnalytics = {
   intelligence: DeterministicIntelligence;
   scenarios: ScenarioAnalysis;
   benchmarks: BenchmarkComparison[];
+  history: AnalyticsHistoryCoverage;
 };
 
 export type BuildAnalyticsInput = {

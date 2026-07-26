@@ -3,6 +3,7 @@ import { faceValueNpr } from "@/lib/market/nepse-fundamentals-format";
 import { getInstrumentByKey } from "@/lib/investment-market/catalog";
 import type { PortfolioLedgerEntry } from "@/components/portfolio/types";
 import { DATA_UNAVAILABLE } from "@/types/market/nepse-company-fundamentals";
+import { missingEodSymbols, resolveAnalyticsLedger } from "./analytics-ledger";
 import {
   buildEquityCurve,
   changeOverLookback,
@@ -22,6 +23,7 @@ import {
 } from "./math";
 import type {
   AllocationSlice,
+  AnalyticsHistoryCoverage,
   BenchmarkComparison,
   BuildAnalyticsInput,
   DeterministicIntelligence,
@@ -32,6 +34,15 @@ import type {
   ScenarioAnalysis,
   SymbolDividendContext,
 } from "./types";
+
+export const NEED_MORE_HISTORY =
+  "Need more historical portfolio data to calculate this metric.";
+export const NEED_PURCHASE_HISTORY =
+  "Add purchase dates or buy transactions so a portfolio equity curve can be rebuilt.";
+export const NEED_MARKET_CONTEXT =
+  "Published EOD market history is still loading or unavailable.";
+
+const MIN_RATIO_RETURNS = 20;
 
 function weightSlices(raw: Map<string, number>, total: number): AllocationSlice[] {
   if (total <= 0) return [];
@@ -136,12 +147,16 @@ function earliestPurchaseDate(ledger: readonly PortfolioLedgerEntry[], rowIds: S
   return min;
 }
 
-function buildPerformance(input: BuildAnalyticsInput, curve: ReturnType<typeof buildEquityCurve>): PerformanceDashboard {
+function buildPerformance(
+  input: BuildAnalyticsInput,
+  curve: ReturnType<typeof buildEquityCurve>,
+  analyticsLedger: readonly PortfolioLedgerEntry[],
+): PerformanceDashboard {
   const s = input.summary;
   const asOf = input.todayIso ?? new Date().toISOString().slice(0, 10);
   const rowIds = new Set(input.holdings.map((h) => h.row.id));
-  const xirr = computeXirr(buildXirrCashflows(input.ledger, rowIds, s.portfolioValueNpr, asOf));
-  const start = earliestPurchaseDate(input.ledger, rowIds);
+  const xirr = computeXirr(buildXirrCashflows(analyticsLedger, rowIds, s.portfolioValueNpr, asOf));
+  const start = earliestPurchaseDate(analyticsLedger, rowIds);
   const days = start ? daysBetweenIso(start, asOf) : null;
   const cagrFrac =
     days != null && days >= 30 && s.costNpr > 0
@@ -627,19 +642,96 @@ function buildBenchmarks(
   return out;
 }
 
+function buildHistoryCoverage(args: {
+  curve: ReturnType<typeof buildEquityCurve>;
+  risk: RiskAnalysis;
+  synthesizedBuyCount: number;
+  missingEod: string[];
+  hasMarketContext: boolean;
+  hadReplayableBuys: boolean;
+}): AnalyticsHistoryCoverage {
+  const dailyReturnCount = dailyReturnsFromCurve(args.curve).length;
+  const equityPointCount = args.curve.length;
+  const missingLabel =
+    args.missingEod.length > 0
+      ? `Historical EOD prices missing for ${args.missingEod.join(", ")}.`
+      : null;
+
+  let chartsUnavailableMessage: string;
+  if (!args.hasMarketContext) chartsUnavailableMessage = NEED_MARKET_CONTEXT;
+  else if (missingLabel) chartsUnavailableMessage = missingLabel;
+  else if (!args.hadReplayableBuys) chartsUnavailableMessage = NEED_PURCHASE_HISTORY;
+  else chartsUnavailableMessage = NEED_MORE_HISTORY;
+
+  const ratioMsg =
+    !args.hasMarketContext
+      ? NEED_MARKET_CONTEXT
+      : missingLabel
+        ? missingLabel
+        : !args.hadReplayableBuys
+          ? NEED_PURCHASE_HISTORY
+          : dailyReturnCount < MIN_RATIO_RETURNS
+            ? NEED_MORE_HISTORY
+            : null;
+
+  const curveMsg =
+    !args.hasMarketContext
+      ? NEED_MARKET_CONTEXT
+      : missingLabel
+        ? missingLabel
+        : !args.hadReplayableBuys
+          ? NEED_PURCHASE_HISTORY
+          : equityPointCount < 2
+            ? NEED_MORE_HISTORY
+            : null;
+
+  return {
+    equityPointCount,
+    dailyReturnCount,
+    synthesizedBuyCount: args.synthesizedBuyCount,
+    missingEodSymbols: args.missingEod,
+    hasMarketContext: args.hasMarketContext,
+    needMoreHistoryMessage: NEED_MORE_HISTORY,
+    chartsUnavailableMessage,
+    riskUnavailable: {
+      portfolioBeta: args.risk.portfolioBeta == null ? ratioMsg : null,
+      portfolioVolatilityPct: args.risk.portfolioVolatilityPct == null ? curveMsg : null,
+      maximumDrawdownPct: args.risk.maximumDrawdownPct == null ? curveMsg : null,
+      sharpeRatio: args.risk.sharpeRatio == null ? ratioMsg : null,
+      sortinoRatio: args.risk.sortinoRatio == null ? ratioMsg : null,
+      riskScore: args.risk.riskScore == null ? curveMsg ?? ratioMsg : null,
+    },
+  };
+}
+
 export function buildInstitutionalPortfolioAnalytics(input: BuildAnalyticsInput): InstitutionalPortfolioAnalytics {
   const asOf = input.todayIso ?? new Date().toISOString().slice(0, 10);
+  const { ledger: analyticsLedger, synthesizedBuyCount } = resolveAnalyticsLedger(
+    input.holdings,
+    input.ledger,
+  );
+  const eodBySymbol = input.market?.eodBySymbol ?? {};
+  const missingEod = missingEodSymbols(input.holdings, eodBySymbol);
+  const hadReplayableBuys = analyticsLedger.some(
+    (e) =>
+      e.bucket === "investment" &&
+      (e.txType === "buy" || e.txType === "right_share") &&
+      e.quantity > 0,
+  );
+
   const curve = buildEquityCurve({
     holdings: input.holdings,
-    ledger: input.ledger,
-    eodBySymbol: input.market?.eodBySymbol ?? {},
+    ledger: analyticsLedger,
+    eodBySymbol,
     asOfDate: asOf,
   });
 
   // Append today's live mark if curve ends before asOf and we have live values.
+  // Only append onto an existing reconstructed curve — a lone live point is not history.
   if (
+    curve.length > 0 &&
     input.summary.portfolioValueNpr > 0 &&
-    (!curve.length || curve[curve.length - 1]!.date < asOf)
+    curve[curve.length - 1]!.date < asOf
   ) {
     const invested = input.summary.costNpr;
     const value = input.summary.portfolioValueNpr;
@@ -654,7 +746,7 @@ export function buildInstitutionalPortfolioAnalytics(input: BuildAnalyticsInput)
   }
 
   const allocation = buildAllocation(input);
-  const performance = buildPerformance(input, curve);
+  const performance = buildPerformance(input, curve, analyticsLedger);
 
   const nepseBars = input.market?.indexEod.NEPSE?.bars ?? null;
   const alignedBench = nepseBars ? alignedBenchmarkReturns(curve, nepseBars) : null;
@@ -663,6 +755,14 @@ export function buildInstitutionalPortfolioAnalytics(input: BuildAnalyticsInput)
   const intelligence = buildIntelligence(input, allocation, risk, income, performance);
   const scenarios = buildScenarios(input.summary.portfolioValueNpr);
   const benchmarks = buildBenchmarks(input, curve, performance);
+  const history = buildHistoryCoverage({
+    curve,
+    risk,
+    synthesizedBuyCount,
+    missingEod,
+    hasMarketContext: input.market != null,
+    hadReplayableBuys,
+  });
 
   return {
     asOf,
@@ -685,5 +785,6 @@ export function buildInstitutionalPortfolioAnalytics(input: BuildAnalyticsInput)
     intelligence,
     scenarios,
     benchmarks,
+    history,
   };
 }
