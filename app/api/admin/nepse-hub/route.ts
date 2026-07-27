@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   let companies: { symbol: string; company_name: string | null; sector: string | null }[] = [];
   if (sb) {
     let query = sb
-      .from("nepse_company_profiles")
+      .from("nepse_company_master")
       .select("symbol,company_name,sector")
       .order("symbol", { ascending: true })
       .limit(q ? 40 : 80);

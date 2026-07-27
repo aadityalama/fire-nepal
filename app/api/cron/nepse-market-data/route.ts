@@ -5,6 +5,7 @@ import {
   ingestCompanyActions,
   ingestCompanyDisclosures,
   ingestCompanyFundamentals,
+  ingestOfficialCompanyMaster,
   ingestCompanyOwnership,
   ingestCompanyStatements,
   ingestEodPrices,
@@ -27,6 +28,23 @@ import { ingestIndexEod } from "@/services/market/nepse-index-eod";
  * When `CRON_SECRET` is set, send `Authorization: Bearer <CRON_SECRET>`.
  */
 export const maxDuration = 300;
+
+function kathmanduSyncMode(now = new Date()): "preopen" | "postclose" | "weekly_validation" {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kathmandu",
+    weekday: "short",
+    hour: "2-digit",
+    hourCycle: "h23",
+    minute: "2-digit",
+  }).formatToParts(now);
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  const minutes = hour * 60 + minute;
+  const weeklyWindow = weekday === "Sun" && minutes < 10 * 60 + 30;
+  if (weeklyWindow) return "weekly_validation";
+  return minutes < 11 * 60 ? "preopen" : "postclose";
+}
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -52,6 +70,17 @@ export async function GET(request: Request) {
     .split(",")
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
+
+  const masterModeParam = url.searchParams.get("masterMode");
+  const masterMode =
+    masterModeParam === "manual" || masterModeParam === "preopen" || masterModeParam === "postclose" || masterModeParam === "weekly_validation"
+      ? masterModeParam
+      : kathmanduSyncMode();
+
+  const companyMaster =
+    url.searchParams.get("companyMaster") !== "0"
+      ? await ingestOfficialCompanyMaster(sb, masterMode)
+      : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (companyMaster=0)" };
 
   const eod = await ingestEodPrices(sb);
   const indexEod =
@@ -91,6 +120,7 @@ export async function GET(request: Request) {
       : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (ownership=0)" };
 
   const ok =
+    companyMaster.status !== "error" &&
     eod.status !== "error" &&
     indexEod.status !== "error" &&
     news.status !== "error" &&
@@ -103,7 +133,7 @@ export async function GET(request: Request) {
   // indexEod / statements may be "partial" when a migration is not yet applied — do not fail the whole cron
   // unless status is hard error.
   return NextResponse.json(
-    { ok, eod, indexEod, backfill, fundamentals, statements, news, disclosures, actions, ownership },
+    { ok, companyMaster, eod, indexEod, backfill, fundamentals, statements, news, disclosures, actions, ownership },
     { status: ok ? 200 : 500 },
   );
 }

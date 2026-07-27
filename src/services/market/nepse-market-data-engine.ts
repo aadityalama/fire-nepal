@@ -967,3 +967,34 @@ export async function ingestCompanyOwnership(sb: SupabaseClient): Promise<Ingest
   await logRun(sb, result, startedAt);
   return result;
 }
+
+/**
+ * Official NEPSE company master synchronization.
+ * Writes the single-source company catalog + change history + validation report.
+ */
+export async function ingestOfficialCompanyMaster(
+  sb: SupabaseClient,
+  mode: "preopen" | "postclose" | "weekly_validation" | "manual" = "postclose",
+): Promise<IngestResult> {
+  const startedAt = new Date();
+  let result: IngestResult;
+  try {
+    const { syncOfficialCompanyMaster } = await import("@/services/market/nepse-company-master");
+    const sync = await syncOfficialCompanyMaster(sb, mode);
+    result = {
+      kind: "fundamentals",
+      status: sync.status,
+      items: sync.totalSeen,
+      message: `${sync.message} · active=${sync.totalActive} listed=${sync.totalListed} new=${sync.newSymbols} changed=${sync.changedSymbols}`,
+    };
+  } catch (error) {
+    result = {
+      kind: "fundamentals",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Official company master sync failed",
+    };
+  }
+  await logRun(sb, result, startedAt);
+  return result;
+}

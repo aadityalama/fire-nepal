@@ -32,6 +32,11 @@ type AuditRow = {
   note: string | null;
   created_at: string;
 };
+type CompanyMasterSyncView = {
+  latestRun: Record<string, unknown> | null;
+  latestValidation: Record<string, unknown> | null;
+  liveSectorCounts: Record<string, number>;
+};
 
 function unwrap(valueJson: unknown): unknown {
   if (valueJson && typeof valueJson === "object" && !Array.isArray(valueJson) && "v" in (valueJson as object)) {
@@ -53,6 +58,8 @@ export function NepseHubAdminClient() {
   const [note, setNote] = useState("");
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<CompanyMasterSyncView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,10 +110,18 @@ export function NepseHubAdminClient() {
     }
   }, []);
 
+  const loadSyncInfo = useCallback(async () => {
+    const r = await fetch("/api/admin/nepse-hub/company-master-sync", { credentials: "include", cache: "no-store" });
+    if (!r.ok) return;
+    const j = (await r.json()) as CompanyMasterSyncView;
+    setSyncInfo(j);
+  }, []);
+
   useEffect(() => {
     void loadCatalog("");
     void loadSymbol(initialSymbol);
-  }, [loadCatalog, loadSymbol, initialSymbol]);
+    void loadSyncInfo();
+  }, [loadCatalog, loadSymbol, initialSymbol, loadSyncInfo]);
 
   useEffect(() => {
     const first = fields[0]?.key;
@@ -203,6 +218,37 @@ export function NepseHubAdminClient() {
     }
   }
 
+  async function runCompanyMasterSyncNow() {
+    setSyncBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await fetch("/api/admin/nepse-hub/company-master-sync", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        result?: { message?: string; totalSeen?: number; sectorCounts?: Record<string, number> };
+        error?: string;
+      };
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? "Company master sync failed");
+        return;
+      }
+      setMessage(
+        j.result?.message ??
+          `Company master synchronized (${j.result?.totalSeen?.toLocaleString("en-IN") ?? "0"} companies).`,
+      );
+      await loadSyncInfo();
+      await loadCatalog(query);
+      await loadSymbol(symbol);
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1200px] px-3 py-4 sm:px-5 sm:py-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
@@ -215,6 +261,14 @@ export function NepseHubAdminClient() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={syncBusy}
+            onClick={() => void runCompanyMasterSyncNow()}
+            className="rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-[11px] font-black text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
+          >
+            {syncBusy ? "Syncing…" : "Sync Now (Official Company Master)"}
+          </button>
           <Link
             href="/market"
             className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.06]"
@@ -398,6 +452,34 @@ export function NepseHubAdminClient() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Official Company Master</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Automatic sync runs before open, after close, and weekly validation. This panel can trigger manual sync.
+              </p>
+              {syncInfo?.latestRun ? (
+                <div className="mt-3 rounded-lg border border-white/[0.05] bg-black/20 p-2.5 text-[11px] text-zinc-300">
+                  <p>
+                    Last run: <span className="font-black">{String(syncInfo.latestRun.status ?? "—")}</span> ·{" "}
+                    {String(syncInfo.latestRun.mode ?? "—")}
+                  </p>
+                  <p className="mt-0.5 text-zinc-500">{String(syncInfo.latestRun.message ?? "")}</p>
+                </div>
+              ) : null}
+              {syncInfo?.liveSectorCounts ? (
+                <div className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-white/[0.05] bg-black/20 p-2.5">
+                  {Object.entries(syncInfo.liveSectorCounts)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([sector, count]) => (
+                      <p key={sector} className="flex items-center justify-between text-[11px] text-zinc-300">
+                        <span className="truncate pr-2">{sector}</span>
+                        <span className="font-black">{count.toLocaleString("en-IN")}</span>
+                      </p>
+                    ))}
+                </div>
+              ) : null}
+            </div>
+
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Active overrides</p>
               <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">

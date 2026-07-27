@@ -1,6 +1,7 @@
 import { fetchJson } from "@/lib/api/fetch-json";
 import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
-import { sectorForListedSymbol } from "@/services/market/nepse-sector-map";
+import { listCompanyMasterMap } from "@/services/market/nepse-company-master";
+import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 import type { NepseIndexTick, NepseSecurityTick } from "@/types/market";
 
 function pickNum(o: Record<string, unknown>, keys: string[]): number | undefined {
@@ -70,7 +71,10 @@ export type NepseBundle = {
   topStocks: NepseTopStocksBoard;
 };
 
-function rowToTick(o: Record<string, unknown>): NepseSecurityTick | null {
+function rowToTick(
+  o: Record<string, unknown>,
+  masterBySymbol?: Map<string, { companyName: string; sector: string | null }>,
+): NepseSecurityTick | null {
   const symRaw = pickStr(o, ["symbol", "SYMBOL", "ticker", "stock_symbol", "security_symbol"]);
   const ltp = pickNum(o, ["ltp", "close", "last_price", "closing_price", "Close", "LTP", "last", "nav", "NAV", "closingPrice", "lastTradedPrice"]);
   if (!symRaw || ltp == null) return null;
@@ -92,8 +96,8 @@ function rowToTick(o: Record<string, unknown>): NepseSecurityTick | null {
   const trades = pickNum(o, ["trades", "total_trades", "Trades", "totalTrades"]);
   const lastUpdated = pickStr(o, ["last_updated", "updated_at", "timestamp"]);
   const sectorRaw = pickStr(o, ["sector", "Sector", "industry", "Industry"]);
-  const sectorFromRegistry = sectorForListedSymbol(symbol);
-  const sector = sectorRaw ?? sectorFromRegistry;
+  const master = masterBySymbol?.get(symbol);
+  const sector = master?.sector ?? sectorRaw;
 
   let intradayRangePct: number | undefined;
   if (highNpr != null && lowNpr != null && previousCloseNpr != null && previousCloseNpr > 0) {
@@ -102,7 +106,7 @@ function rowToTick(o: Record<string, unknown>): NepseSecurityTick | null {
 
   return {
     symbol,
-    companyName,
+    companyName: master?.companyName ?? companyName,
     ltpNpr: ltp,
     changePct,
     changeNpr,
@@ -144,13 +148,17 @@ function emptyTopBoard(): NepseTopStocksBoard {
   return { topGainers: [], topLosers: [], topTurnover: [], topVolume: [], topTransactions: [] };
 }
 
-function mapTopList(rows: unknown, enrich?: Record<string, NepseSecurityTick>): NepseSecurityTick[] {
+function mapTopList(
+  rows: unknown,
+  enrich?: Record<string, NepseSecurityTick>,
+  masterBySymbol?: Map<string, { companyName: string; sector: string | null }>,
+): NepseSecurityTick[] {
   if (!Array.isArray(rows)) return [];
   const out: NepseSecurityTick[] = [];
   for (const row of rows.slice(0, 40)) {
     if (!row || typeof row !== "object") continue;
     const o = row as Record<string, unknown>;
-    const tick = rowToTick(o);
+    const tick = rowToTick(o, masterBySymbol);
     if (!tick) continue;
     const live = enrich?.[tick.symbol];
     out.push({
@@ -170,6 +178,11 @@ function mapTopList(rows: unknown, enrich?: Record<string, NepseSecurityTick>): 
 }
 
 export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
+  const sb = createMarketDataServiceClient();
+  const masterRows = await listCompanyMasterMap(sb).catch(() => new Map());
+  const masterBySymbol = new Map(
+    [...masterRows.entries()].map(([symbol, row]) => [symbol, { companyName: row.companyName, sector: row.sector }]),
+  );
   const bySymbol: Record<string, NepseSecurityTick> = {};
   let index: NepseIndexTick | undefined;
   let indices: NepseIndexRow[] = [];
@@ -209,7 +222,7 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
     for (let i = 0; i < cap; i++) {
       const row = rows[i];
       if (!row || typeof row !== "object") continue;
-      const tick = rowToTick(row as Record<string, unknown>);
+      const tick = rowToTick(row as Record<string, unknown>, masterBySymbol);
       if (!tick) continue;
       bySymbol[tick.symbol] = tick;
     }
@@ -240,11 +253,11 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
   if (topRes.status === "fulfilled" && topRes.value && typeof topRes.value === "object") {
     const o = topRes.value as Record<string, unknown>;
     topStocks = {
-      topGainers: mapTopList(o.top_gainer ?? o.topGainers, bySymbol),
-      topLosers: mapTopList(o.top_loser ?? o.topLosers, bySymbol),
-      topTurnover: mapTopList(o.top_turnover ?? o.topTurnover, bySymbol),
-      topVolume: mapTopList(o.top_trade ?? o.topVolume, bySymbol),
-      topTransactions: mapTopList(o.top_transaction ?? o.topTransactions, bySymbol),
+      topGainers: mapTopList(o.top_gainer ?? o.topGainers, bySymbol, masterBySymbol),
+      topLosers: mapTopList(o.top_loser ?? o.topLosers, bySymbol, masterBySymbol),
+      topTurnover: mapTopList(o.top_turnover ?? o.topTurnover, bySymbol, masterBySymbol),
+      topVolume: mapTopList(o.top_trade ?? o.topVolume, bySymbol, masterBySymbol),
+      topTransactions: mapTopList(o.top_transaction ?? o.topTransactions, bySymbol, masterBySymbol),
     };
   }
 
