@@ -316,19 +316,52 @@ export async function fetchOfficialStatements(
     return rows;
   }
 
-  const enriched: OfficialStatementRow[] = [];
+  // Parse newest filings first, round-robin across symbols so pdfLimit covers many companies.
+  const rankPeriod = (row: OfficialStatementRow) => {
+    const fy = Number(String(row.fiscalYear).slice(0, 4)) || 0;
+    const q = row.periodType === "annual" ? 5 : row.quarter ?? 0;
+    const modified = Date.parse(row.reportModifiedAt ?? "") || 0;
+    return fy * 10 + q + modified / 1e15;
+  };
+  const bySymbolRows = new Map<string, OfficialStatementRow[]>();
   for (const row of rows) {
+    const list = bySymbolRows.get(row.symbol) ?? [];
+    list.push(row);
+    bySymbolRows.set(row.symbol, list);
+  }
+  for (const list of bySymbolRows.values()) {
+    list.sort((a, b) => rankPeriod(b) - rankPeriod(a));
+  }
+  const symbolOrder = [...bySymbolRows.keys()];
+  const parseQueue: OfficialStatementRow[] = [];
+  let depth = 0;
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const symbol of symbolOrder) {
+      const list = bySymbolRows.get(symbol) ?? [];
+      const candidate = list[depth];
+      if (!candidate) continue;
+      progressed = true;
+      parseQueue.push(candidate);
+    }
+    depth += 1;
+  }
+
+  const enrichedByKey = new Map<string, OfficialStatementRow>();
+  for (const row of parseQueue) {
+    const key = `${row.symbol}|${row.periodKey}`;
     if (options.skipPeriodKeys?.has(`${row.symbol}|${row.periodKey}|${row.reportId}|${row.documentPath ?? ""}`)) {
-      enriched.push(row);
+      enrichedByKey.set(key, row);
       continue;
     }
     if (pdfBudget <= 0 || !row.documentPath) {
-      enriched.push(row);
+      enrichedByKey.set(key, row);
       continue;
     }
     pdfBudget -= 1;
-    enriched.push(await enrichFromPdf(row));
+    enrichedByKey.set(key, await enrichFromPdf(row));
   }
 
-  return enriched;
+  return rows.map((row) => enrichedByKey.get(`${row.symbol}|${row.periodKey}`) ?? row);
 }
