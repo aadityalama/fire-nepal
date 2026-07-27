@@ -51,7 +51,7 @@ import {
 } from "@/lib/market/nepse-hub";
 import { formatBsDateHeroLine, formatMarketAsOfBsTimestamp } from "@/lib/smart-nepal-info";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
-import type { NepseSecurityTick } from "@/types/market";
+import type { NepseIndexTick, NepseSecurityTick } from "@/types/market";
 import { NepseMarketChart } from "./NepseMarketChart";
 
 const ICONS: Record<string, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
@@ -278,62 +278,62 @@ function Header({
 function useLiveMarketPanelClock(tickMs = 30_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    setNow(new Date());
     const timer = window.setInterval(() => setNow(new Date()), tickMs);
     return () => window.clearInterval(timer);
   }, [tickMs]);
   return now;
 }
 
-function HeroDateMarketPanel({ fetchedAt }: { fetchedAt?: string }) {
+function resolveIndexPointChange(index: NepseIndexTick | undefined): number | null {
+  if (index?.changeNpr != null && Number.isFinite(index.changeNpr)) return index.changeNpr;
+  if (index?.value != null && index.previousClose != null && Number.isFinite(index.previousClose)) {
+    return index.value - index.previousClose;
+  }
+  return null;
+}
+
+function resolveIndexChangePct(index: NepseIndexTick | undefined, pointChange: number | null): number | null {
+  if (index?.changePct != null && Number.isFinite(index.changePct)) return index.changePct;
+  if (
+    pointChange != null &&
+    index?.previousClose != null &&
+    Number.isFinite(index.previousClose) &&
+    index.previousClose > 0
+  ) {
+    return (pointChange / index.previousClose) * 100;
+  }
+  return null;
+}
+
+function HeroMarketStatusCard() {
   const now = useLiveMarketPanelClock();
   const panel = getKathmanduMarketPanelStatus(now);
-  const bsLine = formatBsDateHeroLine(now);
-  const asOf = formatMarketAsOfBsTimestamp(fetchedAt);
 
   return (
-    <div className="min-w-0 w-full text-right sm:w-auto sm:max-w-[15.5rem] sm:flex-1">
+    <div
+      className={`inline-flex max-w-full flex-col items-end rounded-xl border px-2.5 py-1.5 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-3 ${
+        panel.open ? "border-emerald-400/35 bg-emerald-400/12" : "border-rose-400/30 bg-rose-400/[0.12]"
+      }`}
+      aria-live="polite"
+    >
       <p
-        className="truncate text-[11px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[12px]"
-        title={bsLine}
-      >
-        {bsLine}
-      </p>
-      <p className="mt-0.5 truncate text-[9px] font-semibold tabular-nums text-emerald-100/50 sm:text-[10px]">
-        As of {asOf}
-      </p>
-      <div
-        className={`mt-2 inline-flex max-w-full flex-col items-end rounded-xl border px-2.5 py-1.5 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-3 ${
-          panel.open
-            ? "border-emerald-400/35 bg-emerald-400/12"
-            : "border-rose-400/30 bg-rose-400/[0.12]"
+        className={`flex max-w-full items-center justify-end gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] sm:text-[10px] ${
+          panel.open ? "text-emerald-200" : "text-rose-200"
         }`}
-        aria-live="polite"
       >
-        <p
-          className={`flex max-w-full items-center justify-end gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] sm:text-[10px] ${
-            panel.open ? "text-emerald-200" : "text-rose-200"
-          }`}
-        >
-          <span
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-              panel.open ? "animate-pulse bg-emerald-300" : "bg-rose-300"
-            }`}
-            aria-hidden
-          />
-          <span className="min-w-0 truncate">
-            <span aria-hidden>{panel.open ? "🟢" : "🔴"} </span>
-            {panel.headline}
-          </span>
-        </p>
-        <p
-          className={`mt-0.5 max-w-full truncate text-[9px] font-semibold sm:text-[10px] ${
-            panel.open ? "text-emerald-100/70" : "text-rose-100/65"
-          }`}
-        >
-          {panel.detail}
-        </p>
-      </div>
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${panel.open ? "animate-pulse bg-emerald-300" : "bg-rose-300"}`}
+          aria-hidden
+        />
+        <span className="min-w-0 truncate">{panel.headline}</span>
+      </p>
+      <p
+        className={`mt-0.5 max-w-full truncate text-[9px] font-semibold sm:text-[10px] ${
+          panel.open ? "text-emerald-100/70" : "text-rose-100/65"
+        }`}
+      >
+        {panel.detail}
+      </p>
     </div>
   );
 }
@@ -347,7 +347,7 @@ function Hero({
   onRefresh,
   refreshing,
 }: {
-  index: { value: number; changePct?: number; name?: string } | undefined;
+  index: NepseIndexTick | undefined;
   turnover: number;
   volume: number;
   trades: number;
@@ -355,49 +355,72 @@ function Hero({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
-  const change = index?.changePct;
-  const positive = (change ?? 0) >= 0;
+  const pointChange = resolveIndexPointChange(index);
+  const changePct = resolveIndexChangePct(index, pointChange);
+  const positive = (pointChange ?? changePct ?? 0) >= 0;
   const reduced = usePrefersReducedMotion();
   const animatedIndex = useCountUpNumber(index?.value ?? 0, { durationMs: 900, skipAnimation: reduced });
+  const nepaliDate = formatBsDateHeroLine(fetchedAt ? new Date(fetchedAt) : undefined);
+  const asOf = formatMarketAsOfBsTimestamp(fetchedAt);
+
   return (
     <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-4 text-white shadow-[0_32px_90px_-40px_rgba(4,120,87,0.65)] sm:p-6">
       <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
       <div className="pointer-events-none absolute -right-9 -top-14 h-40 w-40 rounded-full border border-white/[0.05]" />
       <div className="relative grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
         <div className="min-w-0">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
-                  {index?.name ?? "NEPSE Index"}
-                </p>
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:hidden"
-                  aria-label="Refresh market data"
-                >
-                  <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-                </button>
-              </div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
+                {index?.name ?? "NEPSE Index"}
+              </p>
               <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
                 {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <div className={`mt-2 flex min-w-0 items-center gap-2 text-sm font-extrabold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
-                {positive ? <TrendingUp size={16} className="shrink-0" /> : <TrendingDown size={16} className="shrink-0" />}
-                <span className="min-w-0 truncate">{change == null ? "Change unavailable" : `${positive ? "+" : ""}${change.toFixed(2)}% today`}</span>
+              <div
+                className={`mt-2 flex min-w-0 items-center gap-1.5 text-sm font-extrabold tabular-nums ${
+                  positive ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {pointChange == null && changePct == null ? (
+                  <span>Change unavailable</span>
+                ) : (
+                  <>
+                    <span aria-hidden className="text-[15px] leading-none">
+                      {positive ? "▲" : "▼"}
+                    </span>
+                    <span className="min-w-0 truncate">
+                      {pointChange == null
+                        ? "—"
+                        : `${positive && pointChange > 0 ? "+" : ""}${pointChange.toFixed(2)}`}
+                      {changePct == null
+                        ? ""
+                        : ` (${positive && changePct > 0 ? "+" : ""}${changePct.toFixed(2)}% today)`}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
-            <div className="flex min-w-0 items-start justify-end gap-2 sm:max-w-[16.5rem]">
-              <HeroDateMarketPanel fetchedAt={fetchedAt} />
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
               <button
                 type="button"
                 onClick={onRefresh}
-                className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:grid"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white"
                 aria-label="Refresh market data"
               >
                 <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
               </button>
+              <div className="max-w-[12rem] text-right sm:max-w-[15rem]">
+                <p
+                  className="text-[14px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[16px]"
+                  title={nepaliDate}
+                >
+                  {nepaliDate}
+                </p>
+                <p className="mt-0.5 text-[9px] font-semibold tabular-nums text-emerald-100/40 sm:text-[10px]">
+                  As of {asOf}
+                </p>
+              </div>
             </div>
           </div>
           <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/[0.07] pt-4">
@@ -413,7 +436,7 @@ function Hero({
             ))}
           </div>
         </div>
-        <div className="min-w-0">
+        <div className="relative min-w-0">
           <MiniSparkline positive={positive} />
           <svg viewBox="0 0 500 140" className="h-28 w-full sm:h-36" aria-label="Indicative NEPSE intraday chart">
             <defs>
@@ -425,9 +448,9 @@ function Hero({
             <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8 L500 140 L0 140 Z" fill="url(#hero-fill)" />
             <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8" fill="none" stroke={positive ? "#34d399" : "#fb7185"} strokeWidth="3" strokeLinecap="round" />
           </svg>
-          <p className="mt-1 text-right text-[9px] font-semibold text-emerald-100/40">
-            Last updated {fetchedAt ? new Date(fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
-          </p>
+          <div className="mt-2 flex justify-end">
+            <HeroMarketStatusCard />
+          </div>
         </div>
       </div>
     </section>

@@ -228,7 +228,17 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   const feedIndices = board?.indices?.length
     ? board.indices
     : cached?.index
-      ? [{ name: cached.index.name, value: cached.index.value, changePct: cached.index.changePct ?? null, changeNpr: null, high: null, low: null, previousClose: null }]
+      ? [
+          {
+            name: cached.index.name,
+            value: cached.index.value,
+            changePct: cached.index.changePct ?? null,
+            changeNpr: cached.index.changeNpr ?? null,
+            high: null,
+            low: null,
+            previousClose: cached.index.previousClose ?? null,
+          },
+        ]
       : [];
 
   for (const row of feedIndices) {

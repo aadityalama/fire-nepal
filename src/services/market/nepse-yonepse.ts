@@ -127,20 +127,45 @@ function rowToTick(
 function parseIndexRow(o: Record<string, unknown>): NepseIndexRow | null {
   const name = pickStr(o, ["index_name", "indexName", "name", "index", "title", "Index"]);
   if (!name) return null;
-  // Prefer currentValue when published; fall back to close. Never invent.
-  const value =
-    pickNum(o, ["currentValue", "current_index", "current_value", "value", "index_value", "last", "ltp"]) ??
-    pickNum(o, ["close", "Close"]);
-  const changePct = pickNum(o, ["perChange", "percent_change", "percentageChange", "change_percent", "changePct", "pct_change"]);
-  const changeNpr = pickNum(o, ["change", "point_change", "pointChange"]);
+  const currentValue = pickNum(o, [
+    "currentValue",
+    "current_index",
+    "current_value",
+    "value",
+    "index_value",
+    "last",
+    "ltp",
+  ]);
+  const close = pickNum(o, ["close", "Close"]);
+  const previousClose = pickNum(o, ["previousClose", "previous_close"]) ?? null;
+  // Prefer live currentValue; after hours some mirrors reset it to previousClose while `close` still holds the session print.
+  let value = currentValue ?? close ?? null;
+  if (
+    currentValue != null &&
+    close != null &&
+    previousClose != null &&
+    Math.abs(currentValue - previousClose) < 0.05 &&
+    Math.abs(close - previousClose) > 0.05
+  ) {
+    value = close;
+  }
+  let changeNpr = pickNum(o, ["change", "point_change", "pointChange"]) ?? null;
+  let changePct =
+    pickNum(o, ["perChange", "percent_change", "percentageChange", "change_percent", "changePct", "pct_change"]) ?? null;
+  if (changeNpr == null && value != null && previousClose != null) {
+    changeNpr = value - previousClose;
+  }
+  if (changePct == null && changeNpr != null && previousClose != null && previousClose > 0) {
+    changePct = (changeNpr / previousClose) * 100;
+  }
   return {
     name,
-    value: value ?? null,
-    changePct: changePct ?? null,
-    changeNpr: changeNpr ?? null,
+    value,
+    changePct,
+    changeNpr,
     high: pickNum(o, ["high"]) ?? null,
     low: pickNum(o, ["low"]) ?? null,
-    previousClose: pickNum(o, ["previousClose", "previous_close"]) ?? null,
+    previousClose,
   };
 }
 
@@ -185,9 +210,9 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
   );
   const bySymbol: Record<string, NepseSecurityTick> = {};
   let index: NepseIndexTick | undefined;
-  let indices: NepseIndexRow[] = [];
+  const indices: NepseIndexRow[] = [];
   let marketStatus: NepseMarketFeedStatus = { isOpen: null, checkedAt: null };
-  let summaryStats: NepseMarketSummaryStats = {
+  const summaryStats: NepseMarketSummaryStats = {
     totalTurnoverNpr: null,
     totalVolume: null,
     totalTrades: null,
@@ -212,7 +237,13 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
     const nepseRow = indices.find((row) => /nepse/i.test(row.name) && !/sensitive|float/i.test(row.name));
     const fallback = nepseRow ?? indices.find((row) => /nepse/i.test(row.name)) ?? indices[0];
     if (fallback?.value != null) {
-      index = { name: fallback.name.includes("NEPSE") ? "NEPSE" : fallback.name, value: fallback.value, changePct: fallback.changePct ?? undefined };
+      index = {
+        name: fallback.name.includes("NEPSE") ? "NEPSE" : fallback.name,
+        value: fallback.value,
+        changePct: fallback.changePct ?? undefined,
+        changeNpr: fallback.changeNpr ?? undefined,
+        previousClose: fallback.previousClose ?? undefined,
+      };
     }
   }
 

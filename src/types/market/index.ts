@@ -16,6 +16,10 @@ export type NepseIndexTick = {
   name: string;
   value: number;
   changePct?: number;
+  /** Absolute day change in index points when known. */
+  changeNpr?: number;
+  /** Previous session close when published by the feed. */
+  previousClose?: number;
 };
 
 export type NepseSecurityTick = {
