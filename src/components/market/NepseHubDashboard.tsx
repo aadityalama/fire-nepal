@@ -40,6 +40,7 @@ import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
+import type { NepseBreadthCategory } from "@/lib/market/nepse-breadth";
 import {
   countCircuitStocks,
   deriveMarketSentiment,
@@ -307,16 +308,18 @@ function Hero({
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
                   {index?.name ?? "NEPSE Index"}
                 </p>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                <Link
+                  href="/market/breadth/all-listed"
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition hover:brightness-110 ${
                     status.live
                       ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-300"
                       : "border-amber-300/20 bg-amber-300/10 text-amber-200"
                   }`}
+                  aria-label={`NEPSE market ${status.label.toLowerCase()} — view all listed companies`}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${status.live ? "animate-pulse bg-emerald-300" : "bg-amber-300"}`} />
                   {status.label}
-                </span>
+                </Link>
               </div>
               <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
                 {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -425,12 +428,14 @@ export function NepseHubDashboard() {
   const trades = ticks.reduce((total, tick) => total + (tick.trades ?? 0), 0);
   const marketCap = ticks.reduce((total, tick) => total + (tick.marketCap ?? 0), 0);
   const breadth = [
-    ["Advanced", term?.breadth.advancing ?? 0, "text-emerald-600 dark:text-emerald-400", TrendingUp],
-    ["Declined", term?.breadth.declining ?? 0, "text-rose-600 dark:text-rose-400", TrendingDown],
-    ["Unchanged", term?.breadth.unchanged ?? 0, "text-slate-600 dark:text-zinc-300", Activity],
-    ["Upper Circuit", circuits.upper, "text-violet-600 dark:text-violet-300", Zap],
-    ["Lower Circuit", circuits.lower, "text-amber-600 dark:text-amber-300", ShieldCheck],
-  ] as const;
+    ["Advanced", term?.breadth.advancing ?? 0, "text-emerald-600 dark:text-emerald-400", TrendingUp, "advanced"],
+    ["Declined", term?.breadth.declining ?? 0, "text-rose-600 dark:text-rose-400", TrendingDown, "declined"],
+    ["Unchanged", term?.breadth.unchanged ?? 0, "text-slate-600 dark:text-zinc-300", Activity, "unchanged"],
+    ["Upper Circuit", circuits.upper, "text-violet-600 dark:text-violet-300", Zap, "upper-circuit"],
+    ["Lower Circuit", circuits.lower, "text-amber-600 dark:text-amber-300", ShieldCheck, "lower-circuit"],
+  ] as const satisfies ReadonlyArray<
+    readonly [string, number, string, (typeof TrendingUp), NepseBreadthCategory]
+  >;
 
   return (
     <main className="min-h-screen bg-[#f4f8f6] text-slate-950 dark:bg-[#030a08] dark:text-white">
@@ -487,16 +492,24 @@ export function NepseHubDashboard() {
         />
 
         <section className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Market breadth">
-          {breadth.map(([label, value, tone, Icon]) => (
-            <div key={label} className={`${card} min-w-0 p-3.5 transition duration-300 hover:border-emerald-400/30`}>
+          {breadth.map(([label, value, tone, Icon, slug]) => (
+            <Link
+              key={label}
+              href={`/market/breadth/${slug}`}
+              className={`${card} group min-w-0 p-3.5 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-400/30 active:scale-[0.98]`}
+              aria-label={`${label} — ${value.toLocaleString("en-IN")} companies`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className={eyebrow}>{label}</p>
                 <Icon className={`h-3.5 w-3.5 ${tone}`} aria-hidden />
               </div>
-              <p className={`mt-2 text-xl font-black tabular-nums ${tone}`}>
-                <AnimatedCount value={value} />
-              </p>
-            </div>
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <p className={`text-xl font-black tabular-nums ${tone}`}>
+                  <AnimatedCount value={value} />
+                </p>
+                <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-500 dark:text-zinc-700" aria-hidden />
+              </div>
+            </Link>
           ))}
         </section>
 

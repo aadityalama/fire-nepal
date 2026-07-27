@@ -26,6 +26,7 @@ const NAV = [
       path.startsWith("/market/corporate") ||
       path.startsWith("/market/ipo") ||
       path.startsWith("/market/company") ||
+      path.startsWith("/market/breadth") ||
       path.startsWith("/market/top-brokers"),
   },
   {
