@@ -317,7 +317,7 @@ export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId
                           onClick={() => void openProof(row.id)}
                           className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-emerald-200 transition hover:bg-white/[0.08]"
                         >
-                          <Eye size={12} aria-hidden />
+                          <Eye size={15} aria-hidden />
                           Preview
                         </button>
                         <button
@@ -325,7 +325,7 @@ export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId
                           onClick={() => void downloadProof(row.id)}
                           className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-zinc-200 transition hover:bg-white/[0.08]"
                         >
-                          <Download size={12} aria-hidden />
+                          <Download size={15} aria-hidden />
                           Download
                         </button>
                       </div>
@@ -339,7 +339,7 @@ export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId
                             onClick={() => void patch(row.id, "reject")}
                             className="inline-flex w-full min-w-[6.5rem] items-center justify-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50 sm:w-auto"
                           >
-                            <XCircle size={14} aria-hidden />
+                            <XCircle size={17.5} aria-hidden />
                             Reject
                           </button>
                           <button
@@ -348,7 +348,7 @@ export function AdminMembershipRequestsClient({ initialUserId }: { initialUserId
                             onClick={() => void patch(row.id, "approve")}
                             className="inline-flex w-full min-w-[6.5rem] items-center justify-center gap-1 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-black text-emerald-50 transition hover:bg-emerald-500/30 disabled:opacity-50 sm:w-auto"
                           >
-                            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check size={14} aria-hidden />}
+                            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check size={17.5} aria-hidden />}
                             Approve
                           </button>
                         </div>

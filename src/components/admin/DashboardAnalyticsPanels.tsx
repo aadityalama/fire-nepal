@@ -56,14 +56,14 @@ function MiniChart({
                 </linearGradient>
               </defs>
               <CartesianGrid stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: chartMuted, fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartMuted, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
+              <XAxis dataKey="label" tick={{ fill: chartMuted, fontSize: 11.25 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: chartMuted, fontSize: 11.25 }} axisLine={false} tickLine={false} width={32} />
               <Tooltip
                 contentStyle={{
                   background: "#0a1a14",
                   border: "1px solid rgba(255,255,255,0.08)",
                   borderRadius: 10,
-                  fontSize: 11,
+                  fontSize: 13.75,
                 }}
                 labelStyle={{ color: "#a7f3d0" }}
                 formatter={(v: number) => [`${v}${suffix ?? ""}`, ""]}
@@ -73,14 +73,14 @@ function MiniChart({
           ) : (
             <LineChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: chartMuted, fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: chartMuted, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
+              <XAxis dataKey="label" tick={{ fill: chartMuted, fontSize: 11.25 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: chartMuted, fontSize: 11.25 }} axisLine={false} tickLine={false} width={32} />
               <Tooltip
                 contentStyle={{
                   background: "#0a1a14",
                   border: "1px solid rgba(255,255,255,0.08)",
                   borderRadius: 10,
-                  fontSize: 11,
+                  fontSize: 13.75,
                 }}
                 labelStyle={{ color: "#a7f3d0" }}
                 formatter={(v: number) => [`${v}${suffix ?? ""}`, ""]}
