@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 
 const TABS = [
   { href: "/admin", label: "Overview", match: (p: string) => p === "/admin" },
@@ -21,6 +22,7 @@ const TABS = [
 
 export function OverviewHeader() {
   const pathname = usePathname() || "/admin";
+  const { isNepseHubAdmin } = useProductAuth();
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#020806]/90 backdrop-blur-xl">
@@ -59,6 +61,14 @@ export function OverviewHeader() {
               </Link>
             );
           })}
+          {isNepseHubAdmin ? (
+            <Link
+              href="/nepse-hub-admin"
+              className="shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-200 sm:text-xs"
+            >
+              NEPSE Hub
+            </Link>
+          ) : null}
         </nav>
       </div>
     </header>

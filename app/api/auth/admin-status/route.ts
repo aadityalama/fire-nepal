@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin/check-session-is-admin";
+import { getNepseHubAdminSession } from "@/lib/admin/nepse-hub-admin";
 
 export const runtime = "nodejs";
 
-/** Returns whether the signed-in Supabase user is in `admin_users` (RLS-safe self-read). */
+/** Returns admin flags for the signed-in user. NEPSE Hub Admin is email-gated server-side. */
 export async function GET() {
-  const session = await getAdminSession();
+  const [session, nepseHub] = await Promise.all([getAdminSession(), getNepseHubAdminSession()]);
   const isAdmin = Boolean(session);
   const isSuperAdmin = session?.role === "super_admin";
-  return NextResponse.json({ isAdmin, isSuperAdmin, role: session?.role ?? null });
+  const isNepseHubAdmin = Boolean(nepseHub);
+  return NextResponse.json({
+    isAdmin,
+    isSuperAdmin,
+    isNepseHubAdmin,
+    role: session?.role ?? null,
+  });
 }

@@ -27,6 +27,8 @@ type ProductAuthContextValue = {
   loading: boolean;
   /** Supabase session only: true if `public.admin_users` contains this user. Always false for legacy auth. */
   isAdmin: boolean;
+  /** True only when session email is the NEPSE Hub Admin allowlist (server-verified). */
+  isNepseHubAdmin: boolean;
   authMode: "supabase" | "legacy";
   refreshSession: () => Promise<void>;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ ok: boolean; error?: string }>;
@@ -148,6 +150,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ProductAuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isNepseHubAdmin, setIsNepseHubAdmin] = useState(false);
   const loginInFlightRef = useRef<Promise<LoginResult> | null>(null);
   const authMode: "supabase" | "legacy" = isSupabaseConfigured() ? "supabase" : "legacy";
 
@@ -240,16 +243,28 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       if (!isSupabaseConfigured() || !user) {
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) {
+          setIsAdmin(false);
+          setIsNepseHubAdmin(false);
+        }
         return;
       }
-      if (!cancelled) setIsAdmin(false);
+      if (!cancelled) {
+        setIsAdmin(false);
+        setIsNepseHubAdmin(false);
+      }
       try {
         const r = await fetch("/api/auth/admin-status", { credentials: "include", cache: "no-store" });
-        const j = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
-        if (!cancelled) setIsAdmin(Boolean(j.isAdmin));
+        const j = (await r.json().catch(() => ({}))) as { isAdmin?: boolean; isNepseHubAdmin?: boolean };
+        if (!cancelled) {
+          setIsAdmin(Boolean(j.isAdmin));
+          setIsNepseHubAdmin(Boolean(j.isNepseHubAdmin));
+        }
       } catch {
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) {
+          setIsAdmin(false);
+          setIsNepseHubAdmin(false);
+        }
       }
     })();
     return () => {
@@ -547,6 +562,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
     clearProductAuthSession();
     setUser(null);
     setIsAdmin(false);
+    setIsNepseHubAdmin(false);
   }, []);
 
   const value = useMemo(
@@ -554,6 +570,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       isAdmin,
+      isNepseHubAdmin,
       authMode,
       refreshSession,
       login,
@@ -562,7 +579,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       resendVerification,
       logout,
     }),
-    [user, loading, isAdmin, authMode, refreshSession, login, signup, verifyEmail, resendVerification, logout],
+    [user, loading, isAdmin, isNepseHubAdmin, authMode, refreshSession, login, signup, verifyEmail, resendVerification, logout],
   );
 
   return <ProductAuthContext.Provider value={value}>{children}</ProductAuthContext.Provider>;

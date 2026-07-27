@@ -31,6 +31,7 @@ export const FN_PROTECTED_PREFIXES = [
   "/family-settings",
   "/child-records-vault",
   "/admin",
+  "/nepse-hub-admin",
   "/fire-biz",
   "/fire-lending",
   "/more",

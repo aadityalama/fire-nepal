@@ -21,7 +21,7 @@ function initials(name: string): string {
 }
 
 export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
-  const { user, logout, isAdmin } = useProductAuth();
+  const { user, logout, isAdmin, isNepseHubAdmin } = useProductAuth();
   const { profile } = useCurrentUserProfile();
   const [open, setOpen] = useState(false);
   const [imgBroken, setImgBroken] = useState(false);
@@ -179,6 +179,17 @@ export function UserMenuDropdown({ variant = "light" }: UserMenuDropdownProps) {
             >
               <Activity size={16} className="shrink-0" />
               <span className="min-w-0 break-words leading-snug">Admin dashboard</span>
+            </Link>
+          ) : null}
+          {isNepseHubAdmin ? (
+            <Link
+              href="/nepse-hub-admin"
+              role="menuitem"
+              className={`flex min-w-0 items-center gap-2 px-4 py-2.5 text-sm font-bold transition ${hoverRow}`}
+              onClick={close}
+            >
+              <Activity size={16} className="shrink-0" />
+              <span className="min-w-0 break-words leading-snug">NEPSE Hub Admin</span>
             </Link>
           ) : null}
           <Link

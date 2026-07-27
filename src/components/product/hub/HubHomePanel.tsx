@@ -538,7 +538,7 @@ function CompactToolCard({ item, light }: { item: ToolLauncherItem; light: boole
 
 export function HubHomePanel() {
   const onboarding = useMemo(() => loadProductOnboarding(), []);
-  const { isAdmin } = useProductAuth();
+  const { isAdmin, isNepseHubAdmin } = useProductAuth();
   const { tier } = useFireMembership();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -585,6 +585,41 @@ export function HubHomePanel() {
           <span
             className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black ${
               light ? "border-violet-300/50 bg-white text-violet-800" : "border-violet-300/30 bg-violet-500/15 text-violet-100"
+            }`}
+          >
+            Open
+            <ArrowRight size={16} />
+          </span>
+        </Link>
+      ) : null}
+
+      {isNepseHubAdmin ? (
+        <Link
+          href="/nepse-hub-admin"
+          className={`flex min-h-[64px] touch-manipulation items-center gap-3 rounded-2xl border p-4 transition active:scale-[0.99] sm:flex-row sm:items-center sm:justify-between sm:p-5 ${
+            light
+              ? "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-teal-50/80"
+              : "border-emerald-400/25 bg-gradient-to-br from-emerald-600/20 to-teal-600/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${
+                light ? "border-emerald-300/50 bg-emerald-100 text-emerald-700" : "border-emerald-400/30 bg-emerald-500/15 text-emerald-200"
+              }`}
+            >
+              <Activity size={22} />
+            </span>
+            <div>
+              <p className={`text-sm font-black ${titleCls}`}>NEPSE Hub Admin</p>
+              <p className={`mt-1 text-xs font-medium ${light ? "text-emerald-700/80" : "text-emerald-100/75"}`}>
+                Manual overrides, restore official data, and audit logs.
+              </p>
+            </div>
+          </div>
+          <span
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black ${
+              light ? "border-emerald-300/50 bg-white text-emerald-800" : "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
             }`}
           >
             Open

@@ -55,14 +55,16 @@ function linkCls(active: boolean, light: boolean) {
 export function MorePagePanel() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const { isAdmin } = useProductAuth();
+  const { isAdmin, isNepseHubAdmin } = useProductAuth();
   const labels = FIRE_BIZ_I18N.en.mainNav;
   const fireBiz = FIRE_BIZ_I18N.en.hubPromo;
   const fireBizMore = FIRE_BIZ_I18N.en.morePromo;
 
-  const links = isAdmin
-    ? [...MORE_LINKS, { href: "/admin", label: "Admin", icon: Activity }]
-    : MORE_LINKS;
+  const links = [
+    ...MORE_LINKS,
+    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Activity }] : []),
+    ...(isNepseHubAdmin ? [{ href: "/nepse-hub-admin", label: "NEPSE Hub Admin", icon: Activity }] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

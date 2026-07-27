@@ -28,6 +28,7 @@ import { CompanyFinancialsTable } from "@/components/market/company/CompanyFinan
 import { CompanyFreeFloatPanel } from "@/components/market/company/CompanyFreeFloatPanel";
 import { CompanyMetricGrid } from "@/components/market/company/CompanyMetricGrid";
 import { CompanyShareholdingPanel } from "@/components/market/company/CompanyShareholdingPanel";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { CompanyTechnicalAnalysis } from "@/components/market/company/CompanyTechnicalAnalysis";
 import { CompanyTechnicalChart } from "@/components/market/company/CompanyTechnicalChart";
 import { useNepseAiIntelligence } from "@/hooks/useNepseAiIntelligence";
@@ -225,6 +226,7 @@ function NewsList({ items, empty }: { items: NepseNewsItem[]; empty: string }) {
 
 export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const normalized = decodeURIComponent(symbol).toUpperCase();
+  const { isNepseHubAdmin } = useProductAuth();
   const { snapshot } = useRealtimeMarket();
   const { isWatched, toggle } = useNepseWatchlist();
   const { track } = useNepseRecentlyViewed();
@@ -357,18 +359,28 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
               <h1 className="truncate text-xl font-black tracking-tight sm:text-2xl">{normalized}</h1>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => toggle(normalized)}
-            className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black transition ${
-              isWatched(normalized)
-                ? "border-amber-300/50 bg-amber-50 text-amber-700 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-200"
-                : "border-slate-200/80 bg-white/90 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300"
-            }`}
-          >
-            <Star size={15} fill={isWatched(normalized) ? "currentColor" : "none"} />
-            {isWatched(normalized) ? "Watching" : "Watch"}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {isNepseHubAdmin ? (
+              <Link
+                href={`/nepse-hub-admin?symbol=${encodeURIComponent(normalized)}`}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-emerald-300/40 bg-emerald-50 px-3 text-xs font-black text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-200"
+              >
+                Admin
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => toggle(normalized)}
+              className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black transition ${
+                isWatched(normalized)
+                  ? "border-amber-300/50 bg-amber-50 text-amber-700 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-200"
+                  : "border-slate-200/80 bg-white/90 text-slate-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-zinc-300"
+              }`}
+            >
+              <Star size={15} fill={isWatched(normalized) ? "currentColor" : "none"} />
+              {isWatched(normalized) ? "Watching" : "Watch"}
+            </button>
+          </div>
         </header>
 
         {/* Live Price hero */}

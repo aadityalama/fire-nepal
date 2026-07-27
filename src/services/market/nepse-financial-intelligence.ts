@@ -844,13 +844,42 @@ export async function loadFinancialIntelligence(symbolRaw: string): Promise<Neps
   const dividends = dividendsBySymbol.get(symbol) ?? [];
   const latest = pickLatestReport(reports);
 
-  const quarterly = buildQuarterly(reports, dbStatements);
-  const annual = buildAnnual(reports, dbStatements, dbFinancials);
+  let quarterly = buildQuarterly(reports, dbStatements);
+  let annual = buildAnnual(reports, dbStatements, dbFinancials);
+
+  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol } = await import(
+    "@/services/market/nepse-hub-admin-overrides"
+  );
+  const overrideIndex = indexOverrides(await listOverridesForSymbol(symbol, sb));
+  if (overrideIndex.size) {
+    quarterly = quarterly.map((row) => {
+      const qNum = String(row.quarter).replace(/^Q/i, "");
+      const keys = [`Q:${row.fiscalYear}:${qNum}`, `${row.fiscalYear}:Q${qNum}`, row.fiscalYear];
+      let next = { ...row } as Record<string, unknown>;
+      for (const key of keys) next = applyFieldOverrides(next, overrideIndex, "statements", key);
+      return next as typeof row;
+    });
+    annual = annual.map((row) => {
+      const keys = [`A:${row.fiscalYear}`, row.fiscalYear];
+      let next = { ...row } as Record<string, unknown>;
+      for (const key of keys) next = applyFieldOverrides(next, overrideIndex, "statements", key);
+      return next as typeof row;
+    });
+  }
+
   const quarterlyStatements = buildQuarterlyStatements(quarterly);
   const annualStatements = buildAnnualStatements(annual);
-  const ratios = buildRatios(reports, annual, livePrice, dbValuation);
+  let ratios = buildRatios(reports, annual, livePrice, dbValuation);
+  let shareholding = buildShareholding(dbProfile, latest, securities.get(symbol)?.instrumentType ?? sector);
+  if (overrideIndex.size) {
+    ratios = applyFieldOverrides({ ...ratios } as Record<string, unknown>, overrideIndex, "ratios") as typeof ratios;
+    shareholding = applyFieldOverrides(
+      { ...shareholding } as Record<string, unknown>,
+      overrideIndex,
+      "ownership",
+    ) as typeof shareholding;
+  }
   const dividendAnalytics = await buildDividendAnalytics(symbol, dividends, annual, livePrice, rightsRows);
-  const shareholding = buildShareholding(dbProfile, latest, securities.get(symbol)?.instrumentType ?? sector);
   const growth = buildGrowth(annual);
   const peers = await buildPeers(
     symbol,

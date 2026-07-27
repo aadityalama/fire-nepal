@@ -409,16 +409,61 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     .map(mapAction)
     .filter((row): row is NepseCompanyActionRow => Boolean(row));
 
+  // Manual NEPSE Hub Admin overrides (field-level). Official cron data remains in DB.
+  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol } = await import(
+    "@/services/market/nepse-hub-admin-overrides"
+  );
+  const overrideIndex = indexOverrides(await listOverridesForSymbol(symbol, sb));
+
+  const profileOverridden = applyFieldOverrides(
+    applyFieldOverrides({ ...profile } as Record<string, unknown>, overrideIndex, "profile"),
+    overrideIndex,
+    "ownership",
+  ) as typeof profile;
+
+  const marketOverridden = applyFieldOverrides({ ...profileOverridden } as Record<string, unknown>, overrideIndex, "market") as typeof profile;
+
+  const valuationOverridden = applyFieldOverrides(
+    { ...valuation } as Record<string, unknown>,
+    overrideIndex,
+    "ratios",
+  ) as typeof valuation;
+
+  const financialsOverridden = financials.map((row) =>
+    applyFieldOverrides({ ...row } as Record<string, unknown>, overrideIndex, "statements", row.fiscalYear),
+  ) as typeof financials;
+
+  const dividendsOverridden = dividends.map((row) =>
+    applyFieldOverrides(
+      { ...row } as Record<string, unknown>,
+      overrideIndex,
+      "dividends",
+      row.fiscalYear || row.id,
+    ),
+  ) as typeof dividends;
+
+  const actionsOverridden = actions.map((row) =>
+    applyFieldOverrides({ ...row } as Record<string, unknown>, overrideIndex, "actions", row.id),
+  ) as typeof actions;
+
+  let session = sessionFromTick(tick);
+  session = applyFieldOverrides({ ...session } as Record<string, unknown>, overrideIndex, "technical", "_") as typeof session;
+  // Also map market LTP into session close when overridden.
+  const ltpOverride = overrideIndex.get("market|_|ltpNpr");
+  if (typeof ltpOverride === "number" && Number.isFinite(ltpOverride)) {
+    session = { ...session, closeNpr: ltpOverride };
+  }
+
   return {
     symbol,
-    profile,
-    valuation,
-    financials,
-    dividends,
-    actions,
-    session: sessionFromTick(tick),
+    profile: marketOverridden,
+    valuation: valuationOverridden,
+    financials: financialsOverridden,
+    dividends: dividendsOverridden,
+    actions: actionsOverridden,
+    session,
     range52w,
-    shareholding: shareholdingFromProfile(profile),
+    shareholding: shareholdingFromProfile(marketOverridden),
     loadedAt: new Date().toISOString(),
   };
 }
