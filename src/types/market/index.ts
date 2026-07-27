@@ -20,6 +20,12 @@ export type NepseIndexTick = {
   changeNpr?: number;
   /** Previous session close when published by the feed. */
   previousClose?: number;
+  /** Session open when published or derived from the official intraday graph. */
+  open?: number;
+  /** Intraday high when published by the official index feed. */
+  high?: number;
+  /** Intraday low when published by the official index feed. */
+  low?: number;
 };
 
 export type NepseSecurityTick = {

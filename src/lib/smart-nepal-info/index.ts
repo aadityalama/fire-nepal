@@ -11,6 +11,7 @@ export {
   formatBsDateHeroLine,
   formatBsDateParts,
   formatMarketAsOfBsTimestamp,
+  formatMarketLastUpdatedParts,
   getSmartNepalDayInfo,
   pickLocalizedLabel,
   resolveBarStatus,

@@ -15,9 +15,7 @@ import {
   ListFilter,
   Newspaper,
   PieChart,
-  RefreshCw,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -31,27 +29,23 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { buildNepsePortfolioSummary } from "@/components/portfolio/nepse-portfolio/nepse-portfolio-metrics";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
-import type { NepseBreadthCategory } from "@/lib/market/nepse-breadth";
 import {
-  countCircuitStocks,
   deriveMarketSentiment,
   formatCompactNpr,
-  getKathmanduMarketPanelStatus,
   NEPSE_NEWS_SOURCES,
   NEPSE_SERVICE_ITEMS,
 } from "@/lib/market/nepse-hub";
-import { formatBsDateHeroLine, formatMarketAsOfBsTimestamp } from "@/lib/smart-nepal-info";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
-import type { NepseIndexTick, NepseSecurityTick } from "@/types/market";
+import type { NepseSecurityTick } from "@/types/market";
+import { NepseInstitutionalHero } from "./NepseInstitutionalHero";
 import { NepseMarketChart } from "./NepseMarketChart";
 
 const ICONS: Record<string, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
@@ -103,25 +97,6 @@ function SectionHeading({
   );
 }
 
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduced(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  return reduced;
-}
-
-/** Count-up integer that re-animates whenever the live feed pushes a new value. */
-function AnimatedCount({ value, className }: { value: number; className?: string }) {
-  const reduced = usePrefersReducedMotion();
-  const display = useCountUpNumber(value, { durationMs: 800, skipAnimation: reduced });
-  return <span className={className}>{Math.round(display).toLocaleString("en-IN")}</span>;
-}
-
 function relativeTime(iso: string | null): string {
   if (!iso) return "Recently";
   const diffMs = Date.now() - Date.parse(iso);
@@ -152,20 +127,6 @@ function Delta({ value }: { value?: number | null }) {
       {positive ? "+" : ""}
       {value.toFixed(2)}%
     </span>
-  );
-}
-
-function MiniSparkline({ positive = true }: { positive?: boolean }) {
-  return (
-    <svg viewBox="0 0 120 35" className="h-8 w-24" aria-hidden>
-      <path
-        d="M2 27 C13 25, 16 12, 28 17 S44 29, 54 19 S71 6, 82 13 S102 10, 118 3"
-        fill="none"
-        stroke={positive ? "#34d399" : "#fb7185"}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 
@@ -275,188 +236,6 @@ function Header({
   );
 }
 
-function useLiveMarketPanelClock(tickMs = 30_000) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), tickMs);
-    return () => window.clearInterval(timer);
-  }, [tickMs]);
-  return now;
-}
-
-function resolveIndexPointChange(index: NepseIndexTick | undefined): number | null {
-  if (index?.changeNpr != null && Number.isFinite(index.changeNpr)) return index.changeNpr;
-  if (index?.value != null && index.previousClose != null && Number.isFinite(index.previousClose)) {
-    return index.value - index.previousClose;
-  }
-  return null;
-}
-
-function resolveIndexChangePct(index: NepseIndexTick | undefined, pointChange: number | null): number | null {
-  if (index?.changePct != null && Number.isFinite(index.changePct)) return index.changePct;
-  if (
-    pointChange != null &&
-    index?.previousClose != null &&
-    Number.isFinite(index.previousClose) &&
-    index.previousClose > 0
-  ) {
-    return (pointChange / index.previousClose) * 100;
-  }
-  return null;
-}
-
-function HeroMarketStatusCard() {
-  const now = useLiveMarketPanelClock();
-  const panel = getKathmanduMarketPanelStatus(now);
-
-  return (
-    <div
-      className={`inline-flex max-w-full flex-col items-end rounded-xl border px-2.5 py-1.5 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-3 ${
-        panel.open ? "border-emerald-400/35 bg-emerald-400/12" : "border-rose-400/30 bg-rose-400/[0.12]"
-      }`}
-      aria-live="polite"
-    >
-      <p
-        className={`flex max-w-full items-center justify-end gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] sm:text-[10px] ${
-          panel.open ? "text-emerald-200" : "text-rose-200"
-        }`}
-      >
-        <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${panel.open ? "animate-pulse bg-emerald-300" : "bg-rose-300"}`}
-          aria-hidden
-        />
-        <span className="min-w-0 truncate">{panel.headline}</span>
-      </p>
-      <p
-        className={`mt-0.5 max-w-full truncate text-[9px] font-semibold sm:text-[10px] ${
-          panel.open ? "text-emerald-100/70" : "text-rose-100/65"
-        }`}
-      >
-        {panel.detail}
-      </p>
-    </div>
-  );
-}
-
-function Hero({
-  index,
-  turnover,
-  volume,
-  trades,
-  fetchedAt,
-  onRefresh,
-  refreshing,
-}: {
-  index: NepseIndexTick | undefined;
-  turnover: number;
-  volume: number;
-  trades: number;
-  fetchedAt?: string;
-  onRefresh: () => void;
-  refreshing: boolean;
-}) {
-  const pointChange = resolveIndexPointChange(index);
-  const changePct = resolveIndexChangePct(index, pointChange);
-  const positive = (pointChange ?? changePct ?? 0) >= 0;
-  const reduced = usePrefersReducedMotion();
-  const animatedIndex = useCountUpNumber(index?.value ?? 0, { durationMs: 900, skipAnimation: reduced });
-  const nepaliDate = formatBsDateHeroLine(fetchedAt ? new Date(fetchedAt) : undefined);
-  const asOf = formatMarketAsOfBsTimestamp(fetchedAt);
-
-  return (
-    <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-4 text-white shadow-[0_32px_90px_-40px_rgba(4,120,87,0.65)] sm:p-6">
-      <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
-      <div className="pointer-events-none absolute -right-9 -top-14 h-40 w-40 rounded-full border border-white/[0.05]" />
-      <div className="relative grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-        <div className="min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
-                {index?.name ?? "NEPSE Index"}
-              </p>
-              <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
-                {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <div
-                className={`mt-2 flex min-w-0 items-center gap-1.5 text-sm font-extrabold tabular-nums ${
-                  positive ? "text-emerald-300" : "text-rose-300"
-                }`}
-              >
-                {pointChange == null && changePct == null ? (
-                  <span>Change unavailable</span>
-                ) : (
-                  <>
-                    <span aria-hidden className="text-[15px] leading-none">
-                      {positive ? "▲" : "▼"}
-                    </span>
-                    <span className="min-w-0 truncate">
-                      {pointChange == null
-                        ? "—"
-                        : `${positive && pointChange > 0 ? "+" : ""}${pointChange.toFixed(2)}`}
-                      {changePct == null
-                        ? ""
-                        : ` (${positive && changePct > 0 ? "+" : ""}${changePct.toFixed(2)}% today)`}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white"
-                aria-label="Refresh market data"
-              >
-                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-              </button>
-              <div className="max-w-[12rem] text-right sm:max-w-[15rem]">
-                <p
-                  className="text-[14px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[16px]"
-                  title={nepaliDate}
-                >
-                  {nepaliDate}
-                </p>
-                <p className="mt-0.5 text-[9px] font-semibold tabular-nums text-emerald-100/40 sm:text-[10px]">
-                  As of {asOf}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/[0.07] pt-4">
-            {[
-              ["Turnover", formatCompactNpr(turnover)],
-              ["Volume", volume ? volume.toLocaleString("en-IN") : "—"],
-              ["Transactions", trades ? trades.toLocaleString("en-IN") : "—"],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/45">{label}</p>
-                <p className="mt-1 truncate text-[11px] font-extrabold tabular-nums text-white sm:text-sm">{value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative min-w-0">
-          <MiniSparkline positive={positive} />
-          <svg viewBox="0 0 500 140" className="h-28 w-full sm:h-36" aria-label="Indicative NEPSE intraday chart">
-            <defs>
-              <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={positive ? "#34d399" : "#fb7185"} stopOpacity=".28" />
-                <stop offset="100%" stopColor={positive ? "#34d399" : "#fb7185"} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8 L500 140 L0 140 Z" fill="url(#hero-fill)" />
-            <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8" fill="none" stroke={positive ? "#34d399" : "#fb7185"} strokeWidth="3" strokeLinecap="round" />
-          </svg>
-          <div className="mt-2 flex justify-end">
-            <HeroMarketStatusCard />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function NepseHubDashboard() {
   const { snapshot, status, error, reload, overlay } = useRealtimeMarket();
   const { state, krwPerNpr, usdPerNpr } = useWealthPortfolio();
@@ -467,7 +246,6 @@ export function NepseHubDashboard() {
   const [query, setQuery] = useState("");
   const term = snapshot?.nepseTerminal;
   const ticks = useMemo(() => Object.values(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
-  const circuits = useMemo(() => countCircuitStocks(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
   const sentiment = useMemo(() => deriveMarketSentiment(term), [term]);
   const portfolio = useMemo(
     () =>
@@ -512,16 +290,6 @@ export function NepseHubDashboard() {
   const volume = ticks.reduce((total, tick) => total + (tick.volume ?? 0), 0);
   const trades = ticks.reduce((total, tick) => total + (tick.trades ?? 0), 0);
   const marketCap = ticks.reduce((total, tick) => total + (tick.marketCap ?? 0), 0);
-  const breadth = [
-    ["Advanced", term?.breadth.advancing ?? 0, "text-emerald-600 dark:text-emerald-400", TrendingUp, "advanced"],
-    ["Declined", term?.breadth.declining ?? 0, "text-rose-600 dark:text-rose-400", TrendingDown, "declined"],
-    ["Unchanged", term?.breadth.unchanged ?? 0, "text-slate-600 dark:text-zinc-300", Activity, "unchanged"],
-    ["Upper Circuit", circuits.upper, "text-violet-600 dark:text-violet-300", Zap, "upper-circuit"],
-    ["Lower Circuit", circuits.lower, "text-amber-600 dark:text-amber-300", ShieldCheck, "lower-circuit"],
-  ] as const satisfies ReadonlyArray<
-    readonly [string, number, string, (typeof TrendingUp), NepseBreadthCategory]
-  >;
-
   return (
     <main className="min-h-screen bg-[#f4f8f6] text-slate-950 dark:bg-[#030a08] dark:text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(16,185,129,0.12),transparent_28rem),radial-gradient(circle_at_94%_16%,rgba(20,184,166,0.08),transparent_24rem)]" />
@@ -566,8 +334,10 @@ export function NepseHubDashboard() {
           </div>
         ) : null}
 
-        <Hero
+        <NepseInstitutionalHero
           index={snapshot?.nepseIndex}
+          term={term}
+          bySymbol={snapshot?.nepseBySymbol ?? {}}
           turnover={term?.totalTurnoverNpr ?? 0}
           volume={volume}
           trades={trades}
@@ -575,28 +345,6 @@ export function NepseHubDashboard() {
           onRefresh={reload}
           refreshing={status === "loading"}
         />
-
-        <section className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Market breadth">
-          {breadth.map(([label, value, tone, Icon, slug]) => (
-            <Link
-              key={label}
-              href={`/market/breadth/${slug}`}
-              className={`${card} group min-w-0 p-3.5 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-400/30 active:scale-[0.98]`}
-              aria-label={`${label} — ${value.toLocaleString("en-IN")} companies`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className={eyebrow}>{label}</p>
-                <Icon className={`h-3.5 w-3.5 ${tone}`} aria-hidden />
-              </div>
-              <div className="mt-2 flex items-end justify-between gap-2">
-                <p className={`text-xl font-black tabular-nums ${tone}`}>
-                  <AnimatedCount value={value} />
-                </p>
-                <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-500 dark:text-zinc-700" aria-hidden />
-              </div>
-            </Link>
-          ))}
-        </section>
 
         <div className="mt-4">
           <NepseMarketChart value={snapshot?.nepseIndex?.value ?? 2_650} changePct={snapshot?.nepseIndex?.changePct} />
@@ -860,7 +608,6 @@ export function NepseHubDashboard() {
                       <p className="text-xs font-black text-slate-950 dark:text-white">{tick.symbol}</p>
                       <p className="truncate text-[10px] font-medium text-slate-500 dark:text-zinc-500">{tick.companyName}</p>
                     </Link>
-                    <MiniSparkline positive={(tick.changePct ?? 0) >= 0} />
                     <div className="shrink-0 text-right text-xs">
                       <p className="font-black tabular-nums text-slate-950 dark:text-white">रु {tick.ltpNpr.toLocaleString("en-IN")}</p>
                       <Delta value={tick.changePct} />
