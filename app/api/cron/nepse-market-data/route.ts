@@ -6,6 +6,7 @@ import {
   ingestCompanyDisclosures,
   ingestCompanyFundamentals,
   ingestCompanyOwnership,
+  ingestCompanyStatements,
   ingestEodPrices,
   ingestMarketNews,
 } from "@/services/market/nepse-market-data-engine";
@@ -18,8 +19,9 @@ import { ingestIndexEod } from "@/services/market/nepse-index-eod";
  * 3) Backfill multi-day OHLC for symbols still short on history
  * 4) Aggregate configured news feeds + company disclosures + exchange notices into `nepse_market_news`
  * 5) Refresh fundamentals from filings
- * 6) Build typed corporate actions into `nepse_company_actions`
- * 7) Refresh official NEPSE promoter/public ownership into `nepse_company_profiles`
+ * 6) Incrementally ingest official financial statements (NEPSE reports + text PDFs)
+ * 7) Build typed corporate actions into `nepse_company_actions`
+ * 8) Refresh official NEPSE promoter/public ownership into `nepse_company_profiles`
  *
  * Manual: GET /api/cron/nepse-market-data?backfill=1&limit=80&priority=NABIL,VLBS,UPPER
  * When `CRON_SECRET` is set, send `Authorization: Bearer <CRON_SECRET>`.
@@ -63,6 +65,17 @@ export async function GET(request: Request) {
     url.searchParams.get("fundamentals") !== "0"
       ? await ingestCompanyFundamentals(sb)
       : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (fundamentals=0)" };
+  const statementLimit = Number(url.searchParams.get("statementLimit")) || 160;
+  const pdfLimit = Number(url.searchParams.get("pdfLimit")) || 50;
+  const statements =
+    url.searchParams.get("statements") !== "0"
+      ? await ingestCompanyStatements(sb, {
+          securityLimit: statementLimit,
+          pdfLimit,
+          prioritize: priority,
+          parsePdfs: url.searchParams.get("pdfs") !== "0",
+        })
+      : { kind: "statements" as const, status: "ok" as const, items: 0, message: "Skipped (statements=0)" };
   const news = await ingestMarketNews(sb);
   const disclosures =
     url.searchParams.get("disclosures") !== "0"
@@ -85,10 +98,12 @@ export async function GET(request: Request) {
     actions.status !== "error" &&
     ownership.status !== "error" &&
     backfill.status !== "error" &&
-    fundamentals.status !== "error";
-  // indexEod may be "partial" when the migration is not yet applied — do not fail the whole cron.
+    fundamentals.status !== "error" &&
+    statements.status !== "error";
+  // indexEod / statements may be "partial" when a migration is not yet applied — do not fail the whole cron
+  // unless status is hard error.
   return NextResponse.json(
-    { ok, eod, indexEod, backfill, fundamentals, news, disclosures, actions, ownership },
+    { ok, eod, indexEod, backfill, fundamentals, statements, news, disclosures, actions, ownership },
     { status: ok ? 200 : 500 },
   );
 }

@@ -5,13 +5,45 @@
  * derived ratios (PE, PB, ROE, yield, CAGR, margins) are computed only from real inputs.
  */
 
-export type NepseQuarterlyReportRow = {
+/** Shared audited / interim statement line items (null = not published). */
+export type NepseStatementFigures = {
+  revenueNpr: number | null;
+  operatingRevenueNpr: number | null;
+  otherIncomeNpr: number | null;
+  grossProfitNpr: number | null;
+  operatingProfitNpr: number | null;
+  ebitdaNpr: number | null;
+  ebitNpr: number | null;
+  netProfitNpr: number | null;
+  eps: number | null;
+  dilutedEps: number | null;
+  totalAssetsNpr: number | null;
+  currentAssetsNpr: number | null;
+  nonCurrentAssetsNpr: number | null;
+  cashNpr: number | null;
+  investmentsNpr: number | null;
+  inventoriesNpr: number | null;
+  receivablesNpr: number | null;
+  totalEquityNpr: number | null;
+  shareCapitalNpr: number | null;
+  reservesNpr: number | null;
+  retainedEarningsNpr: number | null;
+  totalLiabilitiesNpr: number | null;
+  currentLiabilitiesNpr: number | null;
+  nonCurrentLiabilitiesNpr: number | null;
+  borrowingsNpr: number | null;
+  operatingCashFlowNpr: number | null;
+  investingCashFlowNpr: number | null;
+  financingCashFlowNpr: number | null;
+  freeCashFlowNpr: number | null;
+  netCashMovementNpr: number | null;
+};
+
+export type NepseQuarterlyReportRow = NepseStatementFigures & {
   fiscalYear: string;
   fiscalYearNepali: string | null;
   quarter: string;
-  eps: number | null;
   pe: number | null;
-  netProfitNpr: number | null;
   netWorthPerShareNpr: number | null;
   paidUpCapitalNpr: number | null;
   submittedDate: string | null;
@@ -20,22 +52,18 @@ export type NepseQuarterlyReportRow = {
   yoyProfitPct: number | null;
 };
 
-export type NepseAnnualReportRow = {
+export type NepseAnnualReportRow = NepseStatementFigures & {
   fiscalYear: string;
   fiscalYearNepali: string | null;
-  eps: number | null;
   pe: number | null;
-  netProfitNpr: number | null;
   netWorthPerShareNpr: number | null;
   paidUpCapitalNpr: number | null;
-  /** Merged from nepse_company_financials when ingested. */
-  revenueNpr: number | null;
-  operatingProfitNpr: number | null;
+  /** @deprecated Prefer totalAssetsNpr — kept for older consumers. */
   assetsNpr: number | null;
+  /** @deprecated Prefer totalLiabilitiesNpr */
   liabilitiesNpr: number | null;
+  /** @deprecated Prefer totalEquityNpr */
   equityNpr: number | null;
-  cashNpr: number | null;
-  borrowingsNpr: number | null;
   submittedDate: string | null;
   profitYoyPct: number | null;
   revenueYoyPct: number | null;

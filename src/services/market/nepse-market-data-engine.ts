@@ -15,7 +15,7 @@ import {
  */
 
 export type IngestResult = {
-  kind: "eod" | "news" | "fundamentals" | "eod_backfill";
+  kind: "eod" | "news" | "fundamentals" | "eod_backfill" | "statements";
   status: "ok" | "partial" | "error";
   items: number;
   message: string;
@@ -35,8 +35,10 @@ export function kathmanduTradeDate(now = new Date()): string {
 }
 
 async function logRun(sb: SupabaseClient, result: IngestResult, startedAt: Date): Promise<void> {
+  const kind =
+    result.kind === "eod_backfill" ? "eod" : result.kind === "statements" ? "statements" : result.kind;
   const { error } = await sb.from("nepse_ingestion_runs").insert({
-    kind: result.kind === "eod_backfill" ? "eod" : result.kind,
+    kind,
     status: result.status,
     items: result.items,
     message: result.message.slice(0, 500),
@@ -639,6 +641,279 @@ export async function ingestCompanyActions(sb: SupabaseClient): Promise<IngestRe
       status: "error",
       items: 0,
       message: error instanceof Error ? error.message : "Corporate actions ingest failed",
+    };
+  }
+  await logRun(sb, result, startedAt);
+  return result;
+}
+
+function statementRowChanged(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  keys: string[],
+): boolean {
+  for (const key of keys) {
+    const a = previous[key] == null ? null : Number(previous[key]);
+    const b = next[key] == null ? null : Number(next[key]);
+    if (a !== b && !(Number.isNaN(a) && Number.isNaN(b))) {
+      if (previous[key] !== next[key]) return true;
+    }
+    if (typeof previous[key] === "string" || typeof next[key] === "string") {
+      if ((previous[key] ?? null) !== (next[key] ?? null)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Ingest complete annual/quarterly financial statements from official NEPSE reports.
+ * Structured fiscalReport scalars always; PDF line items when text-extractable.
+ * Incremental: skips unchanged document fingerprints; archives prior values on restatement.
+ */
+export async function ingestCompanyStatements(
+  sb: SupabaseClient,
+  options?: {
+    securityLimit?: number;
+    pdfLimit?: number;
+    prioritize?: string[];
+    parsePdfs?: boolean;
+  },
+): Promise<IngestResult> {
+  const startedAt = new Date();
+  let result: IngestResult;
+  try {
+    const { fetchOfficialStatements } = await import("@/services/market/nepse-statements-provider");
+
+    const existingRes = await sb
+      .from("nepse_company_statements")
+      .select("symbol,period_key,report_id,document_path,document_hash,extraction_status,report_modified_at");
+    if (existingRes.error && /nepse_company_statements|schema cache|does not exist/i.test(existingRes.error.message)) {
+      // Soft-fail so the rest of the market cron keeps running until the migration is applied.
+      result = {
+        kind: "statements",
+        status: "partial",
+        items: 0,
+        message: `Statements table missing — apply migration 20260727120000_nepse_company_statements.sql (${existingRes.error.message})`,
+      };
+      await logRun(sb, result, startedAt);
+      return result;
+    }
+
+    const knownHashes = new Set<string>();
+    const skipKeys = new Set<string>();
+    for (const row of (existingRes.data as Record<string, unknown>[] | null) ?? []) {
+      const symbol = typeof row.symbol === "string" ? row.symbol : "";
+      const periodKey = typeof row.period_key === "string" ? row.period_key : "";
+      const reportId = typeof row.report_id === "string" ? row.report_id : "";
+      const documentPath = typeof row.document_path === "string" ? row.document_path : "";
+      const documentHash = typeof row.document_hash === "string" ? row.document_hash : "";
+      const status = typeof row.extraction_status === "string" ? row.extraction_status : "";
+      if (documentHash) knownHashes.add(documentHash);
+      // Skip PDF re-download only when this exact filing was already successfully parsed.
+      if (symbol && periodKey && reportId && status === "pdf_parsed") {
+        skipKeys.add(`${symbol}|${periodKey}|${reportId}|${documentPath}`);
+      }
+    }
+
+    const parsePdfs = options?.parsePdfs !== false;
+    const official = await fetchOfficialStatements({
+      securityLimit: options?.securityLimit ?? 160,
+      pdfLimit: options?.pdfLimit ?? 50,
+      prioritize: options?.prioritize ?? ["NABIL", "NICA", "GBIME", "UPPER", "API", "HIDCL", "NLIC", "SHIVM", "NRIC", "CHCL"],
+      parsePdfs,
+      concurrency: 3,
+      knownDocumentHashes: knownHashes,
+      skipPeriodKeys: parsePdfs ? skipKeys : undefined,
+    });
+
+    const now = new Date().toISOString();
+    const numericKeys = [
+      "revenue_npr",
+      "operating_revenue_npr",
+      "other_income_npr",
+      "gross_profit_npr",
+      "operating_profit_npr",
+      "ebitda_npr",
+      "ebit_npr",
+      "net_profit_npr",
+      "eps",
+      "diluted_eps",
+      "total_assets_npr",
+      "current_assets_npr",
+      "non_current_assets_npr",
+      "cash_npr",
+      "investments_npr",
+      "inventories_npr",
+      "receivables_npr",
+      "total_equity_npr",
+      "share_capital_npr",
+      "reserves_npr",
+      "retained_earnings_npr",
+      "total_liabilities_npr",
+      "current_liabilities_npr",
+      "non_current_liabilities_npr",
+      "borrowings_npr",
+      "operating_cash_flow_npr",
+      "investing_cash_flow_npr",
+      "financing_cash_flow_npr",
+      "free_cash_flow_npr",
+      "net_cash_movement_npr",
+      "paid_up_capital_npr",
+      "pe",
+      "net_worth_per_share_npr",
+    ] as const;
+
+    const symbols = [...new Set(official.map((row) => row.symbol))];
+    const existingByKey = new Map<string, Record<string, unknown>>();
+    for (let i = 0; i < symbols.length; i += 80) {
+      const chunk = symbols.slice(i, i + 80);
+      const existingFull = await sb.from("nepse_company_statements").select("*").in("symbol", chunk);
+      for (const row of (existingFull.data as Record<string, unknown>[] | null) ?? []) {
+        existingByKey.set(`${row.symbol}|${row.period_key}`, row);
+      }
+    }
+
+    const prefer = <T,>(next: T | null | undefined, prev: unknown): T | null => {
+      if (next != null && next !== "") return next as T;
+      if (prev == null || prev === "") return null;
+      return prev as T;
+    };
+
+    const upsertRows: Record<string, unknown>[] = official.map((row) => {
+      const prev = existingByKey.get(`${row.symbol}|${row.periodKey}`) ?? {};
+      const sameFiling =
+        prev.report_id === row.reportId &&
+        (prev.document_path ?? null) === (row.documentPath ?? null) &&
+        (row.documentHash == null || prev.document_hash == null || prev.document_hash === row.documentHash);
+      const mergeNulls = sameFiling || row.extractionStatus !== "pdf_parsed";
+      const pickNum = (next: number | null | undefined, key: string) =>
+        mergeNulls ? prefer(next ?? null, prev[key]) : (next ?? null);
+
+      return {
+        symbol: row.symbol,
+        period_key: row.periodKey,
+        period_type: row.periodType,
+        fiscal_year: row.fiscalYear,
+        fiscal_year_nepali: row.fiscalYearNepali,
+        quarter: row.quarter,
+        period_label: row.periodLabel,
+        report_id: row.reportId,
+        document_path: row.documentPath,
+        document_hash: prefer(row.documentHash, prev.document_hash),
+        submitted_date: row.submittedDate,
+        report_modified_at: row.reportModifiedAt,
+        revenue_npr: pickNum(row.fields.revenueNpr ?? null, "revenue_npr"),
+        operating_revenue_npr: pickNum(row.fields.operatingRevenueNpr ?? null, "operating_revenue_npr"),
+        other_income_npr: pickNum(row.fields.otherIncomeNpr ?? null, "other_income_npr"),
+        gross_profit_npr: pickNum(row.fields.grossProfitNpr ?? null, "gross_profit_npr"),
+        operating_profit_npr: pickNum(row.fields.operatingProfitNpr ?? null, "operating_profit_npr"),
+        ebitda_npr: pickNum(row.fields.ebitdaNpr ?? null, "ebitda_npr"),
+        ebit_npr: pickNum(row.fields.ebitNpr ?? null, "ebit_npr"),
+        net_profit_npr: pickNum(row.netProfitNpr ?? row.fields.netProfitNpr ?? null, "net_profit_npr"),
+        eps: pickNum(row.eps ?? row.fields.eps ?? null, "eps"),
+        diluted_eps: pickNum(row.dilutedEps ?? row.fields.dilutedEps ?? null, "diluted_eps"),
+        total_assets_npr: pickNum(row.fields.totalAssetsNpr ?? null, "total_assets_npr"),
+        current_assets_npr: pickNum(row.fields.currentAssetsNpr ?? null, "current_assets_npr"),
+        non_current_assets_npr: pickNum(row.fields.nonCurrentAssetsNpr ?? null, "non_current_assets_npr"),
+        cash_npr: pickNum(row.fields.cashNpr ?? null, "cash_npr"),
+        investments_npr: pickNum(row.fields.investmentsNpr ?? null, "investments_npr"),
+        inventories_npr: pickNum(row.fields.inventoriesNpr ?? null, "inventories_npr"),
+        receivables_npr: pickNum(row.fields.receivablesNpr ?? null, "receivables_npr"),
+        total_equity_npr: pickNum(row.fields.totalEquityNpr ?? null, "total_equity_npr"),
+        share_capital_npr: pickNum(row.fields.shareCapitalNpr ?? row.paidUpCapitalNpr ?? null, "share_capital_npr"),
+        reserves_npr: pickNum(row.fields.reservesNpr ?? null, "reserves_npr"),
+        retained_earnings_npr: pickNum(row.fields.retainedEarningsNpr ?? null, "retained_earnings_npr"),
+        total_liabilities_npr: pickNum(row.fields.totalLiabilitiesNpr ?? null, "total_liabilities_npr"),
+        current_liabilities_npr: pickNum(row.fields.currentLiabilitiesNpr ?? null, "current_liabilities_npr"),
+        non_current_liabilities_npr: pickNum(row.fields.nonCurrentLiabilitiesNpr ?? null, "non_current_liabilities_npr"),
+        borrowings_npr: pickNum(row.fields.borrowingsNpr ?? null, "borrowings_npr"),
+        operating_cash_flow_npr: pickNum(row.fields.operatingCashFlowNpr ?? null, "operating_cash_flow_npr"),
+        investing_cash_flow_npr: pickNum(row.fields.investingCashFlowNpr ?? null, "investing_cash_flow_npr"),
+        financing_cash_flow_npr: pickNum(row.fields.financingCashFlowNpr ?? null, "financing_cash_flow_npr"),
+        free_cash_flow_npr: pickNum(row.fields.freeCashFlowNpr ?? null, "free_cash_flow_npr"),
+        net_cash_movement_npr: pickNum(row.fields.netCashMovementNpr ?? null, "net_cash_movement_npr"),
+        paid_up_capital_npr: pickNum(row.paidUpCapitalNpr, "paid_up_capital_npr"),
+        pe: pickNum(row.pe, "pe"),
+        net_worth_per_share_npr: pickNum(row.netWorthPerShareNpr, "net_worth_per_share_npr"),
+        extraction_status:
+          row.extractionStatus === "structured_only" && prev.extraction_status === "pdf_parsed" && sameFiling
+            ? "pdf_parsed"
+            : row.extractionStatus,
+        source: row.source,
+        updated_at: now,
+      };
+    });
+
+    const revisions: Record<string, unknown>[] = [];
+    for (const next of upsertRows) {
+      const prev = existingByKey.get(`${next.symbol}|${next.period_key}`);
+      if (!prev) continue;
+      const changed =
+        statementRowChanged(prev, next, [...numericKeys, "document_hash", "report_id", "document_path"]) ||
+        (prev.report_id != null && next.report_id != null && prev.report_id !== next.report_id);
+      if (!changed) continue;
+      revisions.push({
+        symbol: next.symbol,
+        period_key: next.period_key,
+        previous_row: prev,
+        reason: "official_report_updated",
+        source: next.source,
+      });
+    }
+    for (let i = 0; i < revisions.length; i += 200) {
+      const { error } = await sb.from("nepse_company_statement_revisions").insert(revisions.slice(i, i + 200));
+      if (error) console.error("[nepse-engine] statement revision archive failed:", error.message);
+    }
+
+    let persisted = 0;
+    const failures: string[] = [];
+    for (let i = 0; i < upsertRows.length; i += 150) {
+      const chunk = upsertRows.slice(i, i + 150);
+      const { error } = await sb.from("nepse_company_statements").upsert(chunk, { onConflict: "symbol,period_key" });
+      if (error) failures.push(error.message);
+      else persisted += chunk.length;
+    }
+
+    // Keep legacy annual financials table in sync for CompanyFinancialsTable.
+    const annualLegacy = upsertRows
+      .filter((row) => row.period_type === "annual")
+      .map((row) => ({
+        symbol: row.symbol,
+        fiscal_year: row.fiscal_year,
+        period_label: row.period_label,
+        revenue_npr: row.revenue_npr,
+        operating_profit_npr: row.operating_profit_npr,
+        net_profit_npr: row.net_profit_npr,
+        reserves_npr: row.reserves_npr ?? row.total_equity_npr,
+        cash_npr: row.cash_npr,
+        borrowings_npr: row.borrowings_npr,
+        assets_npr: row.total_assets_npr,
+        liabilities_npr: row.total_liabilities_npr,
+        source: row.source,
+        updated_at: now,
+      }));
+    for (let i = 0; i < annualLegacy.length; i += 200) {
+      const { error } = await sb.from("nepse_company_financials").upsert(annualLegacy.slice(i, i + 200), {
+        onConflict: "symbol,fiscal_year",
+      });
+      if (error) failures.push(`legacy financials: ${error.message}`);
+    }
+
+    const parsed = upsertRows.filter((row) => row.extraction_status === "pdf_parsed").length;
+    result = {
+      kind: "statements",
+      status: failures.length === 0 ? "ok" : persisted > 0 ? "partial" : "error",
+      items: persisted,
+      message: failures.length
+        ? failures.slice(0, 3).join("; ")
+        : `Upserted ${persisted} statement periods (${parsed} PDF-parsed, ${revisions.length} revisions archived)`,
+    };
+  } catch (error) {
+    result = {
+      kind: "statements",
+      status: "error",
+      items: 0,
+      message: error instanceof Error ? error.message : "Statements ingest failed",
     };
   }
   await logRun(sb, result, startedAt);

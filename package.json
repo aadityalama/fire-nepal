@@ -37,7 +37,10 @@
     "revenue:backfill-membership": "node scripts/backfill-membership-revenue-events.mjs",
     "revenue:verify-membership": "node scripts/backfill-membership-revenue-events.mjs --verify-only",
     "nepse:backfill-eod": "node scripts/backfill-nepse-eod.mjs",
-    "nepse:ingest-fundamentals": "node scripts/ingest-nepse-fundamentals.mjs"
+    "nepse:ingest-fundamentals": "node scripts/ingest-nepse-fundamentals.mjs",
+    "nepse:ingest-statements": "npx tsx scripts/ingest-nepse-statements.ts",
+    "nepse:audit-statements": "node scripts/audit-nepse-statements.mjs",
+    "db:apply:nepse-statements": "node scripts/apply-nepse-company-statements-migration.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
@@ -64,6 +67,7 @@
     "sonner": "^2.0.7",
     "swr": "^2.4.1",
     "tesseract.js": "^7.0.0",
+    "unpdf": "^1.8.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -34,11 +34,13 @@ export function CompanyFinancialsTable({ rows }: { rows: NepseCompanyFinancialRo
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06]" data-testid="company-financials">
+    <div className="overflow-x-auto rounded-2xl border border-slate-200/70 [-webkit-overflow-scrolling:touch] dark:border-white/[0.06]" data-testid="company-financials">
       <table className="min-w-full text-left text-xs">
         <thead className="bg-slate-50/90 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:bg-white/[0.03] dark:text-zinc-500">
           <tr>
-            <th className="px-3 py-2.5">Line item</th>
+            <th className="sticky left-0 z-[2] bg-slate-50/95 px-3 py-2.5 shadow-[1px_0_0_rgba(148,163,184,0.25)] dark:bg-[#0a1713] dark:shadow-[1px_0_0_rgba(255,255,255,0.06)]">
+              Line item
+            </th>
             {columns.map((col, index) => (
               <th key={`${col.fiscalYear}-${index}`} className="px-3 py-2.5">
                 {col.periodLabel ?? col.fiscalYear}
@@ -49,9 +51,11 @@ export function CompanyFinancialsTable({ rows }: { rows: NepseCompanyFinancialRo
         <tbody>
           {LINE_ITEMS.map((item) => (
             <tr key={item.key} className="border-t border-slate-200/70 dark:border-white/[0.06]">
-              <td className="px-3 py-2.5 font-bold text-slate-800 dark:text-zinc-200">{item.label}</td>
+              <td className="sticky left-0 z-[1] bg-white px-3 py-2.5 font-bold text-slate-800 shadow-[1px_0_0_rgba(148,163,184,0.25)] dark:bg-[#071512] dark:text-zinc-200 dark:shadow-[1px_0_0_rgba(255,255,255,0.06)]">
+                {item.label}
+              </td>
               {columns.map((col, index) => (
-                <td key={`${item.key}-${index}`} className="px-3 py-2.5 tabular-nums text-slate-700 dark:text-zinc-300">
+                <td key={`${item.key}-${index}`} className="px-3 py-2.5 tabular-nums whitespace-nowrap text-slate-700 dark:text-zinc-300">
                   {formatFundamentalValue(col[item.key] as number | null, { style: "compactNpr" })}
                 </td>
               ))}

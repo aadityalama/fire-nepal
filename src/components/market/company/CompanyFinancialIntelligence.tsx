@@ -25,12 +25,15 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 type StatementKind = "income" | "balance" | "cashflow";
 
-const tableWrap = "overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06]";
+const tableWrap = "overflow-x-auto rounded-2xl border border-slate-200/70 dark:border-white/[0.06] [-webkit-overflow-scrolling:touch]";
 const theadCls =
   "bg-slate-50/90 text-[10px] font-black uppercase tracking-wider text-slate-500 dark:bg-white/[0.03] dark:text-zinc-500";
 const rowCls = "border-t border-slate-200/70 dark:border-white/[0.06]";
 const cellCls = "px-3 py-2.5 tabular-nums text-slate-700 dark:text-zinc-300 whitespace-nowrap";
-const labelCellCls = "px-3 py-2.5 font-bold text-slate-800 dark:text-zinc-200 whitespace-nowrap";
+const labelCellCls =
+  "sticky left-0 z-[1] bg-white px-3 py-2.5 font-bold text-slate-800 shadow-[1px_0_0_rgba(148,163,184,0.25)] dark:bg-[#071512] dark:text-zinc-200 dark:shadow-[1px_0_0_rgba(255,255,255,0.06)] whitespace-nowrap";
+const labelHeadCls =
+  "sticky left-0 z-[2] bg-slate-50/95 px-3 py-2.5 shadow-[1px_0_0_rgba(148,163,184,0.25)] dark:bg-[#0a1713] dark:shadow-[1px_0_0_rgba(255,255,255,0.06)]";
 const noteCls = "mt-3 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-zinc-500";
 
 function GrowthBadge({ value }: { value: number | null }) {
@@ -117,7 +120,7 @@ function StatementTable({ block }: { block: StatementBlock }) {
         <table className="min-w-full text-left text-xs">
           <thead className={theadCls}>
             <tr>
-              <th className="px-3 py-2.5">{block.title}</th>
+              <th className={labelHeadCls}>{block.title}</th>
               {block.periods.map((period) => (
                 <th key={period.id} className="px-3 py-2.5">
                   {period.label}
