@@ -29,12 +29,11 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { buildNepsePortfolioSummary } from "@/components/portfolio/nepse-portfolio/nepse-portfolio-metrics";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useCountUpNumber } from "@/hooks/useCountUpNumber";
 import { useNepseAlerts } from "@/hooks/useNepseAlerts";
 import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
@@ -96,25 +95,6 @@ function SectionHeading({
       {action}
     </div>
   );
-}
-
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduced(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  return reduced;
-}
-
-/** Count-up integer that re-animates whenever the live feed pushes a new value. */
-function AnimatedCount({ value, className }: { value: number; className?: string }) {
-  const reduced = usePrefersReducedMotion();
-  const display = useCountUpNumber(value, { durationMs: 800, skipAnimation: reduced });
-  return <span className={className}>{Math.round(display).toLocaleString("en-IN")}</span>;
 }
 
 function relativeTime(iso: string | null): string {

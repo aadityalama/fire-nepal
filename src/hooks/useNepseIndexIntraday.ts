@@ -68,7 +68,7 @@ export function useNepseIndexIntraday(): State {
       const open = getKathmanduMarketStatus().live;
       return window.setTimeout(() => setTick((n) => n + 1), open ? OPEN_POLL_MS : CLOSED_POLL_MS);
     };
-    let timer = schedule();
+    const timer = schedule();
     const onVisibility = () => {
       if (document.visibilityState === "visible") setTick((n) => n + 1);
     };
