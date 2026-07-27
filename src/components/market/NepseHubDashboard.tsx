@@ -274,6 +274,28 @@ function Header({
   );
 }
 
+function heroChangeTone(changePts: number | undefined, changePct: number | undefined): "up" | "down" | "flat" | "unknown" {
+  const signal = changePts ?? changePct;
+  if (signal == null || !Number.isFinite(signal)) return "unknown";
+  if (signal > 0) return "up";
+  if (signal < 0) return "down";
+  return "flat";
+}
+
+function formatSignedPts(value: number): string {
+  const abs = Math.abs(value).toFixed(2);
+  if (value > 0) return `+${abs}`;
+  if (value < 0) return `-${abs}`;
+  return abs;
+}
+
+function formatSignedPct(value: number): string {
+  const abs = Math.abs(value).toFixed(2);
+  if (value > 0) return `+${abs}`;
+  if (value < 0) return `-${abs}`;
+  return abs;
+}
+
 function Hero({
   index,
   turnover,
@@ -283,7 +305,7 @@ function Hero({
   onRefresh,
   refreshing,
 }: {
-  index: { value: number; changePct?: number; name?: string } | undefined;
+  index: { value: number; changePts?: number; changePct?: number; name?: string } | undefined;
   turnover: number;
   volume: number;
   trades: number;
@@ -292,8 +314,13 @@ function Hero({
   refreshing: boolean;
 }) {
   const status = getKathmanduMarketStatus();
-  const change = index?.changePct;
-  const positive = (change ?? 0) >= 0;
+  const changePts = index?.changePts;
+  const changePct = index?.changePct;
+  const tone = heroChangeTone(changePts, changePct);
+  const positive = tone !== "down";
+  const changeColor =
+    tone === "up" ? "text-emerald-300" : tone === "down" ? "text-rose-300" : tone === "flat" ? "text-slate-300" : "text-emerald-100/55";
+  const arrow = tone === "up" ? "▲" : tone === "down" ? "▼" : null;
   const reduced = usePrefersReducedMotion();
   const animatedIndex = useCountUpNumber(index?.value ?? 0, { durationMs: 900, skipAnimation: reduced });
   return (
@@ -301,9 +328,9 @@ function Hero({
       <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
       <div className="pointer-events-none absolute -right-9 -top-14 h-40 w-40 rounded-full border border-white/[0.05]" />
       <div className="relative grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
                   {index?.name ?? "NEPSE Index"}
@@ -324,9 +351,29 @@ function Hero({
               <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
                 {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <div className={`mt-2 flex items-center gap-2 text-sm font-extrabold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
-                {positive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{change == null ? "Change unavailable" : `${positive ? "+" : ""}${change.toFixed(2)}% today`}</span>
+              <div className={`mt-2 flex min-w-0 flex-col gap-0.5 font-extrabold leading-snug ${changeColor}`} aria-live="polite">
+                {changePts == null && changePct == null ? (
+                  <span className="text-sm text-emerald-100/55">Change unavailable</span>
+                ) : (
+                  <>
+                    {changePts != null ? (
+                      <p className="flex min-w-0 items-baseline gap-1.5 text-[0.95rem] sm:text-[1.05rem]">
+                        {arrow ? <span className="shrink-0 text-[0.85em]" aria-hidden>{arrow}</span> : null}
+                        <span className="truncate tabular-nums">
+                          {formatSignedPts(changePts)} pts
+                        </span>
+                      </p>
+                    ) : null}
+                    {changePct != null ? (
+                      <p className="flex min-w-0 items-baseline gap-1.5 text-[0.8rem] opacity-95 sm:text-[0.88rem]">
+                        {arrow ? <span className="shrink-0 text-[0.85em]" aria-hidden>{arrow}</span> : null}
+                        <span className="truncate tabular-nums">
+                          {formatSignedPct(changePct)}% today
+                        </span>
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
             <button

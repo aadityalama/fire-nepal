@@ -212,7 +212,26 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
     const nepseRow = indices.find((row) => /nepse/i.test(row.name) && !/sensitive|float/i.test(row.name));
     const fallback = nepseRow ?? indices.find((row) => /nepse/i.test(row.name)) ?? indices[0];
     if (fallback?.value != null) {
-      index = { name: fallback.name.includes("NEPSE") ? "NEPSE" : fallback.name, value: fallback.value, changePct: fallback.changePct ?? undefined };
+      // Prefer official feed point change; derive from previous close only when the feed omits it.
+      let changePts = fallback.changeNpr ?? undefined;
+      if (changePts == null && fallback.previousClose != null && Number.isFinite(fallback.previousClose)) {
+        changePts = fallback.value - fallback.previousClose;
+      }
+      let changePct = fallback.changePct ?? undefined;
+      if (
+        changePct == null &&
+        changePts != null &&
+        fallback.previousClose != null &&
+        fallback.previousClose > 0
+      ) {
+        changePct = (changePts / fallback.previousClose) * 100;
+      }
+      index = {
+        name: fallback.name.includes("NEPSE") ? "NEPSE" : fallback.name,
+        value: fallback.value,
+        changePts,
+        changePct,
+      };
     }
   }
 
