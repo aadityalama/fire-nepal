@@ -8,7 +8,9 @@ export {
 export {
   formatBsDate,
   formatBsDateCompact,
+  formatBsDateHeroLine,
   formatBsDateParts,
+  formatMarketAsOfBsTimestamp,
   getSmartNepalDayInfo,
   pickLocalizedLabel,
   resolveBarStatus,

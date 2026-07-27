@@ -49,6 +49,10 @@ export function formatCompactNpr(value: number | null | undefined): string {
   return `रु ${Math.round(value).toLocaleString("en-IN")}`;
 }
 
+/** Official NEPSE continuous trading window (Kathmandu): 11:00–15:00, Sun–Thu. */
+export const NEPSE_MARKET_OPEN_LABEL = "Opens at 11:00 AM";
+export const NEPSE_MARKET_CLOSE_LABEL = "Open until 3:00 PM";
+
 export function getKathmanduMarketStatus(now = new Date()): {
   label: "Open" | "Closed" | "Pre-open";
   live: boolean;
@@ -72,6 +76,19 @@ export function getKathmanduMarketStatus(now = new Date()): {
     return { label: "Open", live: true };
   }
   return { label: "Closed", live: false };
+}
+
+/** Premium hero panel status derived from official NEPSE trading hours. */
+export function getKathmanduMarketPanelStatus(now = new Date()): {
+  open: boolean;
+  headline: "MARKET OPEN" | "MARKET CLOSED";
+  detail: string;
+} {
+  const status = getKathmanduMarketStatus(now);
+  if (status.live) {
+    return { open: true, headline: "MARKET OPEN", detail: NEPSE_MARKET_CLOSE_LABEL };
+  }
+  return { open: false, headline: "MARKET CLOSED", detail: NEPSE_MARKET_OPEN_LABEL };
 }
 
 export function countCircuitStocks(

@@ -116,6 +116,37 @@ export function formatBsDateParts(info: SmartNepalDayInfo, locale: "en" | "np"):
   };
 }
 
+/** Full Nepali BS line: e.g. २०८३ श्रावण १० आइतबार */
+export function formatBsDateHeroLine(referenceDate: Date = new Date()): string {
+  const info = getSmartNepalDayInfo(referenceDate);
+  const nepaliDate = new NepaliDate(info.bsDate.year, info.bsDate.month - 1, info.bsDate.day);
+  return nepaliDate.format("YYYY MMMM D ddd", "np");
+}
+
+/**
+ * Market "As of" stamp: BS YYYY-MM-DD + Kathmandu HH:mm:ss from the update timestamp.
+ * Example: 2083-04-10 15:00:00
+ */
+export function formatMarketAsOfBsTimestamp(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : new Date();
+  const safe = Number.isNaN(date.getTime()) ? new Date() : date;
+  const info = getSmartNepalDayInfo(safe);
+  const yyyy = String(info.bsDate.year).padStart(4, "0");
+  const mm = String(info.bsDate.month).padStart(2, "0");
+  const dd = String(info.bsDate.day).padStart(2, "0");
+  const timeParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kathmandu",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(safe);
+  const hour = timeParts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = timeParts.find((part) => part.type === "minute")?.value ?? "00";
+  const second = timeParts.find((part) => part.type === "second")?.value ?? "00";
+  return `${yyyy}-${mm}-${dd} ${hour}:${minute}:${second}`;
+}
+
 export function pickLocalizedLabel(label: LocalizedLabel | null, locale: "en" | "np"): string | null {
   if (!label) {
     return null;

@@ -45,10 +45,11 @@ import {
   countCircuitStocks,
   deriveMarketSentiment,
   formatCompactNpr,
-  getKathmanduMarketStatus,
+  getKathmanduMarketPanelStatus,
   NEPSE_NEWS_SOURCES,
   NEPSE_SERVICE_ITEMS,
 } from "@/lib/market/nepse-hub";
+import { formatBsDateHeroLine, formatMarketAsOfBsTimestamp } from "@/lib/smart-nepal-info";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 import type { NepseSecurityTick } from "@/types/market";
 import { NepseMarketChart } from "./NepseMarketChart";
@@ -274,6 +275,69 @@ function Header({
   );
 }
 
+function useLiveMarketPanelClock(tickMs = 30_000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), tickMs);
+    return () => window.clearInterval(timer);
+  }, [tickMs]);
+  return now;
+}
+
+function HeroDateMarketPanel({ fetchedAt }: { fetchedAt?: string }) {
+  const now = useLiveMarketPanelClock();
+  const panel = getKathmanduMarketPanelStatus(now);
+  const bsLine = formatBsDateHeroLine(now);
+  const asOf = formatMarketAsOfBsTimestamp(fetchedAt);
+
+  return (
+    <div className="min-w-0 w-full text-right sm:w-auto sm:max-w-[15.5rem] sm:flex-1">
+      <p
+        className="truncate text-[11px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[12px]"
+        title={bsLine}
+      >
+        {bsLine}
+      </p>
+      <p className="mt-0.5 truncate text-[9px] font-semibold tabular-nums text-emerald-100/50 sm:text-[10px]">
+        As of {asOf}
+      </p>
+      <div
+        className={`mt-2 inline-flex max-w-full flex-col items-end rounded-xl border px-2.5 py-1.5 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-3 ${
+          panel.open
+            ? "border-emerald-400/35 bg-emerald-400/12"
+            : "border-rose-400/30 bg-rose-400/[0.12]"
+        }`}
+        aria-live="polite"
+      >
+        <p
+          className={`flex max-w-full items-center justify-end gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] sm:text-[10px] ${
+            panel.open ? "text-emerald-200" : "text-rose-200"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              panel.open ? "animate-pulse bg-emerald-300" : "bg-rose-300"
+            }`}
+            aria-hidden
+          />
+          <span className="min-w-0 truncate">
+            <span aria-hidden>{panel.open ? "🟢" : "🔴"} </span>
+            {panel.headline}
+          </span>
+        </p>
+        <p
+          className={`mt-0.5 max-w-full truncate text-[9px] font-semibold sm:text-[10px] ${
+            panel.open ? "text-emerald-100/70" : "text-rose-100/65"
+          }`}
+        >
+          {panel.detail}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Hero({
   index,
   turnover,
@@ -291,7 +355,6 @@ function Hero({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
-  const status = getKathmanduMarketStatus();
   const change = index?.changePct;
   const positive = (change ?? 0) >= 0;
   const reduced = usePrefersReducedMotion();
@@ -301,42 +364,41 @@ function Hero({
       <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
       <div className="pointer-events-none absolute -right-9 -top-14 h-40 w-40 rounded-full border border-white/[0.05]" />
       <div className="relative grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-        <div>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
                   {index?.name ?? "NEPSE Index"}
                 </p>
-                <Link
-                  href="/market/breadth/all-listed"
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider transition hover:brightness-110 ${
-                    status.live
-                      ? "border-emerald-400/30 bg-emerald-400/12 text-emerald-300"
-                      : "border-amber-300/20 bg-amber-300/10 text-amber-200"
-                  }`}
-                  aria-label={`NEPSE market ${status.label.toLowerCase()} — view all listed companies`}
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:hidden"
+                  aria-label="Refresh market data"
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${status.live ? "animate-pulse bg-emerald-300" : "bg-amber-300"}`} />
-                  {status.label}
-                </Link>
+                  <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                </button>
               </div>
               <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
                 {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <div className={`mt-2 flex items-center gap-2 text-sm font-extrabold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
-                {positive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                <span>{change == null ? "Change unavailable" : `${positive ? "+" : ""}${change.toFixed(2)}% today`}</span>
+              <div className={`mt-2 flex min-w-0 items-center gap-2 text-sm font-extrabold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
+                {positive ? <TrendingUp size={16} className="shrink-0" /> : <TrendingDown size={16} className="shrink-0" />}
+                <span className="min-w-0 truncate">{change == null ? "Change unavailable" : `${positive ? "+" : ""}${change.toFixed(2)}% today`}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white"
-              aria-label="Refresh market data"
-            >
-              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-            </button>
+            <div className="flex min-w-0 items-start justify-end gap-2 sm:max-w-[16.5rem]">
+              <HeroDateMarketPanel fetchedAt={fetchedAt} />
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:grid"
+                aria-label="Refresh market data"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              </button>
+            </div>
           </div>
           <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/[0.07] pt-4">
             {[
