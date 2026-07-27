@@ -1328,3 +1328,72 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-fire-score-inner {
     transition: none !important;
   }
 }
+
+/* ── NEPSE Hub: increase all typography by exactly 20% (font-size only) ── */
+.nepse-hub-root {
+  --nepse-type-scale: 1.2;
+  /* Inherited baseline for elements without an explicit text-* size */
+  font-size: calc(1em * var(--nepse-type-scale));
+  /* Scale Tailwind v4 named text tokens for this subtree only */
+  --text-xs: calc(0.75rem * var(--nepse-type-scale));
+  --text-sm: calc(0.875rem * var(--nepse-type-scale));
+  --text-base: calc(1rem * var(--nepse-type-scale));
+  --text-lg: calc(1.125rem * var(--nepse-type-scale));
+  --text-xl: calc(1.25rem * var(--nepse-type-scale));
+  --text-2xl: calc(1.5rem * var(--nepse-type-scale));
+  --text-3xl: calc(1.875rem * var(--nepse-type-scale));
+  --text-4xl: calc(2.25rem * var(--nepse-type-scale));
+  --text-5xl: calc(3rem * var(--nepse-type-scale));
+  --text-6xl: calc(3.75rem * var(--nepse-type-scale));
+  --text-7xl: calc(4.5rem * var(--nepse-type-scale));
+  --text-8xl: calc(6rem * var(--nepse-type-scale));
+  --text-9xl: calc(8rem * var(--nepse-type-scale));
+}
+
+/* Arbitrary text-[…] utilities used across NEPSE Hub (px + rem) */
+.nepse-hub-root .text-\[8px\] {
+  font-size: calc(8px * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[9px\] {
+  font-size: calc(9px * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[10px\] {
+  font-size: calc(10px * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[11px\] {
+  font-size: calc(11px * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[12px\] {
+  font-size: calc(12px * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[2\.25rem\] {
+  font-size: calc(2.25rem * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[2\.4rem\] {
+  font-size: calc(2.4rem * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[3\.25rem\] {
+  font-size: calc(3.25rem * var(--nepse-type-scale));
+}
+.nepse-hub-root .text-\[3\.4rem\] {
+  font-size: calc(3.4rem * var(--nepse-type-scale));
+}
+
+@media (min-width: 640px) {
+  .nepse-hub-root .sm\:text-\[3\.25rem\] {
+    font-size: calc(3.25rem * var(--nepse-type-scale));
+  }
+  .nepse-hub-root .sm\:text-\[3\.4rem\] {
+    font-size: calc(3.4rem * var(--nepse-type-scale));
+  }
+}
+
+/* Mobile numeric inputs force 18px; keep the same +20% inside NEPSE Hub */
+@media (max-width: 767px) {
+  .nepse-hub-root .fn-mobile-numeric-input,
+  .nepse-hub-root input[type="number"],
+  .nepse-hub-root input[inputmode="numeric"],
+  .nepse-hub-root input[inputmode="decimal"] {
+    font-size: calc(18px * var(--nepse-type-scale)) !important;
+  }
+}
