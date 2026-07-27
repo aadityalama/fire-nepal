@@ -12,11 +12,13 @@ import {
   ingestMarketNews,
 } from "@/services/market/nepse-market-data-engine";
 import { ingestIndexEod } from "@/services/market/nepse-index-eod";
+import { ingestIndexComposition } from "@/services/market/nepse-index-composition";
 
 /**
  * Vercel Cron (after NEPSE close):
  * 1) Snapshot today's validated live quotes into `nepse_eod_prices`
- * 2) Snapshot NEPSE / Sensitive / sector index closes into `nepse_index_eod`
+ * 2) Snapshot NEPSE / Sensitive / Float / sector index closes into `nepse_index_eod`
+ * 2b) Refresh official index→company membership into `nepse_index_constituents`
  * 3) Backfill multi-day OHLC for symbols still short on history
  * 4) Aggregate configured news feeds + company disclosures + exchange notices into `nepse_market_news`
  * 5) Refresh fundamentals from filings
@@ -87,6 +89,10 @@ export async function GET(request: Request) {
     url.searchParams.get("indices") !== "0"
       ? await ingestIndexEod(sb)
       : { kind: "eod" as const, status: "ok" as const, items: 0, message: "Skipped (indices=0)" };
+  const indexComposition =
+    url.searchParams.get("indexComposition") !== "0"
+      ? await ingestIndexComposition(sb)
+      : { kind: "eod" as const, status: "ok" as const, items: 0, message: "Skipped (indexComposition=0)" };
   const backfill = wantBackfill
     ? await backfillEodHistory(sb, { symbolLimit, prioritize: priority, minBars: 60 })
     : { kind: "eod_backfill" as const, status: "ok" as const, items: 0, message: "Skipped (backfill=0)" };
@@ -123,6 +129,7 @@ export async function GET(request: Request) {
     companyMaster.status !== "error" &&
     eod.status !== "error" &&
     indexEod.status !== "error" &&
+    indexComposition.status !== "error" &&
     news.status !== "error" &&
     disclosures.status !== "error" &&
     actions.status !== "error" &&
@@ -133,7 +140,20 @@ export async function GET(request: Request) {
   // indexEod / statements may be "partial" when a migration is not yet applied — do not fail the whole cron
   // unless status is hard error.
   return NextResponse.json(
-    { ok, companyMaster, eod, indexEod, backfill, fundamentals, statements, news, disclosures, actions, ownership },
+    {
+      ok,
+      companyMaster,
+      eod,
+      indexEod,
+      indexComposition,
+      backfill,
+      fundamentals,
+      statements,
+      news,
+      disclosures,
+      actions,
+      ownership,
+    },
     { status: ok ? 200 : 500 },
   );
 }

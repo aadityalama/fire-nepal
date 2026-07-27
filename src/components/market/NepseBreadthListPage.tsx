@@ -18,6 +18,7 @@ import {
   sortNepseTicks,
   type NepseBreadthCategory,
 } from "@/lib/market/nepse-breadth";
+import { NEPSE_MARKET_INDEX_OPTIONS } from "@/lib/market/nepse-market-indices";
 import { formatCompactNpr } from "@/lib/market/nepse-hub";
 import { useRealtimeMarket } from "@/providers/realtime-provider";
 import type { NepseSecurityTick } from "@/types/market";
@@ -105,16 +106,35 @@ function usePullToRefresh(onRefresh: () => void, refreshing: boolean) {
 
 type RankedTick = NepseSecurityTick & { rank: number };
 
+type IndexCompositionResponse = {
+  indexKey: string;
+  indexName: string;
+  companyCount: number;
+  symbols: string[];
+  totalMarketCapNpr: number | null;
+  lastUpdated: string | null;
+  membershipSource: string;
+  options?: { key: string; displayName: string }[];
+};
+
 export function NepseBreadthListPage({ category }: { category: NepseBreadthCategory }) {
   const meta = getBreadthCategoryMeta(category);
   const { snapshot, status, error, reload } = useRealtimeMarket();
   const defaultSort = useMemo(() => getDefaultSortForBreadth(category), [category]);
+  const showIndexFilter = category === "all-listed";
 
   const [query, setQuery] = useState("");
+  const [indexFilter, setIndexFilter] = useState("ALL_LISTED");
   const [sectorFilter, setSectorFilter] = useState("");
   const [sortKey, setSortKey] = useState<NepseTableSortKey>(defaultSort.key);
   const [sortDir, setSortDir] = useState<NepseSortDirection>(defaultSort.direction);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [indexMembership, setIndexMembership] = useState<Set<string> | null>(null);
+  const [indexMeta, setIndexMeta] = useState<IndexCompositionResponse | null>(null);
+  const [indexLoading, setIndexLoading] = useState(false);
+  const [indexOptions, setIndexOptions] = useState(
+    NEPSE_MARKET_INDEX_OPTIONS.map((row) => ({ key: row.key, displayName: row.displayName })),
+  );
 
   const pullDistance = usePullToRefresh(reload, status === "loading");
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -123,24 +143,65 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
     setSortKey(defaultSort.key);
     setSortDir(defaultSort.direction);
     setQuery("");
+    setIndexFilter("ALL_LISTED");
     setSectorFilter("");
     setVisibleCount(PAGE_SIZE);
   }, [category, defaultSort.direction, defaultSort.key]);
+
+  useEffect(() => {
+    if (!showIndexFilter) {
+      setIndexMembership(null);
+      setIndexMeta(null);
+      return;
+    }
+    let cancelled = false;
+    setIndexLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/market/nepse/index-composition?index=${encodeURIComponent(indexFilter)}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = (await response.json()) as IndexCompositionResponse;
+        if (cancelled) return;
+        setIndexMeta(payload);
+        setIndexMembership(new Set((payload.symbols ?? []).map((symbol) => symbol.toUpperCase())));
+        if (payload.options?.length) setIndexOptions(payload.options);
+      } catch {
+        if (!cancelled) {
+          setIndexMembership(indexFilter === "ALL_LISTED" ? null : new Set());
+          setIndexMeta(null);
+        }
+      } finally {
+        if (!cancelled) setIndexLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [indexFilter, showIndexFilter]);
 
   const ticks = useMemo(() => Object.values(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
 
   const categoryRows = useMemo(() => filterCompaniesByBreadth(ticks, category), [ticks, category]);
 
-  const rankedByDefault = useMemo(() => {
-    const sorted = sortNepseTicks(categoryRows, defaultSort.key, defaultSort.direction);
-    return new Map(sorted.map((tick, index) => [tick.symbol, index + 1]));
-  }, [categoryRows, defaultSort.direction, defaultSort.key]);
+  const indexFilteredRows = useMemo(() => {
+    if (!showIndexFilter || !indexFilter || indexFilter === "ALL_LISTED" || !indexMembership) {
+      return categoryRows;
+    }
+    return categoryRows.filter((tick) => indexMembership.has(tick.symbol.toUpperCase()));
+  }, [categoryRows, indexFilter, indexMembership, showIndexFilter]);
 
-  const sectors = useMemo(() => collectSectors(categoryRows), [categoryRows]);
+  const rankedByDefault = useMemo(() => {
+    const sorted = sortNepseTicks(indexFilteredRows, defaultSort.key, defaultSort.direction);
+    return new Map(sorted.map((tick, index) => [tick.symbol, index + 1]));
+  }, [indexFilteredRows, defaultSort.direction, defaultSort.key]);
+
+  const sectors = useMemo(() => collectSectors(indexFilteredRows), [indexFilteredRows]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    let list = categoryRows;
+    let list = indexFilteredRows;
     if (sectorFilter) {
       list = list.filter((tick) => (tick.sector ?? "").trim() === sectorFilter);
     }
@@ -148,7 +209,7 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
       list = list.filter((tick) => `${tick.symbol} ${tick.companyName ?? ""}`.toLowerCase().includes(needle));
     }
     return sortNepseTicks(list, sortKey, sortDir);
-  }, [categoryRows, query, sectorFilter, sortDir, sortKey]);
+  }, [indexFilteredRows, query, sectorFilter, sortDir, sortKey]);
 
   const visibleRows: RankedTick[] = useMemo(
     () =>
@@ -159,9 +220,27 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
     [filtered, rankedByDefault, visibleCount],
   );
 
+  const indexSummary = useMemo(() => {
+    const selected = indexOptions.find((row) => row.key === indexFilter);
+    const name = indexMeta?.indexName ?? selected?.displayName ?? "All Listed";
+    const companyCount = filtered.length;
+    let totalMarketCap: number | null = null;
+    let anyCap = false;
+    let sum = 0;
+    for (const tick of filtered) {
+      if (tick.marketCap != null && Number.isFinite(tick.marketCap) && tick.marketCap > 0) {
+        sum += tick.marketCap;
+        anyCap = true;
+      }
+    }
+    totalMarketCap = anyCap ? sum : null;
+    const lastUpdated = indexMeta?.lastUpdated ?? snapshot?.fetchedAt ?? null;
+    return { name, companyCount, totalMarketCap, lastUpdated };
+  }, [filtered, indexFilter, indexMeta, indexOptions, snapshot?.fetchedAt]);
+
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, sectorFilter, sortDir, sortKey]);
+  }, [query, sectorFilter, sortDir, sortKey, indexFilter]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -188,8 +267,8 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
   };
 
   const fetchedAt = snapshot?.fetchedAt;
-  const lastUpdatedLabel = fetchedAt
-    ? new Date(fetchedAt).toLocaleString([], {
+  const lastUpdatedLabel = (indexSummary.lastUpdated ?? fetchedAt)
+    ? new Date(indexSummary.lastUpdated ?? fetchedAt!).toLocaleString([], {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -240,19 +319,30 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
         </header>
 
         <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-4 text-white shadow-[0_32px_90px_-40px_rgba(4,120,87,0.65)] sm:p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">Market breadth</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
+            {showIndexFilter ? "Market index" : "Market breadth"}
+          </p>
           <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-3xl font-black tabular-nums sm:text-4xl">{filtered.length.toLocaleString("en-IN")}</p>
+              <p className="text-lg font-black tracking-tight text-emerald-50 sm:text-xl">{indexSummary.name}</p>
+              <p className="mt-2 text-3xl font-black tabular-nums sm:text-4xl">
+                {indexSummary.companyCount.toLocaleString("en-IN")}
+              </p>
               <p className="mt-1 text-xs font-semibold text-emerald-100/70">
-                {filtered.length === categoryRows.length
-                  ? "companies in this bucket"
-                  : `${filtered.length} of ${categoryRows.length} companies shown`}
+                {indexLoading
+                  ? "Loading official index membership…"
+                  : filtered.length === categoryRows.length
+                    ? "companies in this view"
+                    : `${filtered.length.toLocaleString("en-IN")} of ${categoryRows.length.toLocaleString("en-IN")} companies shown`}
               </p>
             </div>
-            <p className="text-right text-[10px] font-semibold text-emerald-100/45">
-              Last updated {lastUpdatedLabel}
-            </p>
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/45">Total market cap</p>
+              <p className="mt-1 text-lg font-black tabular-nums text-emerald-50">
+                {indexSummary.totalMarketCap != null ? formatCompactNpr(indexSummary.totalMarketCap) : "—"}
+              </p>
+              <p className="mt-2 text-[10px] font-semibold text-emerald-100/45">Last updated {lastUpdatedLabel}</p>
+            </div>
           </div>
           <p className="mt-3 max-w-2xl text-xs font-medium leading-relaxed text-emerald-50/60">{meta.description}</p>
         </section>
@@ -264,8 +354,12 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
         ) : null}
 
         <section className={`${card} mt-4 p-3 sm:p-4`}>
-          <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem]">
-            <div className="relative">
+          <div
+            className={`grid gap-2 ${
+              showIndexFilter ? "sm:grid-cols-2 lg:grid-cols-[1fr_12rem_10rem_10rem]" : "sm:grid-cols-[1fr_10rem_10rem]"
+            }`}
+          >
+            <div className={`relative ${showIndexFilter ? "sm:col-span-2 lg:col-span-1" : ""}`}>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
               <input
                 value={query}
@@ -275,38 +369,71 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
                 aria-label="Search companies"
               />
             </div>
-            <select
-              value={sectorFilter}
-              onChange={(event) => setSectorFilter(event.target.value)}
-              className={inputClass}
-              aria-label="Filter by sector"
-            >
-              <option value="">All sectors</option>
-              {sectors.map((sector) => (
-                <option key={sector} value={sector}>
-                  {sector}
-                </option>
-              ))}
-            </select>
-            <select
-              value={`${sortKey}:${sortDir}`}
-              onChange={(event) => {
-                const [key, dir] = event.target.value.split(":") as [NepseTableSortKey, NepseSortDirection];
-                setSortKey(key);
-                setSortDir(dir);
-              }}
-              className={inputClass}
-              aria-label="Sort companies"
-            >
-              {SORT_OPTIONS.flatMap((option) => [
-                <option key={`${option.key}:asc`} value={`${option.key}:asc`}>
-                  {option.label} ↑
-                </option>,
-                <option key={`${option.key}:desc`} value={`${option.key}:desc`}>
-                  {option.label} ↓
-                </option>,
-              ])}
-            </select>
+            {showIndexFilter ? (
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-500">
+                  Market Index
+                </span>
+                <select
+                  value={indexFilter}
+                  onChange={(event) => setIndexFilter(event.target.value)}
+                  className={inputClass}
+                  aria-label="Filter by market index"
+                >
+                  {indexOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="block">
+              {showIndexFilter ? (
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-500">
+                  Sector
+                </span>
+              ) : null}
+              <select
+                value={sectorFilter}
+                onChange={(event) => setSectorFilter(event.target.value)}
+                className={inputClass}
+                aria-label="Filter by sector"
+              >
+                <option value="">All sectors</option>
+                {sectors.map((sector) => (
+                  <option key={sector} value={sector}>
+                    {sector}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              {showIndexFilter ? (
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-500">
+                  Sort
+                </span>
+              ) : null}
+              <select
+                value={`${sortKey}:${sortDir}`}
+                onChange={(event) => {
+                  const [key, dir] = event.target.value.split(":") as [NepseTableSortKey, NepseSortDirection];
+                  setSortKey(key);
+                  setSortDir(dir);
+                }}
+                className={inputClass}
+                aria-label="Sort companies"
+              >
+                {SORT_OPTIONS.flatMap((option) => [
+                  <option key={`${option.key}:asc`} value={`${option.key}:asc`}>
+                    {option.label} ↑
+                  </option>,
+                  <option key={`${option.key}:desc`} value={`${option.key}:desc`}>
+                    {option.label} ↓
+                  </option>,
+                ])}
+              </select>
+            </label>
           </div>
         </section>
 
@@ -485,7 +612,7 @@ export function NepseBreadthListPage({ category }: { category: NepseBreadthCateg
           {!filtered.length ? (
             <p className="p-10 text-center text-xs font-semibold text-slate-500">
               {categoryRows.length
-                ? "No companies match your search or sector filter."
+                ? "No companies match your market index, sector, or search filters."
                 : "Waiting for live quotes from the NEPSE feed."}
             </p>
           ) : null}

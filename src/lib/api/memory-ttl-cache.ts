@@ -19,5 +19,8 @@ export function createMemoryTtlCache() {
     set<T>(key: string, value: T, ttlMs: number) {
       store.set(key, { value, expiresAt: Date.now() + ttlMs });
     },
+    delete(key: string) {
+      store.delete(key);
+    },
   };
 }
