@@ -237,12 +237,29 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
     const nepseRow = indices.find((row) => /nepse/i.test(row.name) && !/sensitive|float/i.test(row.name));
     const fallback = nepseRow ?? indices.find((row) => /nepse/i.test(row.name)) ?? indices[0];
     if (fallback?.value != null) {
+      // Prefer derived point/% change from value vs previousClose when the feed
+      // publishes an inconsistent sign (common after the session print settles).
+      let changeNpr = fallback.changeNpr ?? undefined;
+      let changePct = fallback.changePct ?? undefined;
+      if (fallback.previousClose != null && Number.isFinite(fallback.previousClose)) {
+        const derived = fallback.value - fallback.previousClose;
+        if (
+          changeNpr == null ||
+          !Number.isFinite(changeNpr) ||
+          (Math.abs(derived) > 0.05 && Math.sign(derived) !== Math.sign(changeNpr) && Math.abs(Math.abs(derived) - Math.abs(changeNpr)) < 1)
+        ) {
+          changeNpr = derived;
+          changePct = fallback.previousClose > 0 ? (derived / fallback.previousClose) * 100 : changePct;
+        }
+      }
       index = {
         name: fallback.name.includes("NEPSE") ? "NEPSE" : fallback.name,
         value: fallback.value,
-        changePct: fallback.changePct ?? undefined,
-        changeNpr: fallback.changeNpr ?? undefined,
+        changePct,
+        changeNpr,
         previousClose: fallback.previousClose ?? undefined,
+        high: fallback.high ?? undefined,
+        low: fallback.low ?? undefined,
       };
     }
   }

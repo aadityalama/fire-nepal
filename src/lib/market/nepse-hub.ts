@@ -52,23 +52,68 @@ export function formatCompactNpr(value: number | null | undefined): string {
 /** Official NEPSE continuous trading window (Kathmandu): 11:00–15:00, Sun–Thu. */
 export const NEPSE_MARKET_OPEN_LABEL = "Opens at 11:00 AM";
 export const NEPSE_MARKET_CLOSE_LABEL = "Open until 3:00 PM";
+export const NEPSE_SESSION_OPEN_TIME = "11:00 AM";
+export const NEPSE_SESSION_CLOSE_TIME = "3:00 PM";
+
+function kathmanduParts(now: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kathmandu",
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "0";
+  return {
+    weekday: get("weekday"),
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    second: Number(get("second")),
+  };
+}
+
+function formatDurationHm(totalMinutes: number): string {
+  const safe = Math.max(0, Math.floor(totalMinutes));
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
+  return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+/** Next continuous-session open (11:00 NPT on a Sun–Thu). */
+function minutesUntilNextOpen(now: Date): number {
+  const k = kathmanduParts(now);
+  const minutesNow = k.hour * 60 + k.minute;
+  const openMinutes = 11 * 60;
+  const weekdayOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+  let weekdayIndex = weekdayOrder.indexOf(k.weekday as (typeof weekdayOrder)[number]);
+  if (weekdayIndex < 0) weekdayIndex = 0;
+
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const dayIndex = (weekdayIndex + offset) % 7;
+    const name = weekdayOrder[dayIndex]!;
+    if (name === "Fri" || name === "Sat") continue;
+    if (offset === 0 && minutesNow >= openMinutes) continue;
+    const dayMinutes = offset === 0 ? openMinutes - minutesNow : offset * 24 * 60 - minutesNow + openMinutes;
+    return dayMinutes;
+  }
+  return 0;
+}
 
 export function getKathmanduMarketStatus(now = new Date()): {
   label: "Open" | "Closed" | "Pre-open";
   live: boolean;
 } {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Kathmandu",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
-  const minutes = hour * 60 + minute;
-  const tradingDay = !["Fri", "Sat"].includes(weekday);
+  const k = kathmanduParts(now);
+  const minutes = k.hour * 60 + k.minute;
+  const tradingDay = !["Fri", "Sat"].includes(k.weekday);
   if (tradingDay && minutes >= 10 * 60 + 30 && minutes < 11 * 60) {
     return { label: "Pre-open", live: false };
   }
@@ -83,12 +128,37 @@ export function getKathmanduMarketPanelStatus(now = new Date()): {
   open: boolean;
   headline: "MARKET OPEN" | "MARKET CLOSED";
   detail: string;
+  sessionLabel: string;
+  sessionTime: string;
+  countdownLabel: string;
+  countdown: string;
 } {
   const status = getKathmanduMarketStatus(now);
+  const k = kathmanduParts(now);
+  const minutesNow = k.hour * 60 + k.minute;
+
   if (status.live) {
-    return { open: true, headline: "MARKET OPEN", detail: NEPSE_MARKET_CLOSE_LABEL };
+    const remaining = 15 * 60 - minutesNow;
+    return {
+      open: true,
+      headline: "MARKET OPEN",
+      detail: NEPSE_MARKET_CLOSE_LABEL,
+      sessionLabel: "Closes at",
+      sessionTime: NEPSE_SESSION_CLOSE_TIME,
+      countdownLabel: "Time Remaining",
+      countdown: formatDurationHm(remaining),
+    };
   }
-  return { open: false, headline: "MARKET CLOSED", detail: NEPSE_MARKET_OPEN_LABEL };
+
+  return {
+    open: false,
+    headline: "MARKET CLOSED",
+    detail: NEPSE_MARKET_OPEN_LABEL,
+    sessionLabel: "Next Session",
+    sessionTime: NEPSE_SESSION_OPEN_TIME,
+    countdownLabel: "Opens in",
+    countdown: formatDurationHm(minutesUntilNextOpen(now)),
+  };
 }
 
 export function countCircuitStocks(

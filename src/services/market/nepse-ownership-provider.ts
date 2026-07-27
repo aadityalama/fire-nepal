@@ -106,7 +106,22 @@ function num(value: unknown): number | null {
   return null;
 }
 
-export async function authenticateNepsePublicApi(): Promise<{ authorization: string; payloadId: number }> {
+function kathmanduDayOfMonth(now = new Date()): number {
+  const day = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kathmandu",
+    day: "2-digit",
+  })
+    .formatToParts(now)
+    .find((part) => part.type === "day")?.value;
+  return Number(day ?? now.getUTCDate());
+}
+
+export async function authenticateNepsePublicApi(): Promise<{
+  authorization: string;
+  payloadId: number;
+  /** Salt-adjusted payload id required by official index graph POST endpoints. */
+  indexGraphPayloadId: number;
+}> {
   const wasm = await loadWasm();
   const prove = await fetchJson<Record<string, unknown>>(`${ROOT}/api/authenticate/prove`);
   const access = parseAccessToken(prove, wasm);
@@ -118,10 +133,17 @@ export async function authenticateNepsePublicApi(): Promise<{ authorization: str
   if (!Number.isFinite(givenId) || givenId < 0 || givenId >= DUMMY_DATA.length) {
     throw new Error(`Unexpected NEPSE market-open id: ${market.id}`);
   }
-  const today = new Date().getDate();
-  // stock-live payload path: no salt adjustment (matches NEPSE frontend / yonepse).
-  const payloadId = DUMMY_DATA[givenId] + givenId + 2 * today;
-  return { authorization, payloadId };
+  const today = kathmanduDayOfMonth();
+  // stock-live / scrip-graph payload path: no salt adjustment (matches NEPSE frontend / yonepse).
+  const base = DUMMY_DATA[givenId] + givenId + 2 * today;
+  const salt1 = Number(prove.salt1);
+  const salt2 = Number(prove.salt2);
+  const salt3 = Number(prove.salt3);
+  const salt4 = Number(prove.salt4);
+  // Index-graph payload uses the same salt table NEPSE's own frontend applies.
+  const indexGraphPayloadId =
+    base % 10 < 5 ? base + salt4 * today - salt3 : base + salt2 * today - salt1;
+  return { authorization, payloadId: base, indexGraphPayloadId };
 }
 
 /**

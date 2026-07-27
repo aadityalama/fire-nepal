@@ -128,6 +128,19 @@ export function formatBsDateHeroLine(referenceDate: Date = new Date()): string {
  * Example: 2083-04-10 15:00:00
  */
 export function formatMarketAsOfBsTimestamp(iso: string | null | undefined): string {
+  const parts = formatMarketLastUpdatedParts(iso);
+  return `${parts.bsDate} ${parts.time24}`;
+}
+
+/**
+ * Split Last Updated stamp for the institutional hero.
+ * Example: { bsDate: "2083-04-11", time12: "03:00:00 PM", time24: "15:00:00" }
+ */
+export function formatMarketLastUpdatedParts(iso: string | null | undefined): {
+  bsDate: string;
+  time12: string;
+  time24: string;
+} {
   const date = iso ? new Date(iso) : new Date();
   const safe = Number.isNaN(date.getTime()) ? new Date() : date;
   const info = getSmartNepalDayInfo(safe);
@@ -141,10 +154,17 @@ export function formatMarketAsOfBsTimestamp(iso: string | null | undefined): str
     second: "2-digit",
     hourCycle: "h23",
   }).formatToParts(safe);
-  const hour = timeParts.find((part) => part.type === "hour")?.value ?? "00";
+  const hour24 = timeParts.find((part) => part.type === "hour")?.value ?? "00";
   const minute = timeParts.find((part) => part.type === "minute")?.value ?? "00";
   const second = timeParts.find((part) => part.type === "second")?.value ?? "00";
-  return `${yyyy}-${mm}-${dd} ${hour}:${minute}:${second}`;
+  const hourNum = Number(hour24);
+  const suffix = hourNum >= 12 ? "PM" : "AM";
+  const hour12 = hourNum % 12 === 0 ? 12 : hourNum % 12;
+  return {
+    bsDate: `${yyyy}-${mm}-${dd}`,
+    time12: `${String(hour12).padStart(2, "0")}:${minute}:${second} ${suffix}`,
+    time24: `${hour24}:${minute}:${second}`,
+  };
 }
 
 export function pickLocalizedLabel(label: LocalizedLabel | null, locale: "en" | "np"): string | null {
