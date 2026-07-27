@@ -15,6 +15,8 @@ export type ForexCross = {
 export type NepseIndexTick = {
   name: string;
   value: number;
+  /** Day change in index points from official NEPSE feed. */
+  changePts?: number;
   changePct?: number;
 };
 
