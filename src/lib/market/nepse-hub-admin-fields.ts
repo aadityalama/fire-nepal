@@ -33,7 +33,7 @@ export const NEPSE_HUB_ADMIN_DOMAIN_LABELS: Record<NepseHubAdminDomain, string> 
   ai: "AI Analysis",
   news: "News",
   market: "Market Data",
-  custom: "Custom / Future Fields",
+  custom: "Custom Fields",
 };
 
 export const NEPSE_HUB_ADMIN_FIELDS: Record<NepseHubAdminDomain, NepseHubAdminFieldDef[]> = {

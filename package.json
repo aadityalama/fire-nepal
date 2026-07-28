@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/membership-sync-architecture.test.mjs scripts/persistence-policy-regression.test.mjs scripts/security/*.test.mjs scripts/reminders-pipeline.test.mjs",
+    "test": "node --test scripts/membership-sync-architecture.test.mjs scripts/persistence-policy-regression.test.mjs scripts/security/*.test.mjs scripts/reminders-pipeline.test.mjs scripts/nepse-hub-admin-overrides.test.mjs",
     "test:reminders": "node --test scripts/reminders-pipeline.test.mjs",
     "test:security": "node --test scripts/security/*.test.mjs",
     "test:persistence": "node --test scripts/persistence-policy-regression.test.mjs",
@@ -40,7 +40,9 @@
     "nepse:ingest-fundamentals": "node scripts/ingest-nepse-fundamentals.mjs",
     "nepse:ingest-statements": "npx tsx scripts/ingest-nepse-statements.ts",
     "nepse:audit-statements": "node scripts/audit-nepse-statements.mjs",
-    "db:apply:nepse-statements": "node scripts/apply-nepse-company-statements-migration.mjs"
+    "db:apply:nepse-statements": "node scripts/apply-nepse-company-statements-migration.mjs",
+    "db:apply:nepse-hub-admin-overrides": "node scripts/apply-nepse-hub-admin-overrides-migration.mjs",
+    "test:nepse-hub-admin-overrides": "node --test scripts/nepse-hub-admin-overrides.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

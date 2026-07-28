@@ -15,6 +15,7 @@ export type NepseHubAdminOverrideRow = {
   note: string | null;
   updated_by: string;
   updated_by_email: string;
+  created_at?: string;
   updated_at: string;
 };
 
@@ -44,6 +45,14 @@ function wrapValue(value: unknown): { v: unknown } {
   return { v: value };
 }
 
+function isMissingOverridesRelation(message: string | undefined | null): boolean {
+  if (!message) return false;
+  return /nepse_hub_admin_overrides|nepse_hub_admin_audit_log|schema cache|does not exist/i.test(message);
+}
+
+const MISSING_TABLE_HINT =
+  "Database table public.nepse_hub_admin_overrides is missing from the PostgREST schema cache. Apply supabase/migrations/20260728030400_nepse_hub_admin_overrides_ensure.sql (npm run db:apply:nepse-hub-admin-overrides) then reload schema.";
+
 export function overrideMapKey(domain: string, recordKey: string, fieldKey: string): string {
   return `${domain}|${recordKey}|${fieldKey}`;
 }
@@ -59,7 +68,10 @@ export async function listOverridesForSymbol(
     .eq("symbol", symbol.toUpperCase())
     .order("updated_at", { ascending: false });
   if (error) {
-    if (/nepse_hub_admin_overrides|schema cache|does not exist/i.test(error.message)) return [];
+    if (isMissingOverridesRelation(error.message)) {
+      console.error("[nepse-hub-admin] listOverrides:", MISSING_TABLE_HINT, error.message);
+      return [];
+    }
     console.error("[nepse-hub-admin] listOverrides:", error.message);
     return [];
   }
@@ -79,7 +91,10 @@ export async function listAuditForSymbol(
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
-    if (/nepse_hub_admin_audit_log|schema cache|does not exist/i.test(error.message)) return [];
+    if (isMissingOverridesRelation(error.message)) {
+      console.error("[nepse-hub-admin] listAudit:", MISSING_TABLE_HINT, error.message);
+      return [];
+    }
     console.error("[nepse-hub-admin] listAudit:", error.message);
     return [];
   }
@@ -140,7 +155,7 @@ export async function setFieldOverride(input: {
   const fieldKey = input.fieldKey.trim();
   if (!symbol || !domain || !fieldKey) return { ok: false, error: "symbol, domain, and fieldKey are required" };
 
-  const { data: existing } = await sb
+  const { data: existing, error: existingError } = await sb
     .from("nepse_hub_admin_overrides")
     .select("*")
     .eq("symbol", symbol)
@@ -149,7 +164,12 @@ export async function setFieldOverride(input: {
     .eq("field_key", fieldKey)
     .maybeSingle();
 
-  const payload = {
+  if (existingError && isMissingOverridesRelation(existingError.message)) {
+    return { ok: false, error: MISSING_TABLE_HINT };
+  }
+
+  const now = new Date().toISOString();
+  const payload: Record<string, unknown> = {
     symbol,
     domain,
     record_key: recordKey,
@@ -162,8 +182,12 @@ export async function setFieldOverride(input: {
     note: input.note ?? null,
     updated_by: input.actorUserId,
     updated_by_email: input.actorEmail,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   };
+
+  // Insert when no override exists; update when one already exists.
+  // Prefer upsert on the unique key so concurrent saves still converge.
+  if (!existing) payload.created_at = now;
 
   const { data, error } = await sb
     .from("nepse_hub_admin_overrides")
@@ -171,9 +195,12 @@ export async function setFieldOverride(input: {
     .select("*")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (isMissingOverridesRelation(error.message)) return { ok: false, error: MISSING_TABLE_HINT };
+    return { ok: false, error: error.message };
+  }
 
-  await sb.from("nepse_hub_admin_audit_log").insert({
+  const { error: auditError } = await sb.from("nepse_hub_admin_audit_log").insert({
     symbol,
     domain,
     record_key: recordKey,
@@ -185,6 +212,9 @@ export async function setFieldOverride(input: {
     actor_email: input.actorEmail,
     note: input.note ?? null,
   });
+  if (auditError && !isMissingOverridesRelation(auditError.message)) {
+    console.error("[nepse-hub-admin] audit set:", auditError.message);
+  }
 
   return { ok: true, row: data as NepseHubAdminOverrideRow };
 }
@@ -207,7 +237,7 @@ export async function restoreFieldOverride(input: {
   const recordKey = (input.recordKey ?? "_").trim() || "_";
   const fieldKey = input.fieldKey.trim();
 
-  const { data: existing } = await sb
+  const { data: existing, error: existingError } = await sb
     .from("nepse_hub_admin_overrides")
     .select("*")
     .eq("symbol", symbol)
@@ -216,8 +246,13 @@ export async function restoreFieldOverride(input: {
     .eq("field_key", fieldKey)
     .maybeSingle();
 
+  if (existingError && isMissingOverridesRelation(existingError.message)) {
+    return { ok: false, error: MISSING_TABLE_HINT };
+  }
+
   if (!existing) return { ok: false, error: "No override for this field" };
 
+  // Delete the override so read paths fall back to the official ingested value.
   const { error } = await sb
     .from("nepse_hub_admin_overrides")
     .delete()
@@ -226,9 +261,12 @@ export async function restoreFieldOverride(input: {
     .eq("record_key", recordKey)
     .eq("field_key", fieldKey);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (isMissingOverridesRelation(error.message)) return { ok: false, error: MISSING_TABLE_HINT };
+    return { ok: false, error: error.message };
+  }
 
-  await sb.from("nepse_hub_admin_audit_log").insert({
+  const { error: auditError } = await sb.from("nepse_hub_admin_audit_log").insert({
     symbol,
     domain,
     record_key: recordKey,
@@ -240,6 +278,9 @@ export async function restoreFieldOverride(input: {
     actor_email: input.actorEmail,
     note: input.note ?? "Restore official data",
   });
+  if (auditError && !isMissingOverridesRelation(auditError.message)) {
+    console.error("[nepse-hub-admin] audit restore_field:", auditError.message);
+  }
 
   return { ok: true };
 }
@@ -258,9 +299,12 @@ export async function restoreCompanyOverrides(input: {
   const existing = await listOverridesForSymbol(symbol, sb);
 
   const { error } = await sb.from("nepse_hub_admin_overrides").delete().eq("symbol", symbol);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (isMissingOverridesRelation(error.message)) return { ok: false, error: MISSING_TABLE_HINT };
+    return { ok: false, error: error.message };
+  }
 
-  await sb.from("nepse_hub_admin_audit_log").insert({
+  const { error: auditError } = await sb.from("nepse_hub_admin_audit_log").insert({
     symbol,
     domain: "custom",
     record_key: "_",
@@ -272,6 +316,9 @@ export async function restoreCompanyOverrides(input: {
     actor_email: input.actorEmail,
     note: input.note ?? "Restore all official data for company",
   });
+  if (auditError && !isMissingOverridesRelation(auditError.message)) {
+    console.error("[nepse-hub-admin] audit restore_company:", auditError.message);
+  }
 
   return { ok: true, restored: existing.length };
 }
