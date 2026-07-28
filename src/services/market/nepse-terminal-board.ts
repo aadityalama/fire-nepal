@@ -219,9 +219,19 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   ]);
 
   const bySymbol = board?.bySymbol ?? cached?.bySymbol ?? {};
-  const term = Object.keys(bySymbol).length ? buildNepseTerminalSnapshot(bySymbol) : null;
+  const officialBreadth =
+    board && "officialBreadth" in board
+      ? (board as { officialBreadth?: { advancing: number; declining: number; unchanged: number; upperCircuit: number; lowerCircuit: number } })
+          .officialBreadth
+      : undefined;
+  const term = Object.keys(bySymbol).length
+    ? buildNepseTerminalSnapshot(bySymbol, {
+        summaryStats: board?.summaryStats ?? cached?.summaryStats,
+        officialBreadth,
+      })
+    : null;
   const clock = getKathmanduMarketStatus();
-  const feedIsOpen = board?.marketStatus.isOpen ?? null;
+  const feedIsOpen = board?.marketStatus.isOpen ?? cached?.marketStatus.isOpen ?? null;
   const ranges = await load52wRanges(bySymbol);
 
   const indices: TerminalIndexRow[] = [];
@@ -315,10 +325,10 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   }));
 
   const sources: string[] = [];
-  if (feedIndices.length) sources.push("Yonepse indices");
-  if (Object.keys(bySymbol).length) sources.push("Yonepse live board");
-  if (board?.topStocks.topGainers.length) sources.push("Yonepse top stocks");
-  if (board?.summaryStats.totalTurnoverNpr != null) sources.push("Yonepse market summary");
+  if (feedIndices.length) sources.push("nepalstock.com.np nepse-index");
+  if (Object.keys(bySymbol).length) sources.push("nepalstock.com.np securityDailyTradeStat");
+  if (board?.topStocks.topGainers.length) sources.push("nepalstock.com.np top-ten");
+  if (board?.summaryStats.totalTurnoverNpr != null) sources.push("nepalstock.com.np market-summary");
   if (ranges.nearHigh.length || ranges.nearLow.length) sources.push("nepse_eod_prices 52W ranges");
   if (brokers.topByTurnover.length) sources.push("Sharehub broker turnover");
 
@@ -327,14 +337,14 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
       label: feedIsOpen === true ? "Open" : feedIsOpen === false ? clock.label === "Pre-open" ? "Pre-open" : "Closed" : clock.label,
       live: feedIsOpen === true ? true : feedIsOpen === false ? false : clock.live,
       feedIsOpen,
-      checkedAt: board?.marketStatus.checkedAt ?? null,
+      checkedAt: board?.marketStatus.checkedAt ?? cached?.marketStatus.checkedAt ?? null,
     },
     indices,
     summary: {
-      totalTurnoverNpr: board?.summaryStats.totalTurnoverNpr ?? term?.totalTurnoverNpr ?? null,
-      totalVolume: board?.summaryStats.totalVolume ?? null,
-      totalTrades: board?.summaryStats.totalTrades ?? null,
-      scripsTraded: board?.summaryStats.scripsTraded ?? term?.totalsListed ?? null,
+      totalTurnoverNpr: board?.summaryStats.totalTurnoverNpr ?? cached?.summaryStats.totalTurnoverNpr ?? term?.totalTurnoverNpr ?? null,
+      totalVolume: board?.summaryStats.totalVolume ?? cached?.summaryStats.totalVolume ?? term?.totalVolume ?? null,
+      totalTrades: board?.summaryStats.totalTrades ?? cached?.summaryStats.totalTrades ?? term?.totalTrades ?? null,
+      scripsTraded: board?.summaryStats.scripsTraded ?? cached?.summaryStats.scripsTraded ?? term?.scripsTraded ?? term?.totalsListed ?? null,
       totalMarketCapNpr,
       marketCapCoverage,
     },

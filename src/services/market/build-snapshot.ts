@@ -1,7 +1,7 @@
 import { DEFAULT_BULLION_USD_PER_TROY_OZ } from "@/lib/market/bullion-estimate";
 import { fetchCoingeckoUsd } from "@/services/market/coingecko";
 import { fetchNprForexCross } from "@/services/market/forex-npr";
-import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
+import { getOfficialNepseBundleWithMeta } from "@/services/market/nepse-bundle-cache";
 import { buildNepseTerminalSnapshot } from "@/services/market/nepse-terminal";
 import { fetchYahooLast } from "@/services/market/yahoo-quotes";
 import type { MarketSnapshot, MarketSourceStatus, MetalSpotUsdOz } from "@/types/market";
@@ -25,6 +25,7 @@ function splitEquitySymbols(symbols: string[]): { usd: string[]; kr: string[] } 
 
 /**
  * Aggregates best-effort public feeds server-side (never throws — returns partial snapshot).
+ * NEPSE values come exclusively from the official nepalstock.com.np sync (or last successful).
  */
 export async function buildMarketSnapshot(opts: {
   /** Extra Yahoo symbols (US or `.KS`). */
@@ -44,26 +45,30 @@ export async function buildMarketSnapshot(opts: {
     return fx;
   });
 
-  const nepseP = getCachedNepseYonepseBundle().then((b) => {
-    sourceStatus.nepse = Object.keys(b.bySymbol).length || b.index ? "ok" : "error";
-    return b;
-  }).catch(() => {
-    sourceStatus.nepse = "error";
-    return { index: undefined, bySymbol: {} };
-  });
+  const nepseP = getOfficialNepseBundleWithMeta()
+    .then((served) => {
+      sourceStatus.nepse = Object.keys(served.bundle.bySymbol).length || served.bundle.index ? "ok" : "error";
+      return served;
+    })
+    .catch(() => {
+      sourceStatus.nepse = "error";
+      return null;
+    });
 
   const cryptoIds = [...new Set(["bitcoin", "ethereum", ...opts.cryptoIds.map((c) => c.toLowerCase())])];
 
-  const [forex, nepse, cg] = await Promise.all([
+  const [forex, nepseServe, cg] = await Promise.all([
     forexP,
     nepseP,
-    fetchCoingeckoUsd(cryptoIds).then((m) => {
-      sourceStatus.coingecko = Object.keys(m).length ? "ok" : "error";
-      return m;
-    }).catch(() => {
-      sourceStatus.coingecko = "error";
-      return {};
-    }),
+    fetchCoingeckoUsd(cryptoIds)
+      .then((m) => {
+        sourceStatus.coingecko = Object.keys(m).length ? "ok" : "error";
+        return m;
+      })
+      .catch(() => {
+        sourceStatus.coingecko = "error";
+        return {};
+      }),
   ]);
 
   const usdEquities: MarketSnapshot["usdEquities"] = {};
@@ -106,15 +111,22 @@ export async function buildMarketSnapshot(opts: {
     crypto[id] = { id, lastUsd };
   }
 
+  const nepse = nepseServe?.bundle;
   const partial =
-    (sourceStatus.nepse === "error" && !nepse.index) ||
-    (sourceStatus.yahoo_usd === "error" && yahooOk === 0);
+    (sourceStatus.nepse === "error" && !nepse?.index) ||
+    (sourceStatus.yahoo_usd === "error" && yahooOk === 0) ||
+    Boolean(nepseServe?.meta.stale);
 
   const nepseTerminal =
-    Object.keys(nepse.bySymbol).length > 0 ? buildNepseTerminalSnapshot(nepse.bySymbol) : undefined;
+    nepse && Object.keys(nepse.bySymbol).length > 0
+      ? buildNepseTerminalSnapshot(nepse.bySymbol, {
+          summaryStats: nepse.summaryStats,
+          officialBreadth: nepse.officialBreadth,
+        })
+      : undefined;
 
   return {
-    fetchedAt,
+    fetchedAt: nepseServe?.meta.lastSuccessfulSyncAt ?? fetchedAt,
     partial,
     sourceStatus,
     forex: {
@@ -122,9 +134,18 @@ export async function buildMarketSnapshot(opts: {
       usdPerNpr: forex.usdPerNpr,
       nprPerUsd: forex.nprPerUsd,
     },
-    nepseIndex: nepse.index,
-    nepseBySymbol: nepse.bySymbol,
+    nepseIndex: nepse?.index,
+    nepseBySymbol: nepse?.bySymbol ?? {},
     nepseTerminal,
+    nepseSync: nepseServe
+      ? {
+          source: nepseServe.meta.source,
+          lastSuccessfulSyncAt: nepseServe.meta.lastSuccessfulSyncAt,
+          stale: nepseServe.meta.stale,
+          marketIsOpen: nepseServe.bundle.marketStatus.isOpen,
+          marketAsOf: nepseServe.bundle.marketStatus.checkedAt,
+        }
+      : undefined,
     usdEquities,
     krEquities,
     crypto,
