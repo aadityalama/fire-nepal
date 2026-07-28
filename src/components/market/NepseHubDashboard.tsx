@@ -42,10 +42,11 @@ import { useNepseNews, type NepseNewsItem } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import type { NepseBreadthCategory } from "@/lib/market/nepse-breadth";
 import {
-  countCircuitStocks,
   deriveMarketSentiment,
   formatCompactNpr,
   getKathmanduMarketPanelStatus,
+  NEPSE_MARKET_CLOSE_LABEL,
+  NEPSE_MARKET_OPEN_LABEL,
   NEPSE_NEWS_SOURCES,
   NEPSE_SERVICE_ITEMS,
 } from "@/lib/market/nepse-hub";
@@ -284,55 +285,50 @@ function useLiveMarketPanelClock(tickMs = 30_000) {
   return now;
 }
 
-function resolveIndexPointChange(index: NepseIndexTick | undefined): number | null {
-  if (index?.changeNpr != null && Number.isFinite(index.changeNpr)) return index.changeNpr;
-  if (index?.value != null && index.previousClose != null && Number.isFinite(index.previousClose)) {
-    return index.value - index.previousClose;
-  }
-  return null;
-}
-
-function resolveIndexChangePct(index: NepseIndexTick | undefined, pointChange: number | null): number | null {
-  if (index?.changePct != null && Number.isFinite(index.changePct)) return index.changePct;
-  if (
-    pointChange != null &&
-    index?.previousClose != null &&
-    Number.isFinite(index.previousClose) &&
-    index.previousClose > 0
-  ) {
-    return (pointChange / index.previousClose) * 100;
-  }
-  return null;
-}
-
-function HeroMarketStatusCard() {
+function HeroMarketStatusCard({
+  feedIsOpen,
+  marketAsOf,
+}: {
+  feedIsOpen?: boolean | null;
+  marketAsOf?: string | null;
+}) {
   const now = useLiveMarketPanelClock();
-  const panel = getKathmanduMarketPanelStatus(now);
+  const clockPanel = getKathmanduMarketPanelStatus(now);
+  const open = feedIsOpen == null ? clockPanel.open : feedIsOpen;
+  const headline = open ? "MARKET OPEN" : "MARKET CLOSED";
+  const detail =
+    feedIsOpen == null
+      ? clockPanel.detail
+      : open
+        ? NEPSE_MARKET_CLOSE_LABEL
+        : marketAsOf
+          ? `Official as of ${marketAsOf}`
+          : NEPSE_MARKET_OPEN_LABEL;
 
   return (
     <div
       className={`inline-flex max-w-full flex-col items-end rounded-lg border px-2 py-1 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:rounded-xl sm:px-2.5 sm:py-1.5 ${
-        panel.open ? "border-emerald-400/35 bg-emerald-400/12" : "border-rose-400/30 bg-rose-400/[0.12]"
+        open ? "border-emerald-400/35 bg-emerald-400/12" : "border-rose-400/30 bg-rose-400/[0.12]"
       }`}
       aria-live="polite"
     >
       <p
         className={`flex max-w-full items-center justify-end gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] sm:text-[10px] ${
-          panel.open ? "text-emerald-200" : "text-rose-200"
+          open ? "text-emerald-200" : "text-rose-200"
         }`}
       >
         <span
-          className={`h-1.5 w-1.5 shrink-0 rounded-full ${panel.open ? "animate-pulse bg-emerald-300" : "bg-rose-300"}`}
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${open ? "animate-pulse bg-emerald-300" : "bg-rose-300"}`}
           aria-hidden
         />
-        <span className="min-w-0 truncate">{panel.headline}</span>
+        <span className="min-w-0 truncate">{headline}</span>
       </p>
       <p
         className={`mt-0.5 max-w-full truncate text-[9px] font-semibold sm:text-[10px] ${
-          panel.open ? "text-emerald-100/70" : "text-rose-100/65"
+          open ? "text-emerald-100/70" : "text-rose-100/65"
         }`}
       >
-        {panel.detail}
+        {detail}
       </p>
     </div>
   );
@@ -346,6 +342,8 @@ function Hero({
   fetchedAt,
   onRefresh,
   refreshing,
+  feedIsOpen,
+  marketAsOf,
 }: {
   index: NepseIndexTick | undefined;
   turnover: number;
@@ -354,9 +352,12 @@ function Hero({
   fetchedAt?: string;
   onRefresh: () => void;
   refreshing: boolean;
+  feedIsOpen?: boolean | null;
+  marketAsOf?: string | null;
 }) {
-  const pointChange = resolveIndexPointChange(index);
-  const changePct = resolveIndexChangePct(index, pointChange);
+  // Official published point/% change from the same atomic snapshot — never recompute across fields.
+  const pointChange = index?.changeNpr != null && Number.isFinite(index.changeNpr) ? index.changeNpr : null;
+  const changePct = index?.changePct != null && Number.isFinite(index.changePct) ? index.changePct : null;
   const positive = (pointChange ?? changePct ?? 0) >= 0;
   const reduced = usePrefersReducedMotion();
   const animatedIndex = useCountUpNumber(index?.value ?? 0, { durationMs: 900, skipAnimation: reduced });
@@ -448,7 +449,7 @@ function Hero({
         </div>
         <div className="relative flex min-w-0 flex-col justify-end">
           <div className="mb-1.5 flex justify-end sm:mb-2">
-            <HeroMarketStatusCard />
+            <HeroMarketStatusCard feedIsOpen={feedIsOpen} marketAsOf={marketAsOf} />
           </div>
           <svg
             viewBox="0 0 500 140"
@@ -479,8 +480,8 @@ export function NepseHubDashboard() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const term = snapshot?.nepseTerminal;
+  const sync = snapshot?.nepseSync;
   const ticks = useMemo(() => Object.values(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
-  const circuits = useMemo(() => countCircuitStocks(snapshot?.nepseBySymbol ?? {}), [snapshot?.nepseBySymbol]);
   const sentiment = useMemo(() => deriveMarketSentiment(term), [term]);
   const portfolio = useMemo(
     () =>
@@ -522,15 +523,16 @@ export function NepseHubDashboard() {
     if (rest > 0.5) top.push({ label: "Others", pct: rest, color: "bg-slate-400 dark:bg-zinc-600" });
     return top;
   }, [portfolio.holdings, portfolio.portfolioValueNpr]);
-  const volume = ticks.reduce((total, tick) => total + (tick.volume ?? 0), 0);
-  const trades = ticks.reduce((total, tick) => total + (tick.trades ?? 0), 0);
+  // Prefer official market-summary totals — never sum tick fields for the hero.
+  const volume = term?.totalVolume ?? 0;
+  const trades = term?.totalTrades ?? 0;
   const marketCap = ticks.reduce((total, tick) => total + (tick.marketCap ?? 0), 0);
   const breadth = [
     ["Advanced", term?.breadth.advancing ?? 0, "text-emerald-600 dark:text-emerald-400", TrendingUp, "advanced"],
     ["Declined", term?.breadth.declining ?? 0, "text-rose-600 dark:text-rose-400", TrendingDown, "declined"],
     ["Unchanged", term?.breadth.unchanged ?? 0, "text-slate-600 dark:text-zinc-300", Activity, "unchanged"],
-    ["Upper Circuit", circuits.upper, "text-violet-600 dark:text-violet-300", Zap, "upper-circuit"],
-    ["Lower Circuit", circuits.lower, "text-amber-600 dark:text-amber-300", ShieldCheck, "lower-circuit"],
+    ["Upper Circuit", term?.upperCircuit ?? 0, "text-violet-600 dark:text-violet-300", Zap, "upper-circuit"],
+    ["Lower Circuit", term?.lowerCircuit ?? 0, "text-amber-600 dark:text-amber-300", ShieldCheck, "lower-circuit"],
   ] as const satisfies ReadonlyArray<
     readonly [string, number, string, (typeof TrendingUp), NepseBreadthCategory]
   >;
@@ -549,7 +551,7 @@ export function NepseHubDashboard() {
 
         {error ? (
           <div className="mb-3 rounded-xl border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:border-amber-300/15 dark:bg-amber-300/[0.07] dark:text-amber-200">
-            Live feed degraded: {error}. Cached and portfolio data remain available.
+            Official NEPSE feed unavailable: {error}. Inconsistent or stale snapshots are not displayed.
           </div>
         ) : null}
 
@@ -587,6 +589,8 @@ export function NepseHubDashboard() {
           fetchedAt={snapshot?.fetchedAt}
           onRefresh={reload}
           refreshing={status === "loading"}
+          feedIsOpen={sync?.marketIsOpen}
+          marketAsOf={sync?.marketAsOf}
         />
 
         <section className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Market breadth">

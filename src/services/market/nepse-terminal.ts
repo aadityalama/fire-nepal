@@ -1,3 +1,5 @@
+import type { NepseOfficialBreadth } from "@/services/market/nepse-official-live";
+import type { NepseMarketSummaryStats } from "@/services/market/nepse-yonepse";
 import type { NepseSecurityTick, NepseTerminalSnapshot } from "@/types/market";
 
 function asList(by: Record<string, NepseSecurityTick>): NepseSecurityTick[] {
@@ -9,9 +11,16 @@ function hasQuote(t: NepseSecurityTick): boolean {
 }
 
 /**
- * Board-level analytics derived from the live NEPSE map (no hardcoded tickers).
+ * Board-level analytics. Breadth/circuits prefer official NEPSE counts when provided;
+ * turnover/volume/trades prefer official market-summary totals (never estimated).
  */
-export function buildNepseTerminalSnapshot(bySymbol: Record<string, NepseSecurityTick>): NepseTerminalSnapshot {
+export function buildNepseTerminalSnapshot(
+  bySymbol: Record<string, NepseSecurityTick>,
+  options?: {
+    summaryStats?: NepseMarketSummaryStats;
+    officialBreadth?: NepseOfficialBreadth;
+  },
+): NepseTerminalSnapshot {
   const list = asList(bySymbol).filter(hasQuote);
   const withPct = list.filter((t) => t.changePct != null && Number.isFinite(t.changePct));
 
@@ -37,15 +46,29 @@ export function buildNepseTerminalSnapshot(bySymbol: Record<string, NepseSecurit
     .slice(0, 12)
     .map((t) => ({ ...t }));
 
+  // Official homepage rule: percentageChange > 0 / < 0 / == 0.
   let adv = 0;
   let dec = 0;
   let flat = 0;
+  let upper = 0;
+  let lower = 0;
   for (const t of withPct) {
     const c = t.changePct ?? 0;
-    if (c > 0.0005) adv++;
-    else if (c < -0.0005) dec++;
+    if (c > 0) adv++;
+    else if (c < 0) dec++;
     else flat++;
+    if (c >= 9.9) upper++;
+    if (c <= -9.9) lower++;
   }
+
+  if (options?.officialBreadth) {
+    adv = options.officialBreadth.advancing;
+    dec = options.officialBreadth.declining;
+    flat = options.officialBreadth.unchanged;
+    upper = options.officialBreadth.upperCircuit;
+    lower = options.officialBreadth.lowerCircuit;
+  }
+
   const denom = Math.max(dec, 1e-9);
   const advanceDeclineRatio = adv / denom;
 
@@ -77,7 +100,8 @@ export function buildNepseTerminalSnapshot(bySymbol: Record<string, NepseSecurit
     .sort((a, b) => b.turnoverNpr - a.turnoverNpr)
     .slice(0, 14);
 
-  const totalTurnoverNpr = list.reduce((a, t) => a + (t.turnoverNpr ?? 0), 0);
+  const summedTurnover = list.reduce((a, t) => a + (t.turnoverNpr ?? 0), 0);
+  const totalTurnoverNpr = options?.summaryStats?.totalTurnoverNpr ?? summedTurnover;
 
   return {
     topGainers,
@@ -93,5 +117,10 @@ export function buildNepseTerminalSnapshot(bySymbol: Record<string, NepseSecurit
     },
     totalsListed: list.length,
     totalTurnoverNpr,
+    totalVolume: options?.summaryStats?.totalVolume ?? null,
+    totalTrades: options?.summaryStats?.totalTrades ?? null,
+    scripsTraded: options?.summaryStats?.scripsTraded ?? null,
+    upperCircuit: upper,
+    lowerCircuit: lower,
   };
 }

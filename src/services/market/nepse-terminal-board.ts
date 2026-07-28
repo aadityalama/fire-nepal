@@ -3,8 +3,8 @@ import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
 import { getKathmanduMarketStatus } from "@/lib/market/nepse-hub";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
+import type { NepseOfficialBundle } from "@/services/market/nepse-official-live";
 import { buildNepseTerminalSnapshot } from "@/services/market/nepse-terminal";
-import { getCachedNepseYonepseBoard } from "@/services/market/nepse-yonepse";
 import type { NepseSecurityTick } from "@/types/market";
 import type {
   NepseTerminalBoardPayload,
@@ -210,36 +210,28 @@ async function loadBrokerBoard(): Promise<TerminalBrokerBoard> {
   }
 }
 
-/** Assemble the institutional terminal board from real feeds + DB ranges. */
+/** Assemble the institutional terminal board from one atomic official snapshot + DB ranges. */
 export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
-  const [board, cached, brokers] = await Promise.all([
-    getCachedNepseYonepseBoard().catch(() => null),
-    getCachedNepseYonepseBundle().catch(() => null),
+  // Single official snapshot — never merge board + cache from different fetches.
+  const [official, brokers] = await Promise.all([
+    getCachedNepseYonepseBundle().catch(() => null) as Promise<NepseOfficialBundle | null>,
     loadBrokerBoard(),
   ]);
 
-  const bySymbol = board?.bySymbol ?? cached?.bySymbol ?? {};
-  const term = Object.keys(bySymbol).length ? buildNepseTerminalSnapshot(bySymbol) : null;
+  const bySymbol = official?.bySymbol ?? {};
+  const officialBreadth = official?.officialBreadth;
+  const term = Object.keys(bySymbol).length
+    ? buildNepseTerminalSnapshot(bySymbol, {
+        summaryStats: official?.summaryStats,
+        officialBreadth,
+      })
+    : null;
   const clock = getKathmanduMarketStatus();
-  const feedIsOpen = board?.marketStatus.isOpen ?? null;
+  const feedIsOpen = official?.marketStatus.isOpen ?? null;
   const ranges = await load52wRanges(bySymbol);
 
   const indices: TerminalIndexRow[] = [];
-  const feedIndices = board?.indices?.length
-    ? board.indices
-    : cached?.index
-      ? [
-          {
-            name: cached.index.name,
-            value: cached.index.value,
-            changePct: cached.index.changePct ?? null,
-            changeNpr: cached.index.changeNpr ?? null,
-            high: null,
-            low: null,
-            previousClose: cached.index.previousClose ?? null,
-          },
-        ]
-      : [];
+  const feedIndices = official?.indices ?? [];
 
   for (const row of feedIndices) {
     indices.push({
@@ -254,13 +246,13 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   }
 
   const hasNepse = indices.some((row) => /nepse/i.test(row.name) && !/sensitive|float/i.test(row.name));
-  if (!hasNepse && cached?.index) {
+  if (!hasNepse && official?.index) {
     indices.unshift({
       id: "nepse-index",
       name: "NEPSE Index",
-      value: cached.index.value,
-      changePct: cached.index.changePct ?? null,
-      changeNpr: null,
+      value: official.index.value,
+      changePct: official.index.changePct ?? null,
+      changeNpr: official.index.changeNpr ?? null,
       sectorChangePct: null,
       source: "index_feed",
     });
@@ -281,15 +273,15 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   }
 
   const movers: TerminalMovers = {
-    topGainers: preferMovers(board?.topStocks.topGainers ?? [], term?.topGainers ?? []),
-    topLosers: preferMovers(board?.topStocks.topLosers ?? [], term?.topLosers ?? []),
-    topTurnover: preferMovers(board?.topStocks.topTurnover ?? [], term?.turnoverLeaders ?? []),
-    topVolume: preferMovers(board?.topStocks.topVolume ?? [], term?.mostActive ?? []),
+    topGainers: preferMovers(official?.topStocks.topGainers ?? [], term?.topGainers ?? []),
+    topLosers: preferMovers(official?.topStocks.topLosers ?? [], term?.topLosers ?? []),
+    topTurnover: preferMovers(official?.topStocks.topTurnover ?? [], term?.turnoverLeaders ?? []),
+    topVolume: preferMovers(official?.topStocks.topVolume ?? [], term?.mostActive ?? []),
     topTransactions: preferMovers(
-      board?.topStocks.topTransactions ?? [],
+      official?.topStocks.topTransactions ?? [],
       [...Object.values(bySymbol)].sort((a, b) => (b.trades ?? 0) - (a.trades ?? 0)),
     ),
-    mostActive: preferMovers(term?.mostActive ?? [], board?.topStocks.topVolume ?? []),
+    mostActive: preferMovers(term?.mostActive ?? [], official?.topStocks.topVolume ?? []),
     near52wHigh: ranges.nearHigh,
     near52wLow: ranges.nearLow,
   };
@@ -315,10 +307,10 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   }));
 
   const sources: string[] = [];
-  if (feedIndices.length) sources.push("Yonepse indices");
-  if (Object.keys(bySymbol).length) sources.push("Yonepse live board");
-  if (board?.topStocks.topGainers.length) sources.push("Yonepse top stocks");
-  if (board?.summaryStats.totalTurnoverNpr != null) sources.push("Yonepse market summary");
+  if (feedIndices.length) sources.push("nepalstock.com.np nepse-index");
+  if (Object.keys(bySymbol).length) sources.push("nepalstock.com.np securityDailyTradeStat");
+  if (official?.topStocks.topGainers.length) sources.push("nepalstock.com.np top-ten");
+  if (official?.summaryStats.totalTurnoverNpr != null) sources.push("nepalstock.com.np market-summary");
   if (ranges.nearHigh.length || ranges.nearLow.length) sources.push("nepse_eod_prices 52W ranges");
   if (brokers.topByTurnover.length) sources.push("Sharehub broker turnover");
 
@@ -327,14 +319,15 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
       label: feedIsOpen === true ? "Open" : feedIsOpen === false ? clock.label === "Pre-open" ? "Pre-open" : "Closed" : clock.label,
       live: feedIsOpen === true ? true : feedIsOpen === false ? false : clock.live,
       feedIsOpen,
-      checkedAt: board?.marketStatus.checkedAt ?? null,
+      checkedAt: official?.marketStatus.checkedAt ?? null,
     },
     indices,
     summary: {
-      totalTurnoverNpr: board?.summaryStats.totalTurnoverNpr ?? term?.totalTurnoverNpr ?? null,
-      totalVolume: board?.summaryStats.totalVolume ?? null,
-      totalTrades: board?.summaryStats.totalTrades ?? null,
-      scripsTraded: board?.summaryStats.scripsTraded ?? term?.totalsListed ?? null,
+      // All summary fields from the same atomic official snapshot — never fall back across sources.
+      totalTurnoverNpr: official?.summaryStats.totalTurnoverNpr ?? null,
+      totalVolume: official?.summaryStats.totalVolume ?? null,
+      totalTrades: official?.summaryStats.totalTrades ?? null,
+      scripsTraded: official?.summaryStats.scripsTraded ?? null,
       totalMarketCapNpr,
       marketCapCoverage,
     },
@@ -352,7 +345,7 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
     },
     brokers,
     marketDistribution,
-    loadedAt: new Date().toISOString(),
+    loadedAt: official?.syncMeta.syncedAt ?? new Date().toISOString(),
     sources,
   };
 }

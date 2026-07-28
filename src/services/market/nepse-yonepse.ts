@@ -1,7 +1,7 @@
 import { fetchJson } from "@/lib/api/fetch-json";
-import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
 import { listCompanyMasterMap } from "@/services/market/nepse-company-master";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
+import { validateOfficialIndexSnapshot } from "@/services/market/nepse-official-index-validation";
 import type { NepseIndexTick, NepseSecurityTick } from "@/types/market";
 
 function pickNum(o: Record<string, unknown>, keys: string[]): number | undefined {
@@ -127,6 +127,7 @@ function rowToTick(
 function parseIndexRow(o: Record<string, unknown>): NepseIndexRow | null {
   const name = pickStr(o, ["index_name", "indexName", "name", "index", "title", "Index"]);
   if (!name) return null;
+  // Never prefer session `close` over `currentValue` — that mixed previous-close into the index.
   const currentValue = pickNum(o, [
     "currentValue",
     "current_index",
@@ -137,36 +138,39 @@ function parseIndexRow(o: Record<string, unknown>): NepseIndexRow | null {
     "ltp",
   ]);
   const close = pickNum(o, ["close", "Close"]);
-  const previousClose = pickNum(o, ["previousClose", "previous_close"]) ?? null;
-  // Prefer live currentValue; after hours some mirrors reset it to previousClose while `close` still holds the session print.
-  let value = currentValue ?? close ?? null;
-  if (
-    currentValue != null &&
-    close != null &&
-    previousClose != null &&
-    Math.abs(currentValue - previousClose) < 0.05 &&
-    Math.abs(close - previousClose) > 0.05
-  ) {
-    value = close;
+  const publishedPreviousClose = pickNum(o, ["previousClose", "previous_close"]) ?? null;
+  const changeNpr = pickNum(o, ["change", "point_change", "pointChange"]) ?? null;
+  const changePct =
+    pickNum(o, ["perChange", "percent_change", "percentageChange", "change_percent", "changePct", "pct_change"]) ??
+    null;
+  const value = currentValue ?? close ?? null;
+  if (value == null || changeNpr == null) return null;
+
+  // Resolve previous_close from the same row so prev + change = current; reject otherwise.
+  try {
+    const validated = validateOfficialIndexSnapshot({
+      name,
+      currentValue: value,
+      close: close ?? null,
+      previousClose: publishedPreviousClose,
+      change: changeNpr,
+      perChange: changePct,
+      high: pickNum(o, ["high"]) ?? null,
+      low: pickNum(o, ["low"]) ?? null,
+      generatedTime: null,
+    });
+    return {
+      name: validated.name,
+      value: validated.currentIndex,
+      changePct: validated.percentageChange,
+      changeNpr: validated.pointChange,
+      high: validated.high,
+      low: validated.low,
+      previousClose: validated.previousClose,
+    };
+  } catch {
+    return null;
   }
-  let changeNpr = pickNum(o, ["change", "point_change", "pointChange"]) ?? null;
-  let changePct =
-    pickNum(o, ["perChange", "percent_change", "percentageChange", "change_percent", "changePct", "pct_change"]) ?? null;
-  if (changeNpr == null && value != null && previousClose != null) {
-    changeNpr = value - previousClose;
-  }
-  if (changePct == null && changeNpr != null && previousClose != null && previousClose > 0) {
-    changePct = (changeNpr / previousClose) * 100;
-  }
-  return {
-    name,
-    value,
-    changePct,
-    changeNpr,
-    high: pickNum(o, ["high"]) ?? null,
-    low: pickNum(o, ["low"]) ?? null,
-    previousClose,
-  };
 }
 
 function emptyTopBoard(): NepseTopStocksBoard {
@@ -295,15 +299,13 @@ export async function fetchNepseYonepseBundle(): Promise<NepseBundle> {
   return { index, indices, bySymbol, marketStatus, summaryStats, topStocks };
 }
 
-const boardCache = createMemoryTtlCache();
 const BOARD_TTL_MS = 20_000;
 
-/** Cached full Yonepse board for terminal routes (indices + movers + status). */
+/**
+ * Official NEPSE board for terminal/screener routes.
+ * Shares the same atomic snapshot path as the hub — no separate cache that can diverge.
+ */
 export async function getCachedNepseYonepseBoard(ttlMs = BOARD_TTL_MS): Promise<NepseBundle> {
-  const key = "nepse-yonepse-board-v2";
-  const hit = boardCache.get<NepseBundle>(key);
-  if (hit) return hit;
-  const bundle = await fetchNepseYonepseBundle();
-  boardCache.set(key, bundle, ttlMs);
-  return bundle;
+  const { getCachedNepseYonepseBundle } = await import("@/services/market/nepse-bundle-cache");
+  return getCachedNepseYonepseBundle(ttlMs);
 }
