@@ -191,7 +191,10 @@ FAIL: Cannot apply migrations — set ONE of these in .env.local:
   - SUPABASE_DB_PASSWORD + NEXT_PUBLIC_SUPABASE_URL
   - SUPABASE_ACCESS_TOKEN + NEXT_PUBLIC_SUPABASE_URL
 
-Or paste in order in the Supabase SQL Editor:
+Or paste ONE file in the Supabase SQL Editor (recommended):
+  scripts/nepse-hub-admin-overrides-production-migration-combined.sql
+
+Or paste migrations in order:
   supabase/migrations/${migrationFiles[0]}
   supabase/migrations/${migrationFiles[1]}
 `);
