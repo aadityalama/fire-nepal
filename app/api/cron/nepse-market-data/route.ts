@@ -13,6 +13,7 @@ import {
 } from "@/services/market/nepse-market-data-engine";
 import { ingestIndexEod } from "@/services/market/nepse-index-eod";
 import { ingestIndexComposition } from "@/services/market/nepse-index-composition";
+import { ingestOfficialLiveMarket } from "@/services/market/nepse-official-sync";
 
 /**
  * Vercel Cron (after NEPSE close):
@@ -84,6 +85,18 @@ export async function GET(request: Request) {
       ? await ingestOfficialCompanyMaster(sb, masterMode)
       : { kind: "fundamentals" as const, status: "ok" as const, items: 0, message: "Skipped (companyMaster=0)" };
 
+  // Capture official post-close print immediately, then persist EOD from that board.
+  const officialLive =
+    url.searchParams.get("officialLive") !== "0"
+      ? await ingestOfficialLiveMarket(sb)
+      : {
+          kind: "official_live" as const,
+          status: "ok" as const,
+          items: 0,
+          message: "Skipped (officialLive=0)",
+          lastSuccessfulSyncAt: null,
+        };
+
   const eod = await ingestEodPrices(sb);
   const indexEod =
     url.searchParams.get("indices") !== "0"
@@ -127,6 +140,7 @@ export async function GET(request: Request) {
 
   const ok =
     companyMaster.status !== "error" &&
+    officialLive.status !== "error" &&
     eod.status !== "error" &&
     indexEod.status !== "error" &&
     indexComposition.status !== "error" &&
@@ -143,6 +157,7 @@ export async function GET(request: Request) {
     {
       ok,
       companyMaster,
+      officialLive,
       eod,
       indexEod,
       indexComposition,

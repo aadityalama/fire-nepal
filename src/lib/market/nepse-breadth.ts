@@ -81,17 +81,18 @@ export function filterCompaniesByBreadth(
     case "advanced":
       return listed.filter((tick) => {
         const change = tick.changePct;
-        return change != null && Number.isFinite(change) && change > 0.0005;
+        // Official NEPSE homepage: percentageChange > 0
+        return change != null && Number.isFinite(change) && change > 0;
       });
     case "declined":
       return listed.filter((tick) => {
         const change = tick.changePct;
-        return change != null && Number.isFinite(change) && change < -0.0005;
+        return change != null && Number.isFinite(change) && change < 0;
       });
     case "unchanged":
       return listed.filter((tick) => {
         const change = tick.changePct;
-        return change != null && Number.isFinite(change) && change >= -0.0005 && change <= 0.0005;
+        return change != null && Number.isFinite(change) && change === 0;
       });
     case "upper-circuit":
       return listed.filter((tick) => {

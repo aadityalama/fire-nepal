@@ -75,6 +75,20 @@ export type NepseTerminalSnapshot = {
   breadth: NepseMarketBreadth;
   totalsListed: number;
   totalTurnoverNpr: number;
+  /** Official market-summary totals when published by nepalstock.com.np. */
+  totalVolume?: number | null;
+  totalTrades?: number | null;
+  scripsTraded?: number | null;
+  upperCircuit?: number;
+  lowerCircuit?: number;
+};
+
+export type NepseOfficialSyncStatus = {
+  source: "official" | "last_successful";
+  lastSuccessfulSyncAt: string | null;
+  stale: boolean;
+  marketIsOpen: boolean | null;
+  marketAsOf: string | null;
 };
 
 export type UsdInstrumentTick = {
@@ -110,6 +124,8 @@ export type MarketSnapshot = {
   nepseBySymbol: Record<string, NepseSecurityTick>;
   /** Equity + MF board analytics (same refresh window as `nepseBySymbol`). */
   nepseTerminal?: NepseTerminalSnapshot;
+  /** Official NEPSE sync provenance for the hub dashboard. */
+  nepseSync?: NepseOfficialSyncStatus;
   /** Yahoo-style symbols (e.g. AAPL, SPY). */
   usdEquities: Record<string, UsdInstrumentTick>;
   /** Yahoo-style KRX symbols (e.g. 005930.KS). */

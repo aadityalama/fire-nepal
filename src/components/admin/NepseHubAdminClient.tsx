@@ -37,6 +37,27 @@ type CompanyMasterSyncView = {
   latestValidation: Record<string, unknown> | null;
   liveSectorCounts: Record<string, number>;
 };
+type OfficialLiveSyncView = {
+  latestSnapshot: {
+    syncedAt: string;
+    tradeDate: string;
+    indexName: string | null;
+    indexValue: number | null;
+    indexChangeNpr: number | null;
+    indexChangePct: number | null;
+    totalTurnoverNpr: number | null;
+    totalVolume: number | null;
+    totalTrades: number | null;
+    advancing: number | null;
+    declining: number | null;
+    unchanged: number | null;
+    upperCircuit: number | null;
+    lowerCircuit: number | null;
+    isMarketOpen: boolean | null;
+  } | null;
+  latestRun: Record<string, unknown> | null;
+  source: string;
+};
 
 function unwrap(valueJson: unknown): unknown {
   if (valueJson && typeof valueJson === "object" && !Array.isArray(valueJson) && "v" in (valueJson as object)) {
@@ -59,7 +80,9 @@ export function NepseHubAdminClient() {
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [forceSyncBusy, setForceSyncBusy] = useState(false);
   const [syncInfo, setSyncInfo] = useState<CompanyMasterSyncView | null>(null);
+  const [liveSyncInfo, setLiveSyncInfo] = useState<OfficialLiveSyncView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,11 +140,19 @@ export function NepseHubAdminClient() {
     setSyncInfo(j);
   }, []);
 
+  const loadLiveSyncInfo = useCallback(async () => {
+    const r = await fetch("/api/admin/nepse-hub/force-sync", { credentials: "include", cache: "no-store" });
+    if (!r.ok) return;
+    const j = (await r.json()) as OfficialLiveSyncView;
+    setLiveSyncInfo(j);
+  }, []);
+
   useEffect(() => {
     void loadCatalog("");
     void loadSymbol(initialSymbol);
     void loadSyncInfo();
-  }, [loadCatalog, loadSymbol, initialSymbol, loadSyncInfo]);
+    void loadLiveSyncInfo();
+  }, [loadCatalog, loadSymbol, initialSymbol, loadSyncInfo, loadLiveSyncInfo]);
 
   useEffect(() => {
     const first = fields[0]?.key;
@@ -249,6 +280,40 @@ export function NepseHubAdminClient() {
     }
   }
 
+  async function runOfficialMarketForceSync() {
+    setForceSyncBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await fetch("/api/admin/nepse-hub/force-sync", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean;
+        result?: {
+          message?: string;
+          lastSuccessfulSyncAt?: string | null;
+          indexValue?: number | null;
+        };
+        error?: string;
+      };
+      if (!r.ok || !j.ok) {
+        setError(j.result?.message ?? j.error ?? "Official NEPSE force sync failed");
+        await loadLiveSyncInfo();
+        return;
+      }
+      setMessage(
+        j.result?.message ??
+          `Official NEPSE synchronized — index ${j.result?.indexValue ?? "n/a"} at ${j.result?.lastSuccessfulSyncAt ?? "n/a"}.`,
+      );
+      await loadLiveSyncInfo();
+    } finally {
+      setForceSyncBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1200px] px-3 py-4 sm:px-5 sm:py-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
@@ -260,7 +325,15 @@ export function NepseHubAdminClient() {
             edited fields. Restore returns a field or whole company to official data.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={forceSyncBusy}
+            onClick={() => void runOfficialMarketForceSync()}
+            className="rounded-lg border border-sky-300/40 bg-sky-500/15 px-3 py-2 text-[11px] font-black text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+          >
+            {forceSyncBusy ? "Force syncing…" : "Force Sync (Official NEPSE)"}
+          </button>
           <button
             type="button"
             disabled={syncBusy}
@@ -283,6 +356,33 @@ export function NepseHubAdminClient() {
           </Link>
         </div>
       </header>
+
+      {liveSyncInfo?.latestSnapshot ? (
+        <section className="mb-4 rounded-2xl border border-sky-300/20 bg-sky-500/[0.07] px-4 py-3 text-xs text-sky-50">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-200/80">
+            Official NEPSE live sync · {liveSyncInfo.source}
+          </p>
+          <p className="mt-1 font-bold">
+            Last successful sync: {new Date(liveSyncInfo.latestSnapshot.syncedAt).toLocaleString("en-GB", {
+              timeZone: "Asia/Kathmandu",
+              hour12: false,
+            })}{" "}
+            NPT
+          </p>
+          <p className="mt-1 text-sky-100/90">
+            {liveSyncInfo.latestSnapshot.indexName ?? "NEPSE Index"}:{" "}
+            {liveSyncInfo.latestSnapshot.indexValue?.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }) ?? "—"}{" "}
+            ({liveSyncInfo.latestSnapshot.indexChangeNpr ?? "—"} / {liveSyncInfo.latestSnapshot.indexChangePct ?? "—"}
+            %) · Turnover {liveSyncInfo.latestSnapshot.totalTurnoverNpr?.toLocaleString("en-IN") ?? "—"} · Adv/Dec/Unch{" "}
+            {liveSyncInfo.latestSnapshot.advancing ?? "—"}/
+            {liveSyncInfo.latestSnapshot.declining ?? "—"}/
+            {liveSyncInfo.latestSnapshot.unchanged ?? "—"}
+          </p>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">

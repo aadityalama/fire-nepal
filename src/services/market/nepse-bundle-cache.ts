@@ -1,18 +1,36 @@
 import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
-import { fetchNepseYonepseBundle, type NepseBundle } from "@/services/market/nepse-yonepse";
+import {
+  getOfficialNepseLiveBundle,
+  type NepseLiveServeMeta,
+} from "@/services/market/nepse-official-sync";
+import { OFFICIAL_LIVE_TTL_MS } from "@/services/market/nepse-official-live";
+import type { NepseOfficialBundle } from "@/services/market/nepse-official-live";
 
-const cache = createMemoryTtlCache();
-const CACHE_KEY = "nepse-yonepse-bundle-v1";
-/** Shared TTL keeps search + summary on one upstream pull per window (anti-spam). */
-const DEFAULT_TTL_MS = 16_000;
+const metaCache = createMemoryTtlCache();
+const META_KEY = "nepse-official-serve-meta-v1";
 
 /**
- * Process-local cached NEPSE mirror (Yonepse). Use from API routes and `buildMarketSnapshot`.
+ * Process-local cached official NEPSE board for API routes and `buildMarketSnapshot`.
+ * Primary source: nepalstock.com.np. On upstream failure, last successful official snapshot.
  */
-export async function getCachedNepseYonepseBundle(ttlMs = DEFAULT_TTL_MS): Promise<NepseBundle> {
-  const hit = cache.get<NepseBundle>(CACHE_KEY);
-  if (hit) return hit;
-  const bundle = await fetchNepseYonepseBundle();
-  cache.set(CACHE_KEY, bundle, ttlMs);
-  return bundle;
+export async function getCachedNepseYonepseBundle(ttlMs = OFFICIAL_LIVE_TTL_MS): Promise<NepseOfficialBundle> {
+  const served = await getOfficialNepseLiveBundle({ ttlMs });
+  metaCache.set(META_KEY, served.meta, Math.max(ttlMs, 60_000));
+  return served.bundle;
+}
+
+/** @deprecated Alias retained for call-sites; returns official NEPSE live bundle. */
+export const getCachedNepseOfficialMarketBundle = getCachedNepseYonepseBundle;
+
+export function getLastNepseServeMeta(): NepseLiveServeMeta | null {
+  return metaCache.get<NepseLiveServeMeta>(META_KEY) ?? null;
+}
+
+export async function getOfficialNepseBundleWithMeta(ttlMs = OFFICIAL_LIVE_TTL_MS): Promise<{
+  bundle: NepseOfficialBundle;
+  meta: NepseLiveServeMeta;
+}> {
+  const served = await getOfficialNepseLiveBundle({ ttlMs });
+  metaCache.set(META_KEY, served.meta, Math.max(ttlMs, 60_000));
+  return served;
 }
