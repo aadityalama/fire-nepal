@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getSiteOriginForServerAuthRedirect } from "@/lib/public-site-url";
 import { getSupabaseAnonKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/config";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,7 @@ function maskEmail(email: string): string {
   return `${safeLocal}@${domain}`;
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured for this host." }, { status: 503 });
   }
@@ -110,3 +112,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true as const });
 }
+
+export const POST = withApiRouteTiming("auth/request-password-reset:POST", POSTHandler);

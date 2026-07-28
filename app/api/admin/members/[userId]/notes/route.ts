@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteParams = { params: Promise<{ userId: string }> };
 
-export async function GET(_request: Request, ctx: RouteParams) {
+async function GETHandler(_request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -33,7 +35,7 @@ export async function GET(_request: Request, ctx: RouteParams) {
 
 type PostBody = { body?: string };
 
-export async function POST(request: Request, ctx: RouteParams) {
+async function POSTHandler(request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
   const authorId = gate.userId;
@@ -75,3 +77,6 @@ export async function POST(request: Request, ctx: RouteParams) {
 
   return NextResponse.json({ note: data });
 }
+
+export const GET = withApiRouteTiming<RouteParams>("admin/members/[userId]/notes:GET", GETHandler);
+export const POST = withApiRouteTiming<RouteParams>("admin/members/[userId]/notes:POST", POSTHandler);

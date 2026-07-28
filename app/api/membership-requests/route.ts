@@ -12,6 +12,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { ensureMembershipPaymentProofsBucket } from "@/lib/supabase/ensure-membership-payment-bucket";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -23,7 +25,7 @@ function extFromMime(mime: string): string {
 }
 
 /** List the signed-in user's membership payment requests. */
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -60,7 +62,7 @@ export async function GET() {
 }
 
 /** Submit a membership payment request with proof image. */
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -205,3 +207,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withApiRouteTiming("membership-requests:GET", GETHandler);
+export const POST = withApiRouteTiming("membership-requests:POST", POSTHandler);

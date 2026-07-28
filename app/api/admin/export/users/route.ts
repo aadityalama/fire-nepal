@@ -3,8 +3,10 @@ import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { requireAdminApi, toCsv } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { getMembershipMapByUserIds } from "@/services/membership-service";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function GET() {
+
+async function GETHandler() {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -70,3 +72,5 @@ export async function GET() {
     },
   });
 }
+
+export const GET = withApiRouteTiming("admin/export/users:GET", GETHandler);

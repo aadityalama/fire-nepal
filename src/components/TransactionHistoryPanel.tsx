@@ -56,6 +56,8 @@ type TransactionHistoryPanelProps = {
   onDeleteExpense: (expense: Expense) => void;
 };
 
+type TransactionHistoryPatch = { type: "update" | "delete"; row: ExpenseTransactionRow };
+
 export function TransactionHistoryPanel({
   userId,
   actorName,
@@ -198,6 +200,25 @@ export function TransactionHistoryPanel({
     setSelected(row);
     setDetailOpen(true);
   }
+
+  const handleTransactionUpdated = useCallback(
+    (patch?: TransactionHistoryPatch) => {
+      if (!patch) {
+        refresh();
+        return;
+      }
+
+      if (patch.type === "delete") {
+        setRows((current) => current.filter((row) => row.id !== patch.row.id));
+        setSelected((current) => (current?.id === patch.row.id ? null : current));
+        return;
+      }
+
+      setRows((current) => current.map((row) => (row.id === patch.row.id ? patch.row : row)));
+      setSelected((current) => (current?.id === patch.row.id ? patch.row : current));
+    },
+    [refresh],
+  );
 
   return (
     <div className="mt-4 space-y-4 pb-24">
@@ -493,7 +514,7 @@ export function TransactionHistoryPanel({
         profiles={profiles}
         expenses={expenses}
         onClose={() => setDetailOpen(false)}
-        onUpdated={refresh}
+        onUpdated={handleTransactionUpdated}
         onEditExpense={onEditExpense}
         onDeleteExpense={onDeleteExpense}
       />

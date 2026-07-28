@@ -3,15 +3,17 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { conversationRowToSummary } from "@/lib/fire-nepal-ai/db-mapper";
 import {
+
   formatFireAiDbError,
   listFireAiConversationsForUser,
 } from "@/services/fire-ai-conversations";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
 }
 
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   try {
     const sb = await createServerSupabaseClient();
@@ -25,7 +27,7 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+async function POSTHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   try {
     const sb = await createServerSupabaseClient();
@@ -46,3 +48,6 @@ export async function POST() {
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const GET = withApiRouteTiming("fire-ai/conversations:GET", GETHandler);
+export const POST = withApiRouteTiming("fire-ai/conversations:POST", POSTHandler);

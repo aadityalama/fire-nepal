@@ -12,6 +12,8 @@ import { signUserSession } from "@/auth/server/session-token";
 import { assertLogin, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
 import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -21,7 +23,7 @@ type Body = {
   rememberMe?: boolean;
 };
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -75,3 +77,5 @@ export async function POST(req: Request) {
   });
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/login:POST", POSTHandler);

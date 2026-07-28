@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildSsfReminderEmailBody, SSF_EMAIL_SUBJECT } from "@/lib/ssf-pension/email-template";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /**
  * Cron-safe endpoint for SSF reminder digests.
@@ -8,7 +10,7 @@ import { buildSsfReminderEmailBody, SSF_EMAIL_SUBJECT } from "@/lib/ssf-pension/
  *
  * Wire to Supabase user prefs + transactional email (Resend, etc.) when backend is ready.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = request.headers.get("authorization");
@@ -31,3 +33,5 @@ export async function GET(request: Request) {
     note: "Connect Supabase + email provider to send real digests; this route is a safe cron hook.",
   });
 }
+
+export const GET = withApiRouteTiming("cron/ssf-reminders:GET", GETHandler);

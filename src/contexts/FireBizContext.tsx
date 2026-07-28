@@ -266,10 +266,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
           }
           return [saved, ...prev];
         });
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteExpense = useCallback(
@@ -278,9 +277,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteExpense(client, user.id, id);
       setTransactions((prev) => prev.filter((t) => t.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleAddExpenseCategory = useCallback(
@@ -332,10 +330,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const saved = await upsertCustomer(client, user.id, input);
       if (saved) {
         setCustomers((prev) => [saved, ...prev.filter((c) => c.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteCustomer = useCallback(
@@ -344,9 +341,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteCustomer(client, user.id, id);
       setCustomers((prev) => prev.filter((c) => c.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleSaveSupplier = useCallback(
@@ -356,10 +352,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const saved = await upsertSupplier(client, user.id, input);
       if (saved) {
         setSuppliers((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteSupplier = useCallback(
@@ -368,9 +363,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteSupplier(client, user.id, id);
       setSuppliers((prev) => prev.filter((s) => s.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleSaveSale = useCallback(
@@ -380,10 +374,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const saved = await upsertSale(client, user.id, input);
       if (saved) {
         setSales((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)]);
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteSale = useCallback(
@@ -392,9 +385,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteSale(client, user.id, id);
       setSales((prev) => prev.filter((s) => s.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleSavePurchase = useCallback(
@@ -404,10 +396,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const saved = await upsertPurchase(client, user.id, input);
       if (saved) {
         setPurchases((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeletePurchase = useCallback(
@@ -416,9 +407,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deletePurchase(client, user.id, id);
       setPurchases((prev) => prev.filter((p) => p.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleSaveInventoryItem = useCallback(
@@ -428,10 +418,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const saved = await upsertInventoryItem(client, user.id, input);
       if (saved) {
         setInventory((prev) => [saved, ...prev.filter((i) => i.id !== saved.id)].sort((a, b) => a.name.localeCompare(b.name)));
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteInventoryItem = useCallback(
@@ -440,9 +429,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteInventoryItem(client, user.id, id);
       setInventory((prev) => prev.filter((i) => i.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const handleSaveBizTransaction = useCallback(
@@ -460,10 +448,9 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
           }
           return [saved, ...prev];
         });
-        void refresh();
       }
     },
-    [user, refresh],
+    [user],
   );
 
   const handleDeleteBizTransaction = useCallback(
@@ -472,9 +459,8 @@ export function FireBizProvider({ children }: { children: ReactNode }) {
       const client = getSupabaseBrowserClient();
       await deleteBizTransaction(client, user.id, id);
       setTransactions((prev) => prev.filter((t) => t.id !== id));
-      void refresh();
     },
-    [user, refresh],
+    [user],
   );
 
   const value = useMemo(

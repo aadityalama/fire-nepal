@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { scheduleAdminNotification, sendAdminNewUserEmail } from "@/lib/admin-notifications";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -13,7 +15,7 @@ type Body = { userId?: string };
  * Called by the browser after Supabase `signUp` succeeds so admin email does not block signup.
  * The service role loads the user by id (client cannot forge arbitrary profiles).
  */
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
   }
@@ -61,3 +63,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApiRouteTiming("admin-notifications/new-user:POST", POSTHandler);

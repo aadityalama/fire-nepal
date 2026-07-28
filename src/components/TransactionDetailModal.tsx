@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { DualCurrencyAmount } from "@/components/DualCurrencyAmount";
 import { memberDisplayName } from "@/lib/expense-members";
 import type { Currency, Expense, RoommateProfile } from "@/lib/expense-utils";
+import { createMutationTimer, logClientRender } from "@/lib/mutation-perf";
 import {
   transactionTypeBadgeClass,
   transactionTypeLabel,
@@ -30,10 +31,14 @@ type TransactionDetailModalProps = {
   profiles: Record<string, RoommateProfile>;
   expenses: Expense[];
   onClose: () => void;
-  onUpdated: () => void;
+  onUpdated: (patch?: { type: "update" | "delete"; row: ExpenseTransactionRow }) => void;
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (expense: Expense) => void;
 };
+
+function clientNowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+}
 
 function formatAuditAction(action: ExpenseTransactionAuditRow["action"]) {
   const labels = { created: "Created", updated: "Updated", deleted: "Deleted", restored: "Restored" };
@@ -92,50 +97,89 @@ export function TransactionDetailModal({
       ? expenses.find((e) => e.id === transaction.local_expense_id)
       : undefined;
 
-  async function handleSave() {
+  function handleSave() {
     if (!userId || !isSupabaseConfigured()) return;
+    const current = transaction;
+    if (!current) return;
+    const timer = createMutationTimer("transaction-detail:update", { transactionId: current.id });
+    const renderStartedAt = clientNowMs();
+    const optimisticRow: ExpenseTransactionRow = {
+      ...current,
+      description: description.trim(),
+      amount: Number(amount),
+      category: category.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const toastId = toast.loading("Saving transaction...");
+
     setSaving(true);
-    try {
-      const client = getSupabaseBrowserClient();
-      const updated = await updateExpenseTransaction(
-        client,
-        userId,
-        transaction!.id,
-        {
-          description: description.trim(),
-          amount: Number(amount),
-          category: category.trim() || null,
-        },
-        actorName,
-      );
-      if (!updated) throw new Error("Transaction was not updated.");
-      toast.success("Transaction updated");
-      setEditing(false);
-      onUpdated();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update transaction");
-    } finally {
-      setSaving(false);
-    }
+    setEditing(false);
+    onUpdated({ type: "update", row: optimisticRow });
+    logClientRender("transaction-detail:update", renderStartedAt, { transactionId: current.id });
+
+    void (async () => {
+      try {
+        const client = getSupabaseBrowserClient();
+        const updated = await timer.track("database", () =>
+          updateExpenseTransaction(
+            client,
+            userId,
+            current.id,
+            {
+              description: optimisticRow.description,
+              amount: optimisticRow.amount,
+              category: optimisticRow.category,
+            },
+            actorName,
+          ),
+        );
+        if (!updated) throw new Error("Transaction was not updated.");
+        onUpdated({ type: "update", row: updated });
+        toast.success("Transaction updated", { id: toastId });
+        timer.flush({ ok: true });
+      } catch (error) {
+        onUpdated({ type: "update", row: current });
+        setDescription(current.description);
+        setAmount(String(current.amount));
+        setCategory(current.category ?? "");
+        toast.error(error instanceof Error ? error.message : "Could not update transaction", { id: toastId });
+        timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
+      } finally {
+        setSaving(false);
+      }
+    })();
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!userId || !isSupabaseConfigured()) return;
     if (!window.confirm("Delete this transaction from history?")) return;
+    const current = transaction;
+    if (!current) return;
+    const timer = createMutationTimer("transaction-detail:delete", { transactionId: current.id });
+    const renderStartedAt = clientNowMs();
+    const toastId = toast.loading("Deleting transaction...");
+
     setSaving(true);
-    try {
-      const client = getSupabaseBrowserClient();
-      const ok = await softDeleteExpenseTransaction(client, userId, transaction!.id, actorName);
-      if (!ok) throw new Error("Transaction was not deleted.");
-      if (linkedExpense) onDeleteExpense(linkedExpense);
-      toast.success("Transaction deleted");
-      onUpdated();
-      onClose();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete transaction");
-    } finally {
-      setSaving(false);
-    }
+    onClose();
+    onUpdated({ type: "delete", row: current });
+    logClientRender("transaction-detail:delete", renderStartedAt, { transactionId: current.id });
+
+    void (async () => {
+      try {
+        const client = getSupabaseBrowserClient();
+        const ok = await timer.track("database", () => softDeleteExpenseTransaction(client, userId, current.id, actorName));
+        if (!ok) throw new Error("Transaction was not deleted.");
+        if (linkedExpense) onDeleteExpense(linkedExpense);
+        toast.success("Transaction deleted", { id: toastId });
+        timer.flush({ ok: true });
+      } catch (error) {
+        onUpdated({ type: "update", row: current });
+        toast.error(error instanceof Error ? error.message : "Could not delete transaction. Restored locally.", { id: toastId });
+        timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
+      } finally {
+        setSaving(false);
+      }
+    })();
   }
 
   return (

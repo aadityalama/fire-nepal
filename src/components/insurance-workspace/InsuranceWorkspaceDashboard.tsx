@@ -28,6 +28,7 @@ import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine
 import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
+import { createMutationTimer, logClientRender } from "@/lib/mutation-perf";
 import {
   derivePolicyStatus,
   formatDisplayDate,
@@ -55,6 +56,10 @@ function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
     ...policy,
     status: derivePolicyStatus(policy.expiryDate),
   }));
+}
+
+function clientNowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
 }
 
 function createLocalPolicy(
@@ -149,102 +154,100 @@ export function InsuranceWorkspaceDashboard() {
     saveInsuranceWorkspaceState(normalized);
   }, []);
 
-  const reloadPoliciesFromCloud = useCallback(async () => {
-    const remote = await fetchInsurancePolicies();
-    const next = { version: 1 as const, policies: withDerivedStatus(remote) };
-    setState(next);
-    saveInsuranceWorkspaceState(next);
-    return next;
-  }, []);
-
   const handleSavePolicy = useCallback(
     async (input: InsurancePolicyFormInput, editingId?: string) => {
+      const timer = createMutationTimer("insurance:save-policy", { mode: editingId ? "update" : "create" });
+      const renderStartedAt = clientNowMs();
+      const previousState: InsuranceWorkspaceState = { version: 1, policies: state.policies };
       setSaving(true);
+      const existing = editingId ? state.policies.find((policy) => policy.id === editingId) : undefined;
+      const localPolicy = createLocalPolicy(input, state.policies.length, existing);
+      const optimisticState: InsuranceWorkspaceState = {
+        version: 1,
+        policies: editingId
+          ? state.policies.map((policy) => (policy.id === editingId ? localPolicy : policy))
+          : [...state.policies, localPolicy],
+      };
 
-      try {
-        if (cloudReady && isSupabaseConfigured() && user?.id) {
-          try {
-            if (editingId) {
-              await updateInsurancePolicy(editingId, input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy updated.", { id: "insurance-save" });
-            } else {
-              await createInsurancePolicy(input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy saved.", { id: "insurance-save" });
-            }
-            setSheetOpen(false);
-            setEditingPolicy(null);
-            recalculate();
-            return;
-          } catch (error) {
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud save failed; keeping local state", error);
-            }
-            setCloudReady(false);
-          }
-        }
+      persistLocalState(optimisticState);
+      setSheetOpen(false);
+      setEditingPolicy(null);
+      recalculate();
+      logClientRender("insurance:save-policy", renderStartedAt, { mode: editingId ? "update" : "create" });
+      appToast.success(editingId ? "Policy updated." : "Policy saved.", { id: "insurance-save" });
 
-        if (editingId) {
-          const existing = state.policies.find((policy) => policy.id === editingId);
-          const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
-          persistLocalState({
-            version: 1,
-            policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
-          });
-          appToast.success("Policy updated.", { id: "insurance-save" });
-        } else {
-          persistLocalState({
-            version: 1,
-            policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
-          });
-          appToast.success("Policy saved.", { id: "insurance-save" });
-        }
-        setSheetOpen(false);
-        setEditingPolicy(null);
-        recalculate();
-      } catch (error) {
-        appToast.error(error instanceof Error ? error.message : "Could not save policy. Please try again.", {
-          id: "insurance-save-error",
-        });
-        throw error;
-      } finally {
+      if (!(cloudReady && isSupabaseConfigured() && user?.id)) {
         setSaving(false);
+        timer.flush({ ok: true, localOnly: true });
+        return;
       }
+
+      void (async () => {
+        try {
+          const savedPolicy = await timer.track("database", () =>
+            editingId ? updateInsurancePolicy(editingId, input) : createInsurancePolicy(input),
+          );
+          persistLocalState({
+            version: 1,
+            policies: optimisticState.policies.map((policy) =>
+              policy.id === localPolicy.id || policy.id === savedPolicy.id ? savedPolicy : policy,
+            ),
+          });
+          timer.flush({ ok: true });
+        } catch (error) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[insurance-workspace] cloud save failed; rolling back local state", error);
+          }
+          setCloudReady(false);
+          persistLocalState(previousState);
+          appToast.error(error instanceof Error ? error.message : "Could not save policy. Restored previous values.", {
+            id: "insurance-save-error",
+          });
+          timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
+        } finally {
+          setSaving(false);
+        }
+      })();
     },
-    [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
+    [cloudReady, persistLocalState, recalculate, state.policies, user?.id],
   );
 
   const handleDeletePolicy = useCallback(
     async (policy: InsurancePolicy) => {
-      try {
-        if (cloudReady && isSupabaseConfigured() && user?.id) {
-          try {
-            await deleteInsurancePolicy(policy.id);
-            await reloadPoliciesFromCloud();
-            appToast.success("Policy deleted.", { id: "insurance-delete" });
-            recalculate();
-            return;
-          } catch (error) {
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud delete failed; keeping local state", error);
-            }
-            setCloudReady(false);
-          }
-        }
-        persistLocalState({
-          version: 1,
-          policies: state.policies.filter((item) => item.id !== policy.id),
-        });
-        appToast.success("Policy deleted.", { id: "insurance-delete" });
-        recalculate();
-      } catch (error) {
-        appToast.error(error instanceof Error ? error.message : "Could not delete policy. Please try again.", {
-          id: "insurance-delete-error",
-        });
+      const timer = createMutationTimer("insurance:delete-policy", { policyId: policy.id });
+      const renderStartedAt = clientNowMs();
+      const previousState: InsuranceWorkspaceState = { version: 1, policies: state.policies };
+      persistLocalState({
+        version: 1,
+        policies: state.policies.filter((item) => item.id !== policy.id),
+      });
+      recalculate();
+      logClientRender("insurance:delete-policy", renderStartedAt, { policyId: policy.id });
+      appToast.success("Policy deleted.", { id: "insurance-delete" });
+
+      if (!(cloudReady && isSupabaseConfigured() && user?.id)) {
+        timer.flush({ ok: true, localOnly: true });
+        return;
       }
+
+      void (async () => {
+        try {
+          await timer.track("database", () => deleteInsurancePolicy(policy.id));
+          timer.flush({ ok: true });
+        } catch (error) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[insurance-workspace] cloud delete failed; rolling back local state", error);
+          }
+          setCloudReady(false);
+          persistLocalState(previousState);
+          appToast.error(error instanceof Error ? error.message : "Could not delete policy. Restored locally.", {
+            id: "insurance-delete-error",
+          });
+          timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
+        }
+      })();
     },
-    [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
+    [cloudReady, persistLocalState, recalculate, state.policies, user?.id],
   );
 
   const riskStyles =

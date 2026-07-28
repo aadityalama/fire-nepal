@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildSmartWatchlistBuckets } from "@/services/market/nepse-screener-engine";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /** Smart watchlist buckets derived from real filings + live quotes. */
-export async function GET() {
+async function GETHandler() {
   try {
     const buckets = await buildSmartWatchlistBuckets();
     return NextResponse.json(
@@ -14,3 +16,5 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("market/nepse/smart-watchlists:GET", GETHandler);

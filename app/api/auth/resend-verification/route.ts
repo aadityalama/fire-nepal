@@ -12,6 +12,8 @@ import { sendSignupVerificationOtpEmail } from "@/auth/server/verification-email
 import { isEmailRegistered } from "@/auth/server/user-store";
 import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import { isResendApiKeyConfigured } from "@/lib/resend-api";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -39,7 +41,7 @@ function clearPendingCookie(res: NextResponse) {
   });
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -129,3 +131,5 @@ export async function POST(req: Request) {
   res.cookies.set(FN_PENDING_VERIFY_COOKIE, rotated.cookieValue, pendingCookieOptions());
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/resend-verification:POST", POSTHandler);

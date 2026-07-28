@@ -3,12 +3,14 @@ import { type MembershipRequestPlan } from "@/lib/membership-payment";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { writeMembership } from "@/services/membership-service";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 type Body = { action?: string };
 
-export async function PATCH(request: Request, ctx: RouteParams) {
+async function PATCHHandler(request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
   const adminUserId = gate.userId;
@@ -108,62 +110,62 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     );
   }
 
-  // 2) Mirror to profiles for legacy admin tooling (reads must still use user_profiles)
+  // 2) After SOT write, run independent mirrors/ledger updates in parallel.
   const { data: existingProfile } = await admin.from("profiles").select("*").eq("id", row.user_id).maybeSingle();
-  const { error: profErr } = await admin.from("profiles").upsert(
-    {
-      id: row.user_id,
-      plan_type: plan,
-      last_active_at: (existingProfile as { last_active_at?: string | null } | null)?.last_active_at ?? null,
-      membership_activated_at:
-        (existingProfile as { membership_activated_at?: string | null } | null)?.membership_activated_at ??
-        periodStart,
-      expires_at: periodEnd,
-      suspended_at: null,
-      updated_at: now,
-    },
-    { onConflict: "id" },
-  );
-
-  if (profErr) {
-    return NextResponse.json({ error: `Profile mirror update failed: ${profErr.message}` }, { status: 500 });
-  }
-
   const amount_minor = Math.round(amountNpr * 100);
 
-  const { error: subErr } = await admin.from("subscriptions").upsert(
-    {
+  const [profRes, subRes, revRes] = await Promise.all([
+    admin.from("profiles").upsert(
+      {
+        id: row.user_id,
+        plan_type: plan,
+        last_active_at: (existingProfile as { last_active_at?: string | null } | null)?.last_active_at ?? null,
+        membership_activated_at:
+          (existingProfile as { membership_activated_at?: string | null } | null)?.membership_activated_at ??
+          periodStart,
+        expires_at: periodEnd,
+        suspended_at: null,
+        updated_at: now,
+      },
+      { onConflict: "id" },
+    ),
+    admin.from("subscriptions").upsert(
+      {
+        user_id: row.user_id,
+        plan,
+        status: "active",
+        amount_minor,
+        currency: "NPR",
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+        updated_at: now,
+      },
+      { onConflict: "user_id" },
+    ),
+    admin.from("revenue_events").insert({
       user_id: row.user_id,
-      plan,
-      status: "active",
-      amount_minor,
-      currency: "NPR",
-      current_period_start: periodStart,
-      current_period_end: periodEnd,
-      updated_at: now,
-    },
-    { onConflict: "user_id" },
-  );
+      membership_request_id: id,
+      plan_type: plan,
+      amount_npr: amountNpr,
+      payment_method: paymentMethod,
+      event_type: "membership_payment",
+      kind: "subscription",
+      created_at: now,
+      external_ref: `membership_request:${id}`,
+    }),
+  ]);
 
-  if (subErr) {
-    return NextResponse.json({ error: `Subscription upsert failed: ${subErr.message}` }, { status: 500 });
+  if (profRes.error) {
+    return NextResponse.json({ error: `Profile mirror update failed: ${profRes.error.message}` }, { status: 500 });
   }
-
-  const { error: revErr } = await admin.from("revenue_events").insert({
-    user_id: row.user_id,
-    membership_request_id: id,
-    plan_type: plan,
-    amount_npr: amountNpr,
-    payment_method: paymentMethod,
-    event_type: "membership_payment",
-    kind: "subscription",
-    created_at: now,
-    external_ref: `membership_request:${id}`,
-  });
-
-  if (revErr) {
-    return NextResponse.json({ error: `Revenue log failed: ${revErr.message}` }, { status: 500 });
+  if (subRes.error) {
+    return NextResponse.json({ error: `Subscription upsert failed: ${subRes.error.message}` }, { status: 500 });
+  }
+  if (revRes.error) {
+    return NextResponse.json({ error: `Revenue log failed: ${revRes.error.message}` }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, status: "approved", plan, current_period_end: periodEnd });
 }
+
+export const PATCH = withApiRouteTiming<RouteParams>("admin/membership-requests/[id]:PATCH", PATCHHandler);

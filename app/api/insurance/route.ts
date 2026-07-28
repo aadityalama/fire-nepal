@@ -5,6 +5,7 @@ import {
   type InsurancePolicyFormInput,
   type InsuranceType,
 } from "@/lib/insurance/insurance-types";
+import { createMutationTimer, withApiRouteTiming } from "@/lib/mutation-perf";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createInsurancePolicyForUser, listInsurancePoliciesForUser } from "@/services/insurance-supabase";
@@ -54,34 +55,45 @@ function sanitizeCreateInput(raw: unknown): InsurancePolicyFormInput | null {
   };
 }
 
-export async function GET() {
+async function getInsuranceHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:insurance:get:handler");
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to view your insurance policies.", 401);
 
-    const policies = await listInsurancePoliciesForUser(sb, data.user.id);
-    return NextResponse.json({ ok: true, policies });
+    const policies = await timer.track("database", () => listInsurancePoliciesForUser(sb, data.user.id));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, policies }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not load insurance policies.", 500);
   }
 }
 
-export async function POST(req: Request) {
+async function postInsuranceHandler(req: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:insurance:post:handler");
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to save an insurance policy.", 401);
 
-    const body = await req.json();
-    const input = sanitizeCreateInput(body);
+    const body = await timer.track("serialization", () => req.json());
+    const input = timer.trackSync("serialization", () => sanitizeCreateInput(body));
     if (!input) return bad("Please check insurance type, provider, and coverage amount.");
 
-    const policy = await createInsurancePolicyForUser(sb, data.user.id, input);
-    return NextResponse.json({ ok: true, policy });
+    const policy = await timer.track("database", () => createInsurancePolicyForUser(sb, data.user.id, input));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, policy }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not save insurance policy.", 500);
   }
 }
+
+export const GET = withApiRouteTiming("insurance:GET", getInsuranceHandler);
+export const POST = withApiRouteTiming("insurance:POST", postInsuranceHandler);

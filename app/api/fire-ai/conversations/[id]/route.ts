@@ -3,9 +3,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { conversationRowToSummary } from "@/lib/fire-nepal-ai/db-mapper";
 import {
+
   formatFireAiDbError,
   getFireAiConversationWithMessages,
 } from "@/services/fire-ai-conversations";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -13,7 +15,7 @@ function bad(msg: string, status = 400) {
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_req: Request, ctx: RouteContext) {
+async function GETHandler(_req: Request, ctx: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   const { id } = await ctx.params;
   if (!id) return bad("Missing conversation id");
@@ -32,7 +34,7 @@ export async function GET(_req: Request, ctx: RouteContext) {
   }
 }
 
-export async function PATCH(req: Request, ctx: RouteContext) {
+async function PATCHHandler(req: Request, ctx: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   const { id } = await ctx.params;
   if (!id) return bad("Missing conversation id");
@@ -69,7 +71,7 @@ export async function PATCH(req: Request, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext) {
+async function DELETEHandler(_req: Request, ctx: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   const { id } = await ctx.params;
   if (!id) return bad("Missing conversation id");
@@ -88,3 +90,7 @@ export async function DELETE(_req: Request, ctx: RouteContext) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const GET = withApiRouteTiming<RouteContext>("fire-ai/conversations/[id]:GET", GETHandler);
+export const PATCH = withApiRouteTiming<RouteContext>("fire-ai/conversations/[id]:PATCH", PATCHHandler);
+export const DELETE = withApiRouteTiming<RouteContext>("fire-ai/conversations/[id]:DELETE", DELETEHandler);

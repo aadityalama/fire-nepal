@@ -3,7 +3,6 @@
 import { format, parseISO } from "date-fns";
 import { ArrowLeft, Eye, Loader2, Mail, Pencil, Plus, Send } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import type { AdminMemberDetail, AdminMemberNoteRow } from "@/lib/admin/fetch-admin-member-detail";
 import { formatMembershipReminderType } from "@/lib/membership-renewal-reminders/reminder-next";
@@ -44,13 +43,23 @@ export function AdminMemberDetailClient({
   detail: AdminMemberDetail;
   initialRenewOpen: boolean;
 }) {
-  const router = useRouter();
-  const bucket = membershipUiBucket({
+  const [memberStatus, setMemberStatus] = useState({
     planType: detail.planType,
-    expiresAtIso: detail.expiresAt,
-    suspendedAtIso: detail.suspendedAt,
-    archivedAtIso: detail.archivedAt,
+    expiresAt: detail.expiresAt,
+    suspendedAt: detail.suspendedAt,
+    archivedAt: detail.archivedAt,
+    subscription: detail.subscription,
   });
+  const bucket = useMemo(
+    () =>
+      membershipUiBucket({
+        planType: memberStatus.planType,
+        expiresAtIso: memberStatus.expiresAt,
+        suspendedAtIso: memberStatus.suspendedAt,
+        archivedAtIso: memberStatus.archivedAt,
+      }),
+    [memberStatus],
+  );
 
   const [notes, setNotes] = useState<AdminMemberNoteRow[]>(detail.notes);
   const [newNote, setNewNote] = useState("");
@@ -64,6 +73,7 @@ export function AdminMemberDetailClient({
   const [reminderBusy, setReminderBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
+  const [reminderStatusMessage, setReminderStatusMessage] = useState<string | null>(null);
 
   const reminderTimeline = useMemo(
     () => [...detail.reminders].sort((a, b) => a.sent_at.localeCompare(b.sent_at)),
@@ -145,23 +155,34 @@ export function AdminMemberDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "renew", extendDays: days, amountNpr }),
       });
-      const j = (await r.json()) as { error?: string };
+      const j = (await r.json()) as { error?: string; expires_at?: string };
       if (!r.ok) {
         window.alert(j.error ?? "Renew failed");
         return;
       }
       const { broadcastMembershipUpdated } = await import("@/services/membership-service");
       broadcastMembershipUpdated(detail.userId);
+      if (j.expires_at) {
+        setMemberStatus((current) => ({
+          ...current,
+          expiresAt: j.expires_at ?? current.expiresAt,
+          suspendedAt: null,
+          subscription: current.subscription
+            ? { ...current.subscription, status: "active", current_period_end: j.expires_at ?? current.subscription.current_period_end }
+            : current.subscription,
+        }));
+      }
       setRenewOpen(false);
-      window.location.reload();
+      setRenewAmount("");
+      setReminderStatusMessage("Membership renewed successfully.");
     } finally {
       setRenewBusy(false);
     }
   };
 
   const canRenew =
-    (detail.planType === "premium" || detail.planType === "elite") && !detail.archivedAt;
-  const remindersDisabled = Boolean(detail.suspendedAt) || Boolean(detail.archivedAt);
+    (memberStatus.planType === "premium" || memberStatus.planType === "elite") && !memberStatus.archivedAt;
+  const remindersDisabled = Boolean(memberStatus.suspendedAt) || Boolean(memberStatus.archivedAt);
 
   const runReminderAction = async (action: "preview" | "send_now" | "resend_last") => {
     setReminderBusy(true);
@@ -175,6 +196,7 @@ export function AdminMemberDetailClient({
       const j = (await r.json()) as {
         error?: string;
         preview?: { subject: string; html: string; text: string };
+        resendId?: string;
       };
       if (!r.ok) {
         window.alert(j.error ?? "Request failed");
@@ -185,7 +207,11 @@ export function AdminMemberDetailClient({
         setPreviewOpen(true);
         return;
       }
-      router.refresh();
+      setReminderStatusMessage(
+        action === "send_now"
+          ? `Reminder sent${j.resendId ? ` (${j.resendId})` : ""}.`
+          : `Reminder resent${j.resendId ? ` (${j.resendId})` : ""}.`,
+      );
     } finally {
       setReminderBusy(false);
     }
@@ -219,7 +245,7 @@ export function AdminMemberDetailClient({
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge bucket={bucket} />
             <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] font-black uppercase text-zinc-300">
-              {planTypeLabel(detail.planType)}
+              {planTypeLabel(memberStatus.planType)}
             </span>
           </div>
         </div>
@@ -242,14 +268,14 @@ export function AdminMemberDetailClient({
           <div className="rounded-xl border border-white/[0.06] bg-black/25 p-3">
             <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Expires</dt>
             <dd className="mt-1 font-mono text-zinc-200">
-              {detail.expiresAt ? format(parseISO(detail.expiresAt), "MMM d, yyyy HH:mm") : "—"}
+              {memberStatus.expiresAt ? format(parseISO(memberStatus.expiresAt), "MMM d, yyyy HH:mm") : "—"}
             </dd>
           </div>
           <div className="rounded-xl border border-white/[0.06] bg-black/25 p-3">
             <dt className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Subscription</dt>
             <dd className="mt-1 text-zinc-200">
-              {detail.subscription
-                ? `${detail.subscription.plan ?? "—"} · ${detail.subscription.status ?? "—"}`
+              {memberStatus.subscription
+                ? `${memberStatus.subscription.plan ?? "—"} · ${memberStatus.subscription.status ?? "—"}`
                 : "—"}
             </dd>
           </div>
@@ -308,6 +334,11 @@ export function AdminMemberDetailClient({
               </button>
             </div>
           </div>
+          {reminderStatusMessage ? (
+            <p className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">
+              {reminderStatusMessage}
+            </p>
+          ) : null}
 
           <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
             <div className="rounded-xl border border-white/[0.06] bg-black/25 p-3">

@@ -7,6 +7,8 @@ import { buildPendingResetCookie } from "@/auth/server/pending-reset-cookie";
 import { sendPasswordResetOtpEmail } from "@/auth/server/password-reset-email";
 import { getVerifiedUserByEmail } from "@/auth/server/user-store";
 import { isResendApiKeyConfigured } from "@/lib/resend-api";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -33,7 +35,7 @@ function resetCookieOptions(): typeof RESET_COOKIE_BASE {
   return RESET_COOKIE_BASE;
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -113,3 +115,5 @@ export async function POST(req: Request) {
   res.cookies.set(FN_PENDING_RESET_COOKIE, built.cookieValue, resetCookieOptions());
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/forgot-password:POST", POSTHandler);

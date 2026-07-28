@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { runMembershipRenewalRemindersCron } from "@/lib/membership-renewal-reminders/cron-dispatch";
 import { upsertMembershipRenewalRemindersCronHealth } from "@/lib/scheduled-reminders/cron-health";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const maxDuration = 300;
 
 /** Optional standalone cron (same logic as chained run from `/api/cron/scheduled-reminders`). */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (secret) {
     const auth = request.headers.get("authorization");
@@ -76,3 +78,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: msg, healthLogged: done.ok }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("cron/membership-renewal-reminders:GET", GETHandler);

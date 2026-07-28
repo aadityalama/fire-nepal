@@ -8,6 +8,8 @@ import { toPublicUser, toSessionClaims, verifyOtpAndActivate } from "@/auth/serv
 import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import { scheduleAdminNotification, sendAdminNewUserEmail } from "@/lib/admin-notifications";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -26,7 +28,7 @@ function clearPendingCookie(res: NextResponse) {
   });
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -78,3 +80,5 @@ export async function POST(req: Request) {
   });
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/verify-email:POST", POSTHandler);

@@ -4,10 +4,12 @@ import { FN_SESSION_COOKIE } from "@/auth/constants";
 import { getAuthSecret } from "@/auth/server/env";
 import { verifyUserSession } from "@/auth/server/session-token";
 import { getVerifiedUserByEmail, toPublicUser } from "@/auth/server/user-store";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
-export async function GET() {
+async function GETHandler() {
   const cookieStore = await cookies();
   const token = cookieStore.get(FN_SESSION_COOKIE)?.value;
   if (!token) {
@@ -21,3 +23,5 @@ export async function GET() {
   const user = stored ? toPublicUser(stored) : base;
   return NextResponse.json({ user });
 }
+
+export const GET = withApiRouteTiming("auth/session:GET", GETHandler);

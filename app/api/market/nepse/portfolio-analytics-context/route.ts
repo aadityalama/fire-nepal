@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadPortfolioMarketContext } from "@/services/market/nepse-portfolio-market-context";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const revalidate = 120;
 
@@ -7,7 +9,7 @@ export const revalidate = 120;
  * Batch EOD / profile / dividend / index context for institutional portfolio analytics.
  * POST body: { symbols: string[] }
  */
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
@@ -28,3 +30,5 @@ export async function POST(request: Request) {
   const context = await loadPortfolioMarketContext(symbols);
   return NextResponse.json({ ok: true, context }, { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } });
 }
+
+export const POST = withApiRouteTiming("market/nepse/portfolio-analytics-context:POST", POSTHandler);

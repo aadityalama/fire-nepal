@@ -15,13 +15,15 @@ import {
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 import { loadCompanyFundamentals } from "@/services/market/nepse-company-fundamentals";
 import { loadFinancialIntelligence } from "@/services/market/nepse-financial-intelligence";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ symbol: string }> };
 
-export async function GET(_request: Request, ctx: Ctx) {
+async function GETHandler(_request: Request, ctx: Ctx) {
   const gate = await requireNepseHubAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -74,7 +76,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   });
 }
 
-export async function PATCH(request: Request, ctx: Ctx) {
+async function PATCHHandler(request: Request, ctx: Ctx) {
   const gate = await requireNepseHubAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -144,3 +146,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true, override: result.row });
 }
+
+export const GET = withApiRouteTiming<Ctx>("admin/nepse-hub/[symbol]:GET", GETHandler);
+export const PATCH = withApiRouteTiming<Ctx>("admin/nepse-hub/[symbol]:PATCH", PATCHHandler);

@@ -5,6 +5,8 @@ import type { Database } from "@/types/supabase-database";
 import { validateReviewInput } from "@/lib/community-reviews/validate-review-input";
 import { clampRating } from "@/services/community-reviews-supabase";
 import { fetchUserProfile } from "@/services/user-profile-supabase";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteCtx = { params: Promise<{ id: string }> };
 type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["Update"];
@@ -12,7 +14,7 @@ type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["
 const REVIEW_COLUMNS =
   "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at, deleted_at";
 
-export async function PATCH(req: Request, ctx: RouteCtx) {
+async function PATCHHandler(req: Request, ctx: RouteCtx) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -68,7 +70,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   return NextResponse.json({ review: data });
 }
 
-export async function DELETE(_req: Request, ctx: RouteCtx) {
+async function DELETEHandler(_req: Request, ctx: RouteCtx) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -104,3 +106,6 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApiRouteTiming<RouteCtx>("community-reviews/[id]:PATCH", PATCHHandler);
+export const DELETE = withApiRouteTiming<RouteCtx>("community-reviews/[id]:DELETE", DELETEHandler);

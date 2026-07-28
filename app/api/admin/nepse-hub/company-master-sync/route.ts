@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireNepseHubAdminApi } from "@/lib/admin/nepse-hub-admin";
 import { createMarketDataServiceClient, ingestOfficialCompanyMaster } from "@/services/market/nepse-market-data-engine";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function GETHandler() {
   const gate = await requireNepseHubAdminApi();
   if (gate instanceof NextResponse) return gate;
   const sb = createMarketDataServiceClient();
@@ -38,7 +40,7 @@ export async function GET() {
   });
 }
 
-export async function POST() {
+async function POSTHandler() {
   const gate = await requireNepseHubAdminApi();
   if (gate instanceof NextResponse) return gate;
   const sb = createMarketDataServiceClient();
@@ -49,3 +51,6 @@ export async function POST() {
   const result = await ingestOfficialCompanyMaster(sb, "manual");
   return NextResponse.json({ ok: result.status !== "error", result, requestedBy: gate.email }, { status: result.status === "error" ? 500 : 200 });
 }
+
+export const GET = withApiRouteTiming("admin/nepse-hub/company-master-sync:GET", GETHandler);
+export const POST = withApiRouteTiming("admin/nepse-hub/company-master-sync:POST", POSTHandler);

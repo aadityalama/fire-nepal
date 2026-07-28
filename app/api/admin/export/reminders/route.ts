@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi, toCsv } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function GET() {
+
+async function GETHandler() {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -55,3 +57,5 @@ export async function GET() {
     },
   });
 }
+
+export const GET = withApiRouteTiming("admin/export/reminders:GET", GETHandler);

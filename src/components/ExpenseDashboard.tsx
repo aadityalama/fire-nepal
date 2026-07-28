@@ -115,6 +115,7 @@ import {
   downloadSettlementSharePdf,
   downloadSettlementSharePng,
 } from "@/lib/settlement-share";
+import { createMutationTimer, logClientRender } from "@/lib/mutation-perf";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
@@ -810,6 +811,7 @@ export function ExpenseDashboard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [mutationPending, setMutationPending] = useState(false);
   const [form, setForm] = useState<ExpenseForm>(() => emptyExpenseForm());
   const [amountInputCurrency, setAmountInputCurrency] = useState<"NPR" | "KRW">("NPR");
   const [exchangeRate, setExchangeRate] = useState<ExchangeRateSnapshot>(fallbackExchangeRate);
@@ -1470,10 +1472,12 @@ export function ExpenseDashboard({
 
   async function saveExpense() {
     const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
-    if (!form.title.trim() || amount === null || !form.payerId) return;
+    if (!form.title.trim() || amount === null || !form.payerId || mutationPending) return;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
     if (splitAmong.length === 0) return;
     const splitPercentages = resolveSplitPercentages(form.splitEqually, splitAmong, form.splitPercentStr);
+    const isEdit = editingExpenseId != null;
+    const previousExpense = isEdit ? expenses.find((expense) => expense.id === editingExpenseId) : undefined;
     const nextExpense: Expense = {
       id: editingExpenseId ?? Date.now(),
       title: form.title.trim(),
@@ -1482,46 +1486,21 @@ export function ExpenseDashboard({
       category: normalizeExpenseCategory(form.category),
       splitEqually: form.splitEqually,
       date: form.date,
-      receiptImage: receiptPreview,
+      receiptImage: receiptPreview ?? previousExpense?.receiptImage,
       splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
       splitPercentages: form.splitEqually ? undefined : splitPercentages,
       amountCurrency: formEntryCurrency,
     };
 
     const monthKey = expenseMonthKey(nextExpense.date);
+    const renderStarted = performance.now();
+    const timer = createMutationTimer(isEdit ? "expense-update-ui" : "expense-save-ui");
+    setMutationPending(true);
 
-    try {
-      if (personalMode) {
-        await recordTransaction(
-          {
-            localExpenseId: nextExpense.id,
-            transactionType: "expense",
-            description: nextExpense.title,
-            category: normalizeExpenseCategory(nextExpense.category),
-            amount: nextExpense.amount,
-            currency: nextExpense.amountCurrency ?? "NPR",
-            memberId: nextExpense.payerId,
-            memberName: memberDisplayName(nextExpense.payerId, profiles),
-            transactionDate: nextExpense.date,
-            metadata: { monthKey, source: editingExpenseId ? "expense_edit" : "expense_add" },
-          },
-          { upsertLocalId: true },
-        );
-      } else {
-        await persistGroupExpense(nextExpense);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save expense.");
-      return;
-    }
-
-    if (editingExpenseId) {
+    // Optimistic local update + close modal immediately; persist in background.
+    if (isEdit) {
       setExpenses((current) =>
-        current.map((expense) =>
-          expense.id === editingExpenseId
-            ? { ...nextExpense, receiptImage: receiptPreview ?? expense.receiptImage }
-            : expense,
-        ),
+        current.map((expense) => (expense.id === editingExpenseId ? nextExpense : expense)),
       );
       appendActivity({
         type: "expense_edited",
@@ -1532,7 +1511,6 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} updated ${nextExpense.title}`,
       });
-      toast.success("Expense updated");
     } else {
       setExpenses((current) => [nextExpense, ...current]);
       appendActivity({
@@ -1544,7 +1522,6 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(nextExpense.payerId, profiles)} added ${nextExpense.title}`,
       });
-      toast.success("Expense saved");
     }
 
     if (!monthKeys.includes(monthKey)) {
@@ -1552,38 +1529,60 @@ export function ExpenseDashboard({
     }
 
     closeExpenseModal();
+    logClientRender(isEdit ? "expense-update" : "expense-save", renderStarted, { optimistic: true });
+    toast.success(isEdit ? "Expense updated" : "Expense saved", { id: "expense-mutation" });
+    timer.mark("recalculation");
+
+    try {
+      if (personalMode) {
+        await timer.track("database", () =>
+          recordTransaction(
+            {
+              localExpenseId: nextExpense.id,
+              transactionType: "expense",
+              description: nextExpense.title,
+              category: normalizeExpenseCategory(nextExpense.category),
+              amount: nextExpense.amount,
+              currency: nextExpense.amountCurrency ?? "NPR",
+              memberId: nextExpense.payerId,
+              memberName: memberDisplayName(nextExpense.payerId, profiles),
+              transactionDate: nextExpense.date,
+              metadata: { monthKey, source: isEdit ? "expense_edit" : "expense_add" },
+            },
+            { upsertLocalId: true },
+          ),
+        );
+      } else {
+        await timer.track("database", () => persistGroupExpense(nextExpense));
+      }
+      timer.flush({ ok: true });
+    } catch (error) {
+      if (isEdit && previousExpense) {
+        setExpenses((current) =>
+          current.map((expense) => (expense.id === nextExpense.id ? previousExpense : expense)),
+        );
+      } else {
+        setExpenses((current) => current.filter((expense) => expense.id !== nextExpense.id));
+      }
+      toast.error(error instanceof Error ? error.message : "Could not save expense.", {
+        id: "expense-mutation-error",
+      });
+      timer.flush({ ok: false });
+    } finally {
+      setMutationPending(false);
+    }
   }
 
   async function confirmDeleteExpense() {
-    if (!expenseToDelete) return;
+    if (!expenseToDelete || mutationPending) return;
     const deleted = expenseToDelete;
-    try {
-      if (personalMode) {
-        await recordTransaction({
-          transactionType: "adjustment",
-          description: `Deleted: ${deleted.title}`,
-          category: normalizeExpenseCategory(deleted.category),
-          amount: deleted.amount,
-          currency: deleted.amountCurrency ?? "NPR",
-          memberId: deleted.payerId,
-          memberName: memberDisplayName(deleted.payerId, profiles),
-          transactionDate: deleted.date,
-          metadata: { localExpenseId: deleted.id, source: "expense_delete" },
-        });
-        if (user?.id && isSupabaseConfigured()) {
-          await softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
-        }
-      } else {
-        if (!user?.id) throw new Error("Please sign in to delete group expenses.");
-        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
-        const ok = await softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
-        if (!ok) throw new Error("Could not delete group expense from Supabase.");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete expense.");
-      return;
-    }
-    setExpenses((current) => current.filter((expense) => expense.id !== expenseToDelete.id));
+    const renderStarted = performance.now();
+    const timer = createMutationTimer("expense-delete-ui");
+    setMutationPending(true);
+
+    // Close confirm dialog and remove locally immediately.
+    setExpenseToDelete(null);
+    setExpenses((current) => current.filter((expense) => expense.id !== deleted.id));
     appendActivity({
       type: "expense_deleted",
       monthKey: expenseMonthKey(deleted.date),
@@ -1592,8 +1591,50 @@ export function ExpenseDashboard({
       category: normalizeExpenseCategory(deleted.category),
       message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
     });
-    setExpenseToDelete(null);
-    toast.success("Expense deleted");
+    logClientRender("expense-delete", renderStarted, { optimistic: true });
+    toast.success("Expense deleted", { id: "expense-mutation" });
+    timer.mark("recalculation");
+
+    try {
+      if (personalMode) {
+        const client = user?.id && isSupabaseConfigured() ? getSupabaseBrowserClient() : null;
+        await timer.track("database", async () => {
+          const jobs: Promise<unknown>[] = [
+            recordTransaction({
+              transactionType: "adjustment",
+              description: `Deleted: ${deleted.title}`,
+              category: normalizeExpenseCategory(deleted.category),
+              amount: deleted.amount,
+              currency: deleted.amountCurrency ?? "NPR",
+              memberId: deleted.payerId,
+              memberName: memberDisplayName(deleted.payerId, profiles),
+              transactionDate: deleted.date,
+              metadata: { localExpenseId: deleted.id, source: "expense_delete" },
+            }),
+          ];
+          if (client && user?.id) {
+            jobs.push(softDeleteExpenseTransactionByLocalId(client, user.id, deleted.id, actorName));
+          }
+          await Promise.all(jobs);
+        });
+      } else {
+        if (!user?.id) throw new Error("Please sign in to delete group expenses.");
+        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
+        const ok = await timer.track("database", () =>
+          softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id),
+        );
+        if (!ok) throw new Error("Could not delete group expense from Supabase.");
+      }
+      timer.flush({ ok: true });
+    } catch (error) {
+      setExpenses((current) => [deleted, ...current.filter((expense) => expense.id !== deleted.id)]);
+      toast.error(error instanceof Error ? error.message : "Could not delete expense.", {
+        id: "expense-mutation-error",
+      });
+      timer.flush({ ok: false });
+    } finally {
+      setMutationPending(false);
+    }
   }
 
   const settlementMarkedComplete = useMemo(
@@ -2084,8 +2125,13 @@ export function ExpenseDashboard({
                 <button type="button" onClick={closeExpenseModal} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
                   Cancel
                 </button>
-                <button type="button" onClick={saveExpense} className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white">
-                  {editingExpenseId ? "Update" : "Save"}
+                <button
+                  type="button"
+                  onClick={saveExpense}
+                  disabled={mutationPending}
+                  className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white disabled:opacity-60"
+                >
+                  {mutationPending ? "Saving…" : editingExpenseId ? "Update" : "Save"}
                 </button>
               </div>
             </div>
@@ -2104,8 +2150,13 @@ export function ExpenseDashboard({
               <button type="button" onClick={() => setExpenseToDelete(null)} className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
                 Cancel
               </button>
-              <button type="button" onClick={confirmDeleteExpense} className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white">
-                Delete
+              <button
+                type="button"
+                onClick={confirmDeleteExpense}
+                disabled={mutationPending}
+                className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white disabled:opacity-60"
+              >
+                {mutationPending ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>
@@ -2903,9 +2954,10 @@ export function ExpenseDashboard({
             <button
               type="button"
               onClick={saveExpense}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white"
+              disabled={mutationPending}
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white disabled:opacity-60"
             >
-              {editingExpenseId ? "Update" : "Save"}
+              {mutationPending ? "Saving…" : editingExpenseId ? "Update" : "Save"}
             </button>
           </div>
         </div>
@@ -2932,9 +2984,10 @@ export function ExpenseDashboard({
             <button
               type="button"
               onClick={confirmDeleteExpense}
-              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white"
+              disabled={mutationPending}
+              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white disabled:opacity-60"
             >
-              Delete
+              {mutationPending ? "Deleting…" : "Delete"}
             </button>
           </div>
         </div>

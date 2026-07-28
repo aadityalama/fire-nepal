@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getFireAiQuotaSnapshot } from "@/services/fire-ai-usage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
 }
 
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
 
   try {
@@ -21,3 +23,5 @@ export async function GET() {
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const GET = withApiRouteTiming("fire-ai/usage:GET", GETHandler);

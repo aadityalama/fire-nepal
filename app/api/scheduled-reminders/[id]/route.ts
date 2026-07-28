@@ -6,12 +6,14 @@ import { nextDueAfterPaidYmd } from "@/lib/scheduled-reminders/schedule-logic";
 import type { RepeatFrequency } from "@/lib/smart-reminders/types";
 import { REPEAT_FREQUENCIES } from "@/lib/smart-reminders/types";
 import { formatScheduledRemindersDbError } from "@/lib/supabase/scheduled-reminders-db-error";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
 }
 
-export async function PATCH(request: Request, ctx: { params: { id: string } | Promise<{ id: string }> }) {
+async function PATCHHandler(request: Request, ctx: { params: { id: string } | Promise<{ id: string }> }) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   const { id } = await Promise.resolve(ctx.params);
   if (!id) return bad("Missing id");
@@ -106,7 +108,7 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
   }
 }
 
-export async function DELETE(_request: Request, ctx: { params: { id: string } | Promise<{ id: string }> }) {
+async function DELETEHandler(_request: Request, ctx: { params: { id: string } | Promise<{ id: string }> }) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   const { id } = await Promise.resolve(ctx.params);
   if (!id) return bad("Missing id");
@@ -121,3 +123,6 @@ export async function DELETE(_request: Request, ctx: { params: { id: string } | 
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const PATCH = withApiRouteTiming<{ params: { id: string } | Promise<{ id: string }> }>("scheduled-reminders/[id]:PATCH", PATCHHandler);
+export const DELETE = withApiRouteTiming<{ params: { id: string } | Promise<{ id: string }> }>("scheduled-reminders/[id]:DELETE", DELETEHandler);

@@ -241,9 +241,7 @@ export function NepseHubAdminClient() {
         j.result?.message ??
           `Company master synchronized (${j.result?.totalSeen?.toLocaleString("en-IN") ?? "0"} companies).`,
       );
-      await loadSyncInfo();
-      await loadCatalog(query);
-      await loadSymbol(symbol);
+      await Promise.all([loadSyncInfo(), loadCatalog(query), loadSymbol(symbol)]);
     } finally {
       setSyncBusy(false);
     }

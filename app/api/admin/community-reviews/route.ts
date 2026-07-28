@@ -7,6 +7,8 @@ import {
   listCommunityReviewsAdmin,
 } from "@/services/community-reviews-supabase";
 import type { CommunityReviewListFilters, CommunityReviewStatus, CommunityReviewType } from "@/lib/community-reviews/types";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function parseStatus(v: string | null): CommunityReviewListFilters["status"] {
   if (v === "pending" || v === "approved" || v === "rejected" || v === "all") return v;
@@ -18,7 +20,7 @@ function parseDemo(v: string | null): CommunityReviewListFilters["is_demo"] {
   return "all";
 }
 
-export async function GET(req: Request) {
+async function GETHandler(req: Request) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -109,3 +111,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ review: data }, { status: 201 });
 }
+
+export const GET = withApiRouteTiming("admin/community-reviews:GET", GETHandler);
+export const POST = withApiRouteTiming("admin/community-reviews:POST", POSTHandler);

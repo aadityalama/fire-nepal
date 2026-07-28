@@ -8,6 +8,8 @@ import {
 } from "@/lib/scheduled-reminders/api-mapper";
 import { REMINDER_TYPES, REPEAT_FREQUENCIES, type RepeatFrequency, type ReminderType } from "@/lib/smart-reminders/types";
 import { formatScheduledRemindersDbError } from "@/lib/supabase/scheduled-reminders-db-error";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -57,7 +59,7 @@ function validateBody(raw: unknown): CreateScheduledReminderBody | null {
   };
 }
 
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   try {
     const sb = await createServerSupabaseClient();
@@ -77,7 +79,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   let raw: unknown;
   try {
@@ -100,3 +102,6 @@ export async function POST(request: Request) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const GET = withApiRouteTiming("scheduled-reminders:GET", GETHandler);
+export const POST = withApiRouteTiming("scheduled-reminders:POST", POSTHandler);

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { buildMarketSnapshot } from "@/services/market/build-snapshot";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -10,7 +12,7 @@ const LIVE_NO_STORE_HEADERS = {
   Expires: "0",
 } as const;
 
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const rl = checkRateLimit(req, { windowMs: 60_000, max: 45, keyPrefix: "market-summary" });
   if (!rl.ok) {
     return NextResponse.json(
@@ -38,3 +40,5 @@ export async function GET(req: NextRequest) {
     headers: LIVE_NO_STORE_HEADERS,
   });
 }
+
+export const GET = withApiRouteTiming("market/summary:GET", GETHandler);

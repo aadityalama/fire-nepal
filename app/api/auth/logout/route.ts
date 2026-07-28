@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { FN_SESSION_COOKIE } from "@/auth/constants";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
-export async function POST() {
+async function POSTHandler() {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(FN_SESSION_COOKIE, "", {
     httpOnly: true,
@@ -14,3 +16,5 @@ export async function POST() {
   });
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/logout:POST", POSTHandler);

@@ -3,9 +3,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { REAL_ESTATE_STORAGE_BUCKET } from "@/lib/portfolio/real-estate-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /** Refresh a signed URL for a private real-estate vault object owned by the caller. */
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -40,3 +42,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ url: data.signedUrl });
 }
+
+export const POST = withApiRouteTiming("portfolio/real-estate/signed-url:POST", POSTHandler);

@@ -22,6 +22,7 @@ import { SavingsGoalCard } from "@/components/savings-workspace/SavingsGoalCard"
 import { SavingsGoalSheet } from "@/components/savings-workspace/SavingsGoalSheet";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { fetchSavingsWorkspace, saveSavingsWorkspaceToCloud } from "@/lib/savings/savings-api";
+import { createMutationTimer, logClientRender } from "@/lib/mutation-perf";
 import {
   appendSavingsTransaction,
   createGoalId,
@@ -40,6 +41,10 @@ import {
 import type { SavingsGoal, SavingsGoalFormInput, SavingsWorkspaceState } from "@/lib/savings/savings-types";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
+
+function clientNowMs(): number {
+  return typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+}
 
 function mergeSavingsWorkspaceState(local: SavingsWorkspaceState, remote: SavingsWorkspaceState): SavingsWorkspaceState {
   return {
@@ -152,35 +157,35 @@ export function SavingsWorkspaceDashboard() {
 
   const persistState = useCallback(
     async (next: SavingsWorkspaceState) => {
+      const timer = createMutationTimer("savings:persist");
+      const renderStartedAt = clientNowMs();
+      const rollbackState = state;
+      setState(next);
+      saveSavingsWorkspaceState(next);
+      logClientRender("savings:persist", renderStartedAt);
+
       if (!user?.id) {
-        setState(next);
-        saveSavingsWorkspaceState(next);
+        timer.flush({ ok: true, localOnly: true });
         return next;
       }
-      try {
-        const saved = await saveSavingsWorkspaceToCloud(next);
-        const remote = (await fetchSavingsWorkspace()) ?? saved;
-        const fresh = mergeSavingsWorkspaceState(next, remote);
-        setState(fresh);
-        saveSavingsWorkspaceState(fresh);
-        if (JSON.stringify(fresh) !== JSON.stringify(remote)) {
-          void saveSavingsWorkspaceToCloud(fresh).catch((error) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[savings-workspace] background merge sync failed", error);
-            }
-          });
+      void (async () => {
+        try {
+          await timer.track("database", () => saveSavingsWorkspaceToCloud(next));
+          timer.flush({ ok: true });
+        } catch (error) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[savings-workspace] cloud save failed; rolling back local state", error);
+          }
+          setState(rollbackState);
+          saveSavingsWorkspaceState(rollbackState);
+          toast.error(error instanceof Error ? error.message : "Could not save savings workspace. Restored previous values.");
+          timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
         }
-        return fresh;
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[savings-workspace] cloud save failed; keeping local state", error);
-        }
-        setState(next);
-        saveSavingsWorkspaceState(next);
-        return next;
-      }
+      })();
+
+      return next;
     },
-    [user?.id],
+    [state, user?.id],
   );
 
   const handleSaveGoal = useCallback(
@@ -209,7 +214,7 @@ export function SavingsWorkspaceDashboard() {
               ),
             ),
           };
-          await persistState(nextState);
+          void persistState(nextState);
           toast.success("Goal updated successfully");
         } else {
           const newGoal: SavingsGoal = {
@@ -234,7 +239,7 @@ export function SavingsWorkspaceDashboard() {
               source: "Initial deposit",
             });
           }
-          await persistState(nextState);
+          void persistState(nextState);
           toast.success("Goal saved successfully");
         }
         setSheetOpen(false);
@@ -252,7 +257,7 @@ export function SavingsWorkspaceDashboard() {
   const handlePauseGoal = useCallback(
     async (goal: SavingsGoal) => {
       try {
-        await persistState({
+        void persistState({
           ...state,
           goals: state.goals.map((item) =>
             item.id === goal.id
@@ -271,7 +276,7 @@ export function SavingsWorkspaceDashboard() {
   const handleCompleteGoal = useCallback(
     async (goal: SavingsGoal) => {
       try {
-        await persistState({
+        void persistState({
           ...state,
           goals: state.goals.map((item) =>
             item.id === goal.id ? { ...item, status: "completed", updatedAt: new Date().toISOString() } : item,
@@ -288,7 +293,7 @@ export function SavingsWorkspaceDashboard() {
   const handleDeleteGoal = useCallback(
     async (goal: SavingsGoal) => {
       try {
-        await persistState({
+        void persistState({
           ...state,
           goals: state.goals.filter((item) => item.id !== goal.id),
           transactions: state.transactions.filter((txn) => txn.goalId !== goal.id),
