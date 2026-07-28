@@ -847,11 +847,42 @@ export async function loadFinancialIntelligence(symbolRaw: string): Promise<Neps
   let quarterly = buildQuarterly(reports, dbStatements);
   let annual = buildAnnual(reports, dbStatements, dbFinancials);
 
-  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol } = await import(
+  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol, mergeCmsRows, isRecordDeleted } = await import(
     "@/services/market/nepse-hub-admin-overrides"
   );
   const overrideIndex = indexOverrides(await listOverridesForSymbol(symbol, sb));
   if (overrideIndex.size) {
+    quarterly = mergeCmsRows({
+      official: quarterly.filter((row) => {
+        const qNum = String(row.quarter).replace(/^Q/i, "");
+        const keys = [`Q:${row.fiscalYear}:${qNum}`, `${row.fiscalYear}:Q${qNum}`, row.fiscalYear];
+        return !keys.some((key) => isRecordDeleted(overrideIndex, "statements", key));
+      }) as unknown as Array<Record<string, unknown>>,
+      overrides: overrideIndex,
+      domain: "statements",
+      recordKeyOf: (row) => {
+        const qNum = String(row.quarter ?? "").toString().replace(/^Q/i, "");
+        return `Q:${row.fiscalYear}:${qNum}`;
+      },
+      buildCmsRow: (recordKey, payload) =>
+        ({
+          fiscalYear: String(payload.fiscalYear ?? ""),
+          fiscalYearNepali: null,
+          quarter: String(payload.quarter ?? recordKey.split(":").pop() ?? "1"),
+          ...payload,
+        }) as unknown as Record<string, unknown>,
+    }).filter((row) => {
+      const key = `Q:${row.fiscalYear}:${String(row.quarter).replace(/^Q/i, "")}`;
+      const periodType = String((row as unknown as Record<string, unknown>).periodType ?? "");
+      // Keep official quarterly + CMS rows that are quarterly (or keyed as Q:…)
+      if (periodType === "annual") return false;
+      if (String((row as unknown as Record<string, unknown>).id ?? "").startsWith("cms:")) {
+        return periodType === "quarterly" || key.startsWith("Q:");
+      }
+      return true;
+    }) as typeof quarterly;
+
+    // Still apply multi-key field patches for existing quarterly aliases
     quarterly = quarterly.map((row) => {
       const qNum = String(row.quarter).replace(/^Q/i, "");
       const keys = [`Q:${row.fiscalYear}:${qNum}`, `${row.fiscalYear}:Q${qNum}`, row.fiscalYear];
@@ -859,6 +890,29 @@ export async function loadFinancialIntelligence(symbolRaw: string): Promise<Neps
       for (const key of keys) next = applyFieldOverrides(next, overrideIndex, "statements", key);
       return next as typeof row;
     });
+
+    annual = mergeCmsRows({
+      official: annual.filter((row) => {
+        const keys = [`A:${row.fiscalYear}`, row.fiscalYear];
+        return !keys.some((key) => isRecordDeleted(overrideIndex, "statements", key));
+      }) as unknown as Array<Record<string, unknown>>,
+      overrides: overrideIndex,
+      domain: "statements",
+      recordKeyOf: (row) => `A:${String(row.fiscalYear ?? "")}`,
+      buildCmsRow: (recordKey, payload) =>
+        ({
+          fiscalYear: String(payload.fiscalYear ?? recordKey.replace(/^A:/, "")),
+          fiscalYearNepali: null,
+          ...payload,
+        }) as unknown as Record<string, unknown>,
+    }).filter((row) => {
+      const periodType = String((row as unknown as Record<string, unknown>).periodType ?? "");
+      const id = String((row as unknown as Record<string, unknown>).id ?? "");
+      if (periodType === "quarterly") return false;
+      if (id.startsWith("cms:")) return periodType !== "quarterly";
+      return true;
+    }) as typeof annual;
+
     annual = annual.map((row) => {
       const keys = [`A:${row.fiscalYear}`, row.fiscalYear];
       let next = { ...row } as Record<string, unknown>;

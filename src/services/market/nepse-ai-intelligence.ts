@@ -47,48 +47,67 @@ export async function loadAiCompanyIntelligence(symbolRaw: string): Promise<Neps
   });
 
   // Field-level AI overrides from NEPSE Hub Admin (never invent; only apply explicit edits).
-  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol } = await import(
-    "@/services/market/nepse-hub-admin-overrides"
-  );
+  const { indexOverrides, listOverridesForSymbol } = await import("@/services/market/nepse-hub-admin-overrides");
   const overrideIndex = indexOverrides(await listOverridesForSymbol(symbol));
   if (overrideIndex.size) {
     const fullPayload = overrideIndex.get("ai|_|payload");
     if (fullPayload && typeof fullPayload === "object") {
       payload = { ...payload, ...(fullPayload as typeof payload), symbol, loadedAt: new Date().toISOString() };
     }
-    const summaryPatch: Record<string, unknown> = {};
-    for (const key of ["summary", "outlook", "riskNote", "bullCase", "bearCase"] as const) {
+
+    const asString = (key: string) => {
       const value = overrideIndex.get(`ai|_|${key}`);
-      if (typeof value === "string") summaryPatch[key] = value;
-    }
-    if (typeof summaryPatch.summary === "string") {
+      return typeof value === "string" ? value : null;
+    };
+    const asNumber = (key: string) => {
+      const value = overrideIndex.get(`ai|_|${key}`);
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    };
+
+    const summary = asString("summary") ?? asString("investmentThesis");
+    const outlook = asString("outlook");
+    const riskNote = asString("riskNote") ?? asString("risk");
+    const bullCase = asString("bullCase") ?? asString("pros");
+    const bearCase = asString("bearCase") ?? asString("cons");
+    const targetPrice = asNumber("targetPrice");
+
+    if (summary) {
       payload = {
         ...payload,
-        summary: { ...payload.summary, overall: summaryPatch.summary as string },
+        summary: { ...payload.summary, overall: summary },
       };
     }
-    if (typeof summaryPatch.outlook === "string") {
+    if (outlook) {
       payload = {
         ...payload,
-        summary: { ...payload.summary, growthOutlook: summaryPatch.outlook as string },
+        summary: { ...payload.summary, growthOutlook: outlook },
       };
     }
-    if (typeof summaryPatch.riskNote === "string") {
+    if (riskNote) {
       payload = {
         ...payload,
-        risk: { ...payload.risk, detail: summaryPatch.riskNote as string },
+        risk: { ...payload.risk, detail: riskNote },
       };
     }
-    if (typeof summaryPatch.bullCase === "string" || typeof summaryPatch.bearCase === "string") {
+    if (bullCase || bearCase) {
       const rationale = [...payload.recommendation.rationale];
-      if (typeof summaryPatch.bullCase === "string") rationale.unshift(`Bull case: ${summaryPatch.bullCase}`);
-      if (typeof summaryPatch.bearCase === "string") rationale.unshift(`Bear case: ${summaryPatch.bearCase}`);
+      if (bullCase) rationale.unshift(`Bull case: ${bullCase}`);
+      if (bearCase) rationale.unshift(`Bear case: ${bearCase}`);
       payload = {
         ...payload,
         recommendation: { ...payload.recommendation, rationale: rationale.slice(0, 10) },
       };
     }
-    payload = applyFieldOverrides({ ...payload } as Record<string, unknown>, overrideIndex, "ai") as typeof payload;
+    if (targetPrice != null) {
+      payload = {
+        ...payload,
+        fairValue: {
+          ...payload.fairValue,
+          fairValueNpr: targetPrice,
+          detail: payload.fairValue.detail || "Admin target price override",
+        },
+      };
+    }
   }
 
   return payload;
