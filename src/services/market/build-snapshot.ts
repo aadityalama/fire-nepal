@@ -142,8 +142,8 @@ export async function buildMarketSnapshot(opts: {
           source: nepseServe.meta.source,
           lastSuccessfulSyncAt: nepseServe.meta.lastSuccessfulSyncAt,
           stale: nepseServe.meta.stale,
-          marketIsOpen: nepse.marketStatus.isOpen,
-          marketAsOf: nepse.marketStatus.checkedAt,
+          marketIsOpen: nepseServe.bundle.marketStatus.isOpen,
+          marketAsOf: nepseServe.bundle.marketStatus.checkedAt,
         }
       : undefined,
     usdEquities,
