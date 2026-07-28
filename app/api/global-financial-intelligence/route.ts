@@ -3,12 +3,14 @@ import { checkRateLimit } from "@/lib/api/rate-limit";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { buildMarketSnapshot } from "@/services/market/build-snapshot";
 import type {
+
   GlobalFinancialIntelligenceSnapshot,
   GlobalForexCode,
   GlobalForexQuote,
   KoreaEquityQuote,
   MacroIndicator,
 } from "@/types/global-financial-intelligence";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 export const runtime = "nodejs";
 
@@ -134,7 +136,7 @@ function buildFearGreed(market: Awaited<ReturnType<typeof buildMarketSnapshot>>)
   return { score, label };
 }
 
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const rl = checkRateLimit(req, { windowMs: 60_000, max: 35, keyPrefix: "global-financial-intelligence" });
   if (!rl.ok) {
     return NextResponse.json({ error: "Too many requests", retryAfterSec: rl.retryAfterSec }, { status: 429 });
@@ -157,3 +159,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(snapshot, { headers: LIVE_HEADERS });
 }
+
+export const GET = withApiRouteTiming("global-financial-intelligence:GET", GETHandler);

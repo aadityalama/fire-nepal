@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function PATCH(req: Request) {
+
+async function PATCHHandler(req: Request) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -39,3 +41,5 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApiRouteTiming("admin/ai-analytics/settings:PATCH", PATCHHandler);

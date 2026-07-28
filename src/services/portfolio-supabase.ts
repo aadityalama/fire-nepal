@@ -13,6 +13,7 @@ import type {
   WealthPortfolioStateV2,
 } from "@/components/portfolio/types";
 import { coerceWealthPortfolioState } from "@/components/portfolio/storage";
+import { createMutationTimer } from "@/lib/mutation-perf";
 import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
 import type { Database, Json } from "@/types/supabase-database";
 
@@ -181,12 +182,15 @@ async function deleteMissingRows(
 }
 
 export async function saveWealthPortfolioToSupabase(client: Client, userId: string, state: WealthPortfolioStateV2): Promise<boolean> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "saveWealthPortfolioToSupabase");
+  const timer = createMutationTimer("saveWealthPortfolioToSupabase");
+  const workspace = await timer.track("auth", () => ensureAuthenticatedWorkspace(client, userId, "saveWealthPortfolioToSupabase"));
   if (!workspace) {
+    timer.flush({ ok: false });
     throw new PortfolioSupabaseError("Authenticated workspace owner mismatch. Please sign in again.", "workspace");
   }
   const ownerId = workspace.user_id;
 
+  try {
   const liquidRows = state.liquidCash.map((payload) => ({
     user_id: ownerId,
     row_id: payload.id,
@@ -200,33 +204,42 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     payload: payload as unknown as Json,
   }));
   const bankPayload = [...liquidRows, ...fdRows];
-  const { error: bankUpsertErr } = await client.from("bank_accounts").upsert(bankPayload, { onConflict: "user_id,row_id" });
-  if (bankUpsertErr) {
-    portfolioSaveError("bank_accounts upsert", bankUpsertErr, "Could not save portfolio accounts.");
-  }
-  await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id));
 
   const invPayload = state.investments.map((payload) => ({
     user_id: ownerId,
     row_id: payload.id,
     payload: payload as unknown as Json,
   }));
-  const { error: invErr } = await client.from("investments").upsert(invPayload, { onConflict: "user_id,row_id" });
-  if (invErr) {
-    portfolioSaveError("investments upsert", invErr, "Could not save investment accounts.");
-  }
-  await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id));
 
   const metalPayload = state.metals.map((payload) => ({
     user_id: ownerId,
     row_id: payload.id,
     payload: payload as unknown as Json,
   }));
-  const { error: metalErr } = await client.from("gold_assets").upsert(metalPayload, { onConflict: "user_id,row_id" });
-  if (metalErr) {
-    portfolioSaveError("gold_assets upsert", metalErr, "Could not save metal accounts.");
-  }
-  await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id));
+
+  const saveBankAccounts = async () => {
+    const { error: bankUpsertErr } = await client.from("bank_accounts").upsert(bankPayload, { onConflict: "user_id,row_id" });
+    if (bankUpsertErr) {
+      portfolioSaveError("bank_accounts upsert", bankUpsertErr, "Could not save portfolio accounts.");
+    }
+    await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id));
+  };
+
+  const saveInvestments = async () => {
+    const { error: invErr } = await client.from("investments").upsert(invPayload, { onConflict: "user_id,row_id" });
+    if (invErr) {
+      portfolioSaveError("investments upsert", invErr, "Could not save investment accounts.");
+    }
+    await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id));
+  };
+
+  const saveMetals = async () => {
+    const { error: metalErr } = await client.from("gold_assets").upsert(metalPayload, { onConflict: "user_id,row_id" });
+    if (metalErr) {
+      portfolioSaveError("gold_assets upsert", metalErr, "Could not save metal accounts.");
+    }
+    await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id));
+  };
 
   const mapUpsert = async (
     table: "real_estate" | "vehicles" | "liabilities" | "retirement_assets",
@@ -246,39 +259,41 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     return true;
   };
 
-  if (!(await mapUpsert("real_estate", state.realEstate, (id) => state.realEstate.find((x) => x.id === id)! as unknown as Json))) {
-    return false;
-  }
-  if (!(await mapUpsert("vehicles", state.vehicles, (id) => state.vehicles.find((x) => x.id === id)! as unknown as Json))) {
-    return false;
-  }
-  if (
-    !(await mapUpsert("liabilities", state.liabilities, (id) => state.liabilities.find((x) => x.id === id)! as unknown as Json))
-  ) {
-    return false;
-  }
-  if (
-    !(await mapUpsert(
-      "retirement_assets",
-      state.globalRetirementAssets,
-      (id) => state.globalRetirementAssets.find((x) => x.id === id)! as unknown as Json,
-    ))
-  ) {
-    return false;
-  }
+  await timer.track("database", () =>
+    Promise.all([
+      saveBankAccounts(),
+      saveInvestments(),
+      saveMetals(),
+      mapUpsert("real_estate", state.realEstate, (id) => state.realEstate.find((x) => x.id === id)! as unknown as Json),
+      mapUpsert("vehicles", state.vehicles, (id) => state.vehicles.find((x) => x.id === id)! as unknown as Json),
+      mapUpsert("liabilities", state.liabilities, (id) => state.liabilities.find((x) => x.id === id)! as unknown as Json),
+      mapUpsert(
+        "retirement_assets",
+        state.globalRetirementAssets,
+        (id) => state.globalRetirementAssets.find((x) => x.id === id)! as unknown as Json,
+      ),
+    ]),
+  );
 
-  const { error: extErr } = await client.from("portfolio_extensions").upsert(
-    {
-      user_id: ownerId,
-      ledger: state.ledger as unknown as Json,
-      net_worth_history: state.netWorthHistory as unknown as Json,
-      metal_purchase_bill_urls: (state.metalPurchaseBillUrls ?? []) as unknown as Json,
-    },
-    { onConflict: "user_id" },
+  const { error: extErr } = await timer.track("database", () =>
+    client.from("portfolio_extensions").upsert(
+      {
+        user_id: ownerId,
+        ledger: state.ledger as unknown as Json,
+        net_worth_history: state.netWorthHistory as unknown as Json,
+        metal_purchase_bill_urls: (state.metalPurchaseBillUrls ?? []) as unknown as Json,
+      },
+      { onConflict: "user_id" },
+    ),
   );
   if (extErr) {
     portfolioSaveError("portfolio_extensions upsert", extErr, "Could not save portfolio transactions.");
   }
 
+  timer.flush({ ok: true });
   return true;
+  } catch (error) {
+    timer.flush({ ok: false, error: error instanceof Error ? error.message : "unknown" });
+    throw error;
+  }
 }

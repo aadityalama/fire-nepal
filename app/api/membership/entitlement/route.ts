@@ -3,15 +3,17 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import {
+
   getMembershipByUserId,
   toAccessRecord,
 } from "@/services/membership-service";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 /**
  * Membership entitlement — reads ONLY from public.user_profiles via MembershipService.
  * No profiles/subscriptions/localStorage dual-source fallbacks.
  */
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -76,3 +78,5 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("membership/entitlement:GET", GETHandler);

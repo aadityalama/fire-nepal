@@ -7,6 +7,7 @@ import {
   type BudgetPeriod,
   type CreateBudgetInput,
 } from "@/lib/budget/types";
+import { createMutationTimer, withApiRouteTiming } from "@/lib/mutation-perf";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -71,48 +72,61 @@ function sanitizeCreateInput(raw: unknown): CreateBudgetInput | null {
   };
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+type RouteContext = { params: Promise<{ id: string }> };
 
-  const { id } = await params;
+async function patchBudgetHandler(req: Request, { params }: RouteContext) {
+  if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:budgets:id:patch:handler");
+
+  const { id } = await timer.track("serialization", () => params);
   if (!id) return bad("Missing budget id");
 
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = await timer.track("serialization", () => req.json());
   } catch {
     return bad("Invalid JSON");
   }
 
-  const input = sanitizeCreateInput(raw);
+  const input = timer.trackSync("serialization", () => sanitizeCreateInput(raw));
   if (!input) return bad("Invalid budget payload");
 
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to update your budget.", 401);
 
-    const budget = await updateBudgetRecordForUser(sb, data.user.id, id, input);
-    return NextResponse.json({ ok: true, budget });
+    const budget = await timer.track("database", () => updateBudgetRecordForUser(sb, data.user.id, id, input));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, budget }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not update budget.", 500);
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function deleteBudgetHandler(_req: Request, { params }: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:budgets:id:delete:handler");
 
-  const { id } = await params;
+  const { id } = await timer.track("serialization", () => params);
   if (!id) return bad("Missing budget id");
 
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to delete your budget.", 401);
 
-    await deleteBudgetRecordForUser(sb, data.user.id, id);
-    return NextResponse.json({ ok: true });
+    await timer.track("database", () => deleteBudgetRecordForUser(sb, data.user.id, id));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not delete budget.", 500);
   }
 }
+
+export const PATCH = withApiRouteTiming<RouteContext>("budgets:id:PATCH", patchBudgetHandler);
+export const DELETE = withApiRouteTiming<RouteContext>("budgets:id:DELETE", deleteBudgetHandler);

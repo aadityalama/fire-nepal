@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export type NepseNewsResponseItem = {
   id: string;
@@ -14,7 +16,7 @@ export type NepseNewsResponseItem = {
 };
 
 /** Public read of aggregated market headlines (stored metadata only, no article bodies). */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const sb = createMarketDataServiceClient();
   if (!sb) {
     return NextResponse.json({ items: [], corporateActions: [] }, { headers: { "cache-control": "public, max-age=60" } });
@@ -81,3 +83,5 @@ export async function GET(request: Request) {
     { headers: { "cache-control": "public, max-age=120, stale-while-revalidate=600" } },
   );
 }
+
+export const GET = withApiRouteTiming("market/nepse/news:GET", GETHandler);

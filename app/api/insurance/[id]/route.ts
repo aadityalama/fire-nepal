@@ -5,6 +5,7 @@ import {
   type InsurancePolicyFormInput,
   type InsuranceType,
 } from "@/lib/insurance/insurance-types";
+import { createMutationTimer, withApiRouteTiming } from "@/lib/mutation-perf";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { deleteInsurancePolicyForUser, updateInsurancePolicyForUser } from "@/services/insurance-supabase";
@@ -56,40 +57,51 @@ function sanitizeCreateInput(raw: unknown): InsurancePolicyFormInput | null {
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function PATCH(req: Request, context: RouteContext) {
+async function patchInsuranceHandler(req: Request, context: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:insurance:id:patch:handler");
   try {
-    const { id } = await context.params;
+    const { id } = await timer.track("serialization", () => context.params);
     if (!id) return bad("Missing policy id.");
 
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to update an insurance policy.", 401);
 
-    const body = await req.json();
-    const input = sanitizeCreateInput(body);
+    const body = await timer.track("serialization", () => req.json());
+    const input = timer.trackSync("serialization", () => sanitizeCreateInput(body));
     if (!input) return bad("Please check insurance type, provider, and coverage amount.");
 
-    const policy = await updateInsurancePolicyForUser(sb, data.user.id, id, input);
-    return NextResponse.json({ ok: true, policy });
+    const policy = await timer.track("database", () => updateInsurancePolicyForUser(sb, data.user.id, id, input));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, policy }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not update insurance policy.", 500);
   }
 }
 
-export async function DELETE(_req: Request, context: RouteContext) {
+async function deleteInsuranceHandler(_req: Request, context: RouteContext) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:insurance:id:delete:handler");
   try {
-    const { id } = await context.params;
+    const { id } = await timer.track("serialization", () => context.params);
     if (!id) return bad("Missing policy id.");
 
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to delete an insurance policy.", 401);
 
-    await deleteInsurancePolicyForUser(sb, data.user.id, id);
-    return NextResponse.json({ ok: true });
+    await timer.track("database", () => deleteInsurancePolicyForUser(sb, data.user.id, id));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Could not delete insurance policy.", 500);
   }
 }
+
+export const PATCH = withApiRouteTiming<RouteContext>("insurance:id:PATCH", patchInsuranceHandler);
+export const DELETE = withApiRouteTiming<RouteContext>("insurance:id:DELETE", deleteInsuranceHandler);

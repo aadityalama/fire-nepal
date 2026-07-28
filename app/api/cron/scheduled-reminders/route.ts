@@ -6,6 +6,8 @@ import {
 } from "@/lib/scheduled-reminders/cron-health";
 import { runScheduledRemindersCron } from "@/lib/scheduled-reminders/cron-dispatch";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type ServiceSb = NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
 
@@ -50,7 +52,7 @@ export const maxDuration = 300;
  * Vercel Cron: checks reminders due in a rolling lookback window (see `firesDueCatchUp`) and sends via Resend.
  * When `CRON_SECRET` is set on the project, Vercel sends `Authorization: Bearer <CRON_SECRET>`.
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (secret) {
     const auth = request.headers.get("authorization");
@@ -136,3 +138,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withApiRouteTiming("cron/scheduled-reminders:GET", GETHandler);

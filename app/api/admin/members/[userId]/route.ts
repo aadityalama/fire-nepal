@@ -6,9 +6,11 @@ import { requireAdminApi, requireSuperAdminApi } from "@/lib/admin/verify-admin-
 import type { FireMembershipTier } from "@/lib/fire-membership";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import {
+
   getMembershipByUserId,
   writeMembership,
 } from "@/services/membership-service";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 type RouteParams = { params: Promise<{ userId: string }> };
 
@@ -57,7 +59,7 @@ async function mirrorProfilesPlan(
   );
 }
 
-export async function PATCH(request: Request, ctx: RouteParams) {
+async function PATCHHandler(request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
   const adminUserId = gate.userId;
@@ -361,48 +363,65 @@ export async function PATCH(request: Request, ctx: RouteParams) {
       membershipExpiry: newEndIso,
       suspendedAt: null,
     });
-    await mirrorProfilesPlan(admin, userId, { plan_type: plan, expires_at: newEndIso, suspended_at: null }, nowIso);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Renew failed" }, { status: 500 });
   }
 
-  const { data: subRow } = await admin.from("subscriptions").select("user_id").eq("user_id", userId).maybeSingle();
-  if (subRow) {
-    const { error: subErr } = await admin
-      .from("subscriptions")
-      .update({
-        status: "active",
-        current_period_end: newEndIso,
-        updated_at: nowIso,
-      })
-      .eq("user_id", userId);
-    if (subErr) {
-      return NextResponse.json({ error: `Subscription update failed: ${subErr.message}` }, { status: 500 });
-    }
+  const sideEffects = await Promise.all([
+    mirrorProfilesPlan(admin, userId, { plan_type: plan, expires_at: newEndIso, suspended_at: null }, nowIso).then(
+      () => ({ kind: "profile" as const, error: null as string | null }),
+      (e: unknown) => ({ kind: "profile" as const, error: e instanceof Error ? e.message : "Profile mirror failed" }),
+    ),
+    (async () => {
+      const { data: subRow } = await admin.from("subscriptions").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!subRow) return { kind: "subscription" as const, error: null as string | null };
+      const { error: subErr } = await admin
+        .from("subscriptions")
+        .update({
+          status: "active",
+          current_period_end: newEndIso,
+          updated_at: nowIso,
+        })
+        .eq("user_id", userId);
+      return { kind: "subscription" as const, error: subErr?.message ?? null };
+    })(),
+    (async () => {
+      const { error: revErr } = await admin.from("revenue_events").insert({
+        user_id: userId,
+        amount_npr: amountNpr,
+        kind: amountNpr > 0 ? "subscription" : "adjustment",
+        note: `Admin membership renewal (+${extendDays}d)${amountNpr > 0 ? "" : "; NPR amount not recorded"}`,
+        external_ref: `admin_renew:${adminUserId}:${nowIso}`,
+        event_type: null,
+        plan_type: plan,
+        payment_method: null,
+        membership_request_id: null,
+        created_at: nowIso,
+      });
+      return { kind: "revenue" as const, error: revErr?.message ?? null };
+    })(),
+    logCrm("membership_renewed", "Membership renewed", `Extended ${extendDays} days. New expiry ${newEndIso.slice(0, 10)}.`, {
+      extendDays,
+      amount_npr: amountNpr,
+      new_expires_at: newEndIso,
+    }).then(
+      () => ({ kind: "crm" as const, error: null as string | null }),
+      (e: unknown) => ({ kind: "crm" as const, error: e instanceof Error ? e.message : "CRM log failed" }),
+    ),
+  ]);
+
+  const failed = sideEffects.find((item) => item.error);
+  if (failed) {
+    const label =
+      failed.kind === "profile"
+        ? "Profile mirror"
+        : failed.kind === "subscription"
+          ? "Subscription update"
+          : failed.kind === "revenue"
+            ? "Revenue log"
+            : "CRM log";
+    return NextResponse.json({ error: `${label} failed: ${failed.error}` }, { status: 500 });
   }
-
-  const { error: revErr } = await admin.from("revenue_events").insert({
-    user_id: userId,
-    amount_npr: amountNpr,
-    kind: amountNpr > 0 ? "subscription" : "adjustment",
-    note: `Admin membership renewal (+${extendDays}d)${amountNpr > 0 ? "" : "; NPR amount not recorded"}`,
-    external_ref: `admin_renew:${adminUserId}:${nowIso}`,
-    event_type: null,
-    plan_type: plan,
-    payment_method: null,
-    membership_request_id: null,
-    created_at: nowIso,
-  });
-
-  if (revErr) {
-    return NextResponse.json({ error: `Revenue log failed: ${revErr.message}` }, { status: 500 });
-  }
-
-  await logCrm("membership_renewed", "Membership renewed", `Extended ${extendDays} days. New expiry ${newEndIso.slice(0, 10)}.`, {
-    extendDays,
-    amount_npr: amountNpr,
-    new_expires_at: newEndIso,
-  });
 
   return NextResponse.json({
     ok: true,
@@ -412,3 +431,5 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     actor: adminUserId,
   });
 }
+
+export const PATCH = withApiRouteTiming<RouteParams>("admin/members/[userId]:PATCH", PATCHHandler);

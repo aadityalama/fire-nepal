@@ -5,6 +5,8 @@ import { sendMembershipReminderForAdmin } from "@/lib/membership-renewal-reminde
 import { MEMBERSHIP_AUTO_REMINDER_TYPES } from "@/lib/membership-renewal-reminders/reminder-next";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { getMembershipByUserId } from "@/services/membership-service";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteParams = { params: Promise<{ userId: string }> };
 
@@ -12,7 +14,7 @@ type Body = {
   action?: "preview" | "send_now" | "resend_last";
 };
 
-export async function POST(request: Request, ctx: RouteParams) {
+async function POSTHandler(request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -131,3 +133,5 @@ export async function POST(request: Request, ctx: RouteParams) {
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 500 });
   return NextResponse.json({ ok: true, resendId: r.resendId });
 }
+
+export const POST = withApiRouteTiming<RouteParams>("admin/members/[userId]/reminders:POST", POSTHandler);

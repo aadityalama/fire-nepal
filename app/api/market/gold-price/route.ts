@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getGoldSilverNprPrice } from "@/services/market/gold-silver-npr-price";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
-export async function GET() {
+async function GETHandler() {
   const body = await getGoldSilverNprPrice();
   return NextResponse.json(body, {
     headers: {
@@ -11,3 +13,5 @@ export async function GET() {
     },
   });
 }
+
+export const GET = withApiRouteTiming("market/gold-price:GET", GETHandler);

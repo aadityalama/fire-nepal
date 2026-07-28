@@ -12,6 +12,8 @@ import {
   updateVerifiedUserPassword,
 } from "@/auth/server/user-store";
 import type { ProductAuthUser } from "@/lib/product-auth-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -41,7 +43,7 @@ function clearResetCookie(res: NextResponse) {
   });
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -127,3 +129,5 @@ export async function POST(req: Request) {
   });
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/reset-password:POST", POSTHandler);

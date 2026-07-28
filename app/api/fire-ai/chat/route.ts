@@ -10,12 +10,14 @@ import { buildFireAiSystemPrompt } from "@/lib/fire-nepal-ai/system-prompt";
 import type { OpenAiChatMessage } from "@/lib/fire-nepal-ai/openai";
 import { formatFireAiDbError } from "@/services/fire-ai-conversations";
 import {
+
   FireAiQuotaExceededError,
   assertFireAiQuota,
   estimateOpenAiCostUsd,
   recordFireAiRequestFailure,
   recordFireAiUsage,
 } from "@/services/fire-ai-usage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 export const runtime = "nodejs";
 
@@ -35,7 +37,7 @@ function fallbackConversationTitle(userMessage: string): string {
   return trimmed.length <= 48 ? trimmed : `${trimmed.slice(0, 45)}…`;
 }
 
-export async function POST(req: NextRequest) {
+async function POSTHandler(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured" }, { status: 503 });
   }
@@ -329,3 +331,5 @@ export async function POST(req: NextRequest) {
     },
   });
 }
+
+export const POST = withApiRouteTiming("fire-ai/chat:POST", POSTHandler);

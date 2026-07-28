@@ -12,7 +12,11 @@ import {
   type TransactionHistorySummary,
 } from "@/lib/transaction-history-types";
 import type { Database, Json } from "@/types/supabase-database";
-import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
+import { createMutationTimer } from "@/lib/mutation-perf";
+import {
+  ensureAuthenticatedWorkspace,
+  type FireWorkspaceRow,
+} from "@/services/workspace-supabase";
 
 type Client = SupabaseClient<Database>;
 
@@ -82,7 +86,7 @@ async function appendAudit(
   changes: Record<string, unknown>,
   actorName?: string | null,
 ) {
-  await client.from("expense_transaction_audit_log").insert({
+  const { error } = await client.from("expense_transaction_audit_log").insert({
     transaction_id: transactionId,
     workspace_id: workspaceId,
     user_id: userId,
@@ -90,17 +94,18 @@ async function appendAudit(
     changes: changes as Json,
     actor_name: actorName ?? null,
   });
+  if (error && process.env.NODE_ENV !== "production") {
+    console.warn("[expense-transactions] audit insert failed", error);
+  }
 }
 
-export async function insertExpenseTransaction(
+async function insertExpenseTransactionWithWorkspace(
   client: Client,
   userId: string,
+  workspace: FireWorkspaceRow,
   input: ExpenseTransactionInput,
   actorName?: string | null,
 ): Promise<ExpenseTransactionRow | null> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-insert");
-  if (!workspace) return null;
-
   const payload: Database["public"]["Tables"]["expense_transactions"]["Insert"] = {
     workspace_id: workspace.id,
     user_id: userId,
@@ -128,54 +133,30 @@ export async function insertExpenseTransaction(
     return null;
   }
 
-  await appendAudit(client, workspace.id, userId, data.id, "created", { after: data }, actorName);
+  // Fire audit without blocking the mutation response path when possible.
+  void appendAudit(client, workspace.id, userId, data.id, "created", { after: data }, actorName);
   return rowToTransaction(data);
 }
 
-export async function upsertExpenseTransactionByLocalId(
+async function updateExpenseTransactionWithWorkspace(
   client: Client,
   userId: string,
-  input: ExpenseTransactionInput,
-  actorName?: string | null,
-): Promise<ExpenseTransactionRow | null> {
-  if (input.localExpenseId == null) {
-    return insertExpenseTransaction(client, userId, input, actorName);
-  }
-
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-upsert");
-  if (!workspace) return null;
-
-  const { data: existing } = await client
-    .from("expense_transactions")
-    .select("id")
-    .eq("workspace_id", workspace.id)
-    .eq("local_expense_id", input.localExpenseId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (!existing) {
-    return insertExpenseTransaction(client, userId, input, actorName);
-  }
-
-  return updateExpenseTransaction(client, userId, existing.id, input, actorName);
-}
-
-export async function updateExpenseTransaction(
-  client: Client,
-  userId: string,
+  workspace: FireWorkspaceRow,
   transactionId: string,
   input: Partial<ExpenseTransactionInput>,
   actorName?: string | null,
+  beforeRow?: Database["public"]["Tables"]["expense_transactions"]["Row"] | null,
 ): Promise<ExpenseTransactionRow | null> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-update");
-  if (!workspace) return null;
-
-  const { data: before } = await client
-    .from("expense_transactions")
-    .select(TRANSACTION_COLUMNS)
-    .eq("id", transactionId)
-    .eq("workspace_id", workspace.id)
-    .maybeSingle();
+  const before =
+    beforeRow ??
+    (
+      await client
+        .from("expense_transactions")
+        .select(TRANSACTION_COLUMNS)
+        .eq("id", transactionId)
+        .eq("workspace_id", workspace.id)
+        .maybeSingle()
+    ).data;
 
   if (!before) {
     throwHistoryError("expense-transaction-update-before", null, "Transaction was not found or is not accessible.");
@@ -206,8 +187,99 @@ export async function updateExpenseTransaction(
     throwHistoryError("expense-transaction-update", error, "Could not update transaction.");
   }
 
-  await appendAudit(client, workspace.id, userId, transactionId, "updated", { before, after: data }, actorName);
+  void appendAudit(client, workspace.id, userId, transactionId, "updated", { before, after: data }, actorName);
   return rowToTransaction(data);
+}
+
+export async function insertExpenseTransaction(
+  client: Client,
+  userId: string,
+  input: ExpenseTransactionInput,
+  actorName?: string | null,
+): Promise<ExpenseTransactionRow | null> {
+  const timer = createMutationTimer("insertExpenseTransaction");
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-insert"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return null;
+  }
+
+  const row = await timer.track("database", () =>
+    insertExpenseTransactionWithWorkspace(client, userId, workspace, input, actorName),
+  );
+  timer.flush({ ok: Boolean(row) });
+  return row;
+}
+
+export async function upsertExpenseTransactionByLocalId(
+  client: Client,
+  userId: string,
+  input: ExpenseTransactionInput,
+  actorName?: string | null,
+): Promise<ExpenseTransactionRow | null> {
+  const timer = createMutationTimer("upsertExpenseTransactionByLocalId");
+  if (input.localExpenseId == null) {
+    const row = await insertExpenseTransaction(client, userId, input, actorName);
+    timer.flush({ path: "insert-no-local-id" });
+    return row;
+  }
+
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-upsert"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return null;
+  }
+
+  const { data: existing } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .select(TRANSACTION_COLUMNS)
+      .eq("workspace_id", workspace.id)
+      .eq("local_expense_id", input.localExpenseId!)
+      .is("deleted_at", null)
+      .maybeSingle(),
+  );
+
+  if (!existing) {
+    const row = await timer.track("database", () =>
+      insertExpenseTransactionWithWorkspace(client, userId, workspace, input, actorName),
+    );
+    timer.flush({ path: "insert", ok: Boolean(row) });
+    return row;
+  }
+
+  const row = await timer.track("database", () =>
+    updateExpenseTransactionWithWorkspace(client, userId, workspace, existing.id, input, actorName, existing),
+  );
+  timer.flush({ path: "update", ok: Boolean(row) });
+  return row;
+}
+
+export async function updateExpenseTransaction(
+  client: Client,
+  userId: string,
+  transactionId: string,
+  input: Partial<ExpenseTransactionInput>,
+  actorName?: string | null,
+): Promise<ExpenseTransactionRow | null> {
+  const timer = createMutationTimer("updateExpenseTransaction", { transactionId });
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-update"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return null;
+  }
+
+  const row = await timer.track("database", () =>
+    updateExpenseTransactionWithWorkspace(client, userId, workspace, transactionId, input, actorName),
+  );
+  timer.flush({ ok: Boolean(row) });
+  return row;
 }
 
 export async function softDeleteExpenseTransaction(
@@ -216,34 +288,42 @@ export async function softDeleteExpenseTransaction(
   transactionId: string,
   actorName?: string | null,
 ): Promise<boolean> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-delete");
+  const timer = createMutationTimer("softDeleteExpenseTransaction", { transactionId });
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-delete"),
+  );
   if (!workspace) {
     throwHistoryError("expense-transaction-delete-workspace", null, "Workspace was not found for this transaction.");
   }
 
-  const { data: before } = await client
-    .from("expense_transactions")
-    .select(TRANSACTION_COLUMNS)
-    .eq("id", transactionId)
-    .eq("workspace_id", workspace.id)
-    .maybeSingle();
+  const { data: before } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .select(TRANSACTION_COLUMNS)
+      .eq("id", transactionId)
+      .eq("workspace_id", workspace.id)
+      .maybeSingle(),
+  );
 
   if (!before) {
     throwHistoryError("expense-transaction-delete-before", null, "Transaction was not found or is not accessible.");
   }
 
   const deletedAt = new Date().toISOString();
-  const { error } = await client
-    .from("expense_transactions")
-    .update({ deleted_at: deletedAt })
-    .eq("id", transactionId)
-    .eq("workspace_id", workspace.id);
+  const { error } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .update({ deleted_at: deletedAt })
+      .eq("id", transactionId)
+      .eq("workspace_id", workspace.id),
+  );
 
   if (error) {
     throwHistoryError("expense-transaction-delete", error, "Could not delete transaction.");
   }
 
-  await appendAudit(client, workspace.id, userId, transactionId, "deleted", { before, deleted_at: deletedAt }, actorName);
+  void appendAudit(client, workspace.id, userId, transactionId, "deleted", { before, deleted_at: deletedAt }, actorName);
+  timer.flush({ ok: true });
   return true;
 }
 
@@ -253,19 +333,46 @@ export async function softDeleteExpenseTransactionByLocalId(
   localExpenseId: number,
   actorName?: string | null,
 ): Promise<boolean> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-delete-local");
-  if (!workspace) return false;
+  const timer = createMutationTimer("softDeleteExpenseTransactionByLocalId", { localExpenseId });
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-delete-local"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return false;
+  }
 
-  const { data: existing } = await client
-    .from("expense_transactions")
-    .select("id")
-    .eq("workspace_id", workspace.id)
-    .eq("local_expense_id", localExpenseId)
-    .is("deleted_at", null)
-    .maybeSingle();
+  const { data: before } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .select(TRANSACTION_COLUMNS)
+      .eq("workspace_id", workspace.id)
+      .eq("local_expense_id", localExpenseId)
+      .is("deleted_at", null)
+      .maybeSingle(),
+  );
 
-  if (!existing) return false;
-  return softDeleteExpenseTransaction(client, userId, existing.id, actorName);
+  if (!before) {
+    timer.flush({ ok: false, reason: "not-found" });
+    return false;
+  }
+
+  const deletedAt = new Date().toISOString();
+  const { error } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .update({ deleted_at: deletedAt })
+      .eq("id", before.id)
+      .eq("workspace_id", workspace.id),
+  );
+
+  if (error) {
+    throwHistoryError("expense-transaction-delete", error, "Could not delete transaction.");
+  }
+
+  void appendAudit(client, workspace.id, userId, before.id, "deleted", { before, deleted_at: deletedAt }, actorName);
+  timer.flush({ ok: true });
+  return true;
 }
 
 export async function listExpenseTransactions(
@@ -439,6 +546,20 @@ function activityToTransactionType(activity: TimelineActivity): ExpenseTransacti
   return null;
 }
 
+async function mapPool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return;
+  const limit = Math.max(1, concurrency);
+  let index = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const current = items[index];
+      index += 1;
+      await worker(current);
+    }
+  });
+  await Promise.all(runners);
+}
+
 export async function syncLocalDataToTransactions(
   client: Client,
   userId: string,
@@ -447,61 +568,67 @@ export async function syncLocalDataToTransactions(
   activities: TimelineActivity[],
   actorName?: string | null,
 ): Promise<void> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "expense-transaction-sync");
-  if (!workspace) return;
-
-  const { count } = await client
-    .from("expense_transactions")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspace.id);
-
-  if ((count ?? 0) > 0) return;
-
-  for (const expense of expenses) {
-    await insertExpenseTransaction(
-      client,
-      userId,
-      {
-        localExpenseId: expense.id,
-        transactionType: "expense",
-        description: expense.title,
-        category: normalizeCategory(expense.category),
-        amount: expense.amount,
-        currency: expense.amountCurrency ?? "NPR",
-        memberId: expense.payerId,
-        memberName: memberDisplayName(expense.payerId, profiles),
-        transactionDate: expense.date,
-        metadata: { source: "migration", splitEqually: expense.splitEqually },
-        createdByName: actorName,
-      },
-      actorName,
-    );
+  const timer = createMutationTimer("syncLocalDataToTransactions");
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "expense-transaction-sync"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return;
   }
 
-  for (const activity of activities) {
-    const type = activityToTransactionType(activity);
-    if (!type) continue;
-    if (type === "settlement") {
-      await insertExpenseTransaction(
+  const { count } = await timer.track("database", () =>
+    client
+      .from("expense_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspace.id),
+  );
+
+  if ((count ?? 0) > 0) {
+    timer.flush({ skipped: true });
+    return;
+  }
+
+  await timer.track("database", () =>
+    mapPool(expenses, 6, async (expense) => {
+      await insertExpenseTransactionWithWorkspace(
         client,
         userId,
+        workspace,
         {
-          transactionType: "settlement",
+          localExpenseId: expense.id,
+          transactionType: "expense",
+          description: expense.title,
+          category: normalizeCategory(expense.category),
+          amount: expense.amount,
+          currency: expense.amountCurrency ?? "NPR",
+          memberId: expense.payerId,
+          memberName: memberDisplayName(expense.payerId, profiles),
+          transactionDate: expense.date,
+          metadata: { source: "migration", splitEqually: expense.splitEqually },
+          createdByName: actorName,
+        },
+        actorName,
+      );
+    }),
+  );
+
+  const activityJobs = activities
+    .map((activity) => {
+      const type = activityToTransactionType(activity);
+      if (!type) return null;
+      if (type === "settlement") {
+        return {
+          transactionType: "settlement" as const,
           description: activity.message,
           amount: 0,
           transactionDate: activity.timestamp.slice(0, 10),
           metadata: { monthKey: activity.monthKey, source: "migration" },
           createdByName: actorName,
-        },
-        actorName,
-      );
-      continue;
-    }
-    if (activity.amount == null) continue;
-    await insertExpenseTransaction(
-      client,
-      userId,
-      {
+        };
+      }
+      if (activity.amount == null) return null;
+      return {
         transactionType: type,
         description: activity.message,
         category: activity.category ?? null,
@@ -511,8 +638,15 @@ export async function syncLocalDataToTransactions(
         transactionDate: activity.timestamp.slice(0, 10),
         metadata: { monthKey: activity.monthKey, activityType: activity.type, source: "migration" },
         createdByName: actorName,
-      },
-      actorName,
-    );
-  }
+      };
+    })
+    .filter((job): job is NonNullable<typeof job> => job != null);
+
+  await timer.track("database", () =>
+    mapPool(activityJobs, 6, async (input) => {
+      await insertExpenseTransactionWithWorkspace(client, userId, workspace, input, actorName);
+    }),
+  );
+
+  timer.flush({ expenseCount: expenses.length, activityCount: activityJobs.length });
 }

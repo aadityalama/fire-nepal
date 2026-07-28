@@ -6,6 +6,8 @@ import { buildPendingSignupCookie, OTP_TTL_MS } from "@/auth/server/pending-veri
 import { sendSignupVerificationOtpEmail } from "@/auth/server/verification-email";
 import { isEmailRegistered } from "@/auth/server/user-store";
 import { isResendApiKeyConfigured } from "@/lib/resend-api";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -31,7 +33,7 @@ function pendingCookieOptions(): typeof PENDING_COOKIE_BASE {
   return PENDING_COOKIE_BASE;
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -131,3 +133,5 @@ export async function POST(req: Request) {
   res.cookies.set(FN_PENDING_VERIFY_COOKIE, built.cookieValue, pendingCookieOptions());
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/signup:POST", POSTHandler);

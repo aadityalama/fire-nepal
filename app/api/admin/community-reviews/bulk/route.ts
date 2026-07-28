@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase-database";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["Update"];
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -61,3 +63,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ updated: data?.length ?? 0 });
 }
+
+export const POST = withApiRouteTiming("admin/community-reviews/bulk:POST", POSTHandler);

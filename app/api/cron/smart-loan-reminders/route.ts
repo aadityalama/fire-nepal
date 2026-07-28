@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { dispatchSmartLoanReminders, type SmartLoanReminderInput } from "@/lib/smart-loan/reminders";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function readCronLoans() {
   const rawLoans = process.env.SMART_LOAN_CRON_LOANS_JSON;
@@ -13,7 +15,7 @@ function readCronLoans() {
  * Configure in Vercel Cron or system crontab:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/smart-loan-reminders
  */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = request.headers.get("authorization");
@@ -45,3 +47,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withApiRouteTiming("cron/smart-loan-reminders:GET", GETHandler);

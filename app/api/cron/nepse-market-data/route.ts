@@ -13,6 +13,8 @@ import {
 } from "@/services/market/nepse-market-data-engine";
 import { ingestIndexEod } from "@/services/market/nepse-index-eod";
 import { ingestIndexComposition } from "@/services/market/nepse-index-composition";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /**
  * Vercel Cron (after NEPSE close):
@@ -48,7 +50,7 @@ function kathmanduSyncMode(now = new Date()): "preopen" | "postclose" | "weekly_
   return minutes < 11 * 60 ? "preopen" : "postclose";
 }
 
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (secret) {
     const auth = request.headers.get("authorization");
@@ -157,3 +159,5 @@ export async function GET(request: Request) {
     { status: ok ? 200 : 500 },
   );
 }
+
+export const GET = withApiRouteTiming("cron/nepse-market-data:GET", GETHandler);

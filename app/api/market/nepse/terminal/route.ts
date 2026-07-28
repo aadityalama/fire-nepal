@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { loadTerminalBoard } from "@/services/market/nepse-terminal-board";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /** Professional market terminal board: indices, movers, heatmap, breadth. */
-export async function GET() {
+async function GETHandler() {
   try {
     const payload = await loadTerminalBoard();
     return NextResponse.json(payload, {
@@ -13,3 +15,5 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("market/nepse/terminal:GET", GETHandler);

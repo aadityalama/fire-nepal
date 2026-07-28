@@ -3,13 +3,15 @@ import { isSupabaseConfigured, getSupabaseUrl } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import {
+
   COMMUNITY_REVIEW_AVATAR_BUCKET,
   communityReviewAvatarPath,
 } from "@/services/community-reviews-supabase";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -85,3 +87,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ avatar_url: data?.avatar_url ?? publicUrl });
 }
+
+export const POST = withApiRouteTiming("community-reviews/avatar:POST", POSTHandler);

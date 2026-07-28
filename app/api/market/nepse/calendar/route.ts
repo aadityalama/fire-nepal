@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { loadMarketCalendar } from "@/services/market/nepse-market-calendar";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 /** Market calendar: AGM, book close, dividend, bonus, rights, IPO, filings. */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   try {
     const limit = Number(new URL(request.url).searchParams.get("limit")) || 120;
     const payload = await loadMarketCalendar(Math.min(Math.max(limit, 1), 250));
@@ -14,3 +16,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("market/nepse/calendar:GET", GETHandler);

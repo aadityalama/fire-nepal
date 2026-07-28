@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { requireNepseHubAdminApi } from "@/lib/admin/nepse-hub-admin";
 import { NEPSE_HUB_ADMIN_DOMAIN_LABELS, NEPSE_HUB_ADMIN_FIELDS } from "@/lib/market/nepse-hub-admin-fields";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Catalog + company search for NEPSE Hub Admin (email-gated). */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   const gate = await requireNepseHubAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -36,3 +38,5 @@ export async function GET(request: Request) {
     companies,
   });
 }
+
+export const GET = withApiRouteTiming("admin/nepse-hub:GET", GETHandler);

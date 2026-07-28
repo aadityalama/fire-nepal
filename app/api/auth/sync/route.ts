@@ -5,6 +5,8 @@ import { signUserSession } from "@/auth/server/session-token";
 import { canSyncLegacySession, getVerifiedUserByEmail, toPublicUser, toSessionClaims } from "@/auth/server/user-store";
 import { isLegacyAuthBlockedInProduction, legacyAuthNotPersistedResponse } from "@/auth/server/legacy-auth-production";
 import type { ProductAuthSession } from "@/lib/product-auth-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -12,7 +14,7 @@ export const runtime = "nodejs";
  * One-way migration: promote a valid client-stored session into an httpOnly cookie.
  * Only allowed when the user already exists in the server directory (same id + email).
  */
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (isLegacyAuthBlockedInProduction()) {
     return legacyAuthNotPersistedResponse();
   }
@@ -49,3 +51,5 @@ export async function POST(req: Request) {
   });
   return res;
 }
+
+export const POST = withApiRouteTiming("auth/sync:POST", POSTHandler);

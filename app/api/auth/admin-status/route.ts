@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin/check-session-is-admin";
 import { getNepseHubAdminSession } from "@/lib/admin/nepse-hub-admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
 /** Returns admin flags for the signed-in user. NEPSE Hub Admin is email-gated server-side. */
-export async function GET() {
+async function GETHandler() {
   const [session, nepseHub] = await Promise.all([getAdminSession(), getNepseHubAdminSession()]);
   const isAdmin = Boolean(session);
   const isSuperAdmin = session?.role === "super_admin";
@@ -17,3 +19,5 @@ export async function GET() {
     role: session?.role ?? null,
   });
 }
+
+export const GET = withApiRouteTiming("auth/admin-status:GET", GETHandler);

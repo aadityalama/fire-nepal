@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { MEMBERSHIP_PAYMENT_BUCKET } from "@/lib/membership-payment";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, ctx: RouteParams) {
+async function GETHandler(_request: Request, ctx: RouteParams) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -39,3 +41,5 @@ export async function GET(_request: Request, ctx: RouteParams) {
 
   return NextResponse.json({ signedUrl: signed.signedUrl, expiresIn: 600 });
 }
+
+export const GET = withApiRouteTiming<RouteParams>("admin/membership-requests/[id]/proof-url:GET", GETHandler);

@@ -10,6 +10,8 @@ import {
 } from "@/lib/nepal-economy/official-baseline";
 import { readDashboardCache } from "@/lib/nepal-economy/storage-cache";
 import type { NepalEconomyCard, NepalEconomyDashboardData } from "@/types/nepal-economy";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -140,7 +142,7 @@ function minimalOfficialPayload(): NepalEconomyDashboardData {
   };
 }
 
-export async function GET() {
+async function GETHandler() {
   try {
     const payload = await buildNepalEconomyDashboard();
     return NextResponse.json(payload, { headers: HEADERS });
@@ -156,3 +158,5 @@ export async function GET() {
     return NextResponse.json(minimalOfficialPayload(), { headers: HEADERS });
   }
 }
+
+export const GET = withApiRouteTiming("learn/nepal-economy:GET", GETHandler);

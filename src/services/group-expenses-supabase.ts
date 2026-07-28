@@ -3,7 +3,11 @@ import { normalizeGroupCategory } from "@/lib/group-expenses/categories";
 import { memberDisplayName } from "@/lib/expense-members";
 import type { Expense, RoommateProfile } from "@/lib/expense-utils";
 import type { Database, Json } from "@/types/supabase-database";
-import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
+import { createMutationTimer } from "@/lib/mutation-perf";
+import {
+  ensureAuthenticatedWorkspace,
+  type FireWorkspaceRow,
+} from "@/services/workspace-supabase";
 
 type Client = SupabaseClient<Database>;
 
@@ -65,14 +69,12 @@ export type GroupExpenseInput = {
   notes?: string | null;
 };
 
-export async function upsertGroupExpenseByLocalId(
+async function upsertGroupExpenseWithWorkspace(
   client: Client,
   userId: string,
+  workspace: FireWorkspaceRow,
   input: GroupExpenseInput,
 ): Promise<GroupExpenseRow | null> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-expense-upsert");
-  if (!workspace) return null;
-
   const insertPayload: Database["public"]["Tables"]["group_expenses"]["Insert"] = {
     workspace_id: workspace.id,
     user_id: userId,
@@ -140,25 +142,56 @@ export async function upsertGroupExpenseByLocalId(
   return rowToGroupExpense(data);
 }
 
+export async function upsertGroupExpenseByLocalId(
+  client: Client,
+  userId: string,
+  input: GroupExpenseInput,
+): Promise<GroupExpenseRow | null> {
+  const timer = createMutationTimer("upsertGroupExpenseByLocalId", { localExpenseId: input.localExpenseId });
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "group-expense-upsert"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return null;
+  }
+
+  const row = await timer.track("database", () =>
+    upsertGroupExpenseWithWorkspace(client, userId, workspace, input),
+  );
+  timer.flush({ ok: Boolean(row) });
+  return row;
+}
+
 export async function softDeleteGroupExpenseByLocalId(
   client: Client,
   userId: string,
   localExpenseId: number,
 ): Promise<boolean> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-expense-delete");
-  if (!workspace) return false;
+  const timer = createMutationTimer("softDeleteGroupExpenseByLocalId", { localExpenseId });
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "group-expense-delete"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return false;
+  }
 
-  const { error } = await client
-    .from("group_expenses")
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("workspace_id", workspace.id)
-    .eq("local_expense_id", localExpenseId)
-    .is("deleted_at", null);
+  const { error } = await timer.track("database", () =>
+    client
+      .from("group_expenses")
+      .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("workspace_id", workspace.id)
+      .eq("local_expense_id", localExpenseId)
+      .is("deleted_at", null),
+  );
 
   if (error) {
     console.warn("[group-expenses] soft delete failed", error);
+    timer.flush({ ok: false });
     return false;
   }
+  timer.flush({ ok: true });
   return true;
 }
 
@@ -216,39 +249,62 @@ export async function syncLocalExpensesToGroupExpenses(
   userId: string,
   expenses: Expense[],
 ): Promise<void> {
-  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-expense-sync");
-  if (!workspace) return;
+  const timer = createMutationTimer("syncLocalExpensesToGroupExpenses");
+  const workspace = await timer.track("database", () =>
+    ensureAuthenticatedWorkspace(client, userId, "group-expense-sync"),
+  );
+  if (!workspace) {
+    timer.flush({ ok: false });
+    return;
+  }
 
-  const { count, error } = await client
-    .from("group_expenses")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspace.id)
-    .is("deleted_at", null);
+  const { count, error } = await timer.track("database", () =>
+    client
+      .from("group_expenses")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspace.id)
+      .is("deleted_at", null),
+  );
 
   if (error) {
     if (process.env.NODE_ENV !== "production") {
       console.error("[group-expenses] sync guard failed", { workspaceId: workspace.id, error });
     }
+    timer.flush({ ok: false });
     return;
   }
-  if ((count ?? 0) > 0) return;
-
-  for (const expense of expenses) {
-    await upsertGroupExpenseByLocalId(client, userId, {
-      localExpenseId: expense.id,
-      title: expense.title,
-      amount: expense.amount,
-      payerMemberId: expense.payerId,
-      category: expense.category,
-      splitEqually: expense.splitEqually !== false,
-      expenseDate: expense.date,
-      splitAmong: expense.splitAmong,
-      splitPercentages: expense.splitPercentages,
-      amountCurrency: expense.amountCurrency,
-      receiptImageUrl: expense.receiptImage,
-      notes: expense.notes,
-    });
+  if ((count ?? 0) > 0) {
+    timer.flush({ skipped: true });
+    return;
   }
+
+  await timer.track("database", async () => {
+    const concurrency = 6;
+    let index = 0;
+    const runners = Array.from({ length: Math.min(concurrency, expenses.length || 1) }, async () => {
+      while (index < expenses.length) {
+        const expense = expenses[index];
+        index += 1;
+        await upsertGroupExpenseWithWorkspace(client, userId, workspace, {
+          localExpenseId: expense.id,
+          title: expense.title,
+          amount: expense.amount,
+          payerMemberId: expense.payerId,
+          category: expense.category,
+          splitEqually: expense.splitEqually !== false,
+          expenseDate: expense.date,
+          splitAmong: expense.splitAmong,
+          splitPercentages: expense.splitPercentages,
+          amountCurrency: expense.amountCurrency,
+          receiptImageUrl: expense.receiptImage,
+          notes: expense.notes,
+        });
+      }
+    });
+    await Promise.all(runners);
+  });
+
+  timer.flush({ expenseCount: expenses.length });
 }
 
 export type SettlementInput = {

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { dispatchSmartLoanReminders, type SmartLoanReminderInput } from "@/lib/smart-loan/reminders";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function POST(request: Request) {
+
+async function POSTHandler(request: Request) {
   try {
     const body = (await request.json()) as { loans?: SmartLoanReminderInput[]; source?: string };
     const loans = Array.isArray(body.loans) ? body.loans : [];
@@ -23,3 +25,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiRouteTiming("smart-loan/reminders:POST", POSTHandler);

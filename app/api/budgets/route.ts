@@ -7,6 +7,7 @@ import {
   type BudgetPeriod,
   type CreateBudgetInput,
 } from "@/lib/budget/types";
+import { createMutationTimer, withApiRouteTiming } from "@/lib/mutation-perf";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBudgetRecordForUser, listBudgetRecordsForUser } from "@/services/budget-supabase";
@@ -68,41 +69,52 @@ function sanitizeCreateInput(raw: unknown): CreateBudgetInput | null {
   };
 }
 
-export async function GET() {
+async function getBudgetsHandler() {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:budgets:get:handler");
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to view your budgets.", 401);
 
-    const budgets = await listBudgetRecordsForUser(sb, data.user.id);
-    return NextResponse.json({ ok: true, budgets });
+    const budgets = await timer.track("database", () => listBudgetRecordsForUser(sb, data.user.id));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, budgets }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
 
-export async function POST(req: Request) {
+async function postBudgetsHandler(req: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
+  const timer = createMutationTimer("api:budgets:post:handler");
 
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = await timer.track("serialization", () => req.json());
   } catch {
     return bad("Invalid JSON");
   }
 
-  const input = sanitizeCreateInput(raw);
+  const input = timer.trackSync("serialization", () => sanitizeCreateInput(raw));
   if (!input) return bad("Invalid budget payload");
 
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
+    const sb = await timer.track("auth", () => createServerSupabaseClient());
+    const { data } = await timer.track("auth", () => sb.auth.getUser());
     if (!data.user) return bad("Please sign in to save your budget.", 401);
 
-    const budget = await createBudgetRecordForUser(sb, data.user.id, input);
-    return NextResponse.json({ ok: true, budget });
+    const budget = await timer.track("database", () => createBudgetRecordForUser(sb, data.user.id, input));
+    const response = timer.trackSync("serialization", () => NextResponse.json({ ok: true, budget }));
+    timer.flush({ status: response.status });
+    return response;
   } catch (e) {
+    timer.flush({ error: e instanceof Error ? e.message : "unknown" });
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }
 }
+
+export const GET = withApiRouteTiming("budgets:GET", getBudgetsHandler);
+export const POST = withApiRouteTiming("budgets:POST", postBudgetsHandler);

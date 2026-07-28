@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { jsPDF } from "jspdf";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { fetchAdminAiAnalyticsSnapshot } from "@/lib/admin/fetch-ai-analytics-snapshot";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function GET() {
+
+async function GETHandler() {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -40,3 +42,5 @@ export async function GET() {
     },
   });
 }
+
+export const GET = withApiRouteTiming("admin/ai-analytics/export/pdf:GET", GETHandler);

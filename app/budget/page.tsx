@@ -401,7 +401,7 @@ function BudgetFormModal({
 
   async function handleSave() {
     if (!parsedAmount || saving) return;
-    await onSave({
+    const savePromise = onSave({
       name: name.trim() || category,
       category,
       icon: getFinanceCategoryEmoji(category),
@@ -419,6 +419,7 @@ function BudgetFormModal({
       setEnabledAlerts(defaultBudgetNotificationSettings());
     }
     onClose();
+    void savePromise.catch(() => undefined);
   }
 
   return (
@@ -609,8 +610,8 @@ export default function BudgetWorkspacePage() {
       setBudgets((prev) => sortBudgetRecords([...prev, optimisticRecord]));
 
       try {
-        await createBudgetRecord(input);
-        await reloadBudgets();
+        const saved = await createBudgetRecord(input);
+        setBudgets((prev) => sortBudgetRecords(prev.map((item) => (item.id === optimisticId ? saved : item))));
         toast.success("Budget saved successfully");
       } catch (error) {
         setBudgets((prev) => prev.filter((item) => item.id !== optimisticId));
@@ -620,7 +621,7 @@ export default function BudgetWorkspacePage() {
         setSavingBudget(false);
       }
     },
-    [budgets.length, reloadBudgets],
+    [budgets.length],
   );
 
   const handleUpdateBudget = useCallback(
@@ -647,40 +648,41 @@ export default function BudgetWorkspacePage() {
       setBudgets((prev) => sortBudgetRecords(prev.map((item) => (item.id === editingBudget.id ? optimisticRecord : item))));
 
       try {
-        await updateBudgetRecord(editingBudget.id, input);
-        await reloadBudgets();
+        const saved = await updateBudgetRecord(editingBudget.id, input);
+        setBudgets((prev) => sortBudgetRecords(prev.map((item) => (item.id === editingBudget.id ? saved : item))));
         toast.success("Budget updated successfully");
         setEditingBudget(null);
       } catch (error) {
-        await reloadBudgets();
+        setBudgets((prev) => sortBudgetRecords(prev.map((item) => (item.id === editingBudget.id ? editingBudget : item))));
         toast.error(error instanceof Error ? error.message : "Could not update budget.");
         throw error;
       } finally {
         setSavingBudget(false);
       }
     },
-    [editingBudget, reloadBudgets],
+    [editingBudget],
   );
 
   const handleDeleteBudget = useCallback(async () => {
     if (!deletingBudget) return;
 
     const removedId = deletingBudget.id;
+    const removedBudget = deletingBudget;
     setDeletingBudgetBusy(true);
     setBudgets((prev) => prev.filter((item) => item.id !== removedId));
+    setDeletingBudget(null);
+    setActionBudget(null);
 
     try {
       await deleteBudgetRecord(removedId);
       toast.success("Budget deleted");
-      setDeletingBudget(null);
-      setActionBudget(null);
     } catch (error) {
-      await reloadBudgets();
+      setBudgets((prev) => sortBudgetRecords([...prev, removedBudget]));
       toast.error(error instanceof Error ? error.message : "Could not delete budget.");
     } finally {
       setDeletingBudgetBusy(false);
     }
-  }, [deletingBudget, reloadBudgets]);
+  }, [deletingBudget]);
 
   const handleFormSave = useCallback(
     async (input: CreateBudgetInput) => {

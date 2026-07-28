@@ -5,6 +5,8 @@ import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cach
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 import { filterNepseDirectory } from "@/services/market/nepse-search-filter";
 import type { NepseSecurityTick } from "@/types/market";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 export const runtime = "nodejs";
 
@@ -12,7 +14,7 @@ const HEADERS = {
   "Cache-Control": "private, max-age=12, stale-while-revalidate=24",
 } as const;
 
-export async function GET(req: NextRequest) {
+async function GETHandler(req: NextRequest) {
   const rl = checkRateLimit(req, { windowMs: 60_000, max: 90, keyPrefix: "nepse-search" });
   if (!rl.ok) {
     return NextResponse.json(
@@ -78,3 +80,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ hits, fetchedAt: new Date().toISOString() }, { headers: HEADERS });
 }
+
+export const GET = withApiRouteTiming("market/nepse/search:GET", GETHandler);

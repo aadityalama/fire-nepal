@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { runAdvancedScreener, type ScreenerFilters } from "@/services/market/nepse-screener-engine";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 function numParam(value: string | null): number | undefined {
   if (value == null || value.trim() === "") return undefined;
@@ -13,7 +15,7 @@ function boolParam(value: string | null): boolean | undefined {
 }
 
 /** Advanced stock screener with fundamental + optional technical filters. */
-export async function GET(request: Request) {
+async function GETHandler(request: Request) {
   try {
     const url = new URL(request.url);
     const filters: ScreenerFilters = {
@@ -63,3 +65,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming("market/nepse/screener:GET", GETHandler);

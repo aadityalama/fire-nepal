@@ -5,14 +5,16 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { ensureRealEstateStorageBucket } from "@/lib/supabase/ensure-real-estate-bucket";
 import {
+
   REAL_ESTATE_ALLOWED_MIME,
   REAL_ESTATE_STORAGE_BUCKET,
   REAL_ESTATE_UPLOAD_MAX_BYTES,
   extFromMime,
   realEstateStorageObjectPath,
 } from "@/lib/portfolio/real-estate-storage";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -86,3 +88,5 @@ export async function POST(req: Request) {
     name: file.name || `file.${extFromMime(mime)}`,
   });
 }
+
+export const POST = withApiRouteTiming("portfolio/real-estate/upload:POST", POSTHandler);

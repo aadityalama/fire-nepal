@@ -6,10 +6,12 @@ import {
   communityReviewAvatarPath,
 } from "@/services/community-reviews-supabase";
 import { getSupabaseUrl } from "@/lib/supabase/config";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -62,3 +64,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ avatar_url: data.avatar_url });
 }
+
+export const POST = withApiRouteTiming("admin/community-reviews/avatar:POST", POSTHandler);

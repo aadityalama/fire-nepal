@@ -4,11 +4,13 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { validateReviewInput } from "@/lib/community-reviews/validate-review-input";
 import { clampRating, fetchUserCommunityReview } from "@/services/community-reviews-supabase";
 import { fetchUserProfile } from "@/services/user-profile-supabase";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 const REVIEW_COLUMNS =
   "id, user_id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, is_demo, status, review_type, display_order, created_at, updated_at, deleted_at";
 
-export async function GET() {
+async function GETHandler() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ review: null });
   }
@@ -26,7 +28,7 @@ export async function GET() {
   return NextResponse.json({ review });
 }
 
-export async function POST(req: Request) {
+async function POSTHandler(req: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -85,3 +87,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ review: data }, { status: 201 });
 }
+
+export const GET = withApiRouteTiming("community-reviews/mine:GET", GETHandler);
+export const POST = withApiRouteTiming("community-reviews/mine:POST", POSTHandler);

@@ -3,11 +3,13 @@ import { MEMBERSHIP_PAYMENT_BUCKET } from "@/lib/membership-payment";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 /** Signed URL for the request owner to preview or download their proof (short-lived). */
-export async function GET(_request: Request, ctx: RouteParams) {
+async function GETHandler(_request: Request, ctx: RouteParams) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
   }
@@ -56,3 +58,5 @@ export async function GET(_request: Request, ctx: RouteParams) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withApiRouteTiming<RouteParams>("membership-requests/[id]/proof-url:GET", GETHandler);

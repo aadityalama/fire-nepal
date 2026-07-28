@@ -4,12 +4,14 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/supabase-database";
 import { buildReviewPatch } from "@/services/community-reviews-supabase";
 import type { CommunityReviewStatus, CommunityReviewType } from "@/lib/community-reviews/types";
+import { withApiRouteTiming } from "@/lib/mutation-perf";
+
 
 type CommunityReviewUpdate = Database["public"]["Tables"]["community_reviews"]["Update"];
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
-export async function PATCH(req: Request, ctx: RouteCtx) {
+async function PATCHHandler(req: Request, ctx: RouteCtx) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -88,7 +90,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   return NextResponse.json({ review: data });
 }
 
-export async function DELETE(_req: Request, ctx: RouteCtx) {
+async function DELETEHandler(_req: Request, ctx: RouteCtx) {
   const gate = await requireAdminApi();
   if (gate instanceof NextResponse) return gate;
 
@@ -117,3 +119,6 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const PATCH = withApiRouteTiming<RouteCtx>("admin/community-reviews/[id]:PATCH", PATCHHandler);
+export const DELETE = withApiRouteTiming<RouteCtx>("admin/community-reviews/[id]:DELETE", DELETEHandler);
