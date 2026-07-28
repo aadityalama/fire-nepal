@@ -311,7 +311,7 @@ function HeroMarketStatusCard() {
 
   return (
     <div
-      className={`inline-flex max-w-full flex-col items-end rounded-xl border px-2.5 py-1.5 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-3 ${
+      className={`inline-flex max-w-full flex-col items-end rounded-lg border px-2 py-1 text-right shadow-[0_10px_28px_-18px_rgba(0,0,0,0.55)] backdrop-blur-md sm:rounded-xl sm:px-2.5 sm:py-1.5 ${
         panel.open ? "border-emerald-400/35 bg-emerald-400/12" : "border-rose-400/30 bg-rose-400/[0.12]"
       }`}
       aria-live="polite"
@@ -364,21 +364,44 @@ function Hero({
   const asOf = formatMarketAsOfBsTimestamp(fetchedAt);
 
   return (
-    <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-4 text-white shadow-[0_32px_90px_-40px_rgba(4,120,87,0.65)] sm:p-6">
+    <section className="relative overflow-hidden rounded-[1.5rem] border border-emerald-400/15 bg-[radial-gradient(circle_at_8%_0%,rgba(52,211,153,0.22),transparent_34%),linear-gradient(145deg,#063126_0%,#071b17_52%,#040b0a_100%)] p-3.5 text-white shadow-[0_28px_80px_-36px_rgba(4,120,87,0.65)] sm:rounded-[1.75rem] sm:p-5">
       <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full border border-white/[0.04]" />
       <div className="pointer-events-none absolute -right-9 -top-14 h-40 w-40 rounded-full border border-white/[0.05]" />
-      <div className="relative grid gap-5 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-        <div className="min-w-0">
-          <div className="flex items-start justify-between gap-3">
+      <div className="relative grid gap-3 sm:gap-4 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+        <div className="flex min-w-0 flex-col">
+          <div className="flex items-start justify-between gap-2.5 sm:gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
-                {index?.name ?? "NEPSE Index"}
-              </p>
-              <p className="mt-2 text-[2.25rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.4rem]">
-                {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/55">
+                  {index?.name ?? "NEPSE Index"}
+                </p>
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:hidden"
+                  aria-label="Refresh market data"
+                >
+                  <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+                </button>
+              </div>
+              <div className="mt-1.5 flex items-start justify-between gap-2.5 sm:mt-2 sm:gap-3">
+                <p className="min-w-0 text-[2.15rem] font-black leading-none tracking-[-0.045em] tabular-nums sm:text-[3.25rem]">
+                  {animatedIndex.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <div className="max-w-[9.5rem] shrink-0 pt-0.5 text-right sm:max-w-[14rem] sm:pt-1">
+                  <p
+                    className="text-[13px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[16px]"
+                    title={nepaliDate}
+                  >
+                    {nepaliDate}
+                  </p>
+                  <p className="mt-0.5 text-[9px] font-semibold tabular-nums text-emerald-100/40 sm:text-[10px]">
+                    As of {asOf}
+                  </p>
+                </div>
+              </div>
               <div
-                className={`mt-2 flex min-w-0 items-center gap-1.5 text-sm font-extrabold tabular-nums ${
+                className={`mt-1.5 flex min-w-0 items-center gap-1.5 text-sm font-extrabold tabular-nums sm:mt-2 ${
                   positive ? "text-emerald-300" : "text-rose-300"
                 }`}
               >
@@ -401,29 +424,16 @@ function Hero({
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white"
-                aria-label="Refresh market data"
-              >
-                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-              </button>
-              <div className="max-w-[12rem] text-right sm:max-w-[15rem]">
-                <p
-                  className="text-[14px] font-extrabold leading-snug tracking-tight text-emerald-50 sm:text-[16px]"
-                  title={nepaliDate}
-                >
-                  {nepaliDate}
-                </p>
-                <p className="mt-0.5 text-[9px] font-semibold tabular-nums text-emerald-100/40 sm:text-[10px]">
-                  As of {asOf}
-                </p>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-emerald-100/70 transition hover:bg-white/10 hover:text-white sm:grid"
+              aria-label="Refresh market data"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            </button>
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/[0.07] pt-4">
+          <div className="mt-auto grid grid-cols-3 gap-1.5 border-t border-white/[0.07] pt-2.5 sm:mt-3 sm:gap-2 sm:pt-3">
             {[
               ["Turnover", formatCompactNpr(turnover)],
               ["Volume", volume ? volume.toLocaleString("en-IN") : "—"],
@@ -431,14 +441,20 @@ function Hero({
             ].map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-100/45">{label}</p>
-                <p className="mt-1 truncate text-[11px] font-extrabold tabular-nums text-white sm:text-sm">{value}</p>
+                <p className="mt-0.5 truncate text-[11px] font-extrabold tabular-nums text-white sm:mt-1 sm:text-sm">{value}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="relative min-w-0">
-          <MiniSparkline positive={positive} />
-          <svg viewBox="0 0 500 140" className="h-28 w-full sm:h-36" aria-label="Indicative NEPSE intraday chart">
+        <div className="relative flex min-w-0 flex-col justify-end">
+          <div className="mb-1.5 flex justify-end sm:mb-2">
+            <HeroMarketStatusCard />
+          </div>
+          <svg
+            viewBox="0 0 500 140"
+            className="h-[8.125rem] w-full sm:h-36 lg:h-40"
+            aria-label="Indicative NEPSE intraday chart"
+          >
             <defs>
               <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={positive ? "#34d399" : "#fb7185"} stopOpacity=".28" />
@@ -448,9 +464,6 @@ function Hero({
             <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8 L500 140 L0 140 Z" fill="url(#hero-fill)" />
             <path d="M0 112 C42 102 58 74 96 84 S150 112 188 80 S244 26 287 47 S357 69 397 38 S460 30 500 8" fill="none" stroke={positive ? "#34d399" : "#fb7185"} strokeWidth="3" strokeLinecap="round" />
           </svg>
-          <div className="mt-2 flex justify-end">
-            <HeroMarketStatusCard />
-          </div>
         </div>
       </div>
     </section>
