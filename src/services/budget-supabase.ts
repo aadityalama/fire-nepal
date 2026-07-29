@@ -15,27 +15,58 @@ function missingDeletedAtColumn(error: { message?: string; code?: string } | nul
   return error?.code === "42703" || error?.code === "PGRST204" || message.includes("deleted_at");
 }
 
-function mapBudgetError(error: { message?: string; code?: string } | null | undefined, fallback: string) {
-  const message = error?.message ?? fallback;
-  const lower = message.toLowerCase();
+function mapBudgetError(error: { message?: string; code?: string } | null | undefined, fallback: string): string {
+  if (!error) return fallback;
 
+  const message = error.message ?? fallback;
+  const lower = message.toLowerCase();
+  const code = error.code ?? "";
+
+  // Table missing
   if (
     lower.includes("finance_budget_records") &&
-    (lower.includes("does not exist") || lower.includes("schema cache") || error?.code === "42P01" || error?.code === "PGRST205")
+    (lower.includes("does not exist") || lower.includes("schema cache") || code === "42P01" || code === "PGRST205")
   ) {
-    return "Budget storage is being set up. Please try again in a minute or contact support if this continues.";
-  }
-  if (lower.includes("permission denied") || error?.code === "42501") {
-    return "You do not have permission to save this budget.";
-  }
-  if (lower.includes("invalid input") || lower.includes("violates check constraint")) {
-    return "Please check your budget amount and try again.";
-  }
-  if (lower.includes("jwt") || lower.includes("not authenticated")) {
-    return "Please sign in again to save your budget.";
+    return `Missing table: finance_budget_records does not exist in production. Run the budget migration SQL. (code: ${code || "PGRST205"})`;
   }
 
-  return message || fallback;
+  // Column missing
+  if (code === "42703" || code === "PGRST204" || lower.includes("column") && lower.includes("does not exist")) {
+    return `Column does not exist: ${message} (code: ${code})`;
+  }
+
+  // RLS / permission denied
+  if (lower.includes("permission denied") || code === "42501" || lower.includes("new row violates row-level security")) {
+    return `RLS blocked: ${message} (code: ${code || "42501"})`;
+  }
+
+  // Foreign key failure
+  if (lower.includes("foreign key") || lower.includes("violates foreign key constraint") || code === "23503") {
+    return `Foreign key failed: ${message} (code: ${code || "23503"})`;
+  }
+
+  // Unique constraint
+  if (lower.includes("unique") || lower.includes("duplicate") || code === "23505") {
+    return `Duplicate record: ${message} (code: ${code || "23505"})`;
+  }
+
+  // Check constraint
+  if (lower.includes("violates check constraint") || code === "23514") {
+    return `Check constraint failed: ${message} (code: ${code || "23514"})`;
+  }
+
+  // Auth / JWT
+  if (lower.includes("jwt") || lower.includes("not authenticated") || code === "PGRST301") {
+    return `Authentication required: ${message} (code: ${code || "PGRST301"})`;
+  }
+
+  // Missing workspace
+  if (lower.includes("workspace") && lower.includes("not found")) {
+    return `Missing workspace: ${message}`;
+  }
+
+  // Return the actual DB error message with code for all other cases
+  return message ? `${message}${code ? ` (code: ${code})` : ""}` : fallback;
 }
 
 export async function listBudgetRecordsForUser(client: Client, userId: string): Promise<BudgetRecord[]> {
@@ -97,13 +128,29 @@ export async function createBudgetRecordForUser(
   const payload = buildBudgetInsertPayload(userId, input, sortOrder);
   payload.days_remaining = daysRemainingForPeriod(input.period);
 
-  const { data, error } = await client.from("finance_budget_records").insert(payload).select(LEGACY_BUDGET_COLUMNS).single();
+  const insertResult = await client
+    .from("finance_budget_records")
+    .insert(payload)
+    .select(BUDGET_COLUMNS)
+    .single();
 
-  if (error || !data) {
-    throw new Error(mapBudgetError(error, "Could not save budget."));
+  if (missingDeletedAtColumn(insertResult.error)) {
+    const legacyInsertResult = await client
+      .from("finance_budget_records")
+      .insert(payload)
+      .select(LEGACY_BUDGET_COLUMNS)
+      .single();
+    if (legacyInsertResult.error || !legacyInsertResult.data) {
+      throw new Error(mapBudgetError(legacyInsertResult.error, "Could not save budget."));
+    }
+    return mapBudgetRow({ ...legacyInsertResult.data, deleted_at: null });
   }
 
-  return mapBudgetRow({ ...data, deleted_at: null });
+  if (insertResult.error || !insertResult.data) {
+    throw new Error(mapBudgetError(insertResult.error, "Could not save budget."));
+  }
+
+  return mapBudgetRow({ ...insertResult.data, deleted_at: insertResult.data.deleted_at ?? null });
 }
 
 export async function updateBudgetRecordForUser(

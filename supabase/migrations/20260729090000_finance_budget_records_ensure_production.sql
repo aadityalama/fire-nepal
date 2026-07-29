@@ -1,0 +1,64 @@
+-- Ensure finance_budget_records is fully provisioned in production.
+-- Safe to re-run: all statements use IF NOT EXISTS / IF EXISTS guards.
+-- Paste into Supabase Dashboard → SQL Editor → Run, or apply via migration.
+
+-- 1. Create table if missing (idempotent)
+create table if not exists public.finance_budget_records (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  category text not null,
+  icon text not null default '💼',
+  gradient text not null default 'from-emerald-300 to-lime-300',
+  period text not null check (period in ('Monthly', 'Yearly')),
+  amount_npr numeric(14, 2) not null check (amount_npr >= 0),
+  monthly_budget_npr numeric(14, 2) not null check (monthly_budget_npr >= 0),
+  monthly_spent_npr numeric(14, 2) not null default 0 check (monthly_spent_npr >= 0),
+  days_remaining integer not null default 30 check (days_remaining >= 0),
+  notification_settings jsonb not null default '{}'::jsonb,
+  ai_recommendation jsonb,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 2. Add soft-delete column if missing (idempotent)
+alter table public.finance_budget_records
+  add column if not exists deleted_at timestamptz;
+
+-- 3. Indexes (idempotent)
+create index if not exists finance_budget_records_user_sort_idx
+  on public.finance_budget_records (user_id, sort_order asc, created_at asc);
+
+create index if not exists finance_budget_records_active_user_sort_idx
+  on public.finance_budget_records (user_id, sort_order asc, created_at asc)
+  where deleted_at is null;
+
+-- 4. Enable RLS
+alter table public.finance_budget_records enable row level security;
+
+-- 5. Drop and recreate all RLS policies (ensures correct state)
+drop policy if exists "Users read own finance budget records" on public.finance_budget_records;
+drop policy if exists "Users insert own finance budget records" on public.finance_budget_records;
+drop policy if exists "Users update own finance budget records" on public.finance_budget_records;
+drop policy if exists "Users delete own finance budget records" on public.finance_budget_records;
+
+create policy "Users read own finance budget records"
+  on public.finance_budget_records for select
+  using (auth.uid() = user_id);
+
+create policy "Users insert own finance budget records"
+  on public.finance_budget_records for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users update own finance budget records"
+  on public.finance_budget_records for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users delete own finance budget records"
+  on public.finance_budget_records for delete
+  using (auth.uid() = user_id);
+
+-- 6. Reload PostgREST schema cache so changes are immediately visible
+notify pgrst, 'reload schema';
