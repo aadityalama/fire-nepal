@@ -56,7 +56,9 @@ export const BUDGET_NOTES_MAX_LENGTH = 500;
 
 export function sanitizeBudgetNotes(raw: unknown): string {
   if (typeof raw !== "string") return "";
-  return raw.trim().slice(0, BUDGET_NOTES_MAX_LENGTH);
+  // Preserve internal line breaks / paragraphs; only trim outer edges and cap length.
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return normalized.trim().slice(0, BUDGET_NOTES_MAX_LENGTH);
 }
 
 export function defaultBudgetNotificationSettings(): BudgetNotificationSettings {

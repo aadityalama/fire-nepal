@@ -75,6 +75,7 @@ export function BudgetDetailsSheet({
   const notificationsEnabled = enabledAlerts.length > 0;
   const daysLabel =
     period === "Yearly" ? `${budget.daysRemaining + 334} days left` : `${budget.daysRemaining} days left`;
+  const notesText = typeof budget.notes === "string" ? budget.notes.replace(/\r\n/g, "\n").replace(/\r/g, "\n") : "";
 
   return (
     <motion.div
@@ -161,6 +162,17 @@ export function BudgetDetailsSheet({
             </div>
           </section>
 
+          <section className="mt-4 rounded-[1.5rem] border border-lime-300/20 bg-gradient-to-br from-emerald-400/12 to-lime-300/8 p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notes</p>
+            {notesText.trim() ? (
+              <p className="mt-3 max-w-full break-words whitespace-pre-wrap text-sm font-semibold leading-relaxed text-emerald-50">
+                {notesText}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-emerald-100/50">No notes added.</p>
+            )}
+          </section>
+
           <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Alert Levels</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -181,13 +193,6 @@ export function BudgetDetailsSheet({
               })}
             </div>
           </section>
-
-          {budget.notes.trim() ? (
-            <section className="mt-4 rounded-[1.5rem] border border-lime-300/20 bg-gradient-to-br from-emerald-400/12 to-lime-300/8 p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notes</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-emerald-50">{budget.notes}</p>
-            </section>
-          ) : null}
 
           <div className="mt-4 grid gap-2">
             <button

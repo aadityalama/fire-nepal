@@ -485,7 +485,7 @@ function BudgetNotesField({
   return (
     <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Budget Notes (Optional)</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notes</p>
         <span className="text-[11px] font-bold text-emerald-100/45">
           {value.length}/{BUDGET_NOTES_MAX_LENGTH}
         </span>
@@ -495,8 +495,8 @@ function BudgetNotesField({
         value={value}
         onChange={(event) => onChange(event.target.value.slice(0, BUDGET_NOTES_MAX_LENGTH))}
         rows={3}
-        className="min-h-[96px] w-full resize-none overflow-hidden rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold leading-relaxed text-white outline-none placeholder:text-emerald-100/30 focus:border-emerald-300/45"
-        placeholder={"Example:\nSave for emergency expenses.\nLimit dining out this month.\nInvest bonus into mutual funds."}
+        className="min-h-[96px] w-full resize-y overflow-x-hidden overflow-y-auto break-words whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold leading-relaxed text-white outline-none placeholder:text-emerald-100/30 focus:border-emerald-300/45"
+        placeholder={"Example:\n• Buy every month\n• SIP allocation\n• Personal reminder..."}
         aria-label="Budget notes"
       />
     </section>
