@@ -3,11 +3,8 @@
 import {
   ArrowLeft,
   Bell,
-  Bot,
   CalendarDays,
-  Check,
   Copy,
-  CreditCard,
   FileText,
   Mail,
   Pencil,
@@ -15,7 +12,6 @@ import {
   Search,
   Sparkles,
   Trash2,
-  Wallet,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -75,26 +71,12 @@ const FILTERS: ExpenseFilter[] = [
   "Overdue",
 ];
 
-const REPEAT_OPTIONS: ExpenseRepeat[] = ["Never", "Weekly", "Monthly", "Yearly"];
-const REMINDER_OPTIONS: ExpenseReminderTiming[] = ["On Due Date", "1 Day Before", "3 Days Before", "7 Days Before", "Custom"];
-const ACCOUNTS = ["Personal", "Savings", "Cash", "Bank"];
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Card", "Wallet", "UPI"];
-
 type WorkspaceForm = {
   title: string;
   amount: string;
   category: string;
-  account: string;
-  paymentMethod: string;
   expenseDate: string;
-  dueDate: string;
-  repeat: ExpenseRepeat;
   notes: string;
-  reminderEnabled: boolean;
-  reminderTiming: ExpenseReminderTiming;
-  /** HH:mm — native time input; default 09:00 AM */
-  reminderTime: string;
-  reminderEmail: boolean;
 };
 
 function emptyForm(today: string): WorkspaceForm {
@@ -102,37 +84,17 @@ function emptyForm(today: string): WorkspaceForm {
     title: "",
     amount: "",
     category: DEFAULT_FINANCE_CATEGORY_ID,
-    account: "Personal",
-    paymentMethod: "Bank Transfer",
     expenseDate: today,
-    dueDate: today,
-    repeat: "Never",
     notes: "",
-    reminderEnabled: true,
-    reminderTiming: "1 Day Before",
-    reminderTime: "09:00",
-    reminderEmail: true,
   };
 }
 
-function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      className={`flex min-h-[52px] w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] ${
-        checked ? "border-emerald-300/50 bg-emerald-400/15" : "border-white/10 bg-white/[0.04]"
-      }`}
-    >
-      <span className="text-sm font-bold text-emerald-50">{label}</span>
-      <span className={`relative h-8 w-14 rounded-full p-1 transition ${checked ? "bg-emerald-400" : "bg-white/18"}`}>
-        <span className={`block h-6 w-6 rounded-full bg-white shadow-lg transition-transform duration-200 ${checked ? "translate-x-6" : "translate-x-0"}`} />
-      </span>
-    </button>
-  );
-}
+/** Silent defaults when Account / Due Date / reminders are not collected in the UI. */
+const DEFAULT_WORKSPACE_ACCOUNT = "Personal";
+const DEFAULT_PAYMENT_METHOD = "Bank Transfer";
+const DEFAULT_REPEAT: ExpenseRepeat = "Never";
+const DEFAULT_REMINDER_TIMING: ExpenseReminderTiming = "1 Day Before";
+const DEFAULT_REMINDER_TIME = "09:00";
 
 export type ExpenseWorkspaceDashboardProps = {
   expenses: Expense[];
@@ -629,21 +591,22 @@ export function ExpenseWorkspaceDashboard({
             onSave={() => {
               const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
               if (!form.title.trim() || !amountNpr) return;
+              const expenseDate = form.expenseDate || todayIso;
               void Promise.resolve(
                 onSubmitWorkspaceExpense({
                   title: form.title.trim(),
                   amountNpr,
                   category: normalizeFinanceCategory(form.category),
-                  expenseDate: form.expenseDate,
-                  dueDate: form.dueDate,
-                  account: form.account,
-                  paymentMethod: form.paymentMethod,
-                  repeat: form.repeat,
+                  expenseDate,
+                  dueDate: expenseDate,
+                  account: DEFAULT_WORKSPACE_ACCOUNT,
+                  paymentMethod: DEFAULT_PAYMENT_METHOD,
+                  repeat: DEFAULT_REPEAT,
                   notes: form.notes,
-                  reminderEnabled: form.reminderEnabled,
-                  reminderTiming: form.reminderTiming,
-                  reminderTime: form.reminderTime,
-                  reminderEmail: form.reminderEmail,
+                  reminderEnabled: false,
+                  reminderTiming: DEFAULT_REMINDER_TIMING,
+                  reminderTime: DEFAULT_REMINDER_TIME,
+                  reminderEmail: false,
                 }),
               )
                 .then(() => {
@@ -859,8 +822,8 @@ function ExpenseAddSheet({
             Save
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
-          <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+          <div className="space-y-5">
             <Field label="Expense Name">
               <input
                 value={form.title}
@@ -869,6 +832,11 @@ function ExpenseAddSheet({
                 placeholder="Internet Bill"
               />
             </Field>
+            <FinanceCategoryPicker
+              value={form.category}
+              onChange={(category) => setForm((current) => ({ ...current, category }))}
+              heading="Category"
+            />
             <Field label="Amount (NPR only)">
               <div className="flex min-h-[58px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
                 <span className="mr-2 text-lg font-black text-lime-200">NPR</span>
@@ -881,80 +849,15 @@ function ExpenseAddSheet({
                 />
               </div>
             </Field>
-            <FinanceCategoryPicker
-              value={form.category}
-              onChange={(category) => setForm((current) => ({ ...current, category }))}
-              heading="Category"
-            />
-            <Field label="Account">
-              <div className="grid grid-cols-2 gap-2">
-                {ACCOUNTS.map((account) => (
-                  <button
-                    key={account}
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, account }))}
-                    className={`min-h-[44px] rounded-2xl border px-3 text-sm font-black ${
-                      form.account === account ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                    }`}
-                  >
-                    <Wallet size={14} className="mr-1 inline" />
-                    {account}
-                  </button>
-                ))}
-              </div>
+            <Field label="Expense Date">
+              <input
+                type="date"
+                value={form.expenseDate}
+                onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
+                className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+              />
             </Field>
-            <Field label="Payment Method">
-              <div className="grid grid-cols-2 gap-2">
-                {PAYMENT_METHODS.map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, paymentMethod: method }))}
-                    className={`min-h-[44px] rounded-2xl border px-3 text-sm font-black ${
-                      form.paymentMethod === method ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                    }`}
-                  >
-                    <CreditCard size={14} className="mr-1 inline" />
-                    {method}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Expense Date">
-                <input
-                  type="date"
-                  value={form.expenseDate}
-                  onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
-                  className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none"
-                />
-              </Field>
-              <Field label="Due Date">
-                <input
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
-                  className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none"
-                />
-              </Field>
-            </div>
-            <Field label="Repeat">
-              <div className="grid grid-cols-2 gap-2">
-                {REPEAT_OPTIONS.map((repeat) => (
-                  <button
-                    key={repeat}
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, repeat }))}
-                    className={`min-h-[44px] rounded-2xl border px-3 text-sm font-black ${
-                      form.repeat === repeat ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                    }`}
-                  >
-                    {repeat}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="Notes">
+            <Field label="Notes (Optional)">
               <textarea
                 value={form.notes}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
@@ -962,71 +865,6 @@ function ExpenseAddSheet({
                 placeholder="Optional notes"
               />
             </Field>
-            <Field label="Attachment">
-              <div className="rounded-2xl border border-dashed border-emerald-300/20 bg-emerald-300/8 p-4">
-                <p className="text-sm font-semibold text-emerald-100/65">Attach receipts from the expense editor after saving.</p>
-              </div>
-            </Field>
-            <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Bot size={16} className="text-lime-200" />
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Reminder Settings</p>
-              </div>
-              <div className="space-y-2">
-                <ToggleSwitch
-                  label="Enable reminder"
-                  checked={form.reminderEnabled}
-                  onChange={() => setForm((current) => ({ ...current, reminderEnabled: !current.reminderEnabled }))}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  {REMINDER_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setForm((current) => ({ ...current, reminderTiming: option }))}
-                      className={`min-h-[44px] rounded-2xl border px-3 text-xs font-black ${
-                        form.reminderTiming === option ? "border-lime-300/60 bg-lime-300/18 text-white" : "border-white/10 bg-white/[0.04] text-emerald-100/75"
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-                <div className="space-y-1.5 pt-1">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Reminder Time</p>
-                  <input
-                    type="time"
-                    lang="en-US"
-                    step={60}
-                    value={form.reminderTime}
-                    onChange={(event) => {
-                      const next = event.target.value || "09:00";
-                      setForm((current) => ({ ...current, reminderTime: next.slice(0, 5) }));
-                    }}
-                    className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
-                    aria-describedby="expense-reminder-time-help"
-                  />
-                  <p id="expense-reminder-time-help" className="text-xs font-semibold text-emerald-100/65">
-                    Your reminder will be sent at the selected time.
-                  </p>
-                </div>
-                <ToggleSwitch
-                  label="Send email reminder"
-                  checked={form.reminderEmail}
-                  onChange={() => setForm((current) => ({ ...current, reminderEmail: !current.reminderEmail }))}
-                />
-              </div>
-            </section>
-            <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notification System</p>
-              <div className="mt-3 space-y-2">
-                {["Send In-App Notification", "Show Profile Notification", "Show Dashboard Notification", "Show Notification Badge"].map((label) => (
-                  <div key={label} className="flex items-center gap-2 rounded-xl bg-black/15 px-3 py-2 text-sm font-semibold text-emerald-50">
-                    <Check size={14} className="text-lime-300" /> {label}
-                  </div>
-                ))}
-              </div>
-            </section>
           </div>
         </div>
       </motion.div>

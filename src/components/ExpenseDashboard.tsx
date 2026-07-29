@@ -169,6 +169,7 @@ type ExpenseForm = {
   category: string;
   splitEqually: boolean;
   date: string;
+  notes: string;
   splitAmong: string[];
   splitPercentStr: Record<string, string>;
 };
@@ -320,6 +321,7 @@ function emptyExpenseForm(payerId = "", memberList: string[] = [], personalMode 
     category: personalMode ? DEFAULT_FINANCE_CATEGORY_ID : DEFAULT_GROUP_EXPENSE_CATEGORY_ID,
     splitEqually: true,
     date: new Date().toISOString().slice(0, 10),
+    notes: "",
     splitAmong: [...memberList],
     splitPercentStr: Object.fromEntries(memberList.map((m) => [m, ""])),
   };
@@ -1370,6 +1372,7 @@ export function ExpenseDashboard({
       category: normalizeExpenseCategory(expense.category),
       splitEqually: expense.splitEqually ?? true,
       date: expense.date,
+      notes: expense.notes ?? "",
       splitAmong,
       splitPercentStr,
     });
@@ -1482,6 +1485,7 @@ export function ExpenseDashboard({
       category: normalizeExpenseCategory(form.category),
       splitEqually: form.splitEqually,
       date: form.date,
+      notes: form.notes.trim() || undefined,
       receiptImage: receiptPreview,
       splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
       splitPercentages: form.splitEqually ? undefined : splitPercentages,
@@ -1503,7 +1507,11 @@ export function ExpenseDashboard({
             memberId: nextExpense.payerId,
             memberName: memberDisplayName(nextExpense.payerId, profiles),
             transactionDate: nextExpense.date,
-            metadata: { monthKey, source: editingExpenseId ? "expense_edit" : "expense_add" },
+            metadata: {
+              monthKey,
+              source: editingExpenseId ? "expense_edit" : "expense_add",
+              ...(nextExpense.notes ? { notes: nextExpense.notes } : {}),
+            },
           },
           { upsertLocalId: true },
         );
@@ -1938,7 +1946,11 @@ export function ExpenseDashboard({
             memberId: payerId,
             memberName: memberDisplayName(payerId, profiles),
             transactionDate: nextExpense.date,
-            metadata: { monthKey: expenseMonthKey(nextExpense.date), source: "workspace_add" },
+            metadata: {
+              monthKey: expenseMonthKey(nextExpense.date),
+              source: "workspace_add",
+              ...(payload.notes ? { notes: payload.notes } : {}),
+            },
           },
           { upsertLocalId: true },
         );
@@ -2053,6 +2065,10 @@ export function ExpenseDashboard({
                     placeholder="Internet Bill"
                   />
                 </label>
+                <FinanceCategoryPicker
+                  value={form.category}
+                  onChange={(category) => setForm((current) => ({ ...current, category }))}
+                />
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Amount (NPR)</span>
                   <div className="flex min-h-[52px] items-center rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3">
@@ -2065,20 +2081,24 @@ export function ExpenseDashboard({
                     />
                   </div>
                 </label>
-                <FinanceCategoryPicker
-                  value={form.category}
-                  onChange={(category) => setForm((current) => ({ ...current, category }))}
-                />
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Expense Date</span>
                   <input
                     type="date"
                     value={form.date}
                     onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
-                    className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
+                    className="min-h-[48px] w-full max-w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
                   />
                 </label>
-                <ExpenseReceiptUpload compact value={receiptPreview} onChange={setReceiptPreview} onOcrText={setReceiptOcrText} />
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Notes (Optional)</span>
+                  <textarea
+                    value={form.notes}
+                    onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                    className="min-h-[88px] w-full rounded-2xl border border-emerald-100 px-3 py-2.5 text-sm font-semibold outline-none"
+                    placeholder="Optional notes"
+                  />
+                </label>
               </div>
               <div className="mt-4 flex gap-2">
                 <button type="button" onClick={closeExpenseModal} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
