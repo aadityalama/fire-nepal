@@ -7,6 +7,7 @@ import {
   Bot,
   Flame,
   MoreVertical,
+  PieChart,
   Plus,
   Save,
   Sparkles,
@@ -19,6 +20,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
+import {
+  BudgetAllocationManager,
+  type BudgetAllocationSaveItem,
+} from "@/components/budget/BudgetAllocationManager";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import { createBudgetRecord, deleteBudgetRecord, fetchBudgetRecords, updateBudgetRecord } from "@/lib/budget/budget-api";
@@ -543,11 +548,14 @@ export default function BudgetWorkspacePage() {
   const [loadingBudgets, setLoadingBudgets] = useState(true);
   const [savingBudget, setSavingBudget] = useState(false);
   const [deletingBudgetBusy, setDeletingBudgetBusy] = useState(false);
+  const [allocationOpen, setAllocationOpen] = useState(false);
+  const [savingAllocation, setSavingAllocation] = useState(false);
   const light = resolvedTheme === "light";
 
   const openCreateForm = useCallback(() => {
     setFormMode("create");
     setEditingBudget(null);
+    setAllocationOpen(false);
     setFormOpen(true);
   }, []);
 
@@ -696,6 +704,74 @@ export default function BudgetWorkspacePage() {
     [formMode, handleSaveBudget, handleUpdateBudget],
   );
 
+  const handleSaveAllocations = useCallback(
+    async (updates: BudgetAllocationSaveItem[]) => {
+      const byId = new Map(budgets.map((budget) => [budget.id, budget]));
+      const changed = updates.filter((update) => {
+        const current = byId.get(update.id);
+        if (!current) return false;
+        return Math.round(current.monthlyBudgetNpr) !== Math.round(update.monthlyAmountNpr);
+      });
+
+      if (changed.length === 0) {
+        setAllocationOpen(false);
+        toast.success("Allocation unchanged");
+        return;
+      }
+
+      setSavingAllocation(true);
+      setBudgets((prev) =>
+        sortBudgetRecords(
+          prev.map((budget) => {
+            const update = changed.find((item) => item.id === budget.id);
+            if (!update) return budget;
+            const monthlyBudgetNpr = Math.round(update.monthlyAmountNpr);
+            const amountNpr = budget.period === "Yearly" ? monthlyBudgetNpr * 12 : monthlyBudgetNpr;
+            return {
+              ...budget,
+              amountNpr,
+              monthlyBudgetNpr,
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        ),
+      );
+
+      try {
+        await Promise.all(
+          changed.map((update) => {
+            const current = byId.get(update.id);
+            if (!current) {
+              return Promise.reject(new Error("Budget not found."));
+            }
+            const monthlyBudgetNpr = Math.round(update.monthlyAmountNpr);
+            const amountNpr = current.period === "Yearly" ? monthlyBudgetNpr * 12 : monthlyBudgetNpr;
+            return updateBudgetRecord(update.id, {
+              name: current.name,
+              category: current.category,
+              icon: current.icon,
+              gradient: current.gradient,
+              period: current.period,
+              amountNpr,
+              notificationSettings: current.notificationSettings,
+              aiRecommendation: current.aiRecommendation,
+            });
+          }),
+        );
+        await reloadBudgets();
+        toast.success("Budget allocation saved");
+        setAllocationOpen(false);
+      } catch (error) {
+        await reloadBudgets();
+        toast.error(error instanceof Error ? error.message : "Could not save allocation.");
+        throw error;
+      } finally {
+        setSavingAllocation(false);
+      }
+    },
+    [budgets, reloadBudgets],
+  );
+
   useEffect(() => {
     const id = window.setTimeout(() => setChartsReady(true), 480);
     return () => window.clearTimeout(id);
@@ -800,6 +876,29 @@ export default function BudgetWorkspacePage() {
               <ProgressRing percent={totals.progress} />
             </div>
           </motion.section>
+
+          <button
+            type="button"
+            onClick={() => setAllocationOpen(true)}
+            className={`flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[1.55rem] border px-4 text-left shadow-[0_18px_50px_-36px_rgba(16,185,129,0.65)] transition active:scale-[0.99] ${
+              light
+                ? "border-emerald-200/80 bg-gradient-to-r from-white via-emerald-50 to-white text-emerald-950"
+                : "border-lime-300/25 bg-gradient-to-r from-emerald-500/20 via-white/[0.06] to-lime-300/15 text-white"
+            }`}
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/20">
+                <PieChart size={20} strokeWidth={2.4} />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-base font-black">Manage Budget Allocation</span>
+                <span className={`mt-0.5 block truncate text-xs font-semibold ${light ? "text-emerald-800/70" : "text-emerald-100/55"}`}>
+                  Redistribute your monthly budget across categories
+                </span>
+              </span>
+            </span>
+            <span className={`shrink-0 text-sm font-black ${light ? "text-emerald-700" : "text-lime-200"}`}>Open</span>
+          </button>
 
           <section className={`rounded-[1.65rem] border p-4 backdrop-blur-xl ${light ? "border-emerald-200/70 bg-white/90" : "border-white/10 bg-white/[0.055]"}`}>
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -908,6 +1007,17 @@ export default function BudgetWorkspacePage() {
           }}
           onSave={handleFormSave}
           saving={savingBudget}
+        />
+
+        <BudgetAllocationManager
+          open={allocationOpen}
+          budgets={budgets}
+          saving={savingAllocation}
+          onClose={() => {
+            if (!savingAllocation) setAllocationOpen(false);
+          }}
+          onSave={handleSaveAllocations}
+          onCreateBudget={openCreateForm}
         />
 
         <AnimatePresence>
