@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBudgetInsertPayload, mapBudgetRow } from "@/lib/budget/budget-mapper";
-import { daysRemainingForPeriod, sortBudgetRecords, type BudgetRecord, type CreateBudgetInput } from "@/lib/budget/types";
+import {
+  daysRemainingForPeriod,
+  sanitizeBudgetNotes,
+  sortBudgetRecords,
+  type BudgetRecord,
+  type CreateBudgetInput,
+} from "@/lib/budget/types";
 import type { Database } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
@@ -12,13 +18,20 @@ type BudgetQueryError = {
 } | null | undefined;
 
 const BUDGET_COLUMNS =
-  "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,deleted_at,created_at,updated_at" as const;
+  "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notes,notification_settings,ai_recommendation,sort_order,deleted_at,created_at,updated_at" as const;
+const BUDGET_COLUMNS_NO_SOFT_DELETE =
+  "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notes,notification_settings,ai_recommendation,sort_order,created_at,updated_at" as const;
 const LEGACY_BUDGET_COLUMNS =
   "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,created_at,updated_at" as const;
 
 function missingDeletedAtColumn(error: BudgetQueryError) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "42703" || error?.code === "PGRST204" || message.includes("deleted_at");
+}
+
+function missingNotesColumn(error: BudgetQueryError) {
+  const message = error?.message?.toLowerCase() ?? "";
+  return error?.code === "42703" || error?.code === "PGRST204" || message.includes("notes");
 }
 
 function mapBudgetError(error: BudgetQueryError, fallback: string) {
@@ -29,6 +42,10 @@ function mapBudgetError(error: BudgetQueryError, fallback: string) {
   if (pieces.length > 0) return pieces.join(" ");
   if (error?.code) return `Database error ${error.code}`;
   return fallback;
+}
+
+function withEmptyNotes<T extends Record<string, unknown>>(row: T) {
+  return { ...row, notes: typeof row.notes === "string" ? row.notes : "", deleted_at: null as string | null };
 }
 
 async function getNextBudgetSortOrder(client: Client, userId: string): Promise<number> {
@@ -74,7 +91,23 @@ export async function listBudgetRecordsForUser(client: Client, userId: string): 
     .order("created_at", { ascending: true })
     .order("name", { ascending: true });
 
-  if (missingDeletedAtColumn(result.error)) {
+  if (!result.error) {
+    return sortBudgetRecords((result.data ?? []).map((row) => mapBudgetRow({ ...row, deleted_at: null })));
+  }
+
+  if (missingNotesColumn(result.error) || missingDeletedAtColumn(result.error)) {
+    const noSoft = await client
+      .from("finance_budget_records")
+      .select(BUDGET_COLUMNS_NO_SOFT_DELETE)
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (!noSoft.error) {
+      return sortBudgetRecords((noSoft.data ?? []).map((row) => mapBudgetRow(withEmptyNotes(row))));
+    }
+
     const legacyResult = await client
       .from("finance_budget_records")
       .select(LEGACY_BUDGET_COLUMNS)
@@ -85,15 +118,10 @@ export async function listBudgetRecordsForUser(client: Client, userId: string): 
     if (legacyResult.error) {
       throw new Error(mapBudgetError(legacyResult.error, "Could not load budgets."));
     }
-    return sortBudgetRecords((legacyResult.data ?? []).map((row) => mapBudgetRow({ ...row, deleted_at: null })));
+    return sortBudgetRecords((legacyResult.data ?? []).map((row) => mapBudgetRow(withEmptyNotes(row))));
   }
 
-  const { data, error } = result;
-  if (error) {
-    throw new Error(mapBudgetError(error, "Could not load budgets."));
-  }
-
-  return sortBudgetRecords((data ?? []).map((row) => mapBudgetRow({ ...row, deleted_at: null })));
+  throw new Error(mapBudgetError(result.error, "Could not load budgets."));
 }
 
 export async function createBudgetRecordForUser(
@@ -105,13 +133,22 @@ export async function createBudgetRecordForUser(
   const payload = buildBudgetInsertPayload(userId, input, sortOrder);
   payload.days_remaining = daysRemainingForPeriod(input.period);
 
-  const { data, error } = await client.from("finance_budget_records").insert(payload).select(LEGACY_BUDGET_COLUMNS).single();
-
-  if (error || !data) {
-    throw new Error(mapBudgetError(error, "Could not save budget."));
+  const withNotes = await client.from("finance_budget_records").insert(payload).select(BUDGET_COLUMNS_NO_SOFT_DELETE).single();
+  if (!withNotes.error && withNotes.data) {
+    return mapBudgetRow(withEmptyNotes(withNotes.data));
   }
 
-  return mapBudgetRow({ ...data, deleted_at: null });
+  if (withNotes.error && missingNotesColumn(withNotes.error)) {
+    const { notes: _drop, ...legacyPayload } = payload;
+    void _drop;
+    const legacy = await client.from("finance_budget_records").insert(legacyPayload).select(LEGACY_BUDGET_COLUMNS).single();
+    if (legacy.error || !legacy.data) {
+      throw new Error(mapBudgetError(legacy.error, "Could not save budget."));
+    }
+    return mapBudgetRow(withEmptyNotes({ ...legacy.data, notes: sanitizeBudgetNotes(input.notes ?? "") }));
+  }
+
+  throw new Error(mapBudgetError(withNotes.error, "Could not save budget."));
 }
 
 export async function updateBudgetRecordForUser(
@@ -121,6 +158,7 @@ export async function updateBudgetRecordForUser(
   input: CreateBudgetInput,
 ): Promise<BudgetRecord> {
   const monthlyBudgetNpr = input.period === "Yearly" ? Math.round(input.amountNpr / 12) : Math.round(input.amountNpr);
+  const notes = sanitizeBudgetNotes(input.notes ?? "");
 
   const updatePayload = {
     name: input.name.trim() || input.category,
@@ -131,6 +169,7 @@ export async function updateBudgetRecordForUser(
     amount_npr: input.amountNpr,
     monthly_budget_npr: monthlyBudgetNpr,
     days_remaining: daysRemainingForPeriod(input.period),
+    notes,
     notification_settings: input.notificationSettings,
     ai_recommendation: input.aiRecommendation,
     updated_at: new Date().toISOString(),
@@ -144,10 +183,16 @@ export async function updateBudgetRecordForUser(
     .select(BUDGET_COLUMNS)
     .maybeSingle();
 
-  if (missingDeletedAtColumn(updateResult.error)) {
+  if (!updateResult.error && updateResult.data) {
+    return mapBudgetRow({ ...updateResult.data, deleted_at: null });
+  }
+
+  if (updateResult.error && (missingNotesColumn(updateResult.error) || missingDeletedAtColumn(updateResult.error))) {
+    const { notes: _drop, ...legacyPayload } = updatePayload;
+    void _drop;
     const legacyUpdateResult = await client
       .from("finance_budget_records")
-      .update(updatePayload)
+      .update(legacyPayload)
       .eq("id", budgetId)
       .eq("user_id", userId)
       .select(LEGACY_BUDGET_COLUMNS)
@@ -158,18 +203,13 @@ export async function updateBudgetRecordForUser(
     if (!legacyUpdateResult.data) {
       throw new Error("Budget not found.");
     }
-    return mapBudgetRow({ ...legacyUpdateResult.data, deleted_at: null });
+    return mapBudgetRow(withEmptyNotes({ ...legacyUpdateResult.data, notes }));
   }
 
-  const { data, error } = updateResult;
-  if (error) {
-    throw new Error(mapBudgetError(error, "Could not update budget."));
+  if (updateResult.error) {
+    throw new Error(mapBudgetError(updateResult.error, "Could not update budget."));
   }
-  if (!data) {
-    throw new Error("Budget not found.");
-  }
-
-  return mapBudgetRow({ ...data, deleted_at: null });
+  throw new Error("Budget not found.");
 }
 
 export async function deleteBudgetRecordForUser(client: Client, userId: string, budgetId: string): Promise<void> {

@@ -1,6 +1,7 @@
 import {
   BUDGET_NOTIFICATION_OPTIONS,
   defaultBudgetNotificationSettings,
+  sanitizeBudgetNotes,
   type BudgetAiRecommendation,
   type BudgetNotificationSettings,
   type BudgetPeriod,
@@ -49,6 +50,7 @@ export function mapBudgetRow(row: BudgetRow): BudgetRecord {
     monthlySpentNpr: Number(row.monthly_spent_npr),
     daysRemaining: row.days_remaining,
     gradient: row.gradient,
+    notes: sanitizeBudgetNotes(row.notes ?? ""),
     notificationSettings: sanitizeNotificationSettings(row.notification_settings),
     aiRecommendation: sanitizeAiRecommendation(row.ai_recommendation),
     sortOrder: row.sort_order,
@@ -76,6 +78,7 @@ export function buildBudgetInsertPayload(
     monthly_budget_npr: monthlyBudgetNpr,
     monthly_spent_npr: 0,
     days_remaining: input.period === "Yearly" ? 365 : 30,
+    notes: sanitizeBudgetNotes(input.notes ?? ""),
     notification_settings: input.notificationSettings,
     ai_recommendation: input.aiRecommendation,
     sort_order: sortOrder,

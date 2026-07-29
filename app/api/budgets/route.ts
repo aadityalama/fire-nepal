@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   BUDGET_NOTIFICATION_OPTIONS,
   defaultBudgetNotificationSettings,
+  sanitizeBudgetNotes,
   type BudgetAiRecommendation,
   type BudgetNotificationSettings,
   type BudgetPeriod,
@@ -63,6 +64,7 @@ function sanitizeCreateInput(raw: unknown): CreateBudgetInput | null {
         : "from-emerald-300 to-lime-300",
     period,
     amountNpr: Math.round(amountNpr),
+    notes: sanitizeBudgetNotes(source.notes),
     notificationSettings: sanitizeNotificationSettings(source.notificationSettings),
     aiRecommendation: sanitizeAiRecommendation(source.aiRecommendation),
   };

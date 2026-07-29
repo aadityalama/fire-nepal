@@ -1591,6 +1591,7 @@ export type Database = {
           days_remaining: number;
           notification_settings: Json;
           ai_recommendation: Json | null;
+          notes: string;
           sort_order: number;
           deleted_at: string | null;
           created_at: string;
@@ -1610,6 +1611,7 @@ export type Database = {
           days_remaining?: number;
           notification_settings?: Json;
           ai_recommendation?: Json | null;
+          notes?: string;
           sort_order?: number;
           deleted_at?: string | null;
           created_at?: string;
@@ -1627,6 +1629,7 @@ export type Database = {
           days_remaining?: number;
           notification_settings?: Json;
           ai_recommendation?: Json | null;
+          notes?: string;
           sort_order?: number;
           deleted_at?: string | null;
           updated_at?: string;

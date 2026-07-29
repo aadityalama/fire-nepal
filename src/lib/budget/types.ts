@@ -32,6 +32,7 @@ export type BudgetRecord = {
   monthlySpentNpr: number;
   daysRemaining: number;
   gradient: string;
+  notes: string;
   notificationSettings: BudgetNotificationSettings;
   aiRecommendation: BudgetAiRecommendation | null;
   sortOrder: number;
@@ -46,9 +47,17 @@ export type CreateBudgetInput = {
   gradient: string;
   period: BudgetPeriod;
   amountNpr: number;
+  notes?: string;
   notificationSettings: BudgetNotificationSettings;
   aiRecommendation: BudgetAiRecommendation | null;
 };
+
+export const BUDGET_NOTES_MAX_LENGTH = 500;
+
+export function sanitizeBudgetNotes(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().slice(0, BUDGET_NOTES_MAX_LENGTH);
+}
 
 export function defaultBudgetNotificationSettings(): BudgetNotificationSettings {
   return {

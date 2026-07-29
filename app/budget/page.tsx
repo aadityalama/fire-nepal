@@ -5,7 +5,6 @@ import {
   Bell,
   Bot,
   Flame,
-  MoreVertical,
   PieChart,
   Plus,
   Save,
@@ -16,19 +15,22 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import {
   BudgetAllocationManager,
   type BudgetAllocationSaveItem,
 } from "@/components/budget/BudgetAllocationManager";
+import { BudgetDetailsSheet, getBudgetStatus } from "@/components/budget/BudgetDetailsSheet";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import { createBudgetRecord, deleteBudgetRecord, fetchBudgetRecords, updateBudgetRecord } from "@/lib/budget/budget-api";
 import {
+  BUDGET_NOTES_MAX_LENGTH,
   BUDGET_NOTIFICATION_OPTIONS,
   defaultBudgetNotificationSettings,
+  sanitizeBudgetNotes,
   sortBudgetRecords,
   type BudgetAiRecommendation,
   type BudgetNotificationSettings,
@@ -38,7 +40,13 @@ import {
 } from "@/lib/budget/types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryEmoji, normalizeFinanceCategory, type FinanceCategoryId } from "@/lib/finance/categories";
+import {
+  DEFAULT_FINANCE_CATEGORY_ID,
+  getFinanceCategoryEmoji,
+  getFinanceCategoryLabel,
+  normalizeFinanceCategory,
+  type FinanceCategoryId,
+} from "@/lib/finance/categories";
 
 const BudgetMonthlyTrendChart = dynamic(
   () => import("@/components/budget/BudgetMonthlyTrendChart").then((mod) => mod.BudgetMonthlyTrendChart),
@@ -294,17 +302,23 @@ function BudgetCard({
   budget,
   period,
   index,
-  onOpenMenu,
+  totalBudget,
+  onOpen,
 }: {
   budget: BudgetRecord;
   period: BudgetPeriod;
   index: number;
-  onOpenMenu: (budget: BudgetRecord) => void;
+  totalBudget: number;
+  onOpen: (budget: BudgetRecord) => void;
 }) {
   const amount = periodAmount(budget.monthlyBudgetNpr, period);
   const spent = periodAmount(budget.monthlySpentNpr, period);
-  const pct = clampPct((spent / amount) * 100);
-  const daysLabel = period === "Yearly" ? `${budget.daysRemaining + 334} days left` : `${budget.daysRemaining} days left`;
+  const remaining = Math.max(0, amount - spent);
+  const pct = amount > 0 ? clampPct((spent / amount) * 100) : 0;
+  const status = getBudgetStatus(spent, amount);
+  const daysLabel =
+    period === "Yearly" ? `${budget.daysRemaining + 334} days left` : `${budget.daysRemaining} days left`;
+  const allocationPct = totalBudget > 0 ? (amount / totalBudget) * 100 : 0;
 
   return (
     <motion.article
@@ -313,49 +327,61 @@ function BudgetCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -28, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-      className="w-full min-w-0 overflow-hidden rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-3.5 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform sm:p-4"
+      className="w-full min-w-0 overflow-hidden rounded-[1.55rem] border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform"
     >
-      <div className="flex w-full min-w-0 items-start gap-2.5">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${budget.gradient} text-xl shadow-lg sm:h-12 sm:w-12 sm:text-2xl`}>
+      <button
+        type="button"
+        onClick={() => onOpen(budget)}
+        className="w-full min-w-0 p-3.5 text-left transition active:scale-[0.99] sm:p-4"
+        aria-label={`Open details for ${budget.name}`}
+      >
+        <div className="flex w-full min-w-0 items-start gap-3">
+          <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${budget.gradient} text-xl shadow-lg`}>
             {budget.icon}
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-black text-white">{budget.name}</h3>
-            <p className="mt-0.5 truncate text-xs font-bold text-emerald-100/55">{budget.category}</p>
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-black text-white">{budget.name}</h3>
+                <p className="mt-0.5 truncate text-xs font-bold text-emerald-100/55">
+                  {getFinanceCategoryLabel(budget.category)}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${status.className}`}>
+                {status.label}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-white/8 bg-black/15 px-2.5 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-100/45">Budget</p>
+                <p className="mt-1 truncate text-xs font-black tabular-nums text-white">{formatNpr(amount)}</p>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-black/15 px-2.5 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-100/45">Spent</p>
+                <p className="mt-1 truncate text-xs font-black tabular-nums text-emerald-50">{formatNpr(spent)}</p>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-black/15 px-2.5 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-100/45">Left</p>
+                <p className="mt-1 truncate text-xs font-black tabular-nums text-lime-100">{formatNpr(remaining)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2 text-[11px] font-black">
+                <span className="text-emerald-100/55">{pct}% used · {daysLabel}</span>
+                <span className="shrink-0 text-lime-100">{allocationPct.toFixed(1)}%</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={`h-full max-w-full rounded-full bg-gradient-to-r ${budget.gradient} shadow-[0_0_22px_rgba(190,242,100,0.25)] transition-[width] duration-700 ease-out`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
-        <button
-          type="button"
-          aria-label={`Budget actions for ${budget.name}`}
-          onClick={() => onOpenMenu(budget)}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-emerald-100/70 transition hover:bg-white/[0.08] active:scale-95 sm:h-11 sm:w-11"
-        >
-          <MoreVertical size={20} />
-        </button>
-      </div>
-
-      <div className="mt-3 flex w-full min-w-0 items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
-          <p className="mt-0.5 truncate text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
-        </div>
-        <div className="shrink-0 text-right text-xs font-black">
-          <span className="text-lime-200">{pct}%</span>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs font-black">
-          <span className="min-w-0 truncate text-emerald-100/55">Used {formatNpr(spent)}</span>
-        </div>
-        <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
-          <div
-            className={`h-full max-w-full rounded-full bg-gradient-to-r ${budget.gradient} shadow-[0_0_22px_rgba(190,242,100,0.25)] transition-[width] duration-700 ease-out`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+      </button>
     </motion.article>
   );
 }
@@ -382,63 +408,6 @@ function BudgetEmptyState({ onCreate }: { onCreate: () => void }) {
         <Plus size={20} strokeWidth={2.5} /> Create Budget
       </button>
     </motion.div>
-  );
-}
-
-function BudgetActionSheet({
-  open,
-  budgetName,
-  onClose,
-  onEdit,
-  onDelete,
-}: {
-  open: boolean;
-  budgetName: string;
-  onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[#020806]/70 p-0 backdrop-blur-sm sm:p-4">
-      <button type="button" aria-label="Close budget actions" className="absolute inset-0" onClick={onClose} />
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 24 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="relative w-full max-w-lg overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#04140f] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] shadow-2xl sm:rounded-[1.75rem]"
-      >
-        <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-white/20" />
-        <p className="px-2 pt-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-emerald-100/45">{budgetName}</p>
-        <div className="mt-3 w-full min-w-0 space-y-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-left text-base font-black text-white active:scale-[0.99]"
-          >
-            <span className="text-xl">✏️</span>
-            Edit Budget
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="flex min-h-[56px] w-full items-center gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 text-left text-base font-black text-red-200 active:scale-[0.99]"
-          >
-            <span className="text-xl">🗑</span>
-            Delete Budget
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-3 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-100/75"
-        >
-          Cancel
-        </button>
-      </motion.div>
-    </div>
   );
 }
 
@@ -497,6 +466,43 @@ function DeleteBudgetDialog({
   );
 }
 
+function BudgetNotesField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 96), 220)}px`;
+  }, [value]);
+
+  return (
+    <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Budget Notes (Optional)</p>
+        <span className="text-[11px] font-bold text-emerald-100/45">
+          {value.length}/{BUDGET_NOTES_MAX_LENGTH}
+        </span>
+      </div>
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={(event) => onChange(event.target.value.slice(0, BUDGET_NOTES_MAX_LENGTH))}
+        rows={3}
+        className="min-h-[96px] w-full resize-none overflow-hidden rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold leading-relaxed text-white outline-none placeholder:text-emerald-100/30 focus:border-emerald-300/45"
+        placeholder={"Example:\nSave for emergency expenses.\nLimit dining out this month.\nInvest bonus into mutual funds."}
+        aria-label="Budget notes"
+      />
+    </section>
+  );
+}
+
 function budgetFormDefaults(initialBudget?: BudgetRecord | null) {
   if (!initialBudget) {
     return {
@@ -504,6 +510,7 @@ function budgetFormDefaults(initialBudget?: BudgetRecord | null) {
       amountInput: "80000",
       name: "",
       category: DEFAULT_FINANCE_CATEGORY_ID,
+      notes: "",
       enabledAlerts: defaultBudgetNotificationSettings(),
       gradient: "from-emerald-300 to-lime-300",
       aiRecommendation: PLACEHOLDER_AI_RECOMMENDATION,
@@ -515,6 +522,7 @@ function budgetFormDefaults(initialBudget?: BudgetRecord | null) {
     amountInput: String(Math.round(initialBudget.amountNpr)),
     name: initialBudget.name,
     category: normalizeFinanceCategory(initialBudget.category),
+    notes: initialBudget.notes ?? "",
     enabledAlerts: { ...defaultBudgetNotificationSettings(), ...initialBudget.notificationSettings },
     gradient: initialBudget.gradient,
     aiRecommendation: initialBudget.aiRecommendation ?? PLACEHOLDER_AI_RECOMMENDATION,
@@ -541,6 +549,7 @@ function BudgetFormModal({
   const [amountInput, setAmountInput] = useState(defaults.amountInput);
   const [name, setName] = useState(defaults.name);
   const [category, setCategory] = useState<FinanceCategoryId>(defaults.category);
+  const [notes, setNotes] = useState(defaults.notes);
   const [enabledAlerts, setEnabledAlerts] = useState<BudgetNotificationSettings>(defaults.enabledAlerts);
   const [gradient] = useState(defaults.gradient);
   const [aiRecommendation] = useState<BudgetAiRecommendation | null>(defaults.aiRecommendation);
@@ -552,6 +561,7 @@ function BudgetFormModal({
     setAmountInput(next.amountInput);
     setName(next.name);
     setCategory(next.category);
+    setNotes(next.notes);
     setEnabledAlerts(next.enabledAlerts);
   }, [open, mode, initialBudget]);
 
@@ -569,6 +579,7 @@ function BudgetFormModal({
       gradient,
       period,
       amountNpr: parsedAmount,
+      notes: sanitizeBudgetNotes(notes),
       notificationSettings: enabledAlerts,
       aiRecommendation,
     });
@@ -577,6 +588,7 @@ function BudgetFormModal({
       setAmountInput("80000");
       setPeriod("Monthly");
       setCategory(DEFAULT_FINANCE_CATEGORY_ID);
+      setNotes("");
       setEnabledAlerts(defaultBudgetNotificationSettings());
     }
     onClose();
@@ -643,6 +655,8 @@ function BudgetFormModal({
               <SegmentedControl value={period} onChange={setPeriod} compact />
             </section>
 
+            <BudgetNotesField value={notes} onChange={setNotes} />
+
             <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Notifications</p>
@@ -694,7 +708,7 @@ export default function BudgetWorkspacePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingBudget, setEditingBudget] = useState<BudgetRecord | null>(null);
-  const [actionBudget, setActionBudget] = useState<BudgetRecord | null>(null);
+  const [detailBudget, setDetailBudget] = useState<BudgetRecord | null>(null);
   const [deletingBudget, setDeletingBudget] = useState<BudgetRecord | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
@@ -715,8 +729,12 @@ export default function BudgetWorkspacePage() {
   const openEditForm = useCallback((budget: BudgetRecord) => {
     setFormMode("edit");
     setEditingBudget(budget);
-    setActionBudget(null);
+    setDetailBudget(null);
     setFormOpen(true);
+  }, []);
+
+  const openDetailBudget = useCallback((budget: BudgetRecord) => {
+    setDetailBudget(budget);
   }, []);
 
   const reloadBudgets = useCallback(async () => {
@@ -762,6 +780,7 @@ export default function BudgetWorkspacePage() {
         monthlySpentNpr: 0,
         daysRemaining: input.period === "Yearly" ? 365 : 30,
         gradient: input.gradient,
+        notes: sanitizeBudgetNotes(input.notes ?? ""),
         notificationSettings: input.notificationSettings,
         aiRecommendation: input.aiRecommendation,
         sortOrder: budgets.length,
@@ -802,6 +821,7 @@ export default function BudgetWorkspacePage() {
         monthlyBudgetNpr,
         daysRemaining: input.period === "Yearly" ? 365 : editingBudget.daysRemaining,
         gradient: input.gradient,
+        notes: sanitizeBudgetNotes(input.notes ?? ""),
         notificationSettings: input.notificationSettings,
         aiRecommendation: input.aiRecommendation,
         updatedAt: new Date().toISOString(),
@@ -837,7 +857,7 @@ export default function BudgetWorkspacePage() {
       await deleteBudgetRecord(removedId);
       toast.success("Budget deleted");
       setDeletingBudget(null);
-      setActionBudget(null);
+      setDetailBudget(null);
     } catch (error) {
       await reloadBudgets();
       toast.error(error instanceof Error ? error.message : "Could not delete budget.");
@@ -845,6 +865,29 @@ export default function BudgetWorkspacePage() {
       setDeletingBudgetBusy(false);
     }
   }, [deletingBudget, reloadBudgets]);
+
+  const handleDuplicateBudget = useCallback(
+    async (budget: BudgetRecord) => {
+      setDetailBudget(null);
+      const input: CreateBudgetInput = {
+        name: `${budget.name} (Copy)`,
+        category: budget.category,
+        icon: budget.icon,
+        gradient: budget.gradient,
+        period: budget.period,
+        amountNpr: budget.amountNpr,
+        notes: budget.notes,
+        notificationSettings: budget.notificationSettings,
+        aiRecommendation: budget.aiRecommendation,
+      };
+      try {
+        await handleSaveBudget(input);
+      } catch {
+        /* toast already shown */
+      }
+    },
+    [handleSaveBudget],
+  );
 
   const handleFormSave = useCallback(
     async (input: CreateBudgetInput) => {
@@ -906,6 +949,7 @@ export default function BudgetWorkspacePage() {
               gradient: current.gradient,
               period: current.period,
               amountNpr,
+              notes: current.notes,
               notificationSettings: current.notificationSettings,
               aiRecommendation: current.aiRecommendation,
             });
@@ -1086,7 +1130,8 @@ export default function BudgetWorkspacePage() {
                         budget={budget}
                         period={period}
                         index={index}
-                        onOpenMenu={setActionBudget}
+                        totalBudget={totals.totalBudget}
+                        onOpen={openDetailBudget}
                       />
                     ))}
                   </AnimatePresence>
@@ -1148,15 +1193,26 @@ export default function BudgetWorkspacePage() {
         />
 
         <AnimatePresence>
-          {actionBudget ? (
-            <BudgetActionSheet
-              open
-              budgetName={actionBudget.name}
-              onClose={() => setActionBudget(null)}
-              onEdit={() => openEditForm(actionBudget)}
+          {detailBudget ? (
+            <BudgetDetailsSheet
+              budget={budgets.find((item) => item.id === detailBudget.id) ?? detailBudget}
+              period={period}
+              allocationPercent={
+                totals.totalBudget > 0
+                  ? (periodAmount(
+                      (budgets.find((item) => item.id === detailBudget.id) ?? detailBudget).monthlyBudgetNpr,
+                      period,
+                    ) /
+                      totals.totalBudget) *
+                    100
+                  : 0
+              }
+              onClose={() => setDetailBudget(null)}
+              onEdit={() => openEditForm(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget)}
+              onDuplicate={() => void handleDuplicateBudget(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget)}
               onDelete={() => {
-                setDeletingBudget(actionBudget);
-                setActionBudget(null);
+                setDeletingBudget(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget);
+                setDetailBudget(null);
               }}
             />
           ) : null}
