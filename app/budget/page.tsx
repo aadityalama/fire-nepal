@@ -155,42 +155,45 @@ function BudgetCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -28, scale: 0.98 }}
       transition={{ duration: 0.35, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-      className="rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform"
+      className="w-full min-w-0 overflow-hidden rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-3.5 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl motion-safe:hover:-translate-y-0.5 motion-safe:transition-transform sm:p-4"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${budget.gradient} text-2xl shadow-lg`}>
+      <div className="flex w-full min-w-0 items-start gap-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${budget.gradient} text-xl shadow-lg sm:h-12 sm:w-12 sm:text-2xl`}>
             {budget.icon}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h3 className="truncate text-base font-black text-white">{budget.name}</h3>
-            <p className="mt-0.5 text-xs font-bold text-emerald-100/55">{budget.category}</p>
+            <p className="mt-0.5 truncate text-xs font-bold text-emerald-100/55">{budget.category}</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-start gap-1">
-          <div className="text-right">
-            <p className="text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
-            <p className="mt-0.5 text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
-          </div>
-          <button
-            type="button"
-            aria-label={`Budget actions for ${budget.name}`}
-            onClick={() => onOpenMenu(budget)}
-            className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full text-emerald-100/70 transition hover:bg-white/[0.08] active:scale-95"
-          >
-            <MoreVertical size={20} />
-          </button>
+        <button
+          type="button"
+          aria-label={`Budget actions for ${budget.name}`}
+          onClick={() => onOpenMenu(budget)}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-emerald-100/70 transition hover:bg-white/[0.08] active:scale-95 sm:h-11 sm:w-11"
+        >
+          <MoreVertical size={20} />
+        </button>
+      </div>
+
+      <div className="mt-3 flex w-full min-w-0 items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black tabular-nums text-emerald-50">{formatNpr(amount)}</p>
+          <p className="mt-0.5 truncate text-[11px] font-bold text-emerald-100/50">{daysLabel}</p>
+        </div>
+        <div className="shrink-0 text-right text-xs font-black">
+          <span className="text-lime-200">{pct}%</span>
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="mb-2 flex items-center justify-between text-xs font-black">
-          <span className="text-emerald-100/55">Used {formatNpr(spent)}</span>
-          <span className="text-lime-200">{pct}%</span>
+      <div className="mt-3">
+        <div className="mb-2 flex min-w-0 items-center justify-between gap-2 text-xs font-black">
+          <span className="min-w-0 truncate text-emerald-100/55">Used {formatNpr(spent)}</span>
         </div>
         <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
           <div
-            className={`h-full rounded-full bg-gradient-to-r ${budget.gradient} shadow-[0_0_22px_rgba(190,242,100,0.25)] transition-[width] duration-700 ease-out`}
+            className={`h-full max-w-full rounded-full bg-gradient-to-r ${budget.gradient} shadow-[0_0_22px_rgba(190,242,100,0.25)] transition-[width] duration-700 ease-out`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -247,11 +250,11 @@ function BudgetActionSheet({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 24 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="relative w-full max-w-lg overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#04140f] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] shadow-2xl sm:rounded-[1.75rem]"
+        className="relative w-full max-w-lg overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#04140f] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] shadow-2xl sm:rounded-[1.75rem]"
       >
         <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-white/20" />
-        <p className="px-5 pt-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-emerald-100/45">{budgetName}</p>
-        <div className="mt-3 space-y-2 px-3">
+        <p className="px-2 pt-4 text-center text-xs font-bold uppercase tracking-[0.16em] text-emerald-100/45">{budgetName}</p>
+        <div className="mt-3 w-full min-w-0 space-y-2">
           <button
             type="button"
             onClick={onEdit}
@@ -272,7 +275,7 @@ function BudgetActionSheet({
         <button
           type="button"
           onClick={onClose}
-          className="mx-3 mt-3 min-h-[52px] w-[calc(100%-1.5rem)] rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-100/75"
+          className="mt-3 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-100/75"
         >
           Cancel
         </button>
@@ -709,7 +712,7 @@ export default function BudgetWorkspacePage() {
   return (
     <DashboardAccessGuard>
       <main
-        className={`min-h-screen max-w-[100vw] overflow-x-clip px-4 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.85rem+env(safe-area-inset-top,0px))] text-white sm:px-6 lg:px-8 ${
+        className={`min-h-screen w-full max-w-[100vw] overflow-x-hidden pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.85rem+env(safe-area-inset-top,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] text-white sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] lg:pl-[max(2rem,env(safe-area-inset-left,0px))] lg:pr-[max(2rem,env(safe-area-inset-right,0px))] ${
           light ? "bg-[#06291f]" : "bg-[#020806]"
         }`}
       >
@@ -719,11 +722,11 @@ export default function BudgetWorkspacePage() {
           <div className="absolute bottom-0 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl" />
         </div>
 
-        <div className="relative mx-auto flex w-full max-w-lg flex-col gap-3 sm:gap-3.5 lg:max-w-6xl lg:gap-4">
-          <header className="flex items-center justify-between gap-3">
+        <div className="relative mx-auto flex w-full min-w-0 max-w-lg flex-col gap-3 sm:gap-3.5 lg:max-w-6xl lg:gap-4">
+          <header className="flex w-full min-w-0 items-center justify-between gap-2 sm:gap-3">
             <Link
               href="/finance"
-              className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-3 text-sm font-black backdrop-blur-xl transition active:scale-[0.98] ${
+              className={`inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-black backdrop-blur-xl transition active:scale-[0.98] ${
                 light
                   ? "border-emerald-200/90 bg-white/95 text-emerald-900"
                   : "border-white/10 bg-white/[0.06] text-emerald-50"
@@ -741,7 +744,7 @@ export default function BudgetWorkspacePage() {
               type="button"
               onClick={openCreateForm}
               aria-label="Add budget"
-              className="grid min-h-[48px] min-w-[48px] place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/25 transition active:scale-95"
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-lg shadow-emerald-500/25 transition active:scale-95"
             >
               <Plus size={23} strokeWidth={2.6} />
             </button>
@@ -813,15 +816,15 @@ export default function BudgetWorkspacePage() {
             <BudgetMonthlyTrendChart ready={chartsReady} />
           </section>
 
-          <section className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr] lg:gap-4">
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Budget List</h2>
-                <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-black text-lime-100">{budgets.length} active</span>
+          <section className="grid w-full min-w-0 gap-3 lg:grid-cols-[1.1fr_0.9fr] lg:gap-4">
+            <div className="w-full min-w-0">
+              <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+                <h2 className="min-w-0 truncate text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Budget List</h2>
+                <span className="shrink-0 rounded-full bg-white/[0.06] px-3 py-1 text-xs font-black text-lime-100">{budgets.length} active</span>
               </div>
-              <div className="space-y-3">
+              <div className="w-full min-w-0 space-y-3">
                 {loadingBudgets ? (
-                  <div className="rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-6 text-center text-sm font-semibold text-emerald-100/55">
+                  <div className="w-full rounded-[1.55rem] border border-white/10 bg-white/[0.06] p-6 text-center text-sm font-semibold text-emerald-100/55">
                     Loading your budgets...
                   </div>
                 ) : budgets.length === 0 ? (
@@ -879,9 +882,9 @@ export default function BudgetWorkspacePage() {
                     const share = totals.totalBudget > 0 ? clampPct((periodAmount(budget.monthlyBudgetNpr, period) / totals.totalBudget) * 100) : 0;
                     return (
                       <div key={budget.id}>
-                        <div className="mb-1.5 flex items-center justify-between text-xs font-black">
-                          <span className="text-emerald-50">{budget.icon} {budget.name}</span>
-                          <span className="text-lime-100">{share}%</span>
+                        <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2 text-xs font-black">
+                          <span className="min-w-0 truncate text-emerald-50">{budget.icon} {budget.name}</span>
+                          <span className="shrink-0 text-lime-100">{share}%</span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-white/10">
                           <div className={`h-full rounded-full bg-gradient-to-r ${budget.gradient}`} style={{ width: `${share}%` }} />
