@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/nepse-official-live",
-      "schedule": "15 11 * * 0,1,2,3,4"
+      "schedule": "45 9 * * 0,1,2,3,4"
     }
   ]
 }

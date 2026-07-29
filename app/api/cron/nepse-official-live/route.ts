@@ -3,8 +3,8 @@ import { createMarketDataServiceClient } from "@/services/market/nepse-market-da
 import { ingestOfficialLiveMarket } from "@/services/market/nepse-official-sync";
 
 /**
- * Intraday + post-close official NEPSE live sync.
- * Polls nepalstock.com.np, persists a historical snapshot, and refreshes last-successful cache.
+ * Post-close official NEPSE closing snapshot (once per trading day).
+ * Schedule: 15:30 Asia/Kathmandu (09:45 UTC), Sunday–Thursday — Vercel Hobby compatible.
  *
  * Auth: Authorization: Bearer <CRON_SECRET> when CRON_SECRET is set.
  */

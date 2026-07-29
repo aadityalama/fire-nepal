@@ -1,7 +1,7 @@
 /**
- * Official NEPSE synchronization: fetch one atomic validated snapshot → persist → serve.
- * Never fabricates market values. Never serves stale / mixed last-successful payloads
- * to the dashboard — a failed fetch rejects rather than displaying inconsistent data.
+ * Official NEPSE synchronization: fetch one atomic validated closing snapshot → persist → serve.
+ * Stores at most one official snapshot per Kathmandu trading day.
+ * On fetch failure, continues serving the latest previously stored valid snapshot.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -22,14 +22,14 @@ function createSyncServiceClient(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function kathmanduTradeDate(now = new Date()): string {
+export function kathmanduTradeDate(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu" }).format(now);
 }
 
 export type NepseLiveServeMeta = {
   source: "official";
   lastSuccessfulSyncAt: string | null;
-  stale: false;
+  stale: boolean;
   error: string | null;
   snapshotId: string | null;
 };
@@ -65,13 +65,79 @@ type PersistedSnapshotRow = {
 const PERSIST_MIN_INTERVAL_MS = 45_000;
 let lastPersistAt = 0;
 
+function isValidOfficialBundle(value: unknown): value is NepseOfficialBundle {
+  if (!value || typeof value !== "object") return false;
+  const bundle = value as Partial<NepseOfficialBundle>;
+  return Boolean(
+    bundle.syncMeta &&
+      typeof bundle.syncMeta.syncedAt === "string" &&
+      bundle.index &&
+      typeof bundle.index.value === "number" &&
+      bundle.bySymbol &&
+      typeof bundle.bySymbol === "object" &&
+      bundle.summaryStats &&
+      bundle.officialBreadth,
+  );
+}
+
+export async function findOfficialSnapshotForTradeDate(
+  sb: SupabaseClient,
+  tradeDate: string,
+): Promise<PersistedSnapshotRow | null> {
+  const { data, error } = await sb
+    .from("nepse_market_snapshots")
+    .select(
+      "synced_at,trade_date,is_market_open,market_as_of,generated_time,index_name,index_value,index_change_npr,index_change_pct,previous_close,total_turnover_npr,total_volume,total_trades,scrips_traded,advancing,declining,unchanged,upper_circuit,lower_circuit,payload_json",
+    )
+    .eq("trade_date", tradeDate)
+    .eq("source", "official")
+    .order("synced_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error("[nepse-official-sync] trade-date lookup failed:", error.message);
+    return null;
+  }
+  return (data as PersistedSnapshotRow | null) ?? null;
+}
+
+export async function loadLatestOfficialSnapshotBundle(
+  sb: SupabaseClient,
+): Promise<{ bundle: NepseOfficialBundle; row: PersistedSnapshotRow } | null> {
+  const { data, error } = await sb
+    .from("nepse_market_snapshots")
+    .select(
+      "synced_at,trade_date,is_market_open,market_as_of,generated_time,index_name,index_value,index_change_npr,index_change_pct,previous_close,total_turnover_npr,total_volume,total_trades,scrips_traded,advancing,declining,unchanged,upper_circuit,lower_circuit,payload_json",
+    )
+    .eq("source", "official")
+    .order("synced_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error("[nepse-official-sync] latest snapshot load failed:", error.message);
+    return null;
+  }
+  const row = (data as PersistedSnapshotRow | null) ?? null;
+  if (!row || !isValidOfficialBundle(row.payload_json)) return null;
+  return { bundle: row.payload_json, row };
+}
+
 export async function persistOfficialMarketSnapshot(
   sb: SupabaseClient,
   bundle: NepseOfficialBundle,
-): Promise<void> {
+): Promise<"inserted" | "skipped" | "failed"> {
+  const tradeDate = kathmanduTradeDate(new Date(bundle.syncMeta.syncedAt));
+  const existing = await findOfficialSnapshotForTradeDate(sb, tradeDate);
+  if (existing) {
+    console.info(
+      `[nepse-official-sync] skip persist — official snapshot already exists for ${tradeDate} (${existing.synced_at})`,
+    );
+    return "skipped";
+  }
+
   const row = {
     synced_at: bundle.syncMeta.syncedAt,
-    trade_date: kathmanduTradeDate(new Date(bundle.syncMeta.syncedAt)),
+    trade_date: tradeDate,
     source: "official",
     is_market_open: bundle.marketStatus.isOpen,
     market_as_of: bundle.syncMeta.marketAsOf,
@@ -94,9 +160,10 @@ export async function persistOfficialMarketSnapshot(
   };
   const { error } = await sb.from("nepse_market_snapshots").insert(row);
   if (error) {
-    // Table may not be applied yet in some environments — live serve still works.
     console.error("[nepse-official-sync] persist failed:", error.message);
+    return "failed";
   }
+  return "inserted";
 }
 
 async function maybePersist(bundle: NepseOfficialBundle): Promise<void> {
@@ -127,8 +194,8 @@ async function logOfficialSync(
 }
 
 /**
- * Serve the latest atomic official snapshot only.
- * On failure: throw (do NOT fall back to stale last-successful cache).
+ * Serve the latest atomic official snapshot.
+ * Prefer a fresh validated fetch; on failure, serve the latest stored closing snapshot.
  */
 export async function getOfficialNepseLiveBundle(options?: {
   ttlMs?: number;
@@ -136,22 +203,45 @@ export async function getOfficialNepseLiveBundle(options?: {
 }): Promise<NepseLiveServeResult> {
   const ttlMs = options?.ttlMs ?? OFFICIAL_LIVE_TTL_MS;
   if (options?.force) invalidateOfficialLiveCache();
-  const bundle = options?.force
-    ? await fetchNepseOfficialBundle()
-    : await getCachedNepseOfficialBundle(ttlMs);
-  if (options?.force) seedOfficialLiveCache(bundle, ttlMs);
 
-  void maybePersist(bundle);
-  return {
-    bundle,
-    meta: {
-      source: "official",
-      lastSuccessfulSyncAt: bundle.syncMeta.syncedAt,
-      stale: false,
-      error: null,
-      snapshotId: bundle.syncMeta.snapshotId,
-    },
-  };
+  try {
+    const bundle = options?.force
+      ? await fetchNepseOfficialBundle()
+      : await getCachedNepseOfficialBundle(ttlMs);
+    if (options?.force) seedOfficialLiveCache(bundle, ttlMs);
+    void maybePersist(bundle);
+    return {
+      bundle,
+      meta: {
+        source: "official",
+        lastSuccessfulSyncAt: bundle.syncMeta.syncedAt,
+        stale: false,
+        error: null,
+        snapshotId: bundle.syncMeta.snapshotId,
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Official NEPSE fetch failed";
+    console.error("[nepse-official-sync] live fetch failed; serving stored snapshot if available:", message);
+    const sb = createSyncServiceClient();
+    if (sb) {
+      const stored = await loadLatestOfficialSnapshotBundle(sb);
+      if (stored) {
+        seedOfficialLiveCache(stored.bundle, Math.max(ttlMs, 60_000));
+        return {
+          bundle: stored.bundle,
+          meta: {
+            source: "official",
+            lastSuccessfulSyncAt: stored.bundle.syncMeta.syncedAt,
+            stale: true,
+            error: message,
+            snapshotId: stored.bundle.syncMeta.snapshotId,
+          },
+        };
+      }
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
 }
 
 /** Admin / cron force sync against the official NEPSE website. */
@@ -174,13 +264,13 @@ export async function forceSyncOfficialNepseMarket(): Promise<{
     invalidateOfficialLiveCache();
     const bundle = await fetchNepseOfficialBundle();
     seedOfficialLiveCache(bundle);
-    if (sb) await persistOfficialMarketSnapshot(sb, bundle);
+    const persistStatus = sb ? await persistOfficialMarketSnapshot(sb, bundle) : "skipped";
     lastPersistAt = Date.now();
     await logOfficialSync(
       sb,
       "ok",
       Object.keys(bundle.bySymbol).length,
-      `Force sync ok — NEPSE ${bundle.index?.value ?? "n/a"} Δ${bundle.index?.changeNpr ?? "n/a"} @ ${bundle.syncMeta.syncedAt}`,
+      `Force sync ok (${persistStatus}) — NEPSE ${bundle.index?.value ?? "n/a"} Δ${bundle.index?.changeNpr ?? "n/a"} @ ${bundle.syncMeta.syncedAt}`,
       startedAt,
     );
     return {
@@ -191,62 +281,108 @@ export async function forceSyncOfficialNepseMarket(): Promise<{
       pointChange: bundle.index?.changeNpr ?? null,
       percentageChange: bundle.index?.changePct ?? null,
       previousClose: bundle.index?.previousClose ?? null,
-      message: `Synchronized atomic official snapshot ${bundle.syncMeta.snapshotId}`,
+      message:
+        persistStatus === "skipped"
+          ? `Official snapshot already stored for ${kathmanduTradeDate()}; serving latest atomic fetch without duplicate persist`
+          : `Synchronized atomic official snapshot ${bundle.syncMeta.snapshotId}`,
       breadth: bundle.officialBreadth,
       summary: bundle.summaryStats,
       snapshotId: bundle.syncMeta.snapshotId,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Force sync failed";
+    console.error("[nepse-official-sync] force sync failed:", message);
+    const stored = sb ? await loadLatestOfficialSnapshotBundle(sb) : null;
+    if (stored) seedOfficialLiveCache(stored.bundle);
     await logOfficialSync(sb, "error", 0, message, startedAt);
     return {
       ok: false,
       status: "error",
-      lastSuccessfulSyncAt: null,
-      indexValue: null,
-      pointChange: null,
-      percentageChange: null,
-      previousClose: null,
-      message,
-      breadth: null,
-      summary: null,
-      snapshotId: null,
+      lastSuccessfulSyncAt: stored?.bundle.syncMeta.syncedAt ?? null,
+      indexValue: stored?.bundle.index?.value ?? null,
+      pointChange: stored?.bundle.index?.changeNpr ?? null,
+      percentageChange: stored?.bundle.index?.changePct ?? null,
+      previousClose: stored?.bundle.index?.previousClose ?? null,
+      message: stored
+        ? `${message} — continued serving stored snapshot from ${stored.row.trade_date}`
+        : message,
+      breadth: stored?.bundle.officialBreadth ?? null,
+      summary: stored?.bundle.summaryStats ?? null,
+      snapshotId: stored?.bundle.syncMeta.snapshotId ?? null,
     };
   }
 }
 
-/** Cron helper: sync official live board and preserve a historical snapshot. */
+/** Cron helper: capture one official closing snapshot per Kathmandu trading day. */
 export async function ingestOfficialLiveMarket(sb: SupabaseClient): Promise<{
   kind: "official_live";
   status: "ok" | "partial" | "error";
   items: number;
   message: string;
   lastSuccessfulSyncAt: string | null;
+  skipped?: boolean;
 }> {
   const startedAt = new Date();
+  const tradeDate = kathmanduTradeDate(startedAt);
+
+  const existing = await findOfficialSnapshotForTradeDate(sb, tradeDate);
+  if (existing && isValidOfficialBundle(existing.payload_json)) {
+    seedOfficialLiveCache(existing.payload_json);
+    const result = {
+      kind: "official_live" as const,
+      status: "ok" as const,
+      items: Object.keys(existing.payload_json.bySymbol).length,
+      message: `Skipped — official closing snapshot already stored for ${tradeDate}`,
+      lastSuccessfulSyncAt: existing.payload_json.syncMeta.syncedAt,
+      skipped: true,
+    };
+    await logOfficialSync(sb, result.status, result.items, result.message, startedAt);
+    return result;
+  }
+
   try {
     invalidateOfficialLiveCache();
     const bundle = await fetchNepseOfficialBundle();
     seedOfficialLiveCache(bundle);
-    await persistOfficialMarketSnapshot(sb, bundle);
+    const persistStatus = await persistOfficialMarketSnapshot(sb, bundle);
     lastPersistAt = Date.now();
     const result = {
       kind: "official_live" as const,
       status: "ok" as const,
       items: Object.keys(bundle.bySymbol).length,
-      message: `Official atomic sync — index ${bundle.index?.value ?? "n/a"}, change ${bundle.index?.changeNpr ?? "n/a"}, turnover ${bundle.summaryStats.totalTurnoverNpr ?? "n/a"}`,
+      message:
+        persistStatus === "skipped"
+          ? `Official sync fetched for ${tradeDate} but snapshot already existed — duplicate insert skipped`
+          : `Official closing snapshot saved for ${tradeDate} — index ${bundle.index?.value ?? "n/a"}, change ${bundle.index?.changeNpr ?? "n/a"}`,
       lastSuccessfulSyncAt: bundle.syncMeta.syncedAt,
+      skipped: persistStatus === "skipped",
     };
     await logOfficialSync(sb, result.status, result.items, result.message, startedAt);
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Official live sync failed";
+    console.error("[nepse-official-sync] closing snapshot sync failed:", message);
+    const stored = await loadLatestOfficialSnapshotBundle(sb);
+    if (stored) {
+      seedOfficialLiveCache(stored.bundle);
+      const result = {
+        kind: "official_live" as const,
+        status: "partial" as const,
+        items: Object.keys(stored.bundle.bySymbol).length,
+        message: `${message} — kept serving previous valid snapshot from ${stored.row.trade_date}`,
+        lastSuccessfulSyncAt: stored.bundle.syncMeta.syncedAt,
+        skipped: false,
+      };
+      await logOfficialSync(sb, result.status, result.items, result.message, startedAt);
+      return result;
+    }
     const result = {
       kind: "official_live" as const,
       status: "error" as const,
       items: 0,
       message,
       lastSuccessfulSyncAt: null,
+      skipped: false,
     };
     await logOfficialSync(sb, result.status, result.items, result.message, startedAt);
     return result;

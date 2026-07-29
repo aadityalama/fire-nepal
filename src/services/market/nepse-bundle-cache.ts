@@ -11,7 +11,7 @@ const META_KEY = "nepse-official-serve-meta-v1";
 
 /**
  * Process-local short-TTL hold of the latest atomic official NEPSE snapshot.
- * Source of truth: nepalstock.com.np. Does not serve stale last-successful payloads.
+ * Prefers a fresh nepalstock.com.np fetch; falls back to the latest stored closing snapshot.
  */
 export async function getCachedNepseYonepseBundle(ttlMs = OFFICIAL_LIVE_TTL_MS): Promise<NepseOfficialBundle> {
   const served = await getOfficialNepseLiveBundle({ ttlMs });
