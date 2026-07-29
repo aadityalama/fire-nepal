@@ -1,4 +1,4 @@
-import { getFinanceCategoryEmoji, normalizeFinanceCategory } from "@/lib/finance/categories";
+import { getFinanceCategoryEmoji, getFinanceCategoryLabel, normalizeFinanceCategory } from "@/lib/finance/categories";
 import type { ExpenseWorkspaceMeta, ExpenseWorkspaceNotification } from "@/lib/expense-workspace-ui";
 import { shouldDeliverExpenseInAppNotification } from "@/lib/expense-workspace/expense-reminder-sync";
 import type { Expense } from "@/lib/expense-utils";
@@ -308,4 +308,109 @@ export function largestExpense(expenses: Expense[]) {
 
 export function recurringExpenses(expenses: Expense[], metaMap: Record<number, ExpenseWorkspaceMeta>) {
   return expenses.filter((expense) => metaMap[expense.id]?.repeat && metaMap[expense.id]?.repeat !== "Never");
+}
+
+export type CommandCenterInsight = {
+  id: string;
+  message: string;
+  tone: "positive" | "warning" | "neutral" | "info";
+};
+
+export function buildCommandCenterInsights(input: {
+  expenses: Expense[];
+  metaMap: Record<number, ExpenseWorkspaceMeta>;
+  selectedMonthKey: string;
+  monthTotal: number;
+  categories: Array<{ category: string; total: number }>;
+  budgetTotalMonthly: number | null;
+  upcomingThisWeekCount: number;
+}): CommandCenterInsight[] {
+  const { expenses, metaMap, selectedMonthKey, monthTotal, categories, budgetTotalMonthly, upcomingThisWeekCount } =
+    input;
+  const insights: CommandCenterInsight[] = [];
+
+  const [year, month] = selectedMonthKey.split("-").map(Number);
+  const previous = new Date(year, month - 2, 1);
+  const previousMonthKey = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
+  const previousTotal = monthSpending(expenses, previousMonthKey);
+
+  if (previousTotal > 0) {
+    const change = Math.round(((monthTotal - previousTotal) / previousTotal) * 100);
+    if (change <= -1) {
+      insights.push({
+        id: "vs-last-month-down",
+        message: `You spent ${Math.abs(change)}% less than last month.`,
+        tone: "positive",
+      });
+    } else if (change >= 1) {
+      insights.push({
+        id: "vs-last-month-up",
+        message: `You spent ${change}% more than last month.`,
+        tone: "warning",
+      });
+    } else {
+      insights.push({
+        id: "vs-last-month-flat",
+        message: "Spending is about the same as last month.",
+        tone: "neutral",
+      });
+    }
+  }
+
+  const top = categories[0];
+  if (top && top.total > 0) {
+    insights.push({
+      id: "top-category",
+      message: `${getFinanceCategoryLabel(top.category)} is your highest spending category.`,
+      tone: "info",
+    });
+  }
+
+  const investment = categories.find((item) => normalizeFinanceCategory(item.category) === "Investment");
+  if (investment && investment.total > 0) {
+    const prevInvestment = expenses
+      .filter((expense) => expense.date.startsWith(previousMonthKey) && normalizeFinanceCategory(expense.category) === "Investment")
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    if (prevInvestment > 0 && investment.total > prevInvestment) {
+      insights.push({
+        id: "investment-up",
+        message: "Investment increased this month.",
+        tone: "positive",
+      });
+    } else if (prevInvestment <= 0) {
+      insights.push({
+        id: "investment-active",
+        message: "Investment contributions are active this month.",
+        tone: "positive",
+      });
+    }
+  }
+
+  if (upcomingThisWeekCount > 0) {
+    insights.push({
+      id: "upcoming-week",
+      message: `${upcomingThisWeekCount} upcoming payment${upcomingThisWeekCount === 1 ? "" : "s"} this week.`,
+      tone: "info",
+    });
+  }
+
+  if (budgetTotalMonthly != null && budgetTotalMonthly > 0) {
+    const usage = Math.round((monthTotal / budgetTotalMonthly) * 100);
+    insights.push({
+      id: "budget-usage",
+      message: `Budget usage is ${Math.max(0, usage)}%.`,
+      tone: usage >= 90 ? "warning" : usage >= 70 ? "info" : "positive",
+    });
+  }
+
+  const recurringCount = recurringExpenses(expenses, metaMap).length;
+  if (recurringCount > 0 && insights.length < 5) {
+    insights.push({
+      id: "recurring",
+      message: `${recurringCount} recurring expense${recurringCount === 1 ? "" : "s"} on your schedule.`,
+      tone: "neutral",
+    });
+  }
+
+  return insights.slice(0, 5);
 }

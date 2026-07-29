@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetSt
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import {
+  buildCommandCenterInsights,
   buildNotifications,
   buildUpcomingBuckets,
   categoryBreakdown,
@@ -29,18 +30,16 @@ import {
   formatNpr,
   getDueDate,
   getExpenseStatus,
-  largestExpense,
   matchesFilter,
   matchesSearch,
   monthSpending,
   NOTIFICATION_DOT,
-  recurringExpenses,
   sortByDueDate,
   STATUS_STYLES,
   upcomingPaymentsTotal,
   type ExpenseFilter,
 } from "@/components/expense-workspace/expense-workspace-utils";
-import { generateAiInsights } from "@/lib/expense-ai-insights";
+import { fetchBudgetRecords } from "@/lib/budget/budget-api";
 import { monthlyComparisonData } from "@/lib/expense-analytics";
 import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel, normalizeFinanceCategory } from "@/lib/finance/categories";
 import {
@@ -59,17 +58,22 @@ const ExpenseWorkspaceTrendChart = dynamic(
   { ssr: false, loading: () => null },
 );
 
-const FILTERS: ExpenseFilter[] = [
-  "All",
-  "Today",
-  "Tomorrow",
-  "Upcoming",
-  "This Week",
-  "This Month",
-  "Recurring",
-  "Completed",
-  "Overdue",
-];
+const FILTERS: ExpenseFilter[] = ["All", "Today", "This Week", "This Month", "Upcoming", "Recurring"];
+
+const DONUT_COLORS = ["#bef264", "#34d399", "#2dd4bf", "#67e8f9", "#a3e635", "#4ade80", "#fde047", "#fb923c"];
+
+const INSIGHT_TONE: Record<string, string> = {
+  positive: "border-emerald-300/25 bg-emerald-500/12 text-emerald-50",
+  warning: "border-amber-300/30 bg-amber-500/12 text-amber-50",
+  neutral: "border-white/10 bg-white/[0.05] text-emerald-50",
+  info: "border-sky-300/25 bg-sky-500/12 text-sky-50",
+};
+
+const PRIORITY_STYLES = {
+  high: "border-red-300/35 bg-red-500/15 text-red-100",
+  medium: "border-amber-300/35 bg-amber-400/15 text-amber-100",
+  low: "border-sky-300/30 bg-sky-500/12 text-sky-100",
+} as const;
 
 type WorkspaceForm = {
   title: string;
@@ -157,6 +161,8 @@ export function ExpenseWorkspaceDashboard({
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(todayIso);
   const [chartsReady, setChartsReady] = useState(false);
+  const [monthlyBudgetTotal, setMonthlyBudgetTotal] = useState<number | null>(null);
+  const [budgetLoaded, setBudgetLoaded] = useState(false);
 
   useEffect(() => {
     saveExpenseWorkspaceUiState(uiState);
@@ -171,26 +177,69 @@ export function ExpenseWorkspaceDashboard({
     return () => window.clearTimeout(id);
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    void fetchBudgetRecords()
+      .then((records) => {
+        if (!alive) return;
+        const total = records.reduce((sum, item) => sum + Math.max(0, item.monthlyBudgetNpr), 0);
+        setMonthlyBudgetTotal(records.length > 0 ? total : null);
+        setBudgetLoaded(true);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setMonthlyBudgetTotal(null);
+        setBudgetLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [expenses.length]);
+
   const metaMap = uiState.meta;
   const notifications = useMemo(() => buildNotifications(expenses, metaMap), [expenses, metaMap]);
   const unreadCount = notifications.filter((item) => !uiState.readNotificationIds.includes(item.id)).length;
 
   const filteredExpenses = useMemo(() => {
-    const list = sortByDueDate(expenses, metaMap).filter(
+    return sortByDueDate(expenses, metaMap).filter(
       (expense) => matchesFilter(expense, metaMap[expense.id], filter) && matchesSearch(expense, metaMap[expense.id], search),
     );
-    return list;
   }, [expenses, metaMap, filter, search]);
 
   const upcomingBuckets = useMemo(() => buildUpcomingBuckets(expenses, metaMap), [expenses, metaMap]);
+  const monthExpenses = useMemo(
+    () => expenses.filter((expense) => expense.date.startsWith(selectedMonthKey)),
+    [expenses, selectedMonthKey],
+  );
   const monthTotal = useMemo(() => monthSpending(expenses, selectedMonthKey), [expenses, selectedMonthKey]);
-  const categories = useMemo(() => categoryBreakdown(expenses.filter((e) => e.date.startsWith(selectedMonthKey))), [expenses, selectedMonthKey]);
+  const categories = useMemo(() => categoryBreakdown(monthExpenses), [monthExpenses]);
   const dueNext7 = useMemo(() => upcomingPaymentsTotal(expenses, metaMap, 7), [expenses, metaMap]);
-  const topExpense = useMemo(() => largestExpense(expenses.filter((e) => e.date.startsWith(selectedMonthKey))), [expenses, selectedMonthKey]);
-  const recurring = useMemo(() => recurringExpenses(expenses, metaMap), [expenses, metaMap]);
-  const insights = useMemo(
-    () => generateAiInsights(expenses, members, selectedMonthKey, "NPR", profiles).slice(0, 4),
-    [expenses, members, selectedMonthKey, profiles],
+  const dayOfMonth = Math.max(1, new Date().getDate());
+  const dailyAverage = monthTotal > 0 ? Math.round(monthTotal / dayOfMonth) : 0;
+  const remainingBudget =
+    monthlyBudgetTotal != null && monthlyBudgetTotal > 0 ? Math.max(0, monthlyBudgetTotal - monthTotal) : null;
+
+  const upcomingThisWeekCount = useMemo(() => {
+    return expenses.filter((expense) => {
+      const meta = metaMap[expense.id];
+      if (meta?.paidAt || meta?.cancelled) return false;
+      const status = getExpenseStatus(expense, meta);
+      return status.remainingDays >= 0 && status.remainingDays <= 7;
+    }).length;
+  }, [expenses, metaMap]);
+
+  const commandInsights = useMemo(
+    () =>
+      buildCommandCenterInsights({
+        expenses,
+        metaMap,
+        selectedMonthKey,
+        monthTotal,
+        categories,
+        budgetTotalMonthly: monthlyBudgetTotal,
+        upcomingThisWeekCount,
+      }),
+    [expenses, metaMap, selectedMonthKey, monthTotal, categories, monthlyBudgetTotal, upcomingThisWeekCount],
   );
 
   const trendData = useMemo(() => {
@@ -200,6 +249,20 @@ export function ExpenseWorkspaceDashboard({
       spent: comparison.data[index] ?? 0,
     }));
   }, [expenses]);
+
+  const categoryDonutStops = useMemo(() => {
+    if (monthTotal <= 0 || categories.length === 0) return "rgba(255,255,255,0.12) 0% 100%";
+    let cursor = 0;
+    const stops: string[] = [];
+    for (let i = 0; i < categories.length; i += 1) {
+      const item = categories[i];
+      const start = (cursor / monthTotal) * 100;
+      cursor += item.total;
+      const end = (cursor / monthTotal) * 100;
+      stops.push(`${DONUT_COLORS[i % DONUT_COLORS.length]} ${start}% ${end}%`);
+    }
+    return stops.join(", ");
+  }, [categories, monthTotal]);
 
   function markNotificationRead(id: string) {
     setUiState((current) => ({
@@ -220,6 +283,23 @@ export function ExpenseWorkspaceDashboard({
     setDetailExpense(null);
   }
 
+  function openAdd() {
+    setForm(emptyForm(todayIso));
+    setAddOpen(true);
+  }
+
+  const overviewCards = [
+    { emoji: "💸", label: "Total Spent", value: formatNpr(monthTotal) },
+    { emoji: "📊", label: "Daily Average", value: formatNpr(dailyAverage) },
+    { emoji: "🧾", label: "Transactions", value: String(monthExpenses.length) },
+    {
+      emoji: "💰",
+      label: "Remaining Budget",
+      value: !budgetLoaded ? "…" : remainingBudget == null ? "No budget linked" : formatNpr(remainingBudget),
+      muted: remainingBudget == null && budgetLoaded,
+    },
+  ] as const;
+
   return (
     <main
       className={`min-h-screen max-w-[100vw] overflow-x-clip px-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.85rem+env(safe-area-inset-top,0px))] text-white sm:px-6 lg:px-8 ${
@@ -231,20 +311,14 @@ export function ExpenseWorkspaceDashboard({
         <div className="absolute -right-24 top-52 h-80 w-80 rounded-full bg-lime-300/12 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-lg flex-col gap-4 lg:max-w-6xl">
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Link
-              href="/finance"
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl"
-            >
-              <ArrowLeft size={15} /> Finance
-            </Link>
-            <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem]">Expense Workspace</h1>
-            <p className="mt-1 max-w-xl text-sm font-semibold leading-relaxed text-emerald-100/58">
-              Track expenses, bills, reminders and upcoming payments.
-            </p>
-          </div>
+      <div className="relative mx-auto flex w-full max-w-lg flex-col gap-3.5 lg:max-w-6xl lg:gap-4">
+        <header className="flex items-center justify-between gap-3">
+          <Link
+            href="/finance"
+            className="inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl"
+          >
+            <ArrowLeft size={15} /> Finance
+          </Link>
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
@@ -261,16 +335,186 @@ export function ExpenseWorkspaceDashboard({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setForm(emptyForm(todayIso));
-                setAddOpen(true);
-              }}
+              onClick={openAdd}
               className="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95"
             >
-              <Plus size={18} /> Add
+              <Plus size={18} /> Add Expense
             </button>
           </div>
         </header>
+
+        <section className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/45">FIRE Nepal</p>
+          <h1 className="mt-1 text-[1.85rem] font-black tracking-[-0.05em] text-white sm:text-[2.2rem]">
+            Expense Command Center
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm font-semibold leading-relaxed text-emerald-100/58">
+            Track spending, bills, subscriptions and upcoming payments.
+          </p>
+        </section>
+
+        <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+          {overviewCards.map((card) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-3.5 backdrop-blur-xl sm:p-4"
+            >
+              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-emerald-100/50">
+                <span className="mr-1" aria-hidden>
+                  {card.emoji}
+                </span>
+                {card.label}
+              </p>
+              <p
+                className={`mt-2 text-base font-black tracking-tight sm:text-lg ${
+                  "muted" in card && card.muted ? "text-emerald-100/55" : "text-white"
+                }`}
+              >
+                {card.value}
+              </p>
+            </motion.div>
+          ))}
+        </section>
+
+        <section className="rounded-[1.65rem] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-xl sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Spending by Category</h2>
+              <p className="mt-1 text-xs font-semibold text-emerald-100/45">This month · NPR only</p>
+            </div>
+            <button type="button" onClick={onOpenLegacyAnalytics} className="text-xs font-black text-lime-200">
+              Full analytics
+            </button>
+          </div>
+          {categories.length === 0 ? (
+            <p className="py-6 text-center text-sm font-semibold text-emerald-100/55">No spending recorded this month.</p>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-[auto_1fr] sm:items-center">
+              <div
+                className="relative mx-auto grid h-36 w-36 place-items-center rounded-full sm:mx-0 sm:h-40 sm:w-40"
+                style={{ background: `conic-gradient(${categoryDonutStops})` }}
+                aria-label="Spending by category chart"
+              >
+                <div className="grid h-[6.6rem] w-[6.6rem] place-items-center rounded-full bg-[#063326] shadow-[inset_0_0_28px_rgba(0,0,0,0.35)] sm:h-[7.35rem] sm:w-[7.35rem]">
+                  <div className="text-center">
+                    <p className="text-lg font-black tracking-tight text-white sm:text-xl">{formatNpr(monthTotal)}</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/55">Spent</p>
+                  </div>
+                </div>
+              </div>
+              <div className="min-w-0 space-y-2.5">
+                {categories.slice(0, 6).map((item, index) => {
+                  const share = monthTotal > 0 ? Math.round((item.total / monthTotal) * 100) : 0;
+                  return (
+                    <div key={item.category} className="flex min-w-0 items-center gap-3">
+                      <span
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg"
+                        style={{ backgroundColor: `${DONUT_COLORS[index % DONUT_COLORS.length]}22` }}
+                      >
+                        {categoryIcon(item.category)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <p className="truncate text-sm font-black text-white">{getFinanceCategoryLabel(item.category)}</p>
+                          <p className="shrink-0 text-xs font-black text-lime-100">{share}%</p>
+                        </div>
+                        <p className="mt-0.5 text-xs font-bold tabular-nums text-emerald-100/60">{formatNpr(item.total)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {upcomingBuckets.length > 0 ? (
+          <section className="rounded-[1.65rem] border border-emerald-200/15 bg-gradient-to-br from-emerald-500/20 via-emerald-950/85 to-[#03110d] p-4 shadow-[0_24px_80px_-40px_rgba(16,185,129,0.55)] sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Upcoming Payments</p>
+                <p className="mt-1 text-sm font-semibold text-emerald-100/65">Bills, subscriptions and due items</p>
+              </div>
+              <span className="rounded-full bg-lime-300/14 px-3 py-1 text-xs font-black text-lime-100">{formatNpr(dueNext7)}</span>
+            </div>
+            <div className="space-y-3">
+              {upcomingBuckets.map((bucket) => (
+                <div key={bucket.label}>
+                  <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-100/50">{bucket.label}</p>
+                  <div className="space-y-2">
+                    {bucket.items.map(({ expense, meta, status }) => {
+                      const isRecurring = Boolean(meta?.repeat && meta.repeat !== "Never");
+                      const priority =
+                        status.tone === "overdue" || status.tone === "today"
+                          ? "high"
+                          : status.tone === "tomorrow"
+                            ? "medium"
+                            : "low";
+                      return (
+                        <button
+                          key={expense.id}
+                          type="button"
+                          onClick={() => openDetail(expense)}
+                          className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-3.5 py-3 text-left transition active:scale-[0.99] sm:px-4"
+                        >
+                          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400/90 to-lime-300 text-xl">
+                            {categoryIcon(expense.category)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-start justify-between gap-2">
+                              <p className="truncate text-sm font-black text-white">{expense.title}</p>
+                              <p className="shrink-0 text-sm font-black text-lime-100">{formatNpr(expense.amount)}</p>
+                            </div>
+                            <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/55">
+                              {getFinanceCategoryLabel(expense.category)} · {status.remainingLabel}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {isRecurring ? (
+                                <span className="rounded-full border border-violet-300/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-violet-100">
+                                  Recurring
+                                </span>
+                              ) : null}
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] ${PRIORITY_STYLES[priority]}`}
+                              >
+                                {priority === "high" ? "Priority" : priority === "medium" ? "Soon" : "Planned"}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="relative overflow-hidden rounded-[1.65rem] border border-lime-300/20 bg-gradient-to-br from-lime-300/16 via-white/[0.055] to-emerald-500/10 p-4 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-lime-300 text-emerald-950">
+              <Sparkles size={20} />
+            </span>
+            <div>
+              <h2 className="text-base font-black text-white">Smart Insights</h2>
+              <p className="text-xs font-semibold text-emerald-100/55">AI-style signals from your expense data</p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {commandInsights.length === 0 ? (
+              <p className="text-sm font-semibold text-emerald-100/65">Add expenses to unlock smart insights.</p>
+            ) : (
+              commandInsights.map((insight) => (
+                <div key={insight.id} className={`rounded-2xl border px-3.5 py-3 text-sm font-semibold ${INSIGHT_TONE[insight.tone]}`}>
+                  {insight.message}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
         <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-3 backdrop-blur-xl">
           <label className="flex min-h-[52px] items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/8 px-4">
@@ -288,7 +532,7 @@ export function ExpenseWorkspaceDashboard({
                 key={chip}
                 type="button"
                 onClick={() => setFilter(chip)}
-                className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-black transition active:scale-[0.98] ${
+                className={`shrink-0 rounded-full px-3.5 py-2.5 text-xs font-black transition active:scale-[0.98] ${
                   filter === chip
                     ? "bg-gradient-to-r from-emerald-300 to-lime-300 text-emerald-950 shadow-md"
                     : "border border-white/10 bg-white/[0.04] text-emerald-100/70"
@@ -300,46 +544,9 @@ export function ExpenseWorkspaceDashboard({
           </div>
         </section>
 
-        {upcomingBuckets.length > 0 ? (
-          <section className="rounded-[1.65rem] border border-emerald-200/15 bg-gradient-to-br from-emerald-500/20 via-emerald-950/85 to-[#03110d] p-4 shadow-[0_24px_80px_-40px_rgba(16,185,129,0.55)] sm:p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Upcoming Payments</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-100/65">Tap any item to open details</p>
-              </div>
-              <span className="rounded-full bg-lime-300/14 px-3 py-1 text-xs font-black text-lime-100">{formatNpr(dueNext7)}</span>
-            </div>
-            <div className="space-y-3">
-              {upcomingBuckets.map((bucket) => (
-                <div key={bucket.label}>
-                  <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-100/50">{bucket.label}</p>
-                  <div className="space-y-2">
-                    {bucket.items.map(({ expense, status }) => (
-                      <button
-                        key={expense.id}
-                        type="button"
-                        onClick={() => openDetail(expense)}
-                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-left transition active:scale-[0.99]"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-white">
-                            {categoryIcon(expense.category)} {expense.title}
-                          </p>
-                          <p className="mt-0.5 text-xs font-semibold text-emerald-100/50">{status.remainingLabel}</p>
-                        </div>
-                        <p className="shrink-0 text-sm font-black text-lime-100">{formatNpr(expense.amount)}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         <section>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Expenses</h2>
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Recent Expenses</h2>
             <span className="text-xs font-bold text-emerald-100/45">{filteredExpenses.length} items</span>
           </div>
           <div className="space-y-3">
@@ -347,59 +554,67 @@ export function ExpenseWorkspaceDashboard({
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-6 text-center text-sm font-semibold text-emerald-100/50">
                 Loading expense workspace...
               </div>
+            ) : expenses.length === 0 ? (
+              <div className="rounded-[1.75rem] border border-dashed border-emerald-300/25 bg-gradient-to-br from-white/[0.06] via-emerald-400/10 to-lime-300/10 px-6 py-10 text-center backdrop-blur-xl">
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-[1.5rem] bg-gradient-to-br from-emerald-300/25 to-lime-300/20 text-4xl shadow-lg shadow-emerald-500/10">
+                  🧾
+                </div>
+                <h3 className="mt-5 text-xl font-black tracking-tight text-white">No expenses recorded yet.</h3>
+                <p className="mx-auto mt-2 max-w-xs text-sm font-semibold leading-relaxed text-emerald-100/55">
+                  Start tracking spending to unlock insights, category charts, and upcoming payment alerts.
+                </p>
+                <button
+                  type="button"
+                  onClick={openAdd}
+                  className="mt-6 inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 px-6 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/25 active:scale-[0.98]"
+                >
+                  <Plus size={20} strokeWidth={2.5} /> Add Expense
+                </button>
+              </div>
             ) : filteredExpenses.length === 0 ? (
               <div className="rounded-[1.5rem] border border-dashed border-emerald-300/20 bg-emerald-300/8 p-6 text-center">
                 <p className="text-sm font-black text-white">No expenses match this view</p>
-                <p className="mt-1 text-xs font-semibold text-emerald-100/55">Add an expense or change your filters.</p>
+                <p className="mt-1 text-xs font-semibold text-emerald-100/55">Try another filter or clear search.</p>
               </div>
             ) : (
               filteredExpenses.map((expense, index) => {
                 const meta = metaMap[expense.id];
                 const status = getExpenseStatus(expense, meta);
-                const dueDate = getDueDate(expense, meta);
                 return (
                   <motion.article
                     key={expense.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03, duration: 0.3 }}
-                    className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-4 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+                    transition={{ delay: Math.min(index * 0.03, 0.24), duration: 0.28 }}
+                    className="rounded-[1.5rem] border border-white/10 bg-white/[0.06] p-3.5 shadow-[0_18px_60px_-34px_rgba(0,0,0,0.8)] backdrop-blur-xl sm:p-4"
                   >
-                    <button type="button" onClick={() => openDetail(expense)} className="w-full text-left">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-lime-300 text-2xl shadow-lg">
-                            {categoryIcon(expense.category)}
-                          </span>
-                          <div className="min-w-0">
-                            <h3 className="truncate text-base font-black text-white">{expense.title}</h3>
-                            <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/55">
-                              {expense.notes?.trim() || getFinanceCategoryLabel(expense.category)}
-                            </p>
-                            <p className="mt-1 text-[11px] font-bold text-emerald-100/45">
-                              {meta?.account ?? "Personal"} · {meta?.paymentMethod ?? "Bank Transfer"}
-                            </p>
+                    <button type="button" onClick={() => openDetail(expense)} className="w-full min-w-0 text-left">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-400 to-lime-300 text-2xl shadow-lg">
+                          {categoryIcon(expense.category)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="truncate text-base font-black text-white">{expense.title}</h3>
+                              <p className="mt-0.5 truncate text-xs font-semibold text-emerald-100/55">
+                                {getFinanceCategoryLabel(expense.category)}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm font-black tabular-nums text-lime-100">{formatNpr(expense.amount)}</p>
+                              <span
+                                className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${STATUS_STYLES[status.tone]}`}
+                              >
+                                {status.label}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-lime-100">{formatNpr(expense.amount)}</p>
-                          <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${STATUS_STYLES[status.tone]}`}>
-                            {status.label}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
-                        <div className="rounded-xl border border-white/8 bg-black/15 p-2.5">
-                          <p className="font-black uppercase tracking-[0.12em] text-emerald-100/45">Expense Date</p>
-                          <p className="mt-1 font-bold text-emerald-50">{formatDisplayDate(expense.date)}</p>
-                        </div>
-                        <div className="rounded-xl border border-white/8 bg-black/15 p-2.5">
-                          <p className="font-black uppercase tracking-[0.12em] text-emerald-100/45">Due Date</p>
-                          <p className="mt-1 font-bold text-emerald-50">{formatDisplayDate(dueDate)}</p>
-                        </div>
-                        <div className="rounded-xl border border-white/8 bg-black/15 p-2.5">
-                          <p className="font-black uppercase tracking-[0.12em] text-emerald-100/45">Remaining</p>
-                          <p className="mt-1 font-bold text-emerald-50">{status.remainingLabel}</p>
+                          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold text-emerald-100/50">
+                            <span>{meta?.paymentMethod ?? "Bank Transfer"}</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatDisplayDate(expense.date)}</span>
+                          </div>
                         </div>
                       </div>
                     </button>
@@ -407,80 +622,6 @@ export function ExpenseWorkspaceDashboard({
                 );
               })
             )}
-          </div>
-        </section>
-
-        <section className="relative overflow-hidden rounded-[1.65rem] border border-lime-300/20 bg-gradient-to-br from-lime-300/16 via-white/[0.055] to-emerald-500/10 p-4 backdrop-blur-xl">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-lime-300 text-emerald-950">
-              <Sparkles size={20} />
-            </span>
-            <div>
-              <h2 className="text-base font-black text-white">🔥 FIRE AI Insights</h2>
-              <p className="text-xs font-semibold text-emerald-100/55">Based on your existing expense data only</p>
-            </div>
-          </div>
-          <div className="mt-4 space-y-2">
-            {insights.length === 0 ? (
-              <p className="text-sm font-semibold text-emerald-100/65">Add expenses to unlock AI insights.</p>
-            ) : (
-              insights.map((insight) => (
-                <div key={insight.id} className="rounded-2xl border border-white/10 bg-black/18 p-3">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-lime-200">{insight.title}</p>
-                  <p className="mt-1 text-sm font-semibold leading-relaxed text-emerald-50">{insight.message}</p>
-                  {insight.metric ? <p className="mt-2 text-sm font-black text-lime-100">{insight.metric}</p> : null}
-                </div>
-              ))
-            )}
-            {dueNext7 > 0 ? (
-              <div className="rounded-2xl border border-sky-300/20 bg-sky-500/10 p-3">
-                <p className="text-sm font-semibold text-sky-100">You have {formatNpr(dueNext7)} due in the next 7 days.</p>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { label: "Monthly Spending", value: formatNpr(monthTotal), hint: "Current month total" },
-            { label: "Upcoming Payments", value: formatNpr(dueNext7), hint: "Due in next 7 days" },
-            { label: "Recurring Expenses", value: String(recurring.length), hint: "Active repeat schedules" },
-            { label: "Largest Expense", value: topExpense ? formatNpr(topExpense.amount) : "—", hint: topExpense?.title ?? "No data yet" },
-            { label: "Categories", value: String(categories.length), hint: "Tracked this month" },
-            { label: "Remaining Budget", value: "—", hint: "Connect Budget module for live utilization" },
-          ].map((tile) => (
-            <div key={tile.label} className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/50">{tile.label}</p>
-              <p className="mt-3 text-xl font-black tracking-tight text-white">{tile.value}</p>
-              <p className="mt-1 text-xs font-semibold text-emerald-100/50">{tile.hint}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-xl">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Category Breakdown</h2>
-            <button type="button" onClick={onOpenLegacyAnalytics} className="text-xs font-black text-lime-200">
-              Full analytics
-            </button>
-          </div>
-          <div className="space-y-3">
-            {categories.slice(0, 6).map((item) => {
-              const share = monthTotal > 0 ? Math.round((item.total / monthTotal) * 100) : 0;
-              return (
-                <div key={item.category}>
-                  <div className="mb-1.5 flex items-center justify-between text-xs font-black">
-                    <span className="text-emerald-50">
-                      {categoryIcon(item.category)} {item.category}
-                    </span>
-                    <span className="text-lime-100">{formatNpr(item.total)} · {share}%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300" style={{ width: `${share}%` }} />
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </section>
 
