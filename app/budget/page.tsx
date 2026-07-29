@@ -2,7 +2,6 @@
 
 import {
   ArrowLeft,
-  BarChart3,
   Bell,
   Bot,
   Flame,
@@ -117,23 +116,177 @@ function SegmentedControl({
   );
 }
 
-function ProgressRing({ percent }: { percent: number }) {
-  const pct = clampPct(percent);
+function allocatePercentsThatSumTo100(amounts: number[]): number[] {
+  const total = amounts.reduce((sum, amount) => sum + amount, 0);
+  if (total <= 0) return amounts.map(() => 0);
+
+  // Largest-remainder in tenths so displayed one-decimal percentages always sum to 100.0
+  const exactTenths = amounts.map((amount) => (amount / total) * 1000);
+  const floors = exactTenths.map((value) => Math.floor(value));
+  let remainder = 1000 - floors.reduce((sum, value) => sum + value, 0);
+  const ranked = exactTenths
+    .map((value, index) => ({ index, fraction: value - floors[index] }))
+    .sort((a, b) => b.fraction - a.fraction);
+  const adjusted = [...floors];
+  for (let i = 0; i < remainder; i += 1) {
+    adjusted[ranked[i % ranked.length].index] += 1;
+  }
+  return adjusted.map((tenths) => tenths / 10);
+}
+
+const ALLOCATION_COLORS = [
+  "#bef264",
+  "#34d399",
+  "#2dd4bf",
+  "#67e8f9",
+  "#a3e635",
+  "#4ade80",
+  "#fde047",
+  "#fb923c",
+  "#86efac",
+  "#22d3ee",
+  "#c084fc",
+  "#f472b6",
+];
+
+function BudgetAllocationDashboard({
+  budgets,
+  period,
+  light,
+}: {
+  budgets: BudgetRecord[];
+  period: BudgetPeriod;
+  light: boolean;
+}) {
+  const slices = useMemo(() => {
+    const rows = budgets.map((budget) => ({
+      id: budget.id,
+      name: budget.name,
+      icon: budget.icon,
+      gradient: budget.gradient,
+      amount: periodAmount(budget.monthlyBudgetNpr, period),
+    }));
+    const percents = allocatePercentsThatSumTo100(rows.map((row) => row.amount));
+    return rows.map((row, index) => ({
+      ...row,
+      percent: percents[index] ?? 0,
+      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
+    }));
+  }, [budgets, period]);
+
+  const totalBudget = slices.reduce((sum, slice) => sum + slice.amount, 0);
+  const hasAllocation = slices.length > 0 && totalBudget > 0;
+  const allocatedPct = hasAllocation ? 100 : 0;
+
+  const donutStops = useMemo(() => {
+    if (!hasAllocation) return "rgba(255,255,255,0.12) 0% 100%";
+    let cursor = 0;
+    const stops: string[] = [];
+    for (const slice of slices) {
+      const start = cursor;
+      cursor += slice.percent;
+      stops.push(`${slice.color} ${start}% ${cursor}%`);
+    }
+    return stops.join(", ");
+  }, [hasAllocation, slices]);
+
   return (
-    <div
-      className="relative grid h-32 w-32 shrink-0 place-items-center rounded-full sm:h-36 sm:w-36"
-      style={{
-        background: `conic-gradient(rgb(190 242 100) ${pct}%, rgba(255,255,255,0.12) 0)`,
-      }}
-      aria-label={`Budget progress ${pct}%`}
+    <section
+      className={`relative overflow-hidden rounded-[2rem] border p-4 shadow-[0_28px_90px_-48px_rgba(16,185,129,0.55)] sm:p-5 lg:p-6 ${
+        light
+          ? "border-emerald-200/70 bg-gradient-to-br from-white via-emerald-50/80 to-white"
+          : "border-emerald-200/15 bg-gradient-to-br from-emerald-500/18 via-emerald-950/90 to-[#03110d]"
+      }`}
     >
-      <div className="grid h-[6.55rem] w-[6.55rem] place-items-center rounded-full bg-[#063326] shadow-[inset_0_0_32px_rgba(0,0,0,0.35)] sm:h-[7.45rem] sm:w-[7.45rem]">
-        <div className="text-center">
-          <p className="text-3xl font-black tracking-tighter text-white">{pct}%</p>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Progress</p>
+      <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-lime-300/16 blur-3xl" aria-hidden />
+      <div className="relative mb-4">
+        <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>
+          Budget Allocation
+        </p>
+        <h2 className={`mt-1 text-xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>
+          How your budget is distributed
+        </h2>
+      </div>
+
+      <div className="relative grid gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <div className="mx-auto flex flex-col items-center lg:mx-0">
+          <div
+            className="relative grid h-44 w-44 place-items-center rounded-full sm:h-52 sm:w-52"
+            style={{ background: `conic-gradient(${donutStops})` }}
+            aria-label={hasAllocation ? `Budget allocation ${allocatedPct}%` : "No budget allocated yet"}
+          >
+            <div
+              className={`grid h-[8.15rem] w-[8.15rem] place-items-center rounded-full shadow-[inset_0_0_32px_rgba(0,0,0,0.35)] sm:h-[9.6rem] sm:w-[9.6rem] ${
+                light ? "bg-emerald-950" : "bg-[#063326]"
+              }`}
+            >
+              {hasAllocation ? (
+                <div className="text-center">
+                  <p className="text-3xl font-black tracking-tighter text-white sm:text-4xl">{allocatedPct}%</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/55">Allocated</p>
+                </div>
+              ) : (
+                <div className="max-w-[6.5rem] px-2 text-center">
+                  <p className="text-xs font-black leading-snug text-emerald-100/80">No budget allocated yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          {hasAllocation ? (
+            <p className={`mt-3 text-center text-xs font-semibold ${light ? "text-emerald-800/70" : "text-emerald-100/55"}`}>
+              Total {formatNpr(totalBudget)}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 space-y-3">
+          {!hasAllocation ? (
+            <div
+              className={`rounded-2xl border border-dashed px-4 py-8 text-center text-sm font-semibold ${
+                light ? "border-emerald-200 text-emerald-800/70" : "border-emerald-300/20 text-emerald-100/55"
+              }`}
+            >
+              Create budgets to see category allocation here.
+            </div>
+          ) : (
+            slices.map((slice) => (
+              <div
+                key={slice.id}
+                className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/85" : "border-white/10 bg-white/[0.05]"}`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-xl"
+                    style={{ backgroundColor: `${slice.color}28` }}
+                  >
+                    {slice.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`truncate text-sm font-black ${light ? "text-slate-900" : "text-white"}`}>{slice.name}</p>
+                        <p className={`mt-0.5 text-xs font-black tabular-nums ${light ? "text-emerald-800" : "text-emerald-50"}`}>
+                          {formatNpr(slice.amount)}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 text-sm font-black tabular-nums ${light ? "text-emerald-700" : "text-lime-100"}`}>
+                        {slice.percent.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className={`mt-2.5 h-2 overflow-hidden rounded-full ${light ? "bg-emerald-100" : "bg-white/10"}`}>
+                      <div
+                        className="h-full rounded-full transition-[width] duration-500 ease-out"
+                        style={{ width: `${Math.min(100, slice.percent)}%`, backgroundColor: slice.color }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -781,8 +934,7 @@ export default function BudgetWorkspacePage() {
     const totalBudget = budgets.reduce((sum, item) => sum + periodAmount(item.monthlyBudgetNpr, period), 0);
     const totalSpent = budgets.reduce((sum, item) => sum + periodAmount(item.monthlySpentNpr, period), 0);
     const remaining = Math.max(0, totalBudget - totalSpent);
-    const progress = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-    return { totalBudget, totalSpent, remaining, progress };
+    return { totalBudget, totalSpent, remaining };
   }, [budgets, period]);
 
   return (
@@ -853,29 +1005,27 @@ export default function BudgetWorkspacePage() {
           >
             <div className="pointer-events-none absolute -right-16 -top-12 h-56 w-56 rounded-full bg-lime-300/18 blur-3xl" aria-hidden />
             <div className="pointer-events-none absolute bottom-0 left-0 h-44 w-44 rounded-full bg-teal-300/10 blur-3xl" aria-hidden />
-            <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 flex-1">
-                <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Summary</p>
-                <h2 className={`mt-2 text-2xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>Total Budget</h2>
-                <p className={`mt-1 text-3xl font-black tracking-[-0.05em] sm:text-5xl ${light ? "text-emerald-800" : "text-lime-100"}`}>
-                  {formatNpr(totals.totalBudget)}
-                </p>
+            <div className="relative min-w-0">
+              <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${light ? "text-emerald-700/80" : "text-emerald-100/55"}`}>Summary</p>
+              <h2 className={`mt-2 text-2xl font-black tracking-tight ${light ? "text-slate-900" : "text-white"}`}>Total Budget</h2>
+              <p className={`mt-1 text-3xl font-black tracking-[-0.05em] sm:text-5xl ${light ? "text-emerald-800" : "text-lime-100"}`}>
+                {formatNpr(totals.totalBudget)}
+              </p>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5">
-                  <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
-                    <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Spent</p>
-                    <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-slate-900" : "text-white"}`}>{formatNpr(totals.totalSpent)}</p>
-                  </div>
-                  <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
-                    <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Remaining</p>
-                    <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-emerald-700" : "text-lime-100"}`}>{formatNpr(totals.remaining)}</p>
-                  </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-5 sm:max-w-md">
+                <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
+                  <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Spent</p>
+                  <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-slate-900" : "text-white"}`}>{formatNpr(totals.totalSpent)}</p>
+                </div>
+                <div className={`rounded-2xl border p-3 ${light ? "border-emerald-200/70 bg-white/80" : "border-white/10 bg-white/[0.06]"}`}>
+                  <p className={`text-[11px] font-black uppercase tracking-[0.14em] ${light ? "text-emerald-700/80" : "text-emerald-100/50"}`}>Remaining</p>
+                  <p className={`mt-1 text-lg font-black tabular-nums ${light ? "text-emerald-700" : "text-lime-100"}`}>{formatNpr(totals.remaining)}</p>
                 </div>
               </div>
-
-              <ProgressRing percent={totals.progress} />
             </div>
           </motion.section>
+
+          <BudgetAllocationDashboard budgets={budgets} period={period} light={light} />
 
           <button
             type="button"
@@ -968,29 +1118,6 @@ export default function BudgetWorkspacePage() {
                       No financial estimate is shown until your expense history is connected.
                     </p>
                   </div>
-                </div>
-              </section>
-
-              <section className="rounded-[1.65rem] border border-white/10 bg-white/[0.055] p-4 backdrop-blur-xl">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">Category Breakdown</h2>
-                  <BarChart3 size={18} className="text-lime-200" />
-                </div>
-                <div className="space-y-3">
-                  {budgets.slice(0, 5).map((budget) => {
-                    const share = totals.totalBudget > 0 ? clampPct((periodAmount(budget.monthlyBudgetNpr, period) / totals.totalBudget) * 100) : 0;
-                    return (
-                      <div key={budget.id}>
-                        <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2 text-xs font-black">
-                          <span className="min-w-0 truncate text-emerald-50">{budget.icon} {budget.name}</span>
-                          <span className="shrink-0 text-lime-100">{share}%</span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                          <div className={`h-full rounded-full bg-gradient-to-r ${budget.gradient}`} style={{ width: `${share}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </section>
             </aside>
