@@ -52,6 +52,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
+import { formatExpenseRepeatReminder } from "@/components/expense-workspace/expense-workspace-utils";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import { GroupActivityPanel } from "@/components/group-expenses/GroupActivityPanel";
 import { GroupCategoryPicker } from "@/components/group-expenses/GroupCategoryPicker";
@@ -1968,6 +1969,7 @@ export function ExpenseDashboard({
         ? payload.reminderTime.trim()
         : "09:00";
 
+      const repeatSummary = formatExpenseRepeatReminder(payload.repeat, payload.expenseDate);
       const baseMeta: ExpenseWorkspaceMeta = {
         dueDate: payload.dueDate,
         account: payload.account,
@@ -1979,7 +1981,14 @@ export function ExpenseDashboard({
         reminderTimezone,
         reminderEmail: payload.reminderEmail,
         reminderHistory: payload.reminderEnabled
-          ? [{ date: new Date().toISOString().slice(0, 10), type: `Scheduled: ${payload.reminderTiming} at ${reminderTime}` }]
+          ? [
+              {
+                date: new Date().toISOString().slice(0, 10),
+                type: repeatSummary
+                  ? `Reminder: ${repeatSummary}`
+                  : `Scheduled: ${payload.reminderTiming} at ${reminderTime}`,
+              },
+            ]
           : [],
       };
 

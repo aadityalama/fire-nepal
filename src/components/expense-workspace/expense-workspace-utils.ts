@@ -1,5 +1,5 @@
 import { getFinanceCategoryEmoji, getFinanceCategoryLabel, normalizeFinanceCategory } from "@/lib/finance/categories";
-import type { ExpenseWorkspaceMeta, ExpenseWorkspaceNotification } from "@/lib/expense-workspace-ui";
+import type { ExpenseRepeat, ExpenseWorkspaceMeta, ExpenseWorkspaceNotification } from "@/lib/expense-workspace-ui";
 import { shouldDeliverExpenseInAppNotification } from "@/lib/expense-workspace/expense-reminder-sync";
 import type { Expense } from "@/lib/expense-utils";
 
@@ -308,6 +308,41 @@ export function largestExpense(expenses: Expense[]) {
 
 export function recurringExpenses(expenses: Expense[], metaMap: Record<number, ExpenseWorkspaceMeta>) {
   return expenses.filter((expense) => metaMap[expense.id]?.repeat && metaMap[expense.id]?.repeat !== "Never");
+}
+
+function ordinalDay(day: number) {
+  const remainder = day % 100;
+  if (remainder >= 11 && remainder <= 13) return `${day}th`;
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
+}
+
+/** Human-readable reminder summary for repeat schedules, e.g. "Every month on the 29th". */
+export function formatExpenseRepeatReminder(repeat: ExpenseRepeat | undefined, expenseDate: string): string | null {
+  if (!repeat || repeat === "Never") return null;
+  const date = parseIsoDate(expenseDate);
+  if (repeat === "Daily") return "Every day";
+  if (repeat === "Weekly") {
+    const weekday = date?.toLocaleDateString("en-US", { weekday: "long" }) ?? "week";
+    return `Every ${weekday}`;
+  }
+  if (repeat === "Monthly") {
+    const day = date?.getDate() ?? 1;
+    return `Every month on the ${ordinalDay(day)}`;
+  }
+  if (repeat === "Yearly") {
+    const label = date?.toLocaleDateString("en-US", { month: "long", day: "numeric" }) ?? expenseDate;
+    return `Every year on ${label}`;
+  }
+  return null;
 }
 
 export type CommandCenterInsight = {

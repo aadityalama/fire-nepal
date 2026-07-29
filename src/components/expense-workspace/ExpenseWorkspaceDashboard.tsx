@@ -27,6 +27,7 @@ import {
   categoryBreakdown,
   categoryIcon,
   formatDisplayDate,
+  formatExpenseRepeatReminder,
   formatNpr,
   getDueDate,
   getExpenseStatus,
@@ -60,6 +61,14 @@ const ExpenseWorkspaceTrendChart = dynamic(
 
 const FILTERS: ExpenseFilter[] = ["All", "Today", "This Week", "This Month", "Upcoming", "Recurring"];
 
+const REPEAT_OPTIONS: Array<{ id: ExpenseRepeat; label: string }> = [
+  { id: "Never", label: "None" },
+  { id: "Daily", label: "Daily" },
+  { id: "Weekly", label: "Weekly" },
+  { id: "Monthly", label: "Monthly" },
+  { id: "Yearly", label: "Yearly" },
+];
+
 const DONUT_COLORS = ["#bef264", "#34d399", "#2dd4bf", "#67e8f9", "#a3e635", "#4ade80", "#fde047", "#fb923c"];
 
 const INSIGHT_TONE: Record<string, string> = {
@@ -80,6 +89,7 @@ type WorkspaceForm = {
   amount: string;
   category: string;
   expenseDate: string;
+  repeat: ExpenseRepeat;
   notes: string;
 };
 
@@ -89,15 +99,15 @@ function emptyForm(today: string): WorkspaceForm {
     amount: "",
     category: DEFAULT_FINANCE_CATEGORY_ID,
     expenseDate: today,
+    repeat: "Never",
     notes: "",
   };
 }
 
-/** Silent defaults when Account / Due Date / reminders are not collected in the UI. */
+/** Silent defaults when Account / Due Date / advanced reminder timing are not collected in the UI. */
 const DEFAULT_WORKSPACE_ACCOUNT = "Personal";
 const DEFAULT_PAYMENT_METHOD = "Bank Transfer";
-const DEFAULT_REPEAT: ExpenseRepeat = "Never";
-const DEFAULT_REMINDER_TIMING: ExpenseReminderTiming = "1 Day Before";
+const DEFAULT_REMINDER_TIMING: ExpenseReminderTiming = "On Due Date";
 const DEFAULT_REMINDER_TIME = "09:00";
 
 export type ExpenseWorkspaceDashboardProps = {
@@ -733,6 +743,8 @@ export function ExpenseWorkspaceDashboard({
               const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
               if (!form.title.trim() || !amountNpr) return;
               const expenseDate = form.expenseDate || todayIso;
+              const repeat = form.repeat ?? "Never";
+              const reminderEnabled = repeat !== "Never";
               void Promise.resolve(
                 onSubmitWorkspaceExpense({
                   title: form.title.trim(),
@@ -742,9 +754,9 @@ export function ExpenseWorkspaceDashboard({
                   dueDate: expenseDate,
                   account: DEFAULT_WORKSPACE_ACCOUNT,
                   paymentMethod: DEFAULT_PAYMENT_METHOD,
-                  repeat: DEFAULT_REPEAT,
+                  repeat,
                   notes: form.notes,
-                  reminderEnabled: false,
+                  reminderEnabled,
                   reminderTiming: DEFAULT_REMINDER_TIMING,
                   reminderTime: DEFAULT_REMINDER_TIME,
                   reminderEmail: false,
@@ -812,6 +824,11 @@ function ExpenseDetailSheet({
 }) {
   const status = getExpenseStatus(expense, meta);
   const dueDate = getDueDate(expense, meta);
+  const reminderSummary = formatExpenseRepeatReminder(meta?.repeat, expense.date);
+  const repeatLabel =
+    meta?.repeat === "Never" || !meta?.repeat
+      ? "None"
+      : meta.repeat;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
@@ -854,7 +871,7 @@ function ExpenseDetailSheet({
                 ["Remaining", status.remainingLabel],
                 ["Account", meta?.account ?? "Personal"],
                 ["Payment Method", meta?.paymentMethod ?? "Bank Transfer"],
-                ["Repeat", meta?.repeat ?? "Never"],
+                ["Repeat", repeatLabel],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-black/15 px-3 py-2.5">
                   <span className="text-xs font-black uppercase tracking-[0.12em] text-emerald-100/45">{label}</span>
@@ -863,6 +880,13 @@ function ExpenseDetailSheet({
               ))}
             </div>
           </section>
+
+          {reminderSummary ? (
+            <section className="mt-4 rounded-[1.5rem] border border-lime-300/25 bg-gradient-to-br from-emerald-400/14 to-lime-300/10 p-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Repeat / Reminder</p>
+              <p className="mt-3 text-sm font-black text-white">🔔 Reminder: {reminderSummary}</p>
+            </section>
+          ) : null}
 
           <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Reminder History</p>
@@ -998,6 +1022,37 @@ function ExpenseAddSheet({
                 className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
               />
             </Field>
+            <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">Repeat / Reminder (Optional)</p>
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {REPEAT_OPTIONS.map((option) => {
+                  const selected = form.repeat === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, repeat: option.id }))}
+                      className={`min-h-[44px] rounded-2xl border px-2 text-xs font-black transition active:scale-[0.98] sm:text-sm ${
+                        selected
+                          ? "border-lime-300/60 bg-gradient-to-r from-emerald-300/25 to-lime-300/20 text-white shadow-[0_0_24px_rgba(190,242,100,0.12)]"
+                          : "border-white/10 bg-white/[0.04] text-emerald-100/70"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.repeat !== "Never" ? (
+                <div className="mt-3 rounded-2xl border border-lime-300/25 bg-gradient-to-br from-emerald-400/12 to-lime-300/10 px-3.5 py-3">
+                  <p className="text-sm font-black text-white">
+                    🔔 Reminder: {formatExpenseRepeatReminder(form.repeat, form.expenseDate) ?? "Scheduled"}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs font-semibold text-emerald-100/50">No reminder.</p>
+              )}
+            </section>
             <Field label="Notes (Optional)">
               <textarea
                 value={form.notes}

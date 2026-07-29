@@ -1,4 +1,4 @@
-export type ExpenseRepeat = "Never" | "Weekly" | "Monthly" | "Yearly";
+export type ExpenseRepeat = "Never" | "Daily" | "Weekly" | "Monthly" | "Yearly";
 
 export type ExpenseReminderTiming =
   | "On Due Date"

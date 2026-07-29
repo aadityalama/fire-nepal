@@ -54,6 +54,8 @@ export function parseExpenseIdFromReminderNotes(notes: string | null | undefined
 
 export function mapExpenseRepeatToFrequency(repeat: ExpenseRepeat | undefined): RepeatFrequency {
   switch (repeat) {
+    case "Daily":
+      return "daily";
     case "Weekly":
       return "weekly";
     case "Monthly":
