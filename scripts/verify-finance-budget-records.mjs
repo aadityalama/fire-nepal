@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Verify finance_budget_records table exists, RLS works for authenticated users,
- * and service role CRUD succeeds.
+ * Verify finance_budget_records table exists, deleted_at soft delete is available,
+ * RLS works for authenticated users, and service role CRUD succeeds.
  */
 import { createClient } from "@supabase/supabase-js";
 import { loadDotEnvLocal } from "./load-dotenv-local.mjs";
@@ -41,7 +41,12 @@ if (!table.ok) {
 
 console.log("finance_budget_records table exists.");
 
-const testUserId = "00000000-0000-4000-8000-000000000001";
+const deletedAtProbe = await admin.from("finance_budget_records").select("deleted_at").limit(1);
+if (deletedAtProbe.error) {
+  fail(`deleted_at column probe failed: ${deletedAtProbe.error.message ?? "unknown"}`);
+}
+console.log("deleted_at column exists.");
+
 const testEmail = `budget-verify-${Date.now()}@firenepal.test`;
 const testPassword = "BudgetVerify!234";
 let createdUserId = null;
@@ -113,13 +118,23 @@ console.log("Authenticated insert OK:", insertedId);
 
 const { data: userRows, error: userReadError } = await userClient
   .from("finance_budget_records")
-  .select("id,name")
+  .select("id,name,deleted_at")
   .eq("id", insertedId)
   .maybeSingle();
-if (userReadError || userRows?.name !== payload.name) {
+if (userReadError || userRows?.name !== payload.name || userRows?.deleted_at !== null) {
   fail(`Authenticated read failed: ${userReadError?.message ?? "row mismatch"}`);
 }
 console.log("Authenticated read OK");
+
+const activeRowsResult = await userClient
+  .from("finance_budget_records")
+  .select("id")
+  .eq("user_id", createdUserId)
+  .is("deleted_at", null);
+if (activeRowsResult.error) {
+  fail(`Authenticated active-row select failed: ${activeRowsResult.error.message ?? "unknown"}`);
+}
+console.log("Authenticated active-row select OK");
 
 const { error: userUpdateError } = await userClient
   .from("finance_budget_records")
@@ -130,11 +145,35 @@ if (userUpdateError) {
 }
 console.log("Authenticated update OK");
 
-const { error: userDeleteError } = await userClient.from("finance_budget_records").delete().eq("id", insertedId);
-if (userDeleteError) {
-  fail(`Authenticated delete failed: ${userDeleteError.message}`);
+const softDeletedAt = new Date().toISOString();
+const { data: userSoftDeleted, error: userDeleteError } = await userClient
+  .from("finance_budget_records")
+  .update({ deleted_at: softDeletedAt, updated_at: softDeletedAt })
+  .eq("id", insertedId)
+  .is("deleted_at", null)
+  .select("id,deleted_at")
+  .maybeSingle();
+if (userDeleteError || userSoftDeleted?.deleted_at == null) {
+  fail(`Authenticated soft delete failed: ${userDeleteError?.message ?? "row mismatch"}`);
 }
-console.log("Authenticated delete OK");
+console.log("Authenticated soft delete OK");
+
+const { data: activeAfterDelete, error: activeAfterDeleteError } = await userClient
+  .from("finance_budget_records")
+  .select("id")
+  .eq("id", insertedId)
+  .is("deleted_at", null)
+  .maybeSingle();
+if (activeAfterDeleteError || activeAfterDelete) {
+  fail(`Authenticated active-row filter after soft delete failed: ${activeAfterDeleteError?.message ?? "row still active"}`);
+}
+console.log("Authenticated active-row filter after soft delete OK");
+
+const { error: adminCleanupError } = await admin.from("finance_budget_records").delete().eq("id", insertedId);
+if (adminCleanupError) {
+  fail(`Service role cleanup delete failed: ${adminCleanupError.message}`);
+}
+console.log("Service role cleanup delete OK");
 insertedId = null;
 
 const { data: inserted, error: insertError } = await admin.from("finance_budget_records").insert(payload).select("id").single();

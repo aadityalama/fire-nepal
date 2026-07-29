@@ -4,38 +4,64 @@ import { daysRemainingForPeriod, sortBudgetRecords, type BudgetRecord, type Crea
 import type { Database } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
+type BudgetQueryError = {
+  message?: string;
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+} | null | undefined;
 
 const BUDGET_COLUMNS =
   "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,deleted_at,created_at,updated_at" as const;
 const LEGACY_BUDGET_COLUMNS =
   "id,user_id,name,category,icon,gradient,period,amount_npr,monthly_budget_npr,monthly_spent_npr,days_remaining,notification_settings,ai_recommendation,sort_order,created_at,updated_at" as const;
 
-function missingDeletedAtColumn(error: { message?: string; code?: string } | null | undefined) {
+function missingDeletedAtColumn(error: BudgetQueryError) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "42703" || error?.code === "PGRST204" || message.includes("deleted_at");
 }
 
-function mapBudgetError(error: { message?: string; code?: string } | null | undefined, fallback: string) {
-  const message = error?.message ?? fallback;
-  const lower = message.toLowerCase();
+function mapBudgetError(error: BudgetQueryError, fallback: string) {
+  const message = error?.message?.trim() ?? "";
+  const details = error?.details?.trim() ?? "";
+  const hint = error?.hint?.trim() ?? "";
+  const pieces = [message, details, hint].filter(Boolean);
+  if (pieces.length > 0) return pieces.join(" ");
+  if (error?.code) return `Database error ${error.code}`;
+  return fallback;
+}
 
-  if (
-    lower.includes("finance_budget_records") &&
-    (lower.includes("does not exist") || lower.includes("schema cache") || error?.code === "42P01" || error?.code === "PGRST205")
-  ) {
-    return "Budget storage is being set up. Please try again in a minute or contact support if this continues.";
-  }
-  if (lower.includes("permission denied") || error?.code === "42501") {
-    return "You do not have permission to save this budget.";
-  }
-  if (lower.includes("invalid input") || lower.includes("violates check constraint")) {
-    return "Please check your budget amount and try again.";
-  }
-  if (lower.includes("jwt") || lower.includes("not authenticated")) {
-    return "Please sign in again to save your budget.";
+async function getNextBudgetSortOrder(client: Client, userId: string): Promise<number> {
+  const result = await client
+    .from("finance_budget_records")
+    .select("sort_order")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (missingDeletedAtColumn(result.error)) {
+    const legacyResult = await client
+      .from("finance_budget_records")
+      .select("sort_order")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (legacyResult.error) {
+      throw new Error(mapBudgetError(legacyResult.error, "Could not prepare budget save."));
+    }
+    const legacyLastSortOrder = legacyResult.data?.[0]?.sort_order ?? -1;
+    return legacyLastSortOrder + 1;
   }
 
-  return message || fallback;
+  if (result.error) {
+    throw new Error(mapBudgetError(result.error, "Could not prepare budget save."));
+  }
+
+  const lastSortOrder = result.data?.[0]?.sort_order ?? -1;
+  return lastSortOrder + 1;
 }
 
 export async function listBudgetRecordsForUser(client: Client, userId: string): Promise<BudgetRecord[]> {
@@ -75,25 +101,7 @@ export async function createBudgetRecordForUser(
   userId: string,
   input: CreateBudgetInput,
 ): Promise<BudgetRecord> {
-  let countResult = await client
-    .from("finance_budget_records")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("deleted_at", null);
-
-  if (missingDeletedAtColumn(countResult.error)) {
-    countResult = await client
-      .from("finance_budget_records")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
-  }
-
-  const { count, error: countError } = countResult;
-  if (countError) {
-    throw new Error(mapBudgetError(countError, "Could not prepare budget save."));
-  }
-
-  const sortOrder = count ?? 0;
+  const sortOrder = await getNextBudgetSortOrder(client, userId);
   const payload = buildBudgetInsertPayload(userId, input, sortOrder);
   payload.days_remaining = daysRemainingForPeriod(input.period);
 
