@@ -13,7 +13,7 @@ function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
 }
 
-const FREQUENCIES: InsurancePaymentFrequency[] = ["monthly", "quarterly", "yearly", "one_time"];
+const FREQUENCIES: InsurancePaymentFrequency[] = ["monthly", "quarterly", "half_yearly", "yearly", "one_time"];
 
 function sanitizeCreateInput(raw: unknown): InsurancePolicyFormInput | null {
   if (!raw || typeof raw !== "object") return null;

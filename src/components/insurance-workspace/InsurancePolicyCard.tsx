@@ -1,11 +1,12 @@
 "use client";
 
 import { CalendarDays, MoreHorizontal, Pencil, Trash2, Users } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { InsurancePolicy } from "@/lib/insurance/insurance-types";
 import { INSURANCE_TYPE_ICONS } from "@/lib/insurance/insurance-types";
 import {
   buildPremiumDisplay,
+  buildPremiumDueInfo,
   daysUntil,
   formatDisplayDate,
   formatRs,
@@ -22,21 +23,58 @@ const STATUS_STYLES = {
   slate: "border-white/15 bg-white/[0.06] text-emerald-100/70",
 } as const;
 
+const PREMIUM_URGENCY_STYLES = {
+  green: "border-emerald-300/35 bg-emerald-400/12 text-lime-100",
+  yellow: "border-amber-300/40 bg-amber-400/12 text-amber-100",
+  orange: "border-orange-300/45 bg-orange-400/15 text-orange-100",
+  red: "border-rose-300/40 bg-rose-400/15 text-rose-100",
+  neutral: "border-white/12 bg-white/[0.04] text-emerald-100/65",
+} as const;
+
+const PREMIUM_BAR_STYLES = {
+  green: "bg-emerald-300",
+  yellow: "bg-amber-300",
+  orange: "bg-orange-300",
+  red: "bg-rose-300",
+  neutral: "bg-emerald-200/50",
+} as const;
+
 type InsurancePolicyCardProps = {
   policy: InsurancePolicy;
   index: number;
   onEdit: (policy: InsurancePolicy) => void;
   onDelete: (policy: InsurancePolicy) => void;
+  onOpenDetails: (policy: InsurancePolicy) => void;
 };
 
-export function InsurancePolicyCard({ policy, index, onEdit, onDelete }: InsurancePolicyCardProps) {
+export function InsurancePolicyCard({
+  policy,
+  index,
+  onEdit,
+  onDelete,
+  onOpenDetails,
+}: InsurancePolicyCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [todayKey, setTodayKey] = useState(() => new Date().toDateString());
   const menuRef = useRef<HTMLDivElement>(null);
   const tone = statusTone(policy.status);
   const days = daysUntil(policy.expiryDate);
   const premium = buildPremiumDisplay(policy.premiumNpr, policy.paymentFrequency);
   const isLife = policy.type === "life";
   const isHealth = policy.type === "health";
+  const dueInfo = useMemo(
+    () => buildPremiumDueInfo(policy),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when local calendar day changes
+    [policy, todayKey],
+  );
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = new Date().toDateString();
+      setTodayKey((current) => (current === next ? current : next));
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -46,6 +84,15 @@ export function InsurancePolicyCard({ policy, index, onEdit, onDelete }: Insuran
     window.addEventListener("mousedown", onPointer);
     return () => window.removeEventListener("mousedown", onPointer);
   }, [menuOpen]);
+
+  const dateLine =
+    dueInfo.hasSchedule && dueInfo.dueDate
+      ? dueInfo.overdue
+        ? formatDisplayDate(dueInfo.dueDate)
+        : dueInfo.daysRemaining > 0
+          ? `${formatDisplayDate(dueInfo.dueDate)} (${dueInfo.daysRemaining} days left)`
+          : formatDisplayDate(dueInfo.dueDate)
+      : null;
 
   return (
     <article
@@ -136,6 +183,38 @@ export function InsurancePolicyCard({ policy, index, onEdit, onDelete }: Insuran
           </span>
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => onOpenDetails(policy)}
+        className={`relative mt-3 w-full rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.99] ${PREMIUM_URGENCY_STYLES[dueInfo.urgency]}`}
+        aria-label={`Open premium details for ${policy.provider}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.14em]">
+              {dueInfo.emoji} {dueInfo.headline}
+            </p>
+            <p className="mt-1 text-sm font-black tracking-[-0.02em]">{dueInfo.detail}</p>
+            {dateLine ? <p className="mt-0.5 text-[11px] font-semibold opacity-80">{dateLine}</p> : null}
+          </div>
+        </div>
+
+        {dueInfo.hasSchedule ? (
+          <div className="mt-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-70">Premium Cycle</p>
+              <p className="text-[10px] font-black opacity-80">{dueInfo.cycleProgressPct}% completed</p>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/25">
+              <div
+                className={`h-full rounded-full transition-[width] duration-500 ${PREMIUM_BAR_STYLES[dueInfo.urgency]}`}
+                style={{ width: `${dueInfo.cycleProgressPct}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
+      </button>
     </article>
   );
 }

@@ -15,7 +15,7 @@ const INSURANCE_TYPES: InsuranceType[] = [
   "other",
 ];
 
-const FREQUENCIES: InsurancePaymentFrequency[] = ["monthly", "quarterly", "yearly", "one_time"];
+const FREQUENCIES: InsurancePaymentFrequency[] = ["monthly", "quarterly", "half_yearly", "yearly", "one_time"];
 
 function asType(value: string): InsuranceType {
   return (INSURANCE_TYPES.includes(value as InsuranceType) ? value : "other") as InsuranceType;

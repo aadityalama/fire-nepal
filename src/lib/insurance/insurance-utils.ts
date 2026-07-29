@@ -49,6 +49,8 @@ export function monthlyPremiumNpr(premiumNpr: number, frequency: InsurancePaymen
       return amount;
     case "quarterly":
       return amount / 3;
+    case "half_yearly":
+      return amount / 6;
     case "yearly":
       return amount / 12;
     case "one_time":
@@ -95,6 +97,8 @@ export function premiumLabel(frequency: InsurancePaymentFrequency): string {
       return "Monthly Premium";
     case "quarterly":
       return "Quarterly Premium";
+    case "half_yearly":
+      return "Half-Yearly Premium";
     case "yearly":
       return "Yearly Premium";
     case "one_time":
@@ -110,6 +114,8 @@ function premiumPeriodSuffix(frequency: InsurancePaymentFrequency): string | nul
       return "/ month";
     case "quarterly":
       return "/ quarter";
+    case "half_yearly":
+      return "/ half-year";
     case "yearly":
       return "/ year";
     case "one_time":
@@ -165,4 +171,249 @@ export function statusTone(status: InsurancePolicyStatus): "green" | "orange" | 
   if (status === "expiring") return "orange";
   if (status === "expired" || status === "lapsed") return "red";
   return "slate";
+}
+
+export type PremiumUrgency = "green" | "yellow" | "orange" | "red" | "neutral";
+
+export type PremiumDueInfo = {
+  hasSchedule: boolean;
+  dueDate: string | null;
+  daysRemaining: number;
+  overdue: boolean;
+  urgency: PremiumUrgency;
+  emoji: string;
+  headline: string;
+  detail: string;
+  cycleProgressPct: number;
+  lastPremiumPaidDate: string | null;
+  upcomingDates: string[];
+  frequency: InsurancePaymentFrequency;
+};
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toIsoDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDate(iso: string): Date | null {
+  if (!iso) return null;
+  const date = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function premiumIntervalMonths(frequency: InsurancePaymentFrequency): number | null {
+  switch (frequency) {
+    case "monthly":
+      return 1;
+    case "quarterly":
+      return 3;
+    case "half_yearly":
+      return 6;
+    case "yearly":
+      return 12;
+    case "one_time":
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function addMonthsClamped(date: Date, months: number): Date {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const daysInMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, daysInMonth));
+  return result;
+}
+
+/** Generate premium due dates from policy start using payment frequency. */
+export function generatePremiumDueDates(
+  startDate: string,
+  frequency: InsurancePaymentFrequency,
+  options?: { untilIso?: string; maxCount?: number },
+): string[] {
+  const start = parseLocalDate(startDate);
+  const interval = premiumIntervalMonths(frequency);
+  if (!start || !interval) return [];
+
+  const until = options?.untilIso ? parseLocalDate(options.untilIso) : null;
+  const maxCount = options?.maxCount ?? 48;
+  const dates: string[] = [];
+  let cursor = start;
+
+  for (let i = 0; i < maxCount; i += 1) {
+    const iso = toIsoDate(cursor);
+    dates.push(iso);
+    if (until && cursor >= until && i > 0) break;
+    cursor = addMonthsClamped(cursor, interval);
+  }
+  return dates;
+}
+
+export function premiumUrgencyFromDays(daysRemaining: number, hasSchedule: boolean): PremiumUrgency {
+  if (!hasSchedule) return "neutral";
+  if (daysRemaining < 0) return "red";
+  if (daysRemaining <= 6) return "orange";
+  if (daysRemaining <= 30) return "yellow";
+  return "green";
+}
+
+export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
+  const frequency = policy.paymentFrequency;
+  const interval = premiumIntervalMonths(frequency);
+  const today = startOfLocalDay(now);
+
+  if (!interval || !policy.startDate) {
+    return {
+      hasSchedule: false,
+      dueDate: null,
+      daysRemaining: Number.POSITIVE_INFINITY,
+      overdue: false,
+      urgency: "neutral",
+      emoji: "📅",
+      headline: "Next Premium",
+      detail: frequency === "one_time" ? "One-time premium · no recurring schedule" : "Add a start date to track premiums",
+      cycleProgressPct: 0,
+      lastPremiumPaidDate: null,
+      upcomingDates: [],
+      frequency,
+    };
+  }
+
+  const horizon = addMonthsClamped(today, interval * 8);
+  const allDates = generatePremiumDueDates(policy.startDate, frequency, {
+    untilIso: toIsoDate(horizon),
+    maxCount: 96,
+  }).filter((iso) => {
+    if (!policy.expiryDate) return true;
+    return iso <= policy.expiryDate;
+  });
+
+  if (allDates.length === 0) {
+    return {
+      hasSchedule: false,
+      dueDate: null,
+      daysRemaining: Number.POSITIVE_INFINITY,
+      overdue: false,
+      urgency: "neutral",
+      emoji: "📅",
+      headline: "Next Premium",
+      detail: "No premium dates in policy term",
+      cycleProgressPct: 0,
+      lastPremiumPaidDate: null,
+      upcomingDates: [],
+      frequency,
+    };
+  }
+
+  const todayIsoValue = toIsoDate(today);
+  let currentIndex = -1;
+  for (let i = 0; i < allDates.length; i += 1) {
+    if (allDates[i] <= todayIsoValue) currentIndex = i;
+    else break;
+  }
+
+  let dueDate: string;
+  let overdue = false;
+  let daysRemaining: number;
+
+  if (currentIndex < 0) {
+    dueDate = allDates[0];
+    daysRemaining = daysUntil(dueDate, now);
+  } else {
+    const currentDue = allDates[currentIndex];
+    const daysToCurrent = daysUntil(currentDue, now);
+    if (daysToCurrent < 0) {
+      dueDate = currentDue;
+      daysRemaining = daysToCurrent;
+      overdue = true;
+    } else {
+      dueDate = currentDue;
+      daysRemaining = daysToCurrent;
+    }
+  }
+
+  const dueIndex = allDates.indexOf(dueDate);
+  const previousDate = dueIndex > 0 ? allDates[dueIndex - 1] : null;
+  const cycleEnd = parseLocalDate(dueDate)!;
+  const cycleStart = previousDate
+    ? parseLocalDate(previousDate)!
+    : addMonthsClamped(cycleEnd, -interval);
+  const totalMs = Math.max(1, cycleEnd.getTime() - cycleStart.getTime());
+  const elapsedMs = Math.min(totalMs, Math.max(0, today.getTime() - cycleStart.getTime()));
+  const cycleProgressPct = overdue ? 100 : Math.max(0, Math.min(100, Math.round((elapsedMs / totalMs) * 100)));
+
+  const upcomingDates = allDates.filter((iso) => iso >= dueDate).slice(0, 6);
+  const urgency = premiumUrgencyFromDays(daysRemaining, true);
+
+  let detail: string;
+  if (overdue) {
+    const days = Math.abs(daysRemaining);
+    detail = `Overdue by ${days} day${days === 1 ? "" : "s"}`;
+  } else if (daysRemaining === 0) {
+    detail = "Due today";
+  } else if (daysRemaining === 1) {
+    detail = "Due Tomorrow";
+  } else {
+    detail = `Due in ${daysRemaining} days`;
+  }
+
+  const emoji = urgency === "red" ? "🔴" : urgency === "orange" ? "🟠" : urgency === "yellow" ? "🟡" : "🟢";
+
+  return {
+    hasSchedule: true,
+    dueDate,
+    daysRemaining,
+    overdue,
+    urgency,
+    emoji,
+    headline: "Next Premium",
+    detail,
+    cycleProgressPct,
+    lastPremiumPaidDate: previousDate,
+    upcomingDates,
+    frequency,
+  };
+}
+
+export function sortPoliciesByPremiumDue(policies: InsurancePolicy[], now = new Date()): InsurancePolicy[] {
+  return [...policies].sort((a, b) => {
+    const aInfo = buildPremiumDueInfo(a, now);
+    const bInfo = buildPremiumDueInfo(b, now);
+    const aKey = aInfo.hasSchedule ? aInfo.daysRemaining : Number.POSITIVE_INFINITY;
+    const bKey = bInfo.hasSchedule ? bInfo.daysRemaining : Number.POSITIVE_INFINITY;
+    if (aKey !== bKey) return aKey - bKey;
+    return a.provider.localeCompare(b.provider);
+  });
+}
+
+export type PremiumReminderMark = 30 | 7 | 1 | 0;
+
+export function premiumReminderMarksForDays(daysRemaining: number): PremiumReminderMark[] {
+  const marks: PremiumReminderMark[] = [];
+  if (daysRemaining === 30) marks.push(30);
+  if (daysRemaining === 7) marks.push(7);
+  if (daysRemaining === 1) marks.push(1);
+  if (daysRemaining === 0) marks.push(0);
+  return marks;
+}
+
+export function premiumReminderMessage(policy: InsurancePolicy, mark: PremiumReminderMark, dueDate: string) {
+  const when =
+    mark === 30
+      ? "in 30 days"
+      : mark === 7
+        ? "in 7 days"
+        : mark === 1
+          ? "tomorrow"
+          : "today";
+  return `${policy.provider}: premium due ${when} (${formatDisplayDate(dueDate)}).`;
 }

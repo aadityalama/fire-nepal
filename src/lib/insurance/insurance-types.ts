@@ -9,7 +9,7 @@ export type InsuranceType =
   | "property"
   | "other";
 
-export type InsurancePaymentFrequency = "monthly" | "quarterly" | "yearly" | "one_time";
+export type InsurancePaymentFrequency = "monthly" | "quarterly" | "half_yearly" | "yearly" | "one_time";
 
 export type InsurancePolicyStatus = "active" | "expiring" | "expired" | "lapsed";
 
@@ -124,6 +124,7 @@ export const INSURANCE_TYPE_ICONS: Record<InsuranceType, string> = {
 export const PAYMENT_FREQUENCY_LABELS: Record<InsurancePaymentFrequency, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",
+  half_yearly: "Half-Yearly",
   yearly: "Yearly",
   one_time: "One-time",
 };

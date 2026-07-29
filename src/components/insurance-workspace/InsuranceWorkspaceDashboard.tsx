@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { appToast } from "@/lib/toast";
 import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
 import { InsurancePolicyCard } from "@/components/insurance-workspace/InsurancePolicyCard";
+import { InsurancePolicyDetailsSheet } from "@/components/insurance-workspace/InsurancePolicyDetailsSheet";
 import { InsurancePolicySheet } from "@/components/insurance-workspace/InsurancePolicySheet";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
@@ -25,6 +26,10 @@ import {
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
 import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine";
+import {
+  collectPremiumReminderNotifications,
+  dismissPremiumReminder,
+} from "@/lib/insurance/insurance-premium-reminders";
 import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
@@ -33,6 +38,7 @@ import {
   formatDisplayDate,
   formatNprCompact,
   formatRs,
+  sortPoliciesByPremiumDue,
   summarizePoliciesPremiumPaying,
   upcomingRenewals,
 } from "@/lib/insurance/insurance-utils";
@@ -92,7 +98,9 @@ export function InsuranceWorkspaceDashboard() {
   const [cloudReady, setCloudReady] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<InsurancePolicy | null>(null);
+  const [detailsPolicy, setDetailsPolicy] = useState<InsurancePolicy | null>(null);
   const [saving, setSaving] = useState(false);
+  const [todayKey, setTodayKey] = useState(() => new Date().toDateString());
 
   useEffect(() => {
     let cancelled = false;
@@ -136,12 +144,34 @@ export function InsuranceWorkspaceDashboard() {
     saveInsuranceWorkspaceState(state);
   }, [state, hydrated]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = new Date().toDateString();
+      setTodayKey((current) => (current === next ? current : next));
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const policies = useMemo(() => withDerivedStatus(state.policies), [state.policies]);
+  const sortedPolicies = useMemo(
+    () => sortPoliciesByPremiumDue(policies),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort when calendar day changes
+    [policies, todayKey],
+  );
   const recommendation = useMemo(
     () => computeInsuranceRecommendation(policies, inputs),
     [policies, inputs],
   );
   const renewals = useMemo(() => upcomingRenewals(policies, 90), [policies]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const notifications = collectPremiumReminderNotifications(policies);
+    for (const item of notifications) {
+      appToast.info(item.message, { id: `insurance-premium-${item.key}` });
+      dismissPremiumReminder(item.key);
+    }
+  }, [hydrated, policies, todayKey]);
 
   const persistLocalState = useCallback((next: InsuranceWorkspaceState) => {
     const normalized = { version: 1 as const, policies: withDerivedStatus(next.policies) };
@@ -375,11 +405,11 @@ export function InsuranceWorkspaceDashboard() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100/55">My Policies</h2>
             <span className="rounded-full bg-white/[0.06] px-3 py-1 text-xs font-black text-lime-100">
-              {policies.length} total
+              {sortedPolicies.length} total
             </span>
           </div>
           <div className="space-y-3">
-            {policies.length === 0 ? (
+            {sortedPolicies.length === 0 ? (
               <div className={`${glassCard} p-6 text-center`} role="status">
                 <p className="text-sm font-black text-white">No policies yet</p>
                 <p className="mt-1 text-xs font-semibold text-emerald-100/50">
@@ -387,7 +417,7 @@ export function InsuranceWorkspaceDashboard() {
                 </p>
               </div>
             ) : (
-              policies.map((policy, index) => (
+              sortedPolicies.map((policy, index) => (
                 <InsurancePolicyCard
                   key={policy.id}
                   policy={policy}
@@ -397,6 +427,7 @@ export function InsuranceWorkspaceDashboard() {
                     setSheetOpen(true);
                   }}
                   onDelete={(item) => void handleDeletePolicy(item)}
+                  onOpenDetails={(item) => setDetailsPolicy(item)}
                 />
               ))
             )}
@@ -486,6 +517,17 @@ export function InsuranceWorkspaceDashboard() {
           </div>
         </section>
       </div>
+
+      <InsurancePolicyDetailsSheet
+        open={Boolean(detailsPolicy)}
+        policy={detailsPolicy}
+        onClose={() => setDetailsPolicy(null)}
+        onEdit={(item) => {
+          setDetailsPolicy(null);
+          setEditingPolicy(item);
+          setSheetOpen(true);
+        }}
+      />
 
       <InsurancePolicySheet
         open={sheetOpen}
