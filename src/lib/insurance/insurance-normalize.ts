@@ -138,11 +138,26 @@ export function normalizeInsurancePolicyFields<T extends Record<string, unknown>
   };
 }
 
-export function normalizeInsurancePolicy(policy: InsurancePolicy): InsurancePolicy {
-  const meta = normalizeInsurancePolicyFields(policy as unknown as Record<string, unknown>);
+export function normalizeInsurancePolicy(policy: Partial<InsurancePolicy> & { id?: string }): InsurancePolicy {
+  const raw = (policy ?? {}) as Record<string, unknown>;
+  const meta = normalizeInsurancePolicyFields(raw);
+  const coverage = Number(raw.coverageAmountNpr);
+  const premium = Number(raw.premiumNpr);
+  const sortOrder = Number(raw.sortOrder);
   return {
-    ...policy,
+    id: typeof raw.id === "string" && raw.id ? raw.id : "unknown-policy",
+    type: (typeof raw.type === "string" ? raw.type : "other") as InsurancePolicy["type"],
+    provider: typeof raw.provider === "string" && raw.provider ? raw.provider : "Unknown provider",
+    coverageAmountNpr: Number.isFinite(coverage) ? Math.max(0, coverage) : 0,
+    premiumNpr: Number.isFinite(premium) ? Math.max(0, premium) : 0,
+    paymentFrequency: (typeof raw.paymentFrequency === "string"
+      ? raw.paymentFrequency
+      : "yearly") as InsurancePolicy["paymentFrequency"],
     ...meta,
+    status: (typeof raw.status === "string" ? raw.status : "active") as InsurancePolicy["status"],
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
   };
 }
 

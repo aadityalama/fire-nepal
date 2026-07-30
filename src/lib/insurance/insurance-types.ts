@@ -46,19 +46,19 @@ export type InsurancePolicy = {
   paymentFrequency: InsurancePaymentFrequency;
   startDate: string;
   expiryDate: string;
-  /** Policy term in years used for installment scheduling (0 = derive from dates). */
-  policyTermYears: number;
+  /** Policy term in years used for installment scheduling (0 = derive from dates). Optional for legacy policies. */
+  policyTermYears?: number;
   nominee: string;
   familyMembersCovered: string[];
   notes: string;
-  agentName: string;
-  agentPhone: string;
-  branch: string;
-  policyNumber: string;
-  proposalNumber: string;
-  pan: string;
-  medicalNotes: string;
-  documents: InsuranceDocument[];
+  agentName?: string;
+  agentPhone?: string;
+  branch?: string;
+  policyNumber?: string;
+  proposalNumber?: string;
+  pan?: string;
+  medicalNotes?: string;
+  documents?: InsuranceDocument[];
   /** Legacy single attachment — kept in sync with documents[policy_pdf] for older clients. */
   documentDataUrl: string | null;
   documentFileName: string | null;
@@ -76,18 +76,18 @@ export type InsurancePolicyFormInput = {
   paymentFrequency: InsurancePaymentFrequency;
   startDate: string;
   expiryDate: string;
-  policyTermYears: number;
+  policyTermYears?: number;
   nominee: string;
   familyMembersCovered: string[];
   notes: string;
-  agentName: string;
-  agentPhone: string;
-  branch: string;
-  policyNumber: string;
-  proposalNumber: string;
-  pan: string;
-  medicalNotes: string;
-  documents: InsuranceDocument[];
+  agentName?: string;
+  agentPhone?: string;
+  branch?: string;
+  policyNumber?: string;
+  proposalNumber?: string;
+  pan?: string;
+  medicalNotes?: string;
+  documents?: InsuranceDocument[];
   documentDataUrl: string | null;
   documentFileName: string | null;
 };

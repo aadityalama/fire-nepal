@@ -34,11 +34,39 @@ function missingPolicyManagementColumns(error: { message?: string; code?: string
     error?.code === "PGRST204" ||
     message.includes("policy_term_years") ||
     message.includes("agent_name") ||
+    message.includes("agent_phone") ||
+    message.includes("branch") ||
     message.includes("documents") ||
     message.includes("medical_notes") ||
     message.includes("policy_number") ||
-    message.includes("proposal_number")
+    message.includes("proposal_number") ||
+    message.includes("pan")
   );
+}
+
+function stripPolicyManagementFields<T extends Record<string, unknown>>(payload: T) {
+  const {
+    policy_term_years: _policyTermYears,
+    agent_name: _agentName,
+    agent_phone: _agentPhone,
+    branch: _branch,
+    policy_number: _policyNumber,
+    proposal_number: _proposalNumber,
+    pan: _pan,
+    medical_notes: _medicalNotes,
+    documents: _documents,
+    ...legacy
+  } = payload;
+  void _policyTermYears;
+  void _agentName;
+  void _agentPhone;
+  void _branch;
+  void _policyNumber;
+  void _proposalNumber;
+  void _pan;
+  void _medicalNotes;
+  void _documents;
+  return legacy;
 }
 
 function mapInsuranceError(error: { message?: string; code?: string } | null | undefined, fallback: string) {
@@ -153,42 +181,49 @@ export async function createInsurancePolicyForUser(
   const insertResult = await client.from("finance_insurance_policies").insert(payload).select(INSURANCE_COLUMNS).single();
 
   if (missingPolicyManagementColumns(insertResult.error)) {
-    const legacyPayload = {
-      user_id: payload.user_id,
-      insurance_type: payload.insurance_type,
-      provider: payload.provider,
-      coverage_amount_npr: payload.coverage_amount_npr,
-      premium_npr: payload.premium_npr,
-      payment_frequency: payload.payment_frequency,
-      start_date: payload.start_date,
-      expiry_date: payload.expiry_date,
-      nominee: payload.nominee,
-      family_members_covered: payload.family_members_covered,
-      notes: payload.notes,
-      document_data_url: payload.document_data_url,
-      document_file_name: payload.document_file_name,
-      sort_order: payload.sort_order,
-    };
+    const legacyPayload = stripPolicyManagementFields(payload as Record<string, unknown>);
     const legacyInsert = await client
       .from("finance_insurance_policies")
-      .insert(legacyPayload)
+      // Legacy schema omits policy-management columns.
+      .insert(legacyPayload as never)
       .select(LEGACY_INSURANCE_COLUMNS)
       .single();
     if (legacyInsert.error || !legacyInsert.data) {
-      throw new Error(mapInsuranceError(legacyInsert.error, "Could not save insurance policy."));
+      // Soft-delete column may exist without policy-management columns — try soft-delete select set.
+      const softDeleteInsert = await client
+        .from("finance_insurance_policies")
+        .insert(legacyPayload as never)
+        .select(LEGACY_SOFT_DELETE_COLUMNS)
+        .single();
+      if (softDeleteInsert.error || !softDeleteInsert.data) {
+        throw new Error(mapInsuranceError(softDeleteInsert.error ?? legacyInsert.error, "Could not save insurance policy."));
+      }
+      return mapInsuranceRow({
+        ...softDeleteInsert.data,
+        deleted_at: softDeleteInsert.data.deleted_at ?? null,
+        policy_term_years: input.policyTermYears ?? 0,
+        agent_name: input.agentName ?? "",
+        agent_phone: input.agentPhone ?? "",
+        branch: input.branch ?? "",
+        policy_number: input.policyNumber ?? "",
+        proposal_number: input.proposalNumber ?? "",
+        pan: input.pan ?? "",
+        medical_notes: input.medicalNotes ?? "",
+        documents: input.documents ?? [],
+      });
     }
     return mapInsuranceRow({
       ...legacyInsert.data,
       deleted_at: null,
-      policy_term_years: input.policyTermYears,
-      agent_name: input.agentName,
-      agent_phone: input.agentPhone,
-      branch: input.branch,
-      policy_number: input.policyNumber,
-      proposal_number: input.proposalNumber,
-      pan: input.pan,
-      medical_notes: input.medicalNotes,
-      documents: input.documents,
+      policy_term_years: input.policyTermYears ?? 0,
+      agent_name: input.agentName ?? "",
+      agent_phone: input.agentPhone ?? "",
+      branch: input.branch ?? "",
+      policy_number: input.policyNumber ?? "",
+      proposal_number: input.proposalNumber ?? "",
+      pan: input.pan ?? "",
+      medical_notes: input.medicalNotes ?? "",
+      documents: input.documents ?? [],
     });
   }
 
@@ -216,34 +251,20 @@ export async function updateInsurancePolicyForUser(
     .single();
 
   if (missingPolicyManagementColumns(updateResult.error) || missingDeletedAtColumn(updateResult.error)) {
-    const legacyPayload = {
-      insurance_type: updatePayload.insurance_type,
-      provider: updatePayload.provider,
-      coverage_amount_npr: updatePayload.coverage_amount_npr,
-      premium_npr: updatePayload.premium_npr,
-      payment_frequency: updatePayload.payment_frequency,
-      start_date: updatePayload.start_date,
-      expiry_date: updatePayload.expiry_date,
-      nominee: updatePayload.nominee,
-      family_members_covered: updatePayload.family_members_covered,
-      notes: updatePayload.notes,
-      document_data_url: updatePayload.document_data_url,
-      document_file_name: updatePayload.document_file_name,
-      updated_at: updatePayload.updated_at,
-    };
+    const legacyPayload = stripPolicyManagementFields(updatePayload as Record<string, unknown>);
 
     const legacyUpdateResult = await client
       .from("finance_insurance_policies")
-      .update(legacyPayload)
+      .update(legacyPayload as never)
       .eq("id", policyId)
       .eq("user_id", userId)
       .select(LEGACY_SOFT_DELETE_COLUMNS)
       .single();
 
-    if (missingDeletedAtColumn(legacyUpdateResult.error)) {
+    if (missingDeletedAtColumn(legacyUpdateResult.error) || missingPolicyManagementColumns(legacyUpdateResult.error)) {
       const veryLegacy = await client
         .from("finance_insurance_policies")
-        .update(legacyPayload)
+        .update(legacyPayload as never)
         .eq("id", policyId)
         .eq("user_id", userId)
         .select(LEGACY_INSURANCE_COLUMNS)
@@ -254,15 +275,15 @@ export async function updateInsurancePolicyForUser(
       return mapInsuranceRow({
         ...veryLegacy.data,
         deleted_at: null,
-        policy_term_years: input.policyTermYears,
-        agent_name: input.agentName,
-        agent_phone: input.agentPhone,
-        branch: input.branch,
-        policy_number: input.policyNumber,
-        proposal_number: input.proposalNumber,
-        pan: input.pan,
-        medical_notes: input.medicalNotes,
-        documents: input.documents,
+        policy_term_years: input.policyTermYears ?? 0,
+        agent_name: input.agentName ?? "",
+        agent_phone: input.agentPhone ?? "",
+        branch: input.branch ?? "",
+        policy_number: input.policyNumber ?? "",
+        proposal_number: input.proposalNumber ?? "",
+        pan: input.pan ?? "",
+        medical_notes: input.medicalNotes ?? "",
+        documents: input.documents ?? [],
       });
     }
 
@@ -272,15 +293,15 @@ export async function updateInsurancePolicyForUser(
     return mapInsuranceRow({
       ...legacyUpdateResult.data,
       deleted_at: null,
-      policy_term_years: input.policyTermYears,
-      agent_name: input.agentName,
-      agent_phone: input.agentPhone,
-      branch: input.branch,
-      policy_number: input.policyNumber,
-      proposal_number: input.proposalNumber,
-      pan: input.pan,
-      medical_notes: input.medicalNotes,
-      documents: input.documents,
+      policy_term_years: input.policyTermYears ?? 0,
+      agent_name: input.agentName ?? "",
+      agent_phone: input.agentPhone ?? "",
+      branch: input.branch ?? "",
+      policy_number: input.policyNumber ?? "",
+      proposal_number: input.proposalNumber ?? "",
+      pan: input.pan ?? "",
+      medical_notes: input.medicalNotes ?? "",
+      documents: input.documents ?? [],
     });
   }
 

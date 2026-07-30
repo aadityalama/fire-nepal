@@ -180,11 +180,15 @@ export function InsurancePolicyDetailsSheet({
     try {
       const input = policyToFormInput(policy);
       const synced = syncLegacyDocumentFields({
-        documents,
+        documents: Array.isArray(documents) ? documents : [],
         documentDataUrl: null,
         documentFileName: null,
       });
       await onUpdate({ ...input, ...synced }, policy.id);
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[insurance-details] document update failed", error);
+      }
     } finally {
       setSavingDocs(false);
     }
@@ -194,7 +198,7 @@ export function InsurancePolicyDetailsSheet({
     if (!file || !policy) return;
     const dataUrl = await readFileAsDataUrl(file);
     const next = createInsuranceDocument(doc.kind, file.name, dataUrl);
-    const documents = policy.documents.map((item) =>
+    const documents = (policy.documents ?? []).map((item) =>
       item.id === doc.id ? { ...next, id: doc.id, kind: doc.kind } : item,
     );
     await persistDocuments(documents);
@@ -202,7 +206,7 @@ export function InsurancePolicyDetailsSheet({
 
   async function deleteDocument(docId: string) {
     if (!policy) return;
-    await persistDocuments(policy.documents.filter((doc) => doc.id !== docId));
+    await persistDocuments((policy.documents ?? []).filter((doc) => doc.id !== docId));
   }
 
   return (
@@ -308,8 +312,8 @@ export function InsurancePolicyDetailsSheet({
                 <DetailRow label="Running for" value={timeline.runningForLabel} />
                 <DetailRow label="Remaining" value={timeline.remainingLabel} />
                 <DetailRow label="Policy Term" value={tracker.policyTermYears > 0 ? `${tracker.policyTermYears} Years` : "—"} />
-                {policy.familyMembersCovered.length > 0 ? (
-                  <DetailRow label="Family Covered" value={policy.familyMembersCovered.join(", ")} />
+                {(policy.familyMembersCovered ?? []).length > 0 ? (
+                  <DetailRow label="Family Covered" value={(policy.familyMembersCovered ?? []).join(", ")} />
                 ) : null}
               </CollapsibleSection>
 
@@ -318,7 +322,7 @@ export function InsurancePolicyDetailsSheet({
                 defaultOpen
                 badge={`${tracker.installmentsPaid}/${tracker.totalInstallments || "—"} paid`}
               >
-                <DetailRow label="Premium Frequency" value={PAYMENT_FREQUENCY_LABELS[policy.paymentFrequency]} />
+                <DetailRow label="Premium Frequency" value={PAYMENT_FREQUENCY_LABELS[policy.paymentFrequency] ?? "—"} />
                 <DetailRow label="Premium Amount" value={premium.value} />
                 <DetailRow label="Total Installments" value={String(tracker.totalInstallments || "—")} />
                 <DetailRow label="Installments Paid" value={String(tracker.installmentsPaid)} />
@@ -392,7 +396,7 @@ export function InsurancePolicyDetailsSheet({
                 )}
               </CollapsibleSection>
 
-              <CollapsibleSection title="Documents & Notes" badge={`${policy.documents.length} files`}>
+              <CollapsibleSection title="Documents & Notes" badge={`${(policy.documents ?? []).length} files`}>
                 <DetailRow label="Notes" value={policy.notes || "—"} />
                 <DetailRow label="Agent Name" value={policy.agentName || "—"} />
                 <DetailRow label="Agent Phone" value={policy.agentPhone || "—"} />
@@ -403,11 +407,11 @@ export function InsurancePolicyDetailsSheet({
                 <DetailRow label="Nominee" value={policy.nominee || "—"} />
                 <DetailRow label="Medical Notes" value={policy.medicalNotes || "—"} />
 
-                {policy.documents.length === 0 ? (
+                {(policy.documents ?? []).length === 0 ? (
                   <p className="pt-1 text-sm font-semibold text-emerald-100/50">No documents uploaded yet.</p>
                 ) : (
                   <div className="space-y-2 pt-1">
-                    {policy.documents.map((doc) => (
+                    {(policy.documents ?? []).map((doc) => (
                       <div key={doc.id} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
                         <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
                           {INSURANCE_DOCUMENT_KIND_LABELS[doc.kind]}
@@ -466,7 +470,7 @@ export function InsurancePolicyDetailsSheet({
                 <DetailRow label="Nominee" value={policy.nominee || "—"} />
                 <DetailRow
                   label="Family Members"
-                  value={policy.familyMembersCovered.length > 0 ? policy.familyMembersCovered.join(", ") : "—"}
+                  value={(policy.familyMembersCovered ?? []).length > 0 ? (policy.familyMembersCovered ?? []).join(", ") : "—"}
                 />
               </CollapsibleSection>
 

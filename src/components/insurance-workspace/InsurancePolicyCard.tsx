@@ -183,11 +183,11 @@ export function InsurancePolicyCard({
           Expiry {formatDisplayDate(policy.expiryDate)}
         </span>
         {isLife && policy.nominee ? <span>Nominee · {policy.nominee}</span> : null}
-        {(isHealth || policy.familyMembersCovered.length > 0) && (
+        {(isHealth || (policy.familyMembersCovered ?? []).length > 0) && (
           <span className="inline-flex items-center gap-1.5">
             <Users size={13} />
-            {policy.familyMembersCovered.length > 0
-              ? `${policy.familyMembersCovered.length} covered`
+            {(policy.familyMembersCovered ?? []).length > 0
+              ? `${(policy.familyMembersCovered ?? []).length} covered`
               : "Family cover"}
           </span>
         )}

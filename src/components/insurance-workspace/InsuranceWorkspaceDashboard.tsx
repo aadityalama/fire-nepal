@@ -77,32 +77,33 @@ function createLocalPolicy(
   existing?: InsurancePolicy,
 ): InsurancePolicy {
   const now = new Date().toISOString();
+  const safeTrim = (value: unknown) => (typeof value === "string" ? value.trim() : "");
   const docs = syncLegacyDocumentFields({
-    documents: input.documents ?? [],
-    documentDataUrl: input.documentDataUrl,
-    documentFileName: input.documentFileName,
+    documents: Array.isArray(input.documents) ? input.documents : [],
+    documentDataUrl: input.documentDataUrl ?? null,
+    documentFileName: input.documentFileName ?? null,
   });
-  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears, input.expiryDate);
+  const expiryDate = resolveExpiryFromTerm(input.startDate ?? "", input.policyTermYears ?? 0, input.expiryDate ?? "");
   return normalizeInsurancePolicy({
     id: existing?.id ?? createPolicyId(),
     type: input.type,
-    provider: input.provider.trim() || "Unknown provider",
-    coverageAmountNpr: Math.max(0, Math.round(input.coverageAmountNpr)),
-    premiumNpr: Math.max(0, Math.round(input.premiumNpr)),
-    paymentFrequency: input.paymentFrequency,
-    startDate: input.startDate,
+    provider: safeTrim(input.provider) || "Unknown provider",
+    coverageAmountNpr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
+    premiumNpr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+    paymentFrequency: input.paymentFrequency || "yearly",
+    startDate: typeof input.startDate === "string" ? input.startDate : "",
     expiryDate,
-    policyTermYears: Math.max(0, Math.round(input.policyTermYears || 0)),
-    nominee: input.nominee.trim(),
-    familyMembersCovered: input.familyMembersCovered,
-    notes: input.notes.trim(),
-    agentName: input.agentName.trim(),
-    agentPhone: input.agentPhone.trim(),
-    branch: input.branch.trim(),
-    policyNumber: input.policyNumber.trim(),
-    proposalNumber: input.proposalNumber.trim(),
-    pan: input.pan.trim(),
-    medicalNotes: input.medicalNotes.trim(),
+    policyTermYears: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
+    nominee: safeTrim(input.nominee),
+    familyMembersCovered: Array.isArray(input.familyMembersCovered) ? input.familyMembersCovered : [],
+    notes: safeTrim(input.notes),
+    agentName: safeTrim(input.agentName),
+    agentPhone: safeTrim(input.agentPhone),
+    branch: safeTrim(input.branch),
+    policyNumber: safeTrim(input.policyNumber),
+    proposalNumber: safeTrim(input.proposalNumber),
+    pan: safeTrim(input.pan),
+    medicalNotes: safeTrim(input.medicalNotes),
     ...docs,
     status: derivePolicyStatus(expiryDate),
     sortOrder: existing?.sortOrder ?? sortOrder,
@@ -215,24 +216,70 @@ export function InsuranceWorkspaceDashboard() {
       try {
         if (cloudReady && isSupabaseConfigured() && user?.id) {
           try {
+            let saved: InsurancePolicy;
             if (editingId) {
-              await updateInsurancePolicy(editingId, input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy updated.", { id: "insurance-save" });
+              saved = await updateInsurancePolicy(editingId, input);
             } else {
-              await createInsurancePolicy(input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy saved.", { id: "insurance-save" });
+              saved = await createInsurancePolicy(input);
             }
+
+            try {
+              await reloadPoliciesFromCloud();
+            } catch (reloadError) {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("[insurance-workspace] reload after save failed; applying returned policy", reloadError);
+              }
+              const normalized = normalizeInsurancePolicy(saved);
+              persistLocalState({
+                version: 1,
+                policies: editingId
+                  ? state.policies.map((policy) => (policy.id === editingId ? normalized : policy))
+                  : [...state.policies.filter((policy) => policy.id !== normalized.id), normalized],
+              });
+            }
+
+            appToast.success(editingId ? "Policy updated." : "Policy saved.", { id: "insurance-save" });
             setSheetOpen(false);
             setEditingPolicy(null);
             recalculate();
             return;
           } catch (error) {
+            const message = error instanceof Error ? error.message : "Could not save policy. Please try again.";
             if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud save failed; keeping local state", error);
+              console.error("[insurance-workspace] cloud save failed; falling back to local", error);
             }
+            // Schema / sync unavailable → keep working offline. Other failures still try local
+            // so the form never blanks, then surface the original message if local also fails.
             setCloudReady(false);
+            try {
+              if (editingId) {
+                const existing = state.policies.find((policy) => policy.id === editingId);
+                const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
+                persistLocalState({
+                  version: 1,
+                  policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
+                });
+              } else {
+                persistLocalState({
+                  version: 1,
+                  policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
+                });
+              }
+              appToast.success(
+                `${editingId ? "Policy updated" : "Policy saved"} locally. Cloud sync issue: ${message}`,
+                { id: "insurance-save" },
+              );
+              setSheetOpen(false);
+              setEditingPolicy(null);
+              recalculate();
+              return;
+            } catch (localError) {
+              appToast.error(
+                localError instanceof Error ? localError.message : message,
+                { id: "insurance-save-error" },
+              );
+              return;
+            }
           }
         }
 
@@ -258,7 +305,7 @@ export function InsuranceWorkspaceDashboard() {
         appToast.error(error instanceof Error ? error.message : "Could not save policy. Please try again.", {
           id: "insurance-save-error",
         });
-        throw error;
+        // Keep the form open — never rethrow (avoids blanking the page).
       } finally {
         setSaving(false);
       }
@@ -557,11 +604,21 @@ export function InsuranceWorkspaceDashboard() {
           setSheetOpen(true);
         }}
         onUpdate={async (input, policyId) => {
-          await handleSavePolicy(input, policyId);
-          setDetailsPolicy((current) => {
-            if (!current || current.id !== policyId) return current;
-            return createLocalPolicy(input, current.sortOrder, current);
-          });
+          try {
+            await handleSavePolicy(input, policyId);
+            setDetailsPolicy((current) => {
+              if (!current || current.id !== policyId) return current;
+              try {
+                return createLocalPolicy(input, current.sortOrder, current);
+              } catch {
+                return current;
+              }
+            });
+          } catch (error) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[insurance-workspace] details update failed", error);
+            }
+          }
         }}
       />
 

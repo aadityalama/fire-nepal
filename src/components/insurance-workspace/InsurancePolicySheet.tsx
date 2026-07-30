@@ -134,49 +134,100 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
   useEffect(() => {
     if (!open) return;
     if (editingPolicy) {
-      setForm(policyToFormInput(editingPolicy));
-      setFamilyText(editingPolicy.familyMembersCovered.join(", "));
+      try {
+        setForm(policyToFormInput(editingPolicy));
+        setFamilyText((editingPolicy.familyMembersCovered ?? []).join(", "));
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[insurance-policy-sheet] failed to hydrate edit form", error);
+        }
+        setForm(emptyForm());
+        setFamilyText("");
+      }
       return;
     }
     setForm(emptyForm());
     setFamilyText("");
   }, [open, editingPolicy]);
 
-  const premiumPreview = buildPremiumDisplay(form.premiumNpr, form.paymentFrequency);
+  const premiumPreview = buildPremiumDisplay(form.premiumNpr || 0, form.paymentFrequency || "yearly");
   const trackerPreview = useMemo(() => {
-    const draft = {
-      id: "preview",
-      ...form,
-      status: "active" as const,
-      sortOrder: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      expiryDate: resolveExpiryFromTerm(form.startDate, form.policyTermYears, form.expiryDate),
-    };
-    return buildPremiumTracker(draft);
+    try {
+      const draft = {
+        id: "preview",
+        ...form,
+        startDate: form.startDate ?? "",
+        expiryDate: resolveExpiryFromTerm(form.startDate ?? "", form.policyTermYears ?? 0, form.expiryDate ?? ""),
+        policyTermYears: Number.isFinite(Number(form.policyTermYears)) ? Math.max(0, Number(form.policyTermYears)) : 0,
+        documents: Array.isArray(form.documents) ? form.documents : [],
+        familyMembersCovered: Array.isArray(form.familyMembersCovered) ? form.familyMembersCovered : [],
+        agentName: form.agentName ?? "",
+        agentPhone: form.agentPhone ?? "",
+        branch: form.branch ?? "",
+        policyNumber: form.policyNumber ?? "",
+        proposalNumber: form.proposalNumber ?? "",
+        pan: form.pan ?? "",
+        medicalNotes: form.medicalNotes ?? "",
+        nominee: form.nominee ?? "",
+        notes: form.notes ?? "",
+        status: "active" as const,
+        sortOrder: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      return buildPremiumTracker(draft);
+    } catch {
+      return buildPremiumTracker({
+        id: "preview",
+        ...emptyForm(),
+        status: "active",
+        sortOrder: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
   }, [form]);
 
   async function handleSave() {
-    if (!form.provider.trim() || form.coverageAmountNpr <= 0 || saving) return;
+    if (!form.provider?.trim() || (form.coverageAmountNpr || 0) <= 0 || saving) return;
     const familyMembersCovered = familyText
       .split(",")
       .map((part) => part.trim())
       .filter(Boolean);
-    const expiryDate = resolveExpiryFromTerm(form.startDate, form.policyTermYears, form.expiryDate);
+    const expiryDate = resolveExpiryFromTerm(form.startDate ?? "", form.policyTermYears ?? 0, form.expiryDate ?? "");
     const docs = syncLegacyDocumentFields({
-      documents: form.documents,
-      documentDataUrl: form.documentDataUrl,
-      documentFileName: form.documentFileName,
+      documents: Array.isArray(form.documents) ? form.documents : [],
+      documentDataUrl: form.documentDataUrl ?? null,
+      documentFileName: form.documentFileName ?? null,
     });
-    await onSave(
-      {
-        ...form,
-        familyMembersCovered,
-        expiryDate,
-        ...docs,
-      },
-      editingPolicy?.id,
-    );
+    try {
+      await onSave(
+        {
+          ...form,
+          provider: form.provider ?? "",
+          nominee: form.nominee ?? "",
+          notes: form.notes ?? "",
+          agentName: form.agentName ?? "",
+          agentPhone: form.agentPhone ?? "",
+          branch: form.branch ?? "",
+          policyNumber: form.policyNumber ?? "",
+          proposalNumber: form.proposalNumber ?? "",
+          pan: form.pan ?? "",
+          medicalNotes: form.medicalNotes ?? "",
+          policyTermYears: form.policyTermYears ?? 0,
+          startDate: form.startDate ?? "",
+          familyMembersCovered,
+          expiryDate,
+          ...docs,
+        },
+        editingPolicy?.id,
+      );
+    } catch (error) {
+      // Dashboard already toasts; never let an unhandled rejection blank the page.
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[insurance-policy-sheet] save failed", error);
+      }
+    }
   }
 
   async function addDocument(file: File | null, kind: InsuranceDocumentKind, replaceId?: string) {
@@ -184,9 +235,10 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
     const dataUrl = await readFileAsDataUrl(file);
     const nextDoc = createInsuranceDocument(kind, file.name, dataUrl);
     setForm((current) => {
+      const currentDocs = Array.isArray(current.documents) ? current.documents : [];
       const documents = replaceId
-        ? current.documents.map((doc) => (doc.id === replaceId ? { ...nextDoc, id: replaceId, kind: doc.kind } : doc))
-        : [...current.documents, nextDoc];
+        ? currentDocs.map((doc) => (doc.id === replaceId ? { ...nextDoc, id: replaceId, kind: doc.kind } : doc))
+        : [...currentDocs, nextDoc];
       return {
         ...current,
         ...syncLegacyDocumentFields({
@@ -200,7 +252,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
 
   function removeDocument(id: string) {
     setForm((current) => {
-      const documents = current.documents.filter((doc) => doc.id !== id);
+      const documents = (Array.isArray(current.documents) ? current.documents : []).filter((doc) => doc.id !== id);
       return {
         ...current,
         ...syncLegacyDocumentFields({
@@ -240,7 +292,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
               <button
                 type="button"
                 onClick={() => void handleSave()}
-                disabled={saving || !form.provider.trim() || form.coverageAmountNpr <= 0}
+                disabled={saving || !form.provider?.trim() || (form.coverageAmountNpr || 0) <= 0}
                 className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 disabled:opacity-50"
               >
                 <Save size={16} />
@@ -305,7 +357,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                     <FieldLabel>Provider</FieldLabel>
                     <input
                       className={inputClass}
-                      value={form.provider}
+                      value={form.provider ?? ""}
                       onChange={(e) => setForm((current) => ({ ...current, provider: e.target.value }))}
                       placeholder="e.g. Nepal Life, Shikhar"
                     />
@@ -372,7 +424,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                           setForm((current) => ({
                             ...current,
                             startDate,
-                            expiryDate: resolveExpiryFromTerm(startDate, current.policyTermYears, current.expiryDate),
+                            expiryDate: resolveExpiryFromTerm(startDate, current.policyTermYears ?? 0, current.expiryDate ?? ""),
                           }));
                         }}
                       />
@@ -389,7 +441,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                           setForm((current) => ({
                             ...current,
                             policyTermYears,
-                            expiryDate: resolveExpiryFromTerm(current.startDate, policyTermYears, current.expiryDate),
+                            expiryDate: resolveExpiryFromTerm(current.startDate ?? "", policyTermYears, current.expiryDate ?? ""),
                           }));
                         }}
                         placeholder="20"
@@ -432,7 +484,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>Agent Name</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.agentName}
+                          value={form.agentName ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, agentName: e.target.value }))}
                           placeholder="Agent full name"
                         />
@@ -441,7 +493,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>Agent Phone</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.agentPhone}
+                          value={form.agentPhone ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, agentPhone: e.target.value }))}
                           placeholder="98xxxxxxxx"
                         />
@@ -450,7 +502,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>Branch</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.branch}
+                          value={form.branch ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, branch: e.target.value }))}
                           placeholder="Branch / office"
                         />
@@ -459,7 +511,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>Policy Number</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.policyNumber}
+                          value={form.policyNumber ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, policyNumber: e.target.value }))}
                           placeholder="Policy no."
                         />
@@ -468,7 +520,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>Proposal Number</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.proposalNumber}
+                          value={form.proposalNumber ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, proposalNumber: e.target.value }))}
                           placeholder="Proposal no."
                         />
@@ -477,7 +529,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         <FieldLabel>PAN</FieldLabel>
                         <input
                           className={inputClass}
-                          value={form.pan}
+                          value={form.pan ?? ""}
                           onChange={(e) => setForm((current) => ({ ...current, pan: e.target.value }))}
                           placeholder="PAN number"
                         />
@@ -496,7 +548,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                       <FieldLabel>Medical Notes</FieldLabel>
                       <textarea
                         className={`${inputClass} min-h-[80px] py-3`}
-                        value={form.medicalNotes}
+                        value={form.medicalNotes ?? ""}
                         onChange={(e) => setForm((current) => ({ ...current, medicalNotes: e.target.value }))}
                         placeholder="Medical history, exclusions…"
                       />
@@ -542,9 +594,9 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                       </label>
                     </div>
 
-                    {form.documents.length > 0 ? (
+                    {(form.documents ?? []).length > 0 ? (
                       <div className="space-y-2">
-                        {form.documents.map((doc: InsuranceDocument) => (
+                        {(form.documents ?? []).map((doc: InsuranceDocument) => (
                           <div
                             key={doc.id}
                             className="rounded-2xl border border-white/10 bg-black/20 p-3"

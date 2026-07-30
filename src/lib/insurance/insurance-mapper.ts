@@ -35,6 +35,10 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
+function safeTrim(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 /** Map a Supabase row (full or legacy) into the domain policy model. */
 export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted_at" | "policy_term_years" | "agent_name" | "agent_phone" | "branch" | "policy_number" | "proposal_number" | "pan" | "medical_notes" | "documents"> & {
   deleted_at?: string | null;
@@ -71,15 +75,15 @@ export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted
   return {
     id: row.id,
     type: asType(row.insurance_type),
-    provider: row.provider,
+    provider: row.provider || "Unknown provider",
     coverageAmountNpr: Number(row.coverage_amount_npr) || 0,
     premiumNpr: Number(row.premium_npr) || 0,
     paymentFrequency: asFrequency(row.payment_frequency),
     ...meta,
     status: derivePolicyStatus(meta.expiryDate || expiryDate),
-    sortOrder: row.sort_order,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    sortOrder: Number(row.sort_order) || 0,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
   };
 }
 
@@ -93,29 +97,29 @@ export function buildInsuranceInsertPayload(
     documentDataUrl: input.documentDataUrl,
     documentFileName: input.documentFileName,
   });
-  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears, input.expiryDate);
+  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears ?? 0, input.expiryDate);
 
   return {
     user_id: userId,
     insurance_type: input.type,
-    provider: input.provider.trim() || "Unknown provider",
-    coverage_amount_npr: Math.max(0, Math.round(input.coverageAmountNpr)),
-    premium_npr: Math.max(0, Math.round(input.premiumNpr)),
-    payment_frequency: input.paymentFrequency,
+    provider: safeTrim(input.provider) || "Unknown provider",
+    coverage_amount_npr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
+    premium_npr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+    payment_frequency: input.paymentFrequency || "yearly",
     start_date: input.startDate || null,
     expiry_date: expiryDate || null,
-    policy_term_years: Math.max(0, Math.round(input.policyTermYears || 0)),
-    nominee: input.nominee.trim() || null,
-    family_members_covered: input.familyMembersCovered,
-    notes: input.notes.trim() || null,
-    agent_name: input.agentName.trim() || null,
-    agent_phone: input.agentPhone.trim() || null,
-    branch: input.branch.trim() || null,
-    policy_number: input.policyNumber.trim() || null,
-    proposal_number: input.proposalNumber.trim() || null,
-    pan: input.pan.trim() || null,
-    medical_notes: input.medicalNotes.trim() || null,
-    documents: docs.documents as unknown as Json,
+    policy_term_years: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
+    nominee: safeTrim(input.nominee) || null,
+    family_members_covered: Array.isArray(input.familyMembersCovered) ? input.familyMembersCovered : [],
+    notes: safeTrim(input.notes) || null,
+    agent_name: safeTrim(input.agentName) || null,
+    agent_phone: safeTrim(input.agentPhone) || null,
+    branch: safeTrim(input.branch) || null,
+    policy_number: safeTrim(input.policyNumber) || null,
+    proposal_number: safeTrim(input.proposalNumber) || null,
+    pan: safeTrim(input.pan) || null,
+    medical_notes: safeTrim(input.medicalNotes) || null,
+    documents: (docs.documents ?? []) as unknown as Json,
     document_data_url: docs.documentDataUrl,
     document_file_name: docs.documentFileName,
     sort_order: sortOrder,
@@ -128,28 +132,28 @@ export function buildInsuranceUpdatePayload(input: InsurancePolicyFormInput) {
     documentDataUrl: input.documentDataUrl,
     documentFileName: input.documentFileName,
   });
-  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears, input.expiryDate);
+  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears ?? 0, input.expiryDate);
 
   return {
     insurance_type: input.type,
-    provider: input.provider.trim() || "Unknown provider",
-    coverage_amount_npr: Math.max(0, Math.round(input.coverageAmountNpr)),
-    premium_npr: Math.max(0, Math.round(input.premiumNpr)),
-    payment_frequency: input.paymentFrequency,
+    provider: safeTrim(input.provider) || "Unknown provider",
+    coverage_amount_npr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
+    premium_npr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+    payment_frequency: input.paymentFrequency || "yearly",
     start_date: input.startDate || null,
     expiry_date: expiryDate || null,
-    policy_term_years: Math.max(0, Math.round(input.policyTermYears || 0)),
-    nominee: input.nominee.trim() || null,
-    family_members_covered: input.familyMembersCovered,
-    notes: input.notes.trim() || null,
-    agent_name: input.agentName.trim() || null,
-    agent_phone: input.agentPhone.trim() || null,
-    branch: input.branch.trim() || null,
-    policy_number: input.policyNumber.trim() || null,
-    proposal_number: input.proposalNumber.trim() || null,
-    pan: input.pan.trim() || null,
-    medical_notes: input.medicalNotes.trim() || null,
-    documents: docs.documents as unknown as Json,
+    policy_term_years: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
+    nominee: safeTrim(input.nominee) || null,
+    family_members_covered: Array.isArray(input.familyMembersCovered) ? input.familyMembersCovered : [],
+    notes: safeTrim(input.notes) || null,
+    agent_name: safeTrim(input.agentName) || null,
+    agent_phone: safeTrim(input.agentPhone) || null,
+    branch: safeTrim(input.branch) || null,
+    policy_number: safeTrim(input.policyNumber) || null,
+    proposal_number: safeTrim(input.proposalNumber) || null,
+    pan: safeTrim(input.pan) || null,
+    medical_notes: safeTrim(input.medicalNotes) || null,
+    documents: (docs.documents ?? []) as unknown as Json,
     document_data_url: docs.documentDataUrl,
     document_file_name: docs.documentFileName,
     updated_at: new Date().toISOString(),
