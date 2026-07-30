@@ -44,7 +44,9 @@
     "nepse:audit-statements": "node scripts/audit-nepse-statements.mjs",
     "db:apply:nepse-statements": "node scripts/apply-nepse-company-statements-migration.mjs",
     "db:apply:nepse-hub-admin-overrides": "node scripts/apply-nepse-hub-admin-overrides-migration.mjs",
-    "test:nepse-hub-admin-overrides": "node --test scripts/nepse-hub-admin-overrides.test.mjs"
+    "db:apply:insurance": "node scripts/apply-ensure-insurance-schema.mjs",
+    "test:nepse-hub-admin-overrides": "node --test scripts/nepse-hub-admin-overrides.test.mjs",
+    "test:insurance-cloud-primary": "node --test scripts/insurance-cloud-primary-dedupe.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

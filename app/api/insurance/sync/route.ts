@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildInsuranceImportFingerprint } from "@/lib/insurance/insurance-mapper";
 import { sanitizeInsurancePolicyInput } from "@/lib/insurance/insurance-sanitize";
 import { policyToFormInput } from "@/lib/insurance/policy-to-form";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -18,20 +19,23 @@ function bad(msg: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json({ ok: false, error: msg, meta: getInsuranceSupabaseMeta(), ...extra }, { status });
 }
 
-function fingerprint(policy: Pick<InsurancePolicy, "provider" | "type" | "coverageAmountNpr" | "premiumNpr" | "startDate" | "policyNumber">) {
-  return [
-    policy.type,
-    (policy.provider || "").trim().toLowerCase(),
-    Math.round(Number(policy.coverageAmountNpr) || 0),
-    Math.round(Number(policy.premiumNpr) || 0),
-    policy.startDate || "",
-    (policy.policyNumber || "").trim().toLowerCase(),
-  ].join("|");
+function policyFingerprint(policy: Pick<
+  InsurancePolicy,
+  "provider" | "type" | "coverageAmountNpr" | "premiumNpr" | "startDate" | "policyNumber"
+>) {
+  return buildInsuranceImportFingerprint({
+    type: policy.type,
+    provider: policy.provider,
+    coverageAmountNpr: policy.coverageAmountNpr,
+    premiumNpr: policy.premiumNpr,
+    startDate: policy.startDate,
+    policyNumber: policy.policyNumber ?? "",
+  });
 }
 
 /**
  * Merge browser-local policies into the single production table, then return cloud rows.
- * Used so Chrome (old local) and Safari (new local) converge on the same SQL result.
+ * Dedupes by id + import_fingerprint so Chrome/Safari never double-import.
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
@@ -60,7 +64,7 @@ export async function POST(req: Request) {
 
     let remote = await listOrEnsure();
     const remoteById = new Set(remote.map((p) => p.id));
-    const remoteByFp = new Set(remote.map((p) => fingerprint(p)));
+    const remoteByFp = new Set(remote.map((p) => policyFingerprint(p)));
 
     const uploaded: string[] = [];
     const skipped: string[] = [];
@@ -73,7 +77,7 @@ export async function POST(req: Request) {
         skipped.push(id);
         continue;
       }
-      const fp = fingerprint({
+      const fp = policyFingerprint({
         type: row.type,
         provider: row.provider,
         coverageAmountNpr: row.coverageAmountNpr,
@@ -90,19 +94,41 @@ export async function POST(req: Request) {
       if (!input) continue;
 
       try {
-        const saved = await createInsurancePolicyForUser(sb, data.user.id, input);
+        const saved = await createInsurancePolicyForUser(sb, data.user.id, input, {
+          importFingerprint: fp,
+        });
         uploaded.push(saved.id);
         remoteById.add(saved.id);
-        remoteByFp.add(fingerprint(saved));
+        remoteByFp.add(policyFingerprint(saved));
+        remoteByFp.add(fp);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/duplicate insurance policy import skipped/i.test(message)) {
+          skipped.push(id || fp);
+          remoteByFp.add(fp);
+          continue;
+        }
         if (isMissingInsuranceTableError(error)) {
           const ensured = await ensureFinanceInsurancePoliciesSchema();
           if (!ensured.ok) throw new Error(ensured.message);
           await new Promise((r) => setTimeout(r, 600));
-          const saved = await createInsurancePolicyForUser(sb, data.user.id, input);
-          uploaded.push(saved.id);
-          remoteById.add(saved.id);
-          remoteByFp.add(fingerprint(saved));
+          try {
+            const saved = await createInsurancePolicyForUser(sb, data.user.id, input, {
+              importFingerprint: fp,
+            });
+            uploaded.push(saved.id);
+            remoteById.add(saved.id);
+            remoteByFp.add(policyFingerprint(saved));
+            remoteByFp.add(fp);
+          } catch (retryError) {
+            const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+            if (/duplicate insurance policy import skipped/i.test(retryMessage)) {
+              skipped.push(id || fp);
+              remoteByFp.add(fp);
+              continue;
+            }
+            throw retryError;
+          }
           continue;
         }
         throw error;
@@ -119,6 +145,7 @@ export async function POST(req: Request) {
       uploadedCount: uploaded.length,
       uploadedIds: uploaded,
       skippedCount: skipped.length,
+      cloudPrimary: true,
       meta: {
         ...meta,
         browser: req.headers.get("user-agent") ?? null,

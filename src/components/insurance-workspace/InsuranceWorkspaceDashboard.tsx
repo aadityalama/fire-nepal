@@ -32,7 +32,17 @@ import {
   collectPremiumReminderNotifications,
   dismissPremiumReminder,
 } from "@/lib/insurance/insurance-premium-reminders";
-import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
+import {
+  cacheInsurancePoliciesLocally,
+  clearInsuranceCloudPrimary,
+  createPolicyId,
+  isInsuranceCloudPrimary,
+  loadInsuranceWorkspaceState,
+  markInsuranceCloudPrimary,
+  markInsuranceFingerprintsMigrated,
+  saveInsuranceWorkspaceState,
+} from "@/lib/insurance/insurance-storage";
+import { buildInsuranceImportFingerprint } from "@/lib/insurance/insurance-mapper";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import {
   normalizeInsurancePolicy,
@@ -143,45 +153,55 @@ export function InsuranceWorkspaceDashboard() {
 
     async function hydrate() {
       const local = loadInsuranceWorkspaceState();
+      const alreadyCloudPrimary = Boolean(user?.id && isInsuranceCloudPrimary(user.id));
+
       if (!cancelled) {
-        // Show local immediately, then converge onto the single cloud table.
+        // Offline cache for instant paint; cloud replaces this after login sync.
         setState({ version: 1, policies: withDerivedStatus(local.policies) });
+        if (alreadyCloudPrimary) setCloudReady(true);
       }
 
       if (isSupabaseConfigured() && user?.id) {
         try {
           // Ensure public.finance_insurance_policies exists before read/write.
-          await ensureInsuranceSchema();
+          const schema = await ensureInsuranceSchema();
+          if (!schema.tableExists && !schema.ok) {
+            throw new Error(schema.message || "Insurance cloud table is not available yet.");
+          }
 
           const synced = await syncInsurancePoliciesFromLocal(local.policies);
-          if (process.env.NODE_ENV !== "production") {
-            console.info("[insurance-workspace] cloud sync", {
-              table: synced.meta?.table,
-              supabaseUrl: synced.meta?.supabaseUrl,
-              sql: synced.meta?.listSql,
-              policyIds: synced.policyIds,
-              uploadedIds: synced.uploadedIds,
-            });
-          } else {
-            console.info("[insurance-workspace] source", {
-              supabaseUrl: synced.meta?.supabaseUrl,
-              schema: synced.meta?.schema,
-              table: synced.meta?.table,
-              sql: synced.meta?.listSql,
-              policyIds: synced.policyIds,
-              uploadedCount: synced.uploadedIds.length,
-            });
-          }
+          const syncedFingerprints = local.policies.map((policy) =>
+            buildInsuranceImportFingerprint({
+              type: policy.type,
+              provider: policy.provider,
+              coverageAmountNpr: policy.coverageAmountNpr,
+              premiumNpr: policy.premiumNpr,
+              startDate: policy.startDate,
+              policyNumber: policy.policyNumber,
+            }),
+          );
+          markInsuranceFingerprintsMigrated(user.id, syncedFingerprints);
+          markInsuranceCloudPrimary(user.id);
+
+          console.info("[insurance-workspace] cloud primary", {
+            supabaseUrl: synced.meta?.supabaseUrl,
+            schema: synced.meta?.schema,
+            table: synced.meta?.table,
+            sql: synced.meta?.listSql,
+            policyIds: synced.policyIds,
+            uploadedCount: synced.uploadedIds.length,
+            cacheOnly: true,
+          });
 
           if (!cancelled) {
             const next = { version: 1 as const, policies: withDerivedStatus(synced.policies) };
             setState(next);
-            saveInsuranceWorkspaceState(next);
+            cacheInsurancePoliciesLocally(next.policies);
             setCloudReady(true);
           }
         } catch (error) {
-          console.error("[insurance-workspace] hydrate/sync failed — falling back to local only", error);
-          // Last resort: try a plain fetch (no local upload) so one browser can still see cloud rows.
+          console.error("[insurance-workspace] hydrate/sync failed — using offline cache", error);
+          // Last resort: try a plain fetch so one browser can still see cloud rows.
           try {
             const remote = await fetchInsurancePolicies();
             console.info("[insurance-workspace] fallback fetch", {
@@ -193,12 +213,17 @@ export function InsuranceWorkspaceDashboard() {
             if (!cancelled) {
               const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
               setState(next);
-              saveInsuranceWorkspaceState(next);
+              cacheInsurancePoliciesLocally(next.policies);
+              markInsuranceCloudPrimary(user.id);
               setCloudReady(true);
             }
           } catch (fetchError) {
             console.error("[insurance-workspace] cloud fetch failed", fetchError);
-            if (!cancelled) setCloudReady(false);
+            if (!cancelled) {
+              // Keep offline cache only — do not mark cloud primary.
+              clearInsuranceCloudPrimary(user.id);
+              setCloudReady(false);
+            }
           }
         }
       }
@@ -214,7 +239,8 @@ export function InsuranceWorkspaceDashboard() {
 
   useEffect(() => {
     if (!hydrated) return;
-    saveInsuranceWorkspaceState(state);
+    // Always write-through cache; once cloudReady, this is not the primary store.
+    cacheInsurancePoliciesLocally(state.policies);
   }, [state, hydrated]);
 
   useEffect(() => {
@@ -290,7 +316,7 @@ export function InsuranceWorkspaceDashboard() {
     const remote = await fetchInsurancePolicies();
     const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
     setState(next);
-    saveInsuranceWorkspaceState(next);
+    cacheInsurancePoliciesLocally(next.policies);
     return next;
   }, []);
 
@@ -315,12 +341,11 @@ export function InsuranceWorkspaceDashboard() {
                 console.error("[insurance-workspace] reload after save failed; applying returned policy", reloadError);
               }
               const normalized = normalizeInsurancePolicy(saved);
-              persistLocalState({
-                version: 1,
-                policies: editingId
-                  ? state.policies.map((policy) => (policy.id === editingId ? normalized : policy))
-                  : [...state.policies.filter((policy) => policy.id !== normalized.id), normalized],
-              });
+              const nextPolicies = editingId
+                ? state.policies.map((policy) => (policy.id === editingId ? normalized : policy))
+                : [...state.policies.filter((policy) => policy.id !== normalized.id), normalized];
+              setState({ version: 1, policies: withDerivedStatus(nextPolicies) });
+              cacheInsurancePoliciesLocally(nextPolicies);
             }
 
             appToast.success(editingId ? "Policy updated." : "Policy saved.", { id: "insurance-save" });
@@ -330,41 +355,41 @@ export function InsuranceWorkspaceDashboard() {
             return;
           } catch (error) {
             const message = error instanceof Error ? error.message : "Could not save policy. Please try again.";
+            const unavailable = /cloud sync is unavailable|does not exist|schema cache|not available/i.test(message);
             if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud save failed; falling back to local", error);
+              console.error("[insurance-workspace] cloud save failed", error);
             }
-            // Schema / sync unavailable → keep working offline. Other failures still try local
-            // so the form never blanks, then surface the original message if local also fails.
+
+            if (!unavailable) {
+              // Keep cloud as primary — do not fork browser-local source of truth.
+              appToast.error(message, { id: "insurance-save-error" });
+              return;
+            }
+
+            // Table / schema unavailable → temporary offline cache mode.
+            clearInsuranceCloudPrimary(user.id);
             setCloudReady(false);
-            try {
-              if (editingId) {
-                const existing = state.policies.find((policy) => policy.id === editingId);
-                const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
-                persistLocalState({
-                  version: 1,
-                  policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
-                });
-              } else {
-                persistLocalState({
-                  version: 1,
-                  policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
-                });
-              }
-              appToast.success(
-                `${editingId ? "Policy updated" : "Policy saved"} locally. Cloud sync issue: ${message}`,
-                { id: "insurance-save" },
-              );
-              setSheetOpen(false);
-              setEditingPolicy(null);
-              recalculate();
-              return;
-            } catch (localError) {
-              appToast.error(
-                localError instanceof Error ? localError.message : message,
-                { id: "insurance-save-error" },
-              );
-              return;
+            if (editingId) {
+              const existing = state.policies.find((policy) => policy.id === editingId);
+              const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
+              persistLocalState({
+                version: 1,
+                policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
+              });
+            } else {
+              persistLocalState({
+                version: 1,
+                policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
+              });
             }
+            appToast.success(
+              `${editingId ? "Policy updated" : "Policy saved"} offline. Will sync when cloud is ready.`,
+              { id: "insurance-save" },
+            );
+            setSheetOpen(false);
+            setEditingPolicy(null);
+            recalculate();
+            return;
           }
         }
 
@@ -409,9 +434,18 @@ export function InsuranceWorkspaceDashboard() {
             recalculate();
             return;
           } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            const unavailable = /cloud sync is unavailable|does not exist|schema cache|not available/i.test(message);
             if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud delete failed; keeping local state", error);
+              console.error("[insurance-workspace] cloud delete failed", error);
             }
+            if (!unavailable) {
+              appToast.error(message || "Could not delete policy. Please try again.", {
+                id: "insurance-delete-error",
+              });
+              return;
+            }
+            clearInsuranceCloudPrimary(user.id);
             setCloudReady(false);
           }
         }

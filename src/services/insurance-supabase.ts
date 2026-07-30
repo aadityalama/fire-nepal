@@ -1,11 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildInsuranceInsertPayload, buildInsuranceUpdatePayload, mapInsuranceRow } from "@/lib/insurance/insurance-mapper";
+import {
+  buildInsuranceImportFingerprint,
+  buildInsuranceInsertPayload,
+  buildInsuranceUpdatePayload,
+  mapInsuranceRow,
+} from "@/lib/insurance/insurance-mapper";
 import type { InsurancePolicy, InsurancePolicyFormInput } from "@/lib/insurance/insurance-types";
 import type { Database } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
 
 const INSURANCE_COLUMNS =
+  "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,pan_number,medical_notes,documents,premium_history,total_installments,installments_paid,installments_remaining,total_premium_paid,remaining_premium,next_premium_date,next_premium_amount,import_fingerprint,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
+
+const INSURANCE_COLUMNS_WITHOUT_FINGERPRINT =
   "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,pan_number,medical_notes,documents,premium_history,total_installments,installments_paid,installments_remaining,total_premium_paid,remaining_premium,next_premium_date,next_premium_amount,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
 
 const LEGACY_SOFT_DELETE_COLUMNS =
@@ -27,8 +35,15 @@ function missingDeletedAtColumn(error: { message?: string; code?: string } | nul
   return missingColumn(error, "deleted_at");
 }
 
+function missingImportFingerprintColumn(error: { message?: string; code?: string } | null | undefined) {
+  return missingColumn(error, "import_fingerprint");
+}
+
 function missingPolicyManagementColumns(error: { message?: string; code?: string } | null | undefined) {
   const message = error?.message?.toLowerCase() ?? "";
+  if (missingImportFingerprintColumn(error) && !message.includes("policy_term_years") && !message.includes("agent_name")) {
+    return false;
+  }
   return (
     error?.code === "42703" ||
     error?.code === "PGRST204" ||
@@ -52,6 +67,13 @@ function missingPolicyManagementColumns(error: { message?: string; code?: string
   );
 }
 
+function isUniqueViolation(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("duplicate key") || message.includes("unique constraint");
+}
+
 function stripPolicyManagementFields<T extends Record<string, unknown>>(payload: T) {
   const {
     policy_term_years: _policyTermYears,
@@ -71,6 +93,7 @@ function stripPolicyManagementFields<T extends Record<string, unknown>>(payload:
     remaining_premium: _remainingPremium,
     next_premium_date: _nextPremiumDate,
     next_premium_amount: _nextPremiumAmount,
+    import_fingerprint: _importFingerprint,
     ...legacy
   } = payload;
   void _policyTermYears;
@@ -90,6 +113,7 @@ function stripPolicyManagementFields<T extends Record<string, unknown>>(payload:
   void _remainingPremium;
   void _nextPremiumDate;
   void _nextPremiumAmount;
+  void _importFingerprint;
   return legacy;
 }
 
@@ -128,6 +152,21 @@ export async function listInsurancePoliciesForUser(client: Client, userId: strin
     .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
+
+  if (missingImportFingerprintColumn(result.error) && !missingPolicyManagementColumns(result.error)) {
+    const withoutFp = await client
+      .from("finance_insurance_policies")
+      .select(INSURANCE_COLUMNS_WITHOUT_FINGERPRINT)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (withoutFp.error) {
+      // fall through to broader legacy handling below
+    } else {
+      return sortInsurancePolicies((withoutFp.data ?? []).map((row) => mapInsuranceRow({ ...row, deleted_at: null })));
+    }
+  }
 
   if (missingPolicyManagementColumns(result.error) || missingDeletedAtColumn(result.error)) {
     if (missingDeletedAtColumn(result.error) && !missingPolicyManagementColumns(result.error)) {
@@ -182,6 +221,7 @@ export async function createInsurancePolicyForUser(
   client: Client,
   userId: string,
   input: InsurancePolicyFormInput,
+  options?: { importFingerprint?: string | null },
 ): Promise<InsurancePolicy> {
   let countResult = await client
     .from("finance_insurance_policies")
@@ -201,8 +241,46 @@ export async function createInsurancePolicyForUser(
     throw new Error(mapInsuranceError(countError, "Could not prepare insurance save."));
   }
 
-  const payload = buildInsuranceInsertPayload(userId, input, count ?? 0);
-  const insertResult = await client.from("finance_insurance_policies").insert(payload).select(INSURANCE_COLUMNS).single();
+  const fingerprint =
+    options?.importFingerprint ??
+    buildInsuranceImportFingerprint({
+      type: input.type,
+      provider: input.provider,
+      coverageAmountNpr: input.coverageAmountNpr,
+      premiumNpr: input.premiumNpr,
+      startDate: input.startDate,
+      policyNumber: input.policyNumber,
+    });
+
+  const payload = buildInsuranceInsertPayload(userId, input, count ?? 0, {
+    importFingerprint: fingerprint,
+  });
+  let insertResult = await client.from("finance_insurance_policies").insert(payload).select(INSURANCE_COLUMNS).single();
+
+  if (missingImportFingerprintColumn(insertResult.error) && !missingPolicyManagementColumns(insertResult.error)) {
+    const { import_fingerprint: _fp, ...withoutFp } = payload;
+    void _fp;
+    insertResult = await client
+      .from("finance_insurance_policies")
+      .insert(withoutFp)
+      .select(INSURANCE_COLUMNS_WITHOUT_FINGERPRINT)
+      .single();
+  }
+
+  if (isUniqueViolation(insertResult.error)) {
+    const existing = await client
+      .from("finance_insurance_policies")
+      .select(INSURANCE_COLUMNS_WITHOUT_FINGERPRINT)
+      .eq("user_id", userId)
+      .eq("import_fingerprint", fingerprint)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!existing.error && existing.data) {
+      return mapInsuranceRow({ ...existing.data, deleted_at: existing.data.deleted_at ?? null });
+    }
+    // Race: another insert won; re-list by soft match is handled by sync route skip set.
+    throw new Error("Duplicate insurance policy import skipped.");
+  }
 
   if (missingPolicyManagementColumns(insertResult.error)) {
     const legacyPayload = stripPolicyManagementFields(payload as Record<string, unknown>);

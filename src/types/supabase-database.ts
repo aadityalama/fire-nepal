@@ -1687,6 +1687,7 @@ export type Database = {
           remaining_premium: number;
           next_premium_date: string | null;
           next_premium_amount: number;
+          import_fingerprint: string | null;
           document_data_url: string | null;
           document_file_name: string | null;
           sort_order: number;
@@ -1725,6 +1726,7 @@ export type Database = {
           remaining_premium?: number;
           next_premium_date?: string | null;
           next_premium_amount?: number;
+          import_fingerprint?: string | null;
           document_data_url?: string | null;
           document_file_name?: string | null;
           sort_order?: number;
@@ -1761,6 +1763,7 @@ export type Database = {
           remaining_premium?: number;
           next_premium_date?: string | null;
           next_premium_amount?: number;
+          import_fingerprint?: string | null;
           document_data_url?: string | null;
           document_file_name?: string | null;
           sort_order?: number;
