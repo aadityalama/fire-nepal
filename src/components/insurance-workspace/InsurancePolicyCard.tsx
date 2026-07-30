@@ -64,12 +64,48 @@ export function InsurancePolicyCard({
   const isLife = policy.type === "life";
   const isHealth = policy.type === "health";
   const dueInfo = useMemo(
-    () => buildPremiumDueInfo(policy),
+    () => {
+      try {
+        return buildPremiumDueInfo(policy);
+      } catch {
+        return {
+          hasSchedule: false as const,
+          dueDate: null,
+          daysRemaining: Number.POSITIVE_INFINITY,
+          overdue: false,
+          urgency: "neutral" as const,
+          emoji: "📅",
+          headline: "Next Premium",
+          detail: "Premium schedule unavailable",
+          cycleProgressPct: 0,
+          lastPremiumPaidDate: null,
+          upcomingDates: [] as string[],
+          frequency: policy.paymentFrequency || ("yearly" as const),
+        };
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when local calendar day changes
     [policy, todayKey],
   );
   const tracker = useMemo(
-    () => buildPremiumTracker(policy),
+    () => {
+      try {
+        return buildPremiumTracker(policy);
+      } catch {
+        return {
+          policyTermYears: 0,
+          totalInstallments: 0,
+          installmentsPaid: 0,
+          installmentsRemaining: 0,
+          premiumPaidSoFarNpr: 0,
+          remainingPremiumNpr: 0,
+          nextPremiumDate: null,
+          nextPremiumAmountNpr: Math.max(0, Number(policy.premiumNpr) || 0),
+          history: [],
+          smartStatus: { urgency: "neutral" as const, emoji: "📅", label: "No schedule" },
+        };
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [policy, todayKey],
   );

@@ -63,12 +63,20 @@ function MetricTile({ label, value, hint }: { label: string; value: string; hint
 }
 
 function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
-  return policies.map((policy) => {
-    const normalized = normalizeInsurancePolicy(policy);
-    return {
-      ...normalized,
-      status: derivePolicyStatus(normalized.expiryDate),
-    };
+  if (!Array.isArray(policies)) return [];
+  return policies.flatMap((policy) => {
+    try {
+      const normalized = normalizeInsurancePolicy(policy);
+      return [
+        {
+          ...normalized,
+          status: derivePolicyStatus(normalized.expiryDate ?? ""),
+        },
+      ];
+    } catch {
+      // Skip corrupt legacy rows rather than blanking the whole Insurance page.
+      return [];
+    }
   });
 }
 

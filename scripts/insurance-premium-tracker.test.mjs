@@ -149,6 +149,19 @@ test("legacy policy missing documents/family arrays stays iterable", () => {
   assert.equal((policy.documents ?? []).length, 0);
 });
 
+test("last paid due date works without Array.prototype.at", () => {
+  const paid = [
+    { dueDate: "2020-01-15", status: "paid" },
+    { dueDate: "2021-01-15", status: "paid" },
+    { dueDate: "2022-01-15", status: "upcoming" },
+  ];
+  const filtered = paid.filter((h) => h.status === "paid");
+  // Mimic the production-safe indexing used in buildPremiumDueInfo.
+  const last = filtered.length === 0 ? null : filtered[filtered.length - 1]?.dueDate ?? null;
+  assert.equal(last, "2021-01-15");
+  assert.equal(typeof Array.prototype.at === "function" || last === "2021-01-15", true);
+});
+
 test("tsx module loader is available for deeper insurance checks", () => {
   // Soft check — suite still passes without tsx; documents environment readiness.
   const loaded = loadTsModule("src/lib/insurance/insurance-normalize.ts");

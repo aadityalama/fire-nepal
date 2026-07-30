@@ -288,68 +288,94 @@ export function smartPremiumStatus(daysRemaining: number, hasSchedule: boolean):
   return { urgency: "green", emoji: "🟢", label: "On Track" };
 }
 
-export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
-  const tracker = buildPremiumTracker(policy, now);
-  const frequency = policy.paymentFrequency || "yearly";
+function lastPaidDueDate(history: PremiumHistoryEntry[] | null | undefined): string | null {
+  const paid = Array.isArray(history) ? history.filter((h) => h?.status === "paid") : [];
+  if (paid.length === 0) return null;
+  // Avoid Array.prototype.at — unsupported on older mobile WebViews and crashes /insurance.
+  return paid[paid.length - 1]?.dueDate ?? null;
+}
 
-  if (!tracker.nextPremiumDate && tracker.totalInstallments > 0 && tracker.installmentsRemaining === 0) {
-    return {
-      hasSchedule: true,
-      dueDate: null,
-      daysRemaining: Number.POSITIVE_INFINITY,
-      overdue: false,
-      urgency: "green",
-      emoji: "🟢",
-      headline: "Next Premium",
-      detail: "All installments paid",
-      cycleProgressPct: 100,
-      lastPremiumPaidDate: tracker.history.filter((h) => h.status === "paid").at(-1)?.dueDate ?? null,
-      upcomingDates: [],
-      frequency,
-    };
-  }
-
-  if (!tracker.nextPremiumDate) {
-    return {
-      hasSchedule: false,
-      dueDate: null,
-      daysRemaining: Number.POSITIVE_INFINITY,
-      overdue: false,
-      urgency: "neutral",
-      emoji: "📅",
-      headline: "Next Premium",
-      detail: frequency === "one_time" ? "One-time premium · no recurring schedule" : "Add a start date to track premiums",
-      cycleProgressPct: 0,
-      lastPremiumPaidDate: null,
-      upcomingDates: [],
-      frequency,
-    };
-  }
-
-  const daysRemaining = daysUntil(tracker.nextPremiumDate, now);
-  const overdue = daysRemaining < 0;
-  const smart = tracker.smartStatus;
-  const lastPaid = tracker.history.filter((h) => h.status === "paid").at(-1)?.dueDate ?? null;
-  const upcomingDates = tracker.history.filter((h) => h.status !== "paid").map((h) => h.dueDate).slice(0, 6);
-
+function neutralPremiumDueInfo(
+  frequency: InsurancePaymentFrequency = "yearly",
+  detail = "Add a start date to track premiums",
+): PremiumDueInfo {
   return {
-    hasSchedule: true,
-    dueDate: tracker.nextPremiumDate,
-    daysRemaining,
-    overdue,
-    urgency: smart.urgency,
-    emoji: smart.emoji,
+    hasSchedule: false,
+    dueDate: null,
+    daysRemaining: Number.POSITIVE_INFINITY,
+    overdue: false,
+    urgency: "neutral",
+    emoji: "📅",
     headline: "Next Premium",
-    detail: overdue
-      ? `Overdue by ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"}`
-      : smart.label,
-    cycleProgressPct: overdue
-      ? 100
-      : Math.max(0, Math.min(100, Math.round((tracker.installmentsPaid / Math.max(1, tracker.totalInstallments)) * 100))),
-    lastPremiumPaidDate: lastPaid,
-    upcomingDates,
+    detail,
+    cycleProgressPct: 0,
+    lastPremiumPaidDate: null,
+    upcomingDates: [],
     frequency,
   };
+}
+
+export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
+  try {
+    const tracker = buildPremiumTracker(policy, now);
+    const frequency = policy?.paymentFrequency || "yearly";
+    const history = Array.isArray(tracker.history) ? tracker.history : [];
+
+    if (!tracker.nextPremiumDate && tracker.totalInstallments > 0 && tracker.installmentsRemaining === 0) {
+      return {
+        hasSchedule: true,
+        dueDate: null,
+        daysRemaining: Number.POSITIVE_INFINITY,
+        overdue: false,
+        urgency: "green",
+        emoji: "🟢",
+        headline: "Next Premium",
+        detail: "All installments paid",
+        cycleProgressPct: 100,
+        lastPremiumPaidDate: lastPaidDueDate(history),
+        upcomingDates: [],
+        frequency,
+      };
+    }
+
+    if (!tracker.nextPremiumDate) {
+      return neutralPremiumDueInfo(
+        frequency,
+        frequency === "one_time" ? "One-time premium · no recurring schedule" : "Add a start date to track premiums",
+      );
+    }
+
+    const daysRemaining = daysUntil(tracker.nextPremiumDate, now);
+    const overdue = daysRemaining < 0;
+    const smart = tracker.smartStatus ?? { urgency: "neutral" as const, emoji: "📅", label: "No schedule" };
+    const lastPaid = lastPaidDueDate(history);
+    const upcomingDates = history
+      .filter((h) => h?.status !== "paid")
+      .map((h) => h?.dueDate)
+      .filter((iso): iso is string => typeof iso === "string" && iso.length > 0)
+      .slice(0, 6);
+
+    return {
+      hasSchedule: true,
+      dueDate: tracker.nextPremiumDate,
+      daysRemaining,
+      overdue,
+      urgency: smart.urgency,
+      emoji: smart.emoji,
+      headline: "Next Premium",
+      detail: overdue
+        ? `Overdue by ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"}`
+        : smart.label,
+      cycleProgressPct: overdue
+        ? 100
+        : Math.max(0, Math.min(100, Math.round((tracker.installmentsPaid / Math.max(1, tracker.totalInstallments)) * 100))),
+      lastPremiumPaidDate: lastPaid,
+      upcomingDates,
+      frequency,
+    };
+  } catch {
+    return neutralPremiumDueInfo(policy?.paymentFrequency || "yearly");
+  }
 }
 
 export type DurationParts = {
@@ -706,14 +732,19 @@ export function buildPolicyQuickSummary(policy: InsurancePolicy, now = new Date(
 }
 
 export function sortPoliciesByPremiumDue(policies: InsurancePolicy[], now = new Date()): InsurancePolicy[] {
-  return [...policies].sort((a, b) => {
-    const aInfo = buildPremiumDueInfo(a, now);
-    const bInfo = buildPremiumDueInfo(b, now);
-    const aKey = aInfo.hasSchedule ? aInfo.daysRemaining : Number.POSITIVE_INFINITY;
-    const bKey = bInfo.hasSchedule ? bInfo.daysRemaining : Number.POSITIVE_INFINITY;
-    if (aKey !== bKey) return aKey - bKey;
-    return a.provider.localeCompare(b.provider);
-  });
+  const list = Array.isArray(policies) ? policies.filter(Boolean) : [];
+  try {
+    return [...list].sort((a, b) => {
+      const aInfo = buildPremiumDueInfo(a, now);
+      const bInfo = buildPremiumDueInfo(b, now);
+      const aKey = aInfo.hasSchedule ? aInfo.daysRemaining : Number.POSITIVE_INFINITY;
+      const bKey = bInfo.hasSchedule ? bInfo.daysRemaining : Number.POSITIVE_INFINITY;
+      if (aKey !== bKey) return aKey - bKey;
+      return String(a?.provider ?? "").localeCompare(String(b?.provider ?? ""));
+    });
+  } catch {
+    return list;
+  }
 }
 
 export type PremiumReminderMark = 30 | 7 | 1 | 0;
