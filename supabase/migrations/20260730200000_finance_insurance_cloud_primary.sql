@@ -1,12 +1,6 @@
--- FIRE Nepal PRODUCTION: create / harden finance_insurance_policies
--- Table: public.finance_insurance_policies
--- Project: mnxxcewvgnohsavojdzu
---
--- Run in Supabase Dashboard → SQL Editor → Run (or):
---   node scripts/apply-ensure-insurance-schema.mjs
---
--- After this succeeds, Insurance uses Supabase as source of truth.
--- localStorage is cache-only after login + successful sync.
+-- FIRE Nepal: finance_insurance_policies as cloud-primary Insurance storage.
+-- Creates the table if missing, then hardens columns/indexes/RLS/grants.
+-- Safe to re-run. localStorage is cache-only after login + successful sync.
 
 create table if not exists public.finance_insurance_policies (
   id uuid primary key default gen_random_uuid(),
@@ -85,7 +79,7 @@ create index if not exists finance_insurance_policies_active_user_sort_idx
   on public.finance_insurance_policies (user_id, sort_order asc, created_at asc)
   where deleted_at is null;
 
--- One import fingerprint per user (active rows only) — blocks duplicate localStorage migrations.
+-- Blocks duplicate localStorage → cloud imports for the same logical policy.
 create unique index if not exists finance_insurance_policies_user_import_fingerprint_uidx
   on public.finance_insurance_policies (user_id, import_fingerprint)
   where import_fingerprint is not null and deleted_at is null;
@@ -114,7 +108,6 @@ create policy "Users delete own finance insurance policies"
   on public.finance_insurance_policies for delete
   using (auth.uid() = user_id);
 
--- Permissions
 grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on table public.finance_insurance_policies to authenticated;
 grant all on table public.finance_insurance_policies to service_role;

@@ -10,8 +10,42 @@ export type InsuranceQueryMeta = {
   browser?: string | null;
 };
 
+export type InsuranceRuntimeProbe = {
+  at: string;
+  browser: string;
+  userId: string | null;
+  dataLoadedFrom: "supabase" | "localStorage" | "pending";
+  renderedSource: "supabase" | "localStorage" | "pending";
+  supabasePolicyCount: number;
+  localStoragePolicyCount: number;
+  localStoragePolicyCountAfterCache: number;
+  policyIds: string[];
+  uploadedCount: number;
+  protectionScorePct: number | null;
+  engineInputs?: {
+    monthlyIncomeNpr: number;
+    adults: number;
+    children: number;
+    totalSavingsNpr: number;
+  };
+  table: string | null;
+  supabaseUrl: string | null;
+  error?: string;
+};
+
+declare global {
+  interface Window {
+    __FIRE_NEPAL_INSURANCE_RUNTIME__?: InsuranceRuntimeProbe;
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
+}
+
+function withCacheBust(url: string) {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}_ts=${Date.now()}`;
 }
 
 export async function fetchInsurancePolicies(): Promise<{
@@ -19,7 +53,7 @@ export async function fetchInsurancePolicies(): Promise<{
   policyIds: string[];
   meta: InsuranceQueryMeta | null;
 }> {
-  const res = await fetch("/api/insurance", { credentials: "include", cache: "no-store" });
+  const res = await fetch(withCacheBust("/api/insurance"), { credentials: "include", cache: "no-store" });
   const json = await parseJson<{
     ok: boolean;
     policies?: InsurancePolicy[];
@@ -45,7 +79,7 @@ export async function syncInsurancePoliciesFromLocal(localPolicies: InsurancePol
   uploadedIds: string[];
   meta: InsuranceQueryMeta | null;
 }> {
-  const res = await fetch("/api/insurance/sync", {
+  const res = await fetch(withCacheBust("/api/insurance/sync"), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -73,7 +107,7 @@ export async function syncInsurancePoliciesFromLocal(localPolicies: InsurancePol
 }
 
 export async function ensureInsuranceSchema(): Promise<{ ok: boolean; tableExists: boolean; message?: string }> {
-  const res = await fetch("/api/insurance/schema", { cache: "no-store" });
+  const res = await fetch(withCacheBust("/api/insurance/schema"), { cache: "no-store" });
   const json = await parseJson<{
     ok: boolean;
     tableExists?: boolean;
@@ -82,10 +116,16 @@ export async function ensureInsuranceSchema(): Promise<{ ok: boolean; tableExist
     error?: string;
   }>(res);
   return {
-    ok: Boolean(json.ok),
+    ok: Boolean(json.ok) || Boolean(json.tableExists),
     tableExists: Boolean(json.tableExists),
     message: json.ensure?.message ?? json.probeError ?? json.error,
   };
+}
+
+export function publishInsuranceRuntimeProbe(probe: InsuranceRuntimeProbe) {
+  if (typeof window === "undefined") return;
+  window.__FIRE_NEPAL_INSURANCE_RUNTIME__ = probe;
+  console.info("[insurance-runtime]", probe);
 }
 
 export async function createInsurancePolicy(input: InsurancePolicyFormInput): Promise<InsurancePolicy> {

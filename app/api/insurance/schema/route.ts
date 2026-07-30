@@ -55,7 +55,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    ok: ensure.ok && tableExists,
+    ok: tableExists,
     ensure,
     tableExists,
     probeError,

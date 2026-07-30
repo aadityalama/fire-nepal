@@ -39,6 +39,25 @@ function safeTrim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Stable key for localStorage → cloud import dedupe (matches unique index). */
+export function buildInsuranceImportFingerprint(input: {
+  type: string;
+  provider: string;
+  coverageAmountNpr: number;
+  premiumNpr: number;
+  startDate: string;
+  policyNumber?: string | null;
+}): string {
+  return [
+    input.type || "other",
+    safeTrim(input.provider).toLowerCase(),
+    Math.round(Number(input.coverageAmountNpr) || 0),
+    Math.round(Number(input.premiumNpr) || 0),
+    input.startDate || "",
+    safeTrim(input.policyNumber).toLowerCase(),
+  ].join("|");
+}
+
 type LegacyRow = Omit<
   InsuranceRow,
   | "deleted_at"
@@ -60,6 +79,7 @@ type LegacyRow = Omit<
   | "remaining_premium"
   | "next_premium_date"
   | "next_premium_amount"
+  | "import_fingerprint"
 > & {
   deleted_at?: string | null;
   policy_term_years?: number | null;
@@ -80,6 +100,7 @@ type LegacyRow = Omit<
   remaining_premium?: number | null;
   next_premium_date?: string | null;
   next_premium_amount?: number | null;
+  import_fingerprint?: string | null;
 };
 
 /** Map a Supabase row (full or legacy) into the domain policy model. */
@@ -178,17 +199,33 @@ export function buildInsuranceInsertPayload(
   userId: string,
   input: InsurancePolicyFormInput,
   sortOrder: number,
+  options?: { importFingerprint?: string | null },
 ): InsuranceInsert {
   const { docs, expiryDate, draft, pan } = trackerFieldsFromInput(input);
+  const provider = safeTrim(input.provider) || "Unknown provider";
+  const policyNumber = safeTrim(input.policyNumber) || null;
+  const coverageAmountNpr = Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0));
+  const premiumNpr = Math.max(0, Math.round(Number(input.premiumNpr) || 0));
+  const startDate = input.startDate || "";
+  const importFingerprint =
+    options?.importFingerprint ??
+    buildInsuranceImportFingerprint({
+      type: input.type,
+      provider,
+      coverageAmountNpr,
+      premiumNpr,
+      startDate,
+      policyNumber,
+    });
 
   return {
     user_id: userId,
     insurance_type: input.type,
-    provider: safeTrim(input.provider) || "Unknown provider",
-    coverage_amount_npr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
-    premium_npr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+    provider,
+    coverage_amount_npr: coverageAmountNpr,
+    premium_npr: premiumNpr,
     payment_frequency: input.paymentFrequency || "yearly",
-    start_date: input.startDate || null,
+    start_date: startDate || null,
     expiry_date: expiryDate || null,
     policy_term_years: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
     nominee: safeTrim(input.nominee) || null,
@@ -197,7 +234,7 @@ export function buildInsuranceInsertPayload(
     agent_name: safeTrim(input.agentName) || null,
     agent_phone: safeTrim(input.agentPhone) || null,
     branch: safeTrim(input.branch) || null,
-    policy_number: safeTrim(input.policyNumber) || null,
+    policy_number: policyNumber,
     proposal_number: safeTrim(input.proposalNumber) || null,
     pan,
     pan_number: pan,
@@ -213,6 +250,7 @@ export function buildInsuranceInsertPayload(
     remaining_premium: draft.remainingPremium ?? 0,
     next_premium_date: draft.nextPremiumDate ?? null,
     next_premium_amount: draft.nextPremiumAmount ?? 0,
+    import_fingerprint: importFingerprint,
     sort_order: sortOrder,
   };
 }

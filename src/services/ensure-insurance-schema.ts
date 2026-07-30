@@ -4,7 +4,7 @@ export const INSURANCE_TABLE = "finance_insurance_policies" as const;
 export const INSURANCE_SCHEMA = "public" as const;
 
 export const INSURANCE_LIST_SQL =
-  `select id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,pan_number,medical_notes,documents,premium_history,total_installments,installments_paid,installments_remaining,total_premium_paid,remaining_premium,next_premium_date,next_premium_amount,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at from public.finance_insurance_policies where user_id = $1 and deleted_at is null order by sort_order asc, created_at asc`;
+  `select id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,pan_number,medical_notes,documents,premium_history,total_installments,installments_paid,installments_remaining,total_premium_paid,remaining_premium,next_premium_date,next_premium_amount,import_fingerprint,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at from public.finance_insurance_policies where user_id = $1 and deleted_at is null order by sort_order asc, created_at asc`;
 
 /** Bundled so Vercel serverless does not depend on reading scripts/ from disk. */
 export const ENSURE_INSURANCE_SCHEMA_SQL = `
@@ -41,6 +41,7 @@ create table if not exists public.finance_insurance_policies (
   remaining_premium numeric(16, 2) not null default 0,
   next_premium_date date,
   next_premium_amount numeric(14, 2) not null default 0,
+  import_fingerprint text,
   document_data_url text,
   document_file_name text,
   sort_order integer not null default 0,
@@ -74,6 +75,7 @@ alter table public.finance_insurance_policies add column if not exists total_pre
 alter table public.finance_insurance_policies add column if not exists remaining_premium numeric(16, 2) not null default 0;
 alter table public.finance_insurance_policies add column if not exists next_premium_date date;
 alter table public.finance_insurance_policies add column if not exists next_premium_amount numeric(14, 2) not null default 0;
+alter table public.finance_insurance_policies add column if not exists import_fingerprint text;
 alter table public.finance_insurance_policies add column if not exists deleted_at timestamptz;
 
 create index if not exists finance_insurance_policies_user_sort_idx
@@ -82,6 +84,10 @@ create index if not exists finance_insurance_policies_user_sort_idx
 create index if not exists finance_insurance_policies_active_user_sort_idx
   on public.finance_insurance_policies (user_id, sort_order asc, created_at asc)
   where deleted_at is null;
+
+create unique index if not exists finance_insurance_policies_user_import_fingerprint_uidx
+  on public.finance_insurance_policies (user_id, import_fingerprint)
+  where import_fingerprint is not null and deleted_at is null;
 
 alter table public.finance_insurance_policies enable row level security;
 
@@ -100,11 +106,17 @@ create policy "Users insert own finance insurance policies"
 
 create policy "Users update own finance insurance policies"
   on public.finance_insurance_policies for update
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 create policy "Users delete own finance insurance policies"
   on public.finance_insurance_policies for delete
   using (auth.uid() = user_id);
+
+grant usage on schema public to anon, authenticated, service_role;
+grant select, insert, update, delete on table public.finance_insurance_policies to authenticated;
+grant all on table public.finance_insurance_policies to service_role;
+revoke all on table public.finance_insurance_policies from anon;
 
 notify pgrst, 'reload schema';
 `;
