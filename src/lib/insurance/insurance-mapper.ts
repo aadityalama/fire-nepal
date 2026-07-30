@@ -4,7 +4,7 @@ import {
   resolveExpiryFromTerm,
   syncLegacyDocumentFields,
 } from "@/lib/insurance/insurance-normalize";
-import { derivePolicyStatus } from "@/lib/insurance/insurance-utils";
+import { applyTrackerSnapshot, derivePolicyStatus } from "@/lib/insurance/insurance-utils";
 import type { Database, Json } from "@/types/supabase-database";
 
 type InsuranceRow = Database["public"]["Tables"]["finance_insurance_policies"]["Row"];
@@ -39,8 +39,28 @@ function safeTrim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Map a Supabase row (full or legacy) into the domain policy model. */
-export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted_at" | "policy_term_years" | "agent_name" | "agent_phone" | "branch" | "policy_number" | "proposal_number" | "pan" | "medical_notes" | "documents"> & {
+type LegacyRow = Omit<
+  InsuranceRow,
+  | "deleted_at"
+  | "policy_term_years"
+  | "agent_name"
+  | "agent_phone"
+  | "branch"
+  | "policy_number"
+  | "proposal_number"
+  | "pan"
+  | "pan_number"
+  | "medical_notes"
+  | "documents"
+  | "premium_history"
+  | "total_installments"
+  | "installments_paid"
+  | "installments_remaining"
+  | "total_premium_paid"
+  | "remaining_premium"
+  | "next_premium_date"
+  | "next_premium_amount"
+> & {
   deleted_at?: string | null;
   policy_term_years?: number | null;
   agent_name?: string | null;
@@ -49,10 +69,23 @@ export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted
   policy_number?: string | null;
   proposal_number?: string | null;
   pan?: string | null;
+  pan_number?: string | null;
   medical_notes?: string | null;
   documents?: Json | null;
-})): InsurancePolicy {
+  premium_history?: Json | null;
+  total_installments?: number | null;
+  installments_paid?: number | null;
+  installments_remaining?: number | null;
+  total_premium_paid?: number | null;
+  remaining_premium?: number | null;
+  next_premium_date?: string | null;
+  next_premium_amount?: number | null;
+};
+
+/** Map a Supabase row (full or legacy) into the domain policy model. */
+export function mapInsuranceRow(row: InsuranceRow | LegacyRow): InsurancePolicy {
   const expiryDate = row.expiry_date ?? "";
+  const pan = row.pan ?? row.pan_number ?? "";
   const meta = normalizeInsurancePolicyFields({
     startDate: row.start_date ?? "",
     expiryDate,
@@ -65,14 +98,22 @@ export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted
     branch: row.branch ?? "",
     policyNumber: row.policy_number ?? "",
     proposalNumber: row.proposal_number ?? "",
-    pan: row.pan ?? "",
+    pan,
     medicalNotes: row.medical_notes ?? "",
     documents: row.documents ?? [],
     documentDataUrl: row.document_data_url,
     documentFileName: row.document_file_name,
+    premiumHistory: row.premium_history ?? [],
+    totalInstallments: row.total_installments ?? 0,
+    installmentsPaid: row.installments_paid ?? 0,
+    installmentsRemaining: row.installments_remaining ?? 0,
+    totalPremiumPaid: row.total_premium_paid ?? 0,
+    remainingPremium: row.remaining_premium ?? 0,
+    nextPremiumDate: row.next_premium_date ?? null,
+    nextPremiumAmount: row.next_premium_amount ?? 0,
   });
 
-  return {
+  const base: InsurancePolicy = {
     id: row.id,
     type: asType(row.insurance_type),
     provider: row.provider || "Unknown provider",
@@ -85,6 +126,52 @@ export function mapInsuranceRow(row: InsuranceRow | (Omit<InsuranceRow, "deleted
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
   };
+
+  return applyTrackerSnapshot(base);
+}
+
+function trackerFieldsFromInput(input: InsurancePolicyFormInput) {
+  const docs = syncLegacyDocumentFields({
+    documents: input.documents ?? [],
+    documentDataUrl: input.documentDataUrl,
+    documentFileName: input.documentFileName,
+  });
+  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears ?? 0, input.expiryDate);
+  const draft: InsurancePolicy = applyTrackerSnapshot({
+    id: "draft",
+    type: input.type,
+    provider: safeTrim(input.provider) || "Unknown provider",
+    coverageAmountNpr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
+    premiumNpr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+    paymentFrequency: input.paymentFrequency || "yearly",
+    startDate: input.startDate || "",
+    expiryDate,
+    policyTermYears: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
+    nominee: safeTrim(input.nominee),
+    familyMembersCovered: Array.isArray(input.familyMembersCovered) ? input.familyMembersCovered : [],
+    notes: safeTrim(input.notes),
+    agentName: safeTrim(input.agentName),
+    agentPhone: safeTrim(input.agentPhone),
+    branch: safeTrim(input.branch),
+    policyNumber: safeTrim(input.policyNumber),
+    proposalNumber: safeTrim(input.proposalNumber),
+    pan: safeTrim(input.pan),
+    medicalNotes: safeTrim(input.medicalNotes),
+    ...docs,
+    premiumHistory: Array.isArray(input.premiumHistory) ? input.premiumHistory : [],
+    status: derivePolicyStatus(expiryDate),
+    sortOrder: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const pan = safeTrim(input.pan) || null;
+  return {
+    docs,
+    expiryDate,
+    draft,
+    pan,
+  };
 }
 
 export function buildInsuranceInsertPayload(
@@ -92,12 +179,7 @@ export function buildInsuranceInsertPayload(
   input: InsurancePolicyFormInput,
   sortOrder: number,
 ): InsuranceInsert {
-  const docs = syncLegacyDocumentFields({
-    documents: input.documents ?? [],
-    documentDataUrl: input.documentDataUrl,
-    documentFileName: input.documentFileName,
-  });
-  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears ?? 0, input.expiryDate);
+  const { docs, expiryDate, draft, pan } = trackerFieldsFromInput(input);
 
   return {
     user_id: userId,
@@ -117,22 +199,26 @@ export function buildInsuranceInsertPayload(
     branch: safeTrim(input.branch) || null,
     policy_number: safeTrim(input.policyNumber) || null,
     proposal_number: safeTrim(input.proposalNumber) || null,
-    pan: safeTrim(input.pan) || null,
+    pan,
+    pan_number: pan,
     medical_notes: safeTrim(input.medicalNotes) || null,
     documents: (docs.documents ?? []) as unknown as Json,
     document_data_url: docs.documentDataUrl,
     document_file_name: docs.documentFileName,
+    premium_history: (draft.premiumHistory ?? []) as unknown as Json,
+    total_installments: draft.totalInstallments ?? 0,
+    installments_paid: draft.installmentsPaid ?? 0,
+    installments_remaining: draft.installmentsRemaining ?? 0,
+    total_premium_paid: draft.totalPremiumPaid ?? 0,
+    remaining_premium: draft.remainingPremium ?? 0,
+    next_premium_date: draft.nextPremiumDate ?? null,
+    next_premium_amount: draft.nextPremiumAmount ?? 0,
     sort_order: sortOrder,
   };
 }
 
 export function buildInsuranceUpdatePayload(input: InsurancePolicyFormInput) {
-  const docs = syncLegacyDocumentFields({
-    documents: input.documents ?? [],
-    documentDataUrl: input.documentDataUrl,
-    documentFileName: input.documentFileName,
-  });
-  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears ?? 0, input.expiryDate);
+  const { docs, expiryDate, draft, pan } = trackerFieldsFromInput(input);
 
   return {
     insurance_type: input.type,
@@ -151,11 +237,20 @@ export function buildInsuranceUpdatePayload(input: InsurancePolicyFormInput) {
     branch: safeTrim(input.branch) || null,
     policy_number: safeTrim(input.policyNumber) || null,
     proposal_number: safeTrim(input.proposalNumber) || null,
-    pan: safeTrim(input.pan) || null,
+    pan,
+    pan_number: pan,
     medical_notes: safeTrim(input.medicalNotes) || null,
     documents: (docs.documents ?? []) as unknown as Json,
     document_data_url: docs.documentDataUrl,
     document_file_name: docs.documentFileName,
+    premium_history: (draft.premiumHistory ?? []) as unknown as Json,
+    total_installments: draft.totalInstallments ?? 0,
+    installments_paid: draft.installmentsPaid ?? 0,
+    installments_remaining: draft.installmentsRemaining ?? 0,
+    total_premium_paid: draft.totalPremiumPaid ?? 0,
+    remaining_premium: draft.remainingPremium ?? 0,
+    next_premium_date: draft.nextPremiumDate ?? null,
+    next_premium_amount: draft.nextPremiumAmount ?? 0,
     updated_at: new Date().toISOString(),
   };
 }

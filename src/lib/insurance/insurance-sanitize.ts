@@ -75,6 +75,27 @@ export function sanitizeInsurancePolicyInput(raw: unknown): InsurancePolicyFormI
     documentFileName: typeof source.documentFileName === "string" ? source.documentFileName : null,
   });
 
+  const premiumHistory = Array.isArray(source.premiumHistory)
+    ? source.premiumHistory
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+        .map((row) => {
+          const dueDate = typeof row.dueDate === "string" ? row.dueDate : "";
+          const amountNpr = typeof row.amountNpr === "number" ? row.amountNpr : Number(row.amountNpr);
+          const statusRaw = typeof row.status === "string" ? row.status : "upcoming";
+          const status =
+            statusRaw === "paid" || statusRaw === "due" || statusRaw === "overdue" || statusRaw === "upcoming"
+              ? (statusRaw as "paid" | "due" | "overdue" | "upcoming")
+              : ("upcoming" as const);
+          return {
+            dueDate,
+            amountNpr: Number.isFinite(amountNpr) ? Math.max(0, amountNpr) : 0,
+            status,
+            paidAt: typeof row.paidAt === "string" ? row.paidAt : null,
+          };
+        })
+        .filter((entry) => entry.dueDate)
+    : [];
+
   return {
     type,
     provider,
@@ -94,6 +115,7 @@ export function sanitizeInsurancePolicyInput(raw: unknown): InsurancePolicyFormI
     proposalNumber: typeof source.proposalNumber === "string" ? source.proposalNumber : "",
     pan: typeof source.pan === "string" ? source.pan : "",
     medicalNotes: typeof source.medicalNotes === "string" ? source.medicalNotes : "",
+    premiumHistory,
     ...docs,
   };
 }

@@ -1,11 +1,16 @@
 import type { InsurancePolicy, InsurancePolicyFormInput } from "@/lib/insurance/insurance-types";
 import { syncLegacyDocumentFields } from "@/lib/insurance/insurance-normalize";
+import { applyTrackerSnapshot } from "@/lib/insurance/insurance-utils";
 
 export function policyToFormInput(policy: InsurancePolicy): InsurancePolicyFormInput {
   const docs = syncLegacyDocumentFields({
     documents: Array.isArray(policy.documents) ? policy.documents : [],
     documentDataUrl: policy.documentDataUrl ?? null,
     documentFileName: policy.documentFileName ?? null,
+  });
+  const snapped = applyTrackerSnapshot({
+    ...policy,
+    ...docs,
   });
   return {
     type: policy.type || "other",
@@ -28,6 +33,14 @@ export function policyToFormInput(policy: InsurancePolicy): InsurancePolicyFormI
     proposalNumber: policy.proposalNumber ?? "",
     pan: policy.pan ?? "",
     medicalNotes: policy.medicalNotes ?? "",
+    premiumHistory: snapped.premiumHistory,
+    totalInstallments: snapped.totalInstallments,
+    installmentsPaid: snapped.installmentsPaid,
+    installmentsRemaining: snapped.installmentsRemaining,
+    totalPremiumPaid: snapped.totalPremiumPaid,
+    remainingPremium: snapped.remainingPremium,
+    nextPremiumDate: snapped.nextPremiumDate,
+    nextPremiumAmount: snapped.nextPremiumAmount,
     ...docs,
   };
 }

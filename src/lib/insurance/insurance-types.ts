@@ -37,16 +37,27 @@ export type InsuranceDocument = {
   uploadedAt: string;
 };
 
+/** One scheduled premium installment — persisted in premium_history JSON. */
+export type PremiumHistoryEntry = {
+  dueDate: string;
+  amountNpr: number;
+  status: "paid" | "due" | "overdue" | "upcoming";
+  paidAt?: string | null;
+};
+
 export type InsurancePolicy = {
   id: string;
   type: InsuranceType;
   provider: string;
   coverageAmountNpr: number;
+  /** Premium amount per frequency cycle (premium_amount). */
   premiumNpr: number;
+  /** Premium frequency (premium_frequency). */
   paymentFrequency: InsurancePaymentFrequency;
+  /** Policy start date (policy_start_date). */
   startDate: string;
   expiryDate: string;
-  /** Policy term in years used for installment scheduling (0 = derive from dates). Optional for legacy policies. */
+  /** Policy term in years used for installment scheduling (0 = derive from dates). */
   policyTermYears?: number;
   nominee: string;
   familyMembersCovered: string[];
@@ -56,9 +67,19 @@ export type InsurancePolicy = {
   branch?: string;
   policyNumber?: string;
   proposalNumber?: string;
+  /** PAN / pan_number */
   pan?: string;
   medicalNotes?: string;
   documents?: InsuranceDocument[];
+  /** Persisted installment timeline (premium_history). */
+  premiumHistory?: PremiumHistoryEntry[];
+  totalInstallments?: number;
+  installmentsPaid?: number;
+  installmentsRemaining?: number;
+  totalPremiumPaid?: number;
+  remainingPremium?: number;
+  nextPremiumDate?: string | null;
+  nextPremiumAmount?: number;
   /** Legacy single attachment — kept in sync with documents[policy_pdf] for older clients. */
   documentDataUrl: string | null;
   documentFileName: string | null;
@@ -88,6 +109,14 @@ export type InsurancePolicyFormInput = {
   pan?: string;
   medicalNotes?: string;
   documents?: InsuranceDocument[];
+  premiumHistory?: PremiumHistoryEntry[];
+  totalInstallments?: number;
+  installmentsPaid?: number;
+  installmentsRemaining?: number;
+  totalPremiumPaid?: number;
+  remainingPremium?: number;
+  nextPremiumDate?: string | null;
+  nextPremiumAmount?: number;
   documentDataUrl: string | null;
   documentFileName: string | null;
 };

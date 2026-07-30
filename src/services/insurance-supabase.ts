@@ -6,7 +6,7 @@ import type { Database } from "@/types/supabase-database";
 type Client = SupabaseClient<Database>;
 
 const INSURANCE_COLUMNS =
-  "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,medical_notes,documents,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
+  "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,policy_term_years,nominee,family_members_covered,notes,agent_name,agent_phone,branch,policy_number,proposal_number,pan,pan_number,medical_notes,documents,premium_history,total_installments,installments_paid,installments_remaining,total_premium_paid,remaining_premium,next_premium_date,next_premium_amount,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
 
 const LEGACY_SOFT_DELETE_COLUMNS =
   "id,user_id,insurance_type,provider,coverage_amount_npr,premium_npr,payment_frequency,start_date,expiry_date,nominee,family_members_covered,notes,document_data_url,document_file_name,sort_order,deleted_at,created_at,updated_at" as const;
@@ -40,7 +40,15 @@ function missingPolicyManagementColumns(error: { message?: string; code?: string
     message.includes("medical_notes") ||
     message.includes("policy_number") ||
     message.includes("proposal_number") ||
-    message.includes("pan")
+    message.includes("pan_number") ||
+    message.includes("premium_history") ||
+    message.includes("total_installments") ||
+    message.includes("installments_paid") ||
+    message.includes("installments_remaining") ||
+    message.includes("total_premium_paid") ||
+    message.includes("remaining_premium") ||
+    message.includes("next_premium_date") ||
+    message.includes("next_premium_amount")
   );
 }
 
@@ -52,9 +60,17 @@ function stripPolicyManagementFields<T extends Record<string, unknown>>(payload:
     branch: _branch,
     policy_number: _policyNumber,
     proposal_number: _proposalNumber,
-    pan: _pan,
+    pan_number: _panNumber,
     medical_notes: _medicalNotes,
     documents: _documents,
+    premium_history: _premiumHistory,
+    total_installments: _totalInstallments,
+    installments_paid: _installmentsPaid,
+    installments_remaining: _installmentsRemaining,
+    total_premium_paid: _totalPremiumPaid,
+    remaining_premium: _remainingPremium,
+    next_premium_date: _nextPremiumDate,
+    next_premium_amount: _nextPremiumAmount,
     ...legacy
   } = payload;
   void _policyTermYears;
@@ -63,9 +79,17 @@ function stripPolicyManagementFields<T extends Record<string, unknown>>(payload:
   void _branch;
   void _policyNumber;
   void _proposalNumber;
-  void _pan;
+  void _panNumber;
   void _medicalNotes;
   void _documents;
+  void _premiumHistory;
+  void _totalInstallments;
+  void _installmentsPaid;
+  void _installmentsRemaining;
+  void _totalPremiumPaid;
+  void _remainingPremium;
+  void _nextPremiumDate;
+  void _nextPremiumAmount;
   return legacy;
 }
 
@@ -210,6 +234,14 @@ export async function createInsurancePolicyForUser(
         pan: input.pan ?? "",
         medical_notes: input.medicalNotes ?? "",
         documents: input.documents ?? [],
+        premium_history: input.premiumHistory ?? [],
+        total_installments: input.totalInstallments ?? 0,
+        installments_paid: input.installmentsPaid ?? 0,
+        installments_remaining: input.installmentsRemaining ?? 0,
+        total_premium_paid: input.totalPremiumPaid ?? 0,
+        remaining_premium: input.remainingPremium ?? 0,
+        next_premium_date: input.nextPremiumDate ?? null,
+        next_premium_amount: input.nextPremiumAmount ?? 0,
       });
     }
     return mapInsuranceRow({
@@ -224,6 +256,14 @@ export async function createInsurancePolicyForUser(
       pan: input.pan ?? "",
       medical_notes: input.medicalNotes ?? "",
       documents: input.documents ?? [],
+      premium_history: input.premiumHistory ?? [],
+      total_installments: input.totalInstallments ?? 0,
+      installments_paid: input.installmentsPaid ?? 0,
+      installments_remaining: input.installmentsRemaining ?? 0,
+      total_premium_paid: input.totalPremiumPaid ?? 0,
+      remaining_premium: input.remainingPremium ?? 0,
+      next_premium_date: input.nextPremiumDate ?? null,
+      next_premium_amount: input.nextPremiumAmount ?? 0,
     });
   }
 
@@ -284,6 +324,14 @@ export async function updateInsurancePolicyForUser(
         pan: input.pan ?? "",
         medical_notes: input.medicalNotes ?? "",
         documents: input.documents ?? [],
+        premium_history: input.premiumHistory ?? [],
+        total_installments: input.totalInstallments ?? 0,
+        installments_paid: input.installmentsPaid ?? 0,
+        installments_remaining: input.installmentsRemaining ?? 0,
+        total_premium_paid: input.totalPremiumPaid ?? 0,
+        remaining_premium: input.remainingPremium ?? 0,
+        next_premium_date: input.nextPremiumDate ?? null,
+        next_premium_amount: input.nextPremiumAmount ?? 0,
       });
     }
 
@@ -302,6 +350,14 @@ export async function updateInsurancePolicyForUser(
       pan: input.pan ?? "",
       medical_notes: input.medicalNotes ?? "",
       documents: input.documents ?? [],
+      premium_history: input.premiumHistory ?? [],
+      total_installments: input.totalInstallments ?? 0,
+      installments_paid: input.installmentsPaid ?? 0,
+      installments_remaining: input.installmentsRemaining ?? 0,
+      total_premium_paid: input.totalPremiumPaid ?? 0,
+      remaining_premium: input.remainingPremium ?? 0,
+      next_premium_date: input.nextPremiumDate ?? null,
+      next_premium_amount: input.nextPremiumAmount ?? 0,
     });
   }
 

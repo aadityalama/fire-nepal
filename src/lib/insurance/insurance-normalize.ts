@@ -48,6 +48,40 @@ function parseDocuments(value: unknown): InsuranceDocument[] {
   return docs;
 }
 
+function parsePremiumHistory(value: unknown): import("@/lib/insurance/insurance-types").PremiumHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  const entries: import("@/lib/insurance/insurance-types").PremiumHistoryEntry[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const dueDate =
+      typeof row.dueDate === "string"
+        ? row.dueDate
+        : typeof row.due_date === "string"
+          ? row.due_date
+          : "";
+    if (!dueDate) continue;
+    const amountRaw = typeof row.amountNpr === "number" ? row.amountNpr : Number(row.amount_npr ?? row.amountNpr);
+    const statusRaw = typeof row.status === "string" ? row.status : "upcoming";
+    const status =
+      statusRaw === "paid" || statusRaw === "due" || statusRaw === "overdue" || statusRaw === "upcoming"
+        ? statusRaw
+        : "upcoming";
+    entries.push({
+      dueDate,
+      amountNpr: Number.isFinite(amountRaw) ? Math.max(0, amountRaw) : 0,
+      status,
+      paidAt:
+        typeof row.paidAt === "string"
+          ? row.paidAt
+          : typeof row.paid_at === "string"
+            ? row.paid_at
+            : null,
+    });
+  }
+  return entries;
+}
+
 /** Keep legacy single-doc fields and documents[] in sync so older clients still work. */
 export function syncLegacyDocumentFields(input: {
   documents: InsuranceDocument[];
@@ -132,8 +166,18 @@ export function normalizeInsurancePolicyFields<T extends Record<string, unknown>
     branch: typeof raw.branch === "string" ? raw.branch : "",
     policyNumber: typeof raw.policyNumber === "string" ? raw.policyNumber : "",
     proposalNumber: typeof raw.proposalNumber === "string" ? raw.proposalNumber : "",
-    pan: typeof raw.pan === "string" ? raw.pan : "",
+    pan: typeof raw.pan === "string" ? raw.pan : typeof raw.panNumber === "string" ? raw.panNumber : "",
     medicalNotes: typeof raw.medicalNotes === "string" ? raw.medicalNotes : "",
+    premiumHistory: parsePremiumHistory(raw.premiumHistory),
+    totalInstallments: Number.isFinite(Number(raw.totalInstallments)) ? Math.max(0, Math.round(Number(raw.totalInstallments))) : 0,
+    installmentsPaid: Number.isFinite(Number(raw.installmentsPaid)) ? Math.max(0, Math.round(Number(raw.installmentsPaid))) : 0,
+    installmentsRemaining: Number.isFinite(Number(raw.installmentsRemaining))
+      ? Math.max(0, Math.round(Number(raw.installmentsRemaining)))
+      : 0,
+    totalPremiumPaid: Number.isFinite(Number(raw.totalPremiumPaid)) ? Math.max(0, Number(raw.totalPremiumPaid)) : 0,
+    remainingPremium: Number.isFinite(Number(raw.remainingPremium)) ? Math.max(0, Number(raw.remainingPremium)) : 0,
+    nextPremiumDate: typeof raw.nextPremiumDate === "string" ? raw.nextPremiumDate : null,
+    nextPremiumAmount: Number.isFinite(Number(raw.nextPremiumAmount)) ? Math.max(0, Number(raw.nextPremiumAmount)) : 0,
     ...docsSynced,
   };
 }

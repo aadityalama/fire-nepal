@@ -6,15 +6,17 @@ import {
   ChevronDown,
   Download,
   Eye,
+  FileUp,
   Pencil,
   Replace,
   Trash2,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { InsuranceDocument, InsurancePolicy, InsurancePolicyFormInput } from "@/lib/insurance/insurance-types";
+import type { InsuranceDocument, InsuranceDocumentKind, InsurancePolicy, InsurancePolicyFormInput } from "@/lib/insurance/insurance-types";
 import {
   INSURANCE_DOCUMENT_KIND_LABELS,
+  INSURANCE_DOCUMENT_KINDS,
   INSURANCE_TYPE_ICONS,
   PAYMENT_FREQUENCY_LABELS,
 } from "@/lib/insurance/insurance-types";
@@ -31,6 +33,7 @@ import {
   buildPremiumTracker,
   formatDisplayDate,
   formatRs,
+  markInstallmentPaid,
   typeLabel,
 } from "@/lib/insurance/insurance-utils";
 import {
@@ -38,6 +41,7 @@ import {
   premiumReminderStatusLabel,
   savePremiumReminderPrefs,
 } from "@/lib/insurance/insurance-premium-reminders";
+import { appToast } from "@/lib/toast";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const URGENCY_STYLES = {
@@ -130,6 +134,8 @@ export function InsurancePolicyDetailsSheet({
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [todayKey, setTodayKey] = useState(() => new Date().toDateString());
   const [savingDocs, setSavingDocs] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [uploadKind, setUploadKind] = useState<InsuranceDocumentKind>("policy_pdf");
 
   useEffect(() => {
     if (!open) return;
@@ -174,6 +180,23 @@ export function InsurancePolicyDetailsSheet({
   const paidHistory = tracker.history.filter((item) => item.status === "paid");
   const upcomingHistory = tracker.history.filter((item) => item.status !== "paid");
 
+  async function markPaid(dueDate: string) {
+    if (!onUpdate || !policy || markingPaid) return;
+    setMarkingPaid(dueDate);
+    try {
+      const updated = markInstallmentPaid(policy, dueDate);
+      const input = policyToFormInput(updated);
+      await onUpdate(input, policy.id);
+      appToast.success(`Marked ${formatDisplayDate(dueDate)} as paid.`, { id: "insurance-mark-paid" });
+    } catch (error) {
+      appToast.error(error instanceof Error ? error.message : "Could not mark installment paid.", {
+        id: "insurance-mark-paid-error",
+      });
+    } finally {
+      setMarkingPaid(null);
+    }
+  }
+
   async function persistDocuments(documents: InsuranceDocument[]) {
     if (!onUpdate || !policy) return;
     setSavingDocs(true);
@@ -192,6 +215,13 @@ export function InsurancePolicyDetailsSheet({
     } finally {
       setSavingDocs(false);
     }
+  }
+
+  async function addDocument(file: File | null, kind: InsuranceDocumentKind) {
+    if (!file || !policy) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    const next = createInsuranceDocument(kind, file.name, dataUrl);
+    await persistDocuments([...(policy.documents ?? []), next]);
   }
 
   async function replaceDocument(doc: InsuranceDocument, file: File | null) {
@@ -265,23 +295,23 @@ export function InsurancePolicyDetailsSheet({
 
               <section className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3.5">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/55">
-                  Quick Summary
+                  Policy Dashboard
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-black/20 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Policy Value</p>
-                    <p className="mt-1 text-sm font-black text-white">{formatRs(summary.policyValueNpr)}</p>
-                  </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
                     <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Coverage</p>
                     <p className="mt-1 text-sm font-black text-white">{formatRs(summary.coverageNpr)}</p>
                   </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Premium Paid</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Policy Value</p>
+                    <p className="mt-1 text-sm font-black text-white">{formatRs(summary.policyValueNpr)}</p>
+                  </div>
+                  <div className="rounded-xl bg-black/20 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Total Premium Paid</p>
                     <p className="mt-1 text-sm font-black text-lime-100">{formatRs(summary.totalPremiumPaidNpr)}</p>
                   </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Remaining</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Remaining Premium</p>
                     <p className="mt-1 text-sm font-black text-amber-100">{formatRs(summary.remainingPremiumNpr)}</p>
                   </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
@@ -289,8 +319,16 @@ export function InsurancePolicyDetailsSheet({
                     <p className="mt-1 text-sm font-black text-white">{summary.installmentsPaid}</p>
                   </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Remaining</p>
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Installments Remaining</p>
                     <p className="mt-1 text-sm font-black text-white">{summary.installmentsRemaining}</p>
+                  </div>
+                  <div className="rounded-xl bg-black/20 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Policy Age</p>
+                    <p className="mt-1 text-sm font-black text-white">{summary.policyAgeLabel}</p>
+                  </div>
+                  <div className="rounded-xl bg-black/20 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Remaining Term</p>
+                    <p className="mt-1 text-sm font-black text-white">{summary.remainingTermLabel}</p>
                   </div>
                   <div className="rounded-xl bg-black/20 px-3 py-2.5">
                     <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Next Premium</p>
@@ -309,8 +347,8 @@ export function InsurancePolicyDetailsSheet({
                 <DetailRow label="Provider" value={policy.provider} />
                 <DetailRow label="Start Date" value={timeline.startedOn ? formatDisplayDate(timeline.startedOn) : "—"} />
                 <DetailRow label="End Date" value={timeline.endsOn ? formatDisplayDate(timeline.endsOn) : "—"} />
-                <DetailRow label="Running for" value={timeline.runningForLabel} />
-                <DetailRow label="Remaining" value={timeline.remainingLabel} />
+                <DetailRow label="Policy Age" value={timeline.runningForLabel} />
+                <DetailRow label="Remaining Term" value={timeline.remainingLabel} />
                 <DetailRow label="Policy Term" value={tracker.policyTermYears > 0 ? `${tracker.policyTermYears} Years` : "—"} />
                 {(policy.familyMembersCovered ?? []).length > 0 ? (
                   <DetailRow label="Family Covered" value={(policy.familyMembersCovered ?? []).join(", ")} />
@@ -333,9 +371,13 @@ export function InsurancePolicyDetailsSheet({
                   label="Next Premium Date"
                   value={tracker.nextPremiumDate ? formatDisplayDate(tracker.nextPremiumDate) : "—"}
                 />
+                <DetailRow
+                  label="Next Premium Amount"
+                  value={formatRs(tracker.nextPremiumAmountNpr)}
+                />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Payment History" badge={`${tracker.history.length} installments`}>
+              <CollapsibleSection title="Payment History" badge={`${tracker.history.length} installments`} defaultOpen>
                 {paidHistory.length === 0 && upcomingHistory.length === 0 ? (
                   <p className="text-sm font-semibold text-emerald-100/50">No premium schedule yet. Add a start date and term.</p>
                 ) : (
@@ -351,7 +393,7 @@ export function InsurancePolicyDetailsSheet({
                             >
                               <span className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-emerald-50">
                                 <Check size={14} className="shrink-0 text-lime-200" />
-                                <span className="truncate">{formatDisplayDate(item.dueDate)}</span>
+                                <span className="truncate">{formatDisplayDate(item.dueDate)} · Paid</span>
                               </span>
                               <span className="shrink-0 text-xs font-bold text-lime-100">{formatRs(item.amountNpr)}</span>
                             </li>
@@ -362,13 +404,13 @@ export function InsurancePolicyDetailsSheet({
                     {upcomingHistory.length > 0 ? (
                       <div>
                         <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
-                          Upcoming
+                          Upcoming / Overdue
                         </p>
                         <ul className="space-y-1.5">
                           {upcomingHistory.map((item) => (
                             <li
                               key={`upcoming-${item.dueDate}`}
-                              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 ${
+                              className={`rounded-xl border px-3 py-2.5 ${
                                 item.status === "overdue"
                                   ? "border-rose-300/30 bg-rose-400/10"
                                   : item.status === "due"
@@ -376,17 +418,30 @@ export function InsurancePolicyDetailsSheet({
                                     : "border-white/10 bg-white/[0.04]"
                               }`}
                             >
-                              <span className="truncate text-sm font-semibold text-emerald-50">
-                                {formatDisplayDate(item.dueDate)}
-                                {item.status === "overdue"
-                                  ? " · Overdue"
-                                  : item.status === "due"
-                                    ? " · Due today"
-                                    : ""}
-                              </span>
-                              <span className="shrink-0 text-xs font-bold text-emerald-100/70">
-                                {formatRs(item.amountNpr)}
-                              </span>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="truncate text-sm font-semibold text-emerald-50">
+                                  {formatDisplayDate(item.dueDate)}
+                                  {item.status === "overdue"
+                                    ? " · Overdue"
+                                    : item.status === "due"
+                                      ? " · Due today"
+                                      : " · Upcoming"}
+                                </span>
+                                <span className="shrink-0 text-xs font-bold text-emerald-100/70">
+                                  {formatRs(item.amountNpr)}
+                                </span>
+                              </div>
+                              {onUpdate ? (
+                                <button
+                                  type="button"
+                                  disabled={markingPaid === item.dueDate}
+                                  onClick={() => void markPaid(item.dueDate)}
+                                  className="mt-2 inline-flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-300/30 bg-emerald-400/15 text-xs font-black text-lime-100 disabled:opacity-50"
+                                >
+                                  <Check size={14} />
+                                  {markingPaid === item.dueDate ? "Saving…" : "Mark as Paid"}
+                                </button>
+                              ) : null}
                             </li>
                           ))}
                         </ul>
@@ -406,6 +461,50 @@ export function InsurancePolicyDetailsSheet({
                 <DetailRow label="PAN" value={policy.pan || "—"} />
                 <DetailRow label="Nominee" value={policy.nominee || "—"} />
                 <DetailRow label="Medical Notes" value={policy.medicalNotes || "—"} />
+
+                {onUpdate ? (
+                  <div className="pt-1">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
+                      Upload document
+                    </p>
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      {INSURANCE_DOCUMENT_KINDS.map((kind) => {
+                        const active = uploadKind === kind;
+                        return (
+                          <button
+                            key={kind}
+                            type="button"
+                            onClick={() => setUploadKind(kind)}
+                            className={`min-h-[40px] rounded-xl border px-2 text-[10px] font-bold ${
+                              active
+                                ? "border-emerald-300/50 bg-emerald-400/15 text-lime-100"
+                                : "border-white/10 bg-white/[0.04] text-emerald-50"
+                            }`}
+                          >
+                            {INSURANCE_DOCUMENT_KIND_LABELS[kind]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <label className="flex min-h-[72px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-300/30 bg-emerald-400/8 px-4 text-center">
+                      <FileUp size={18} className="text-lime-200" />
+                      <span className="text-xs font-bold text-emerald-50">
+                        Upload {INSURANCE_DOCUMENT_KIND_LABELS[uploadKind]}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        disabled={savingDocs}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          void addDocument(file, uploadKind);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                ) : null}
 
                 {(policy.documents ?? []).length === 0 ? (
                   <p className="pt-1 text-sm font-semibold text-emerald-100/50">No documents uploaded yet.</p>
@@ -474,7 +573,7 @@ export function InsurancePolicyDetailsSheet({
                 />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Reminders">
+              <CollapsibleSection title="Reminder Settings">
                 <div className="rounded-2xl border border-white/10 bg-black/15 px-3.5 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
