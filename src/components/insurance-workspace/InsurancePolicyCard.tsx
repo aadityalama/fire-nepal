@@ -7,6 +7,7 @@ import { INSURANCE_TYPE_ICONS } from "@/lib/insurance/insurance-types";
 import {
   buildPremiumDisplay,
   buildPremiumDueInfo,
+  buildPremiumTracker,
   daysUntil,
   formatDisplayDate,
   formatRs,
@@ -67,6 +68,11 @@ export function InsurancePolicyCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when local calendar day changes
     [policy, todayKey],
   );
+  const tracker = useMemo(
+    () => buildPremiumTracker(policy),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [policy, todayKey],
+  );
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -111,6 +117,9 @@ export function InsurancePolicyCard({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${STATUS_STYLES[tone]}`}>
                 {policy.status}
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${PREMIUM_URGENCY_STYLES[tracker.smartStatus.urgency]}`}>
+                {tracker.smartStatus.emoji} {tracker.smartStatus.label}
               </span>
               {days <= 45 && Number.isFinite(days) ? (
                 <span className="rounded-full border border-amber-300/35 bg-amber-400/12 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-100">
@@ -193,10 +202,15 @@ export function InsurancePolicyCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.14em]">
-              {dueInfo.emoji} {dueInfo.headline}
+              {tracker.smartStatus.emoji} {dueInfo.headline}
             </p>
             <p className="mt-1 text-sm font-black tracking-[-0.02em]">{dueInfo.detail}</p>
             {dateLine ? <p className="mt-0.5 text-[11px] font-semibold opacity-80">{dateLine}</p> : null}
+            {tracker.totalInstallments > 0 ? (
+              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                {tracker.installmentsPaid}/{tracker.totalInstallments} installments · {formatRs(tracker.premiumPaidSoFarNpr)} paid
+              </p>
+            ) : null}
           </div>
         </div>
 

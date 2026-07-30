@@ -21,6 +21,22 @@ export type InsuranceProtectionBadge =
   | "Needs attention"
   | "Underprotected";
 
+export type InsuranceDocumentKind =
+  | "policy_pdf"
+  | "citizenship"
+  | "passport"
+  | "medical_reports"
+  | "premium_receipts"
+  | "other";
+
+export type InsuranceDocument = {
+  id: string;
+  kind: InsuranceDocumentKind;
+  fileName: string;
+  dataUrl: string;
+  uploadedAt: string;
+};
+
 export type InsurancePolicy = {
   id: string;
   type: InsuranceType;
@@ -30,10 +46,20 @@ export type InsurancePolicy = {
   paymentFrequency: InsurancePaymentFrequency;
   startDate: string;
   expiryDate: string;
+  /** Policy term in years used for installment scheduling (0 = derive from dates). */
+  policyTermYears: number;
   nominee: string;
   familyMembersCovered: string[];
   notes: string;
-  /** Local object URL or data URL — OCR-ready attachment placeholder */
+  agentName: string;
+  agentPhone: string;
+  branch: string;
+  policyNumber: string;
+  proposalNumber: string;
+  pan: string;
+  medicalNotes: string;
+  documents: InsuranceDocument[];
+  /** Legacy single attachment — kept in sync with documents[policy_pdf] for older clients. */
   documentDataUrl: string | null;
   documentFileName: string | null;
   status: InsurancePolicyStatus;
@@ -50,9 +76,18 @@ export type InsurancePolicyFormInput = {
   paymentFrequency: InsurancePaymentFrequency;
   startDate: string;
   expiryDate: string;
+  policyTermYears: number;
   nominee: string;
   familyMembersCovered: string[];
   notes: string;
+  agentName: string;
+  agentPhone: string;
+  branch: string;
+  policyNumber: string;
+  proposalNumber: string;
+  pan: string;
+  medicalNotes: string;
+  documents: InsuranceDocument[];
   documentDataUrl: string | null;
   documentFileName: string | null;
 };
@@ -128,6 +163,24 @@ export const PAYMENT_FREQUENCY_LABELS: Record<InsurancePaymentFrequency, string>
   yearly: "Yearly",
   one_time: "One-time",
 };
+
+export const INSURANCE_DOCUMENT_KIND_LABELS: Record<InsuranceDocumentKind, string> = {
+  policy_pdf: "Policy PDF",
+  citizenship: "Citizenship",
+  passport: "Passport",
+  medical_reports: "Medical Reports",
+  premium_receipts: "Premium Receipts",
+  other: "Other Documents",
+};
+
+export const INSURANCE_DOCUMENT_KINDS: InsuranceDocumentKind[] = [
+  "policy_pdf",
+  "citizenship",
+  "passport",
+  "medical_reports",
+  "premium_receipts",
+  "other",
+];
 
 export const INSURANCE_TYPES: InsuranceType[] = [
   "health",

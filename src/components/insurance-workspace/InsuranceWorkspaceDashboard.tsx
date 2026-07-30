@@ -32,6 +32,11 @@ import {
 } from "@/lib/insurance/insurance-premium-reminders";
 import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
+import {
+  normalizeInsurancePolicy,
+  resolveExpiryFromTerm,
+  syncLegacyDocumentFields,
+} from "@/lib/insurance/insurance-normalize";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
 import {
   derivePolicyStatus,
@@ -57,10 +62,13 @@ function MetricTile({ label, value, hint }: { label: string; value: string; hint
 }
 
 function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
-  return policies.map((policy) => ({
-    ...policy,
-    status: derivePolicyStatus(policy.expiryDate),
-  }));
+  return policies.map((policy) => {
+    const normalized = normalizeInsurancePolicy(policy);
+    return {
+      ...normalized,
+      status: derivePolicyStatus(normalized.expiryDate),
+    };
+  });
 }
 
 function createLocalPolicy(
@@ -69,7 +77,13 @@ function createLocalPolicy(
   existing?: InsurancePolicy,
 ): InsurancePolicy {
   const now = new Date().toISOString();
-  return {
+  const docs = syncLegacyDocumentFields({
+    documents: input.documents ?? [],
+    documentDataUrl: input.documentDataUrl,
+    documentFileName: input.documentFileName,
+  });
+  const expiryDate = resolveExpiryFromTerm(input.startDate, input.policyTermYears, input.expiryDate);
+  return normalizeInsurancePolicy({
     id: existing?.id ?? createPolicyId(),
     type: input.type,
     provider: input.provider.trim() || "Unknown provider",
@@ -77,17 +91,24 @@ function createLocalPolicy(
     premiumNpr: Math.max(0, Math.round(input.premiumNpr)),
     paymentFrequency: input.paymentFrequency,
     startDate: input.startDate,
-    expiryDate: input.expiryDate,
+    expiryDate,
+    policyTermYears: Math.max(0, Math.round(input.policyTermYears || 0)),
     nominee: input.nominee.trim(),
     familyMembersCovered: input.familyMembersCovered,
     notes: input.notes.trim(),
-    documentDataUrl: input.documentDataUrl,
-    documentFileName: input.documentFileName,
-    status: derivePolicyStatus(input.expiryDate),
+    agentName: input.agentName.trim(),
+    agentPhone: input.agentPhone.trim(),
+    branch: input.branch.trim(),
+    policyNumber: input.policyNumber.trim(),
+    proposalNumber: input.proposalNumber.trim(),
+    pan: input.pan.trim(),
+    medicalNotes: input.medicalNotes.trim(),
+    ...docs,
+    status: derivePolicyStatus(expiryDate),
     sortOrder: existing?.sortOrder ?? sortOrder,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-  };
+  });
 }
 
 export function InsuranceWorkspaceDashboard() {
@@ -277,6 +298,14 @@ export function InsuranceWorkspaceDashboard() {
     [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
   );
 
+  useEffect(() => {
+    if (!detailsPolicy) return;
+    const fresh = policies.find((policy) => policy.id === detailsPolicy.id);
+    if (fresh && fresh.updatedAt !== detailsPolicy.updatedAt) {
+      setDetailsPolicy(fresh);
+    }
+  }, [policies, detailsPolicy]);
+
   const riskStyles =
     recommendation.riskLevel === "low"
       ? "border-emerald-300/35 bg-emerald-400/15 text-lime-100"
@@ -304,7 +333,7 @@ export function InsuranceWorkspaceDashboard() {
               Insurance
             </h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">
-              FIRE AI protection workspace for your Nepal return.
+              Policy management with premium tracking for your Nepal return.
             </p>
           </div>
           <button
@@ -520,12 +549,19 @@ export function InsuranceWorkspaceDashboard() {
 
       <InsurancePolicyDetailsSheet
         open={Boolean(detailsPolicy)}
-        policy={detailsPolicy}
+        policy={detailsPolicy ? withDerivedStatus([detailsPolicy])[0] : null}
         onClose={() => setDetailsPolicy(null)}
         onEdit={(item) => {
           setDetailsPolicy(null);
           setEditingPolicy(item);
           setSheetOpen(true);
+        }}
+        onUpdate={async (input, policyId) => {
+          await handleSavePolicy(input, policyId);
+          setDetailsPolicy((current) => {
+            if (!current || current.id !== policyId) return current;
+            return createLocalPolicy(input, current.sortOrder, current);
+          });
         }}
       />
 

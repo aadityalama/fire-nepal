@@ -1,21 +1,37 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { FileUp, Save, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown, Download, Eye, FileUp, Replace, Save, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
+  InsuranceDocument,
+  InsuranceDocumentKind,
   InsurancePaymentFrequency,
   InsurancePolicy,
   InsurancePolicyFormInput,
   InsuranceType,
 } from "@/lib/insurance/insurance-types";
 import {
+  INSURANCE_DOCUMENT_KIND_LABELS,
+  INSURANCE_DOCUMENT_KINDS,
   INSURANCE_TYPE_ICONS,
   INSURANCE_TYPE_LABELS,
   INSURANCE_TYPES,
   PAYMENT_FREQUENCY_LABELS,
 } from "@/lib/insurance/insurance-types";
-import { defaultExpiryDate, buildPremiumDisplay, todayIso } from "@/lib/insurance/insurance-utils";
+import {
+  createInsuranceDocument,
+  resolveExpiryFromTerm,
+  syncLegacyDocumentFields,
+} from "@/lib/insurance/insurance-normalize";
+import { policyToFormInput } from "@/lib/insurance/policy-to-form";
+import {
+  buildPremiumDisplay,
+  buildPremiumTracker,
+  defaultExpiryDate,
+  formatRs,
+  todayIso,
+} from "@/lib/insurance/insurance-utils";
 
 type InsurancePolicySheetProps = {
   open: boolean;
@@ -36,28 +52,20 @@ function emptyForm(): InsurancePolicyFormInput {
     paymentFrequency: "yearly",
     startDate: todayIso(),
     expiryDate: defaultExpiryDate(12),
+    policyTermYears: 1,
     nominee: "",
     familyMembersCovered: [],
     notes: "",
+    agentName: "",
+    agentPhone: "",
+    branch: "",
+    policyNumber: "",
+    proposalNumber: "",
+    pan: "",
+    medicalNotes: "",
+    documents: [],
     documentDataUrl: null,
     documentFileName: null,
-  };
-}
-
-function buildFormFromPolicy(policy: InsurancePolicy): InsurancePolicyFormInput {
-  return {
-    type: policy.type,
-    provider: policy.provider,
-    coverageAmountNpr: policy.coverageAmountNpr,
-    premiumNpr: policy.premiumNpr,
-    paymentFrequency: policy.paymentFrequency,
-    startDate: policy.startDate || todayIso(),
-    expiryDate: policy.expiryDate || defaultExpiryDate(12),
-    nominee: policy.nominee,
-    familyMembersCovered: policy.familyMembersCovered,
-    notes: policy.notes,
-    documentDataUrl: policy.documentDataUrl,
-    documentFileName: policy.documentFileName,
   };
 }
 
@@ -65,17 +73,68 @@ function FieldLabel({ children }: { children: ReactNode }) {
   return <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/45">{children}</p>;
 }
 
+function CollapsibleBlock({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[0.055]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-[52px] w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/55">{title}</p>
+        <ChevronDown
+          size={18}
+          className={`shrink-0 text-emerald-100/60 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open ? <div className="space-y-3 border-t border-white/10 px-4 py-4">{children}</div> : null}
+    </section>
+  );
+}
+
 const inputClass =
   "min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-semibold text-white outline-none placeholder:text-emerald-100/30 focus:border-emerald-300/40";
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read file"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const anchor = document.createElement("a");
+  anchor.href = dataUrl;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
 
 export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, saving }: InsurancePolicySheetProps) {
   const [form, setForm] = useState<InsurancePolicyFormInput>(emptyForm);
   const [familyText, setFamilyText] = useState("");
+  const [uploadKind, setUploadKind] = useState<InsuranceDocumentKind>("policy_pdf");
 
   useEffect(() => {
     if (!open) return;
     if (editingPolicy) {
-      setForm(buildFormFromPolicy(editingPolicy));
+      setForm(policyToFormInput(editingPolicy));
       setFamilyText(editingPolicy.familyMembersCovered.join(", "));
       return;
     }
@@ -84,6 +143,18 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
   }, [open, editingPolicy]);
 
   const premiumPreview = buildPremiumDisplay(form.premiumNpr, form.paymentFrequency);
+  const trackerPreview = useMemo(() => {
+    const draft = {
+      id: "preview",
+      ...form,
+      status: "active" as const,
+      sortOrder: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiryDate: resolveExpiryFromTerm(form.startDate, form.policyTermYears, form.expiryDate),
+    };
+    return buildPremiumTracker(draft);
+  }, [form]);
 
   async function handleSave() {
     if (!form.provider.trim() || form.coverageAmountNpr <= 0 || saving) return;
@@ -91,24 +162,54 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
       .split(",")
       .map((part) => part.trim())
       .filter(Boolean);
-    await onSave({ ...form, familyMembersCovered }, editingPolicy?.id);
+    const expiryDate = resolveExpiryFromTerm(form.startDate, form.policyTermYears, form.expiryDate);
+    const docs = syncLegacyDocumentFields({
+      documents: form.documents,
+      documentDataUrl: form.documentDataUrl,
+      documentFileName: form.documentFileName,
+    });
+    await onSave(
+      {
+        ...form,
+        familyMembersCovered,
+        expiryDate,
+        ...docs,
+      },
+      editingPolicy?.id,
+    );
   }
 
-  function onFileChange(file: File | null) {
-    if (!file) {
-      setForm((current) => ({ ...current, documentDataUrl: null, documentFileName: null }));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : null;
-      setForm((current) => ({
+  async function addDocument(file: File | null, kind: InsuranceDocumentKind, replaceId?: string) {
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
+    const nextDoc = createInsuranceDocument(kind, file.name, dataUrl);
+    setForm((current) => {
+      const documents = replaceId
+        ? current.documents.map((doc) => (doc.id === replaceId ? { ...nextDoc, id: replaceId, kind: doc.kind } : doc))
+        : [...current.documents, nextDoc];
+      return {
         ...current,
-        documentDataUrl: result,
-        documentFileName: file.name,
-      }));
-    };
-    reader.readAsDataURL(file);
+        ...syncLegacyDocumentFields({
+          documents,
+          documentDataUrl: current.documentDataUrl,
+          documentFileName: current.documentFileName,
+        }),
+      };
+    });
+  }
+
+  function removeDocument(id: string) {
+    setForm((current) => {
+      const documents = current.documents.filter((doc) => doc.id !== id);
+      return {
+        ...current,
+        ...syncLegacyDocumentFields({
+          documents,
+          documentDataUrl: null,
+          documentFileName: null,
+        }),
+      };
+    });
   }
 
   return (
@@ -133,7 +234,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
               <div className="text-center">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/45">Insurance</p>
                 <p className="text-sm font-black text-white">
-                  {editingPolicy ? "Policy details" : "Add policy"}
+                  {editingPolicy ? "Edit policy" : "Add policy"}
                 </p>
               </div>
               <button
@@ -147,7 +248,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+            <div className="flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
               <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
                 {form.premiumNpr > 0 ? (
                   <section className="rounded-[1.6rem] border border-emerald-300/25 bg-emerald-400/10 p-4">
@@ -156,6 +257,22 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                       {premiumPreview.label}
                     </p>
                     <p className="mt-1 text-2xl font-black tracking-[-0.04em] text-white">{premiumPreview.value}</p>
+                    {trackerPreview.totalInstallments > 0 ? (
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-black/20 px-2 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Total</p>
+                          <p className="text-sm font-black text-white">{trackerPreview.totalInstallments}</p>
+                        </div>
+                        <div className="rounded-xl bg-black/20 px-2 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Paid</p>
+                          <p className="text-sm font-black text-lime-100">{trackerPreview.installmentsPaid}</p>
+                        </div>
+                        <div className="rounded-xl bg-black/20 px-2 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-100/45">Left</p>
+                          <p className="text-sm font-black text-amber-100">{trackerPreview.installmentsRemaining}</p>
+                        </div>
+                      </div>
+                    ) : null}
                   </section>
                 ) : null}
 
@@ -208,7 +325,7 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                       />
                     </div>
                     <div>
-                      <FieldLabel>Premium (NPR)</FieldLabel>
+                      <FieldLabel>Premium Amount</FieldLabel>
                       <input
                         type="number"
                         min={0}
@@ -217,12 +334,12 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                         onChange={(e) =>
                           setForm((current) => ({ ...current, premiumNpr: Number(e.target.value) || 0 }))
                         }
-                        placeholder="5200"
+                        placeholder="126000"
                       />
                     </div>
                   </div>
                   <div>
-                    <FieldLabel>Payment frequency</FieldLabel>
+                    <FieldLabel>Premium Frequency</FieldLabel>
                     <div className="grid grid-cols-2 gap-2">
                       {FREQUENCIES.map((frequency) => {
                         const active = form.paymentFrequency === frequency;
@@ -245,31 +362,47 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <FieldLabel>Start date</FieldLabel>
+                      <FieldLabel>Policy Start Date</FieldLabel>
                       <input
                         type="date"
                         className={inputClass}
                         value={form.startDate}
-                        onChange={(e) => setForm((current) => ({ ...current, startDate: e.target.value }))}
+                        onChange={(e) => {
+                          const startDate = e.target.value;
+                          setForm((current) => ({
+                            ...current,
+                            startDate,
+                            expiryDate: resolveExpiryFromTerm(startDate, current.policyTermYears, current.expiryDate),
+                          }));
+                        }}
                       />
                     </div>
                     <div>
-                      <FieldLabel>Expiry</FieldLabel>
+                      <FieldLabel>Policy Term (Years)</FieldLabel>
                       <input
-                        type="date"
+                        type="number"
+                        min={0}
                         className={inputClass}
-                        value={form.expiryDate}
-                        onChange={(e) => setForm((current) => ({ ...current, expiryDate: e.target.value }))}
+                        value={form.policyTermYears || ""}
+                        onChange={(e) => {
+                          const policyTermYears = Math.max(0, Number(e.target.value) || 0);
+                          setForm((current) => ({
+                            ...current,
+                            policyTermYears,
+                            expiryDate: resolveExpiryFromTerm(current.startDate, policyTermYears, current.expiryDate),
+                          }));
+                        }}
+                        placeholder="20"
                       />
                     </div>
                   </div>
                   <div>
-                    <FieldLabel>Nominee</FieldLabel>
+                    <FieldLabel>Expiry / End Date</FieldLabel>
                     <input
+                      type="date"
                       className={inputClass}
-                      value={form.nominee}
-                      onChange={(e) => setForm((current) => ({ ...current, nominee: e.target.value }))}
-                      placeholder="Primary nominee"
+                      value={form.expiryDate}
+                      onChange={(e) => setForm((current) => ({ ...current, expiryDate: e.target.value }))}
                     />
                   </div>
                   <div>
@@ -281,33 +414,201 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
                       placeholder="Self, Spouse, Child — comma separated"
                     />
                   </div>
-                  <div>
-                    <FieldLabel>Notes</FieldLabel>
-                    <textarea
-                      className={`${inputClass} min-h-[96px] py-3`}
-                      value={form.notes}
-                      onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
-                      placeholder="Policy number, agent, hospital network…"
-                    />
-                  </div>
                 </section>
 
-                <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
-                  <FieldLabel>Upload policy PDF / image</FieldLabel>
-                  <label className="flex min-h-[88px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-300/30 bg-emerald-400/8 px-4 text-center">
-                    <FileUp size={20} className="text-lime-200" />
-                    <span className="text-sm font-bold text-emerald-50">
-                      {form.documentFileName ?? "Attach document · OCR ready"}
-                    </span>
-                    <span className="text-[11px] font-semibold text-emerald-100/45">PDF, JPG, PNG</span>
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      className="hidden"
-                      onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                </section>
+                <CollapsibleBlock title="Documents & Notes" defaultOpen>
+                  <div className="grid gap-3">
+                    <div>
+                      <FieldLabel>Notes</FieldLabel>
+                      <textarea
+                        className={`${inputClass} min-h-[96px] py-3`}
+                        value={form.notes}
+                        onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
+                        placeholder="Hospital network, special conditions…"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <FieldLabel>Agent Name</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.agentName}
+                          onChange={(e) => setForm((current) => ({ ...current, agentName: e.target.value }))}
+                          placeholder="Agent full name"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Agent Phone</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.agentPhone}
+                          onChange={(e) => setForm((current) => ({ ...current, agentPhone: e.target.value }))}
+                          placeholder="98xxxxxxxx"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Branch</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.branch}
+                          onChange={(e) => setForm((current) => ({ ...current, branch: e.target.value }))}
+                          placeholder="Branch / office"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Policy Number</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.policyNumber}
+                          onChange={(e) => setForm((current) => ({ ...current, policyNumber: e.target.value }))}
+                          placeholder="Policy no."
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Proposal Number</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.proposalNumber}
+                          onChange={(e) => setForm((current) => ({ ...current, proposalNumber: e.target.value }))}
+                          placeholder="Proposal no."
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>PAN</FieldLabel>
+                        <input
+                          className={inputClass}
+                          value={form.pan}
+                          onChange={(e) => setForm((current) => ({ ...current, pan: e.target.value }))}
+                          placeholder="PAN number"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <FieldLabel>Nominee</FieldLabel>
+                      <input
+                        className={inputClass}
+                        value={form.nominee}
+                        onChange={(e) => setForm((current) => ({ ...current, nominee: e.target.value }))}
+                        placeholder="Primary nominee"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Medical Notes</FieldLabel>
+                      <textarea
+                        className={`${inputClass} min-h-[80px] py-3`}
+                        value={form.medicalNotes}
+                        onChange={(e) => setForm((current) => ({ ...current, medicalNotes: e.target.value }))}
+                        placeholder="Medical history, exclusions…"
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>Upload document type</FieldLabel>
+                      <div className="mb-3 grid grid-cols-2 gap-2">
+                        {INSURANCE_DOCUMENT_KINDS.map((kind) => {
+                          const active = uploadKind === kind;
+                          return (
+                            <button
+                              key={kind}
+                              type="button"
+                              onClick={() => setUploadKind(kind)}
+                              className={`min-h-[44px] rounded-2xl border px-2 text-[11px] font-bold ${
+                                active
+                                  ? "border-emerald-300/50 bg-emerald-400/15 text-lime-100"
+                                  : "border-white/10 bg-white/[0.04] text-emerald-50"
+                              }`}
+                            >
+                              {INSURANCE_DOCUMENT_KIND_LABELS[kind]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <label className="flex min-h-[88px] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-300/30 bg-emerald-400/8 px-4 text-center">
+                        <FileUp size={20} className="text-lime-200" />
+                        <span className="text-sm font-bold text-emerald-50">
+                          Upload {INSURANCE_DOCUMENT_KIND_LABELS[uploadKind]}
+                        </span>
+                        <span className="text-[11px] font-semibold text-emerald-100/45">PDF, JPG, PNG</span>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            void addDocument(file, uploadKind);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {form.documents.length > 0 ? (
+                      <div className="space-y-2">
+                        {form.documents.map((doc: InsuranceDocument) => (
+                          <div
+                            key={doc.id}
+                            className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                          >
+                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
+                              {INSURANCE_DOCUMENT_KIND_LABELS[doc.kind]}
+                            </p>
+                            <p className="mt-1 truncate text-sm font-bold text-white">{doc.fileName}</p>
+                            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              <button
+                                type="button"
+                                onClick={() => window.open(doc.dataUrl, "_blank", "noopener,noreferrer")}
+                                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] text-xs font-black text-emerald-50"
+                              >
+                                <Eye size={14} /> View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadDataUrl(doc.dataUrl, doc.fileName)}
+                                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] text-xs font-black text-emerald-50"
+                              >
+                                <Download size={14} /> Download
+                              </button>
+                              <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] text-xs font-black text-emerald-50">
+                                <Replace size={14} /> Replace
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0] ?? null;
+                                    void addDocument(file, doc.kind, doc.id);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => removeDocument(doc.id)}
+                                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-rose-300/25 bg-rose-400/10 text-xs font-black text-rose-100"
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </CollapsibleBlock>
+
+                {trackerPreview.premiumPaidSoFarNpr > 0 || trackerPreview.totalInstallments > 0 ? (
+                  <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/45">
+                      Premium paid so far
+                    </p>
+                    <p className="mt-1 text-xl font-black text-lime-100">
+                      {formatRs(trackerPreview.premiumPaidSoFarNpr)} Paid
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-100/50">
+                      Remaining {formatRs(trackerPreview.remainingPremiumNpr)}
+                    </p>
+                  </section>
+                ) : null}
               </div>
             </div>
           </div>

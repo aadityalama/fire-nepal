@@ -261,9 +261,32 @@ export function generatePremiumDueDates(
 export function premiumUrgencyFromDays(daysRemaining: number, hasSchedule: boolean): PremiumUrgency {
   if (!hasSchedule) return "neutral";
   if (daysRemaining < 0) return "red";
-  if (daysRemaining <= 6) return "orange";
+  if (daysRemaining === 0) return "orange";
   if (daysRemaining <= 30) return "yellow";
   return "green";
+}
+
+export type SmartPremiumStatus = {
+  urgency: PremiumUrgency;
+  emoji: string;
+  label: string;
+};
+
+export function smartPremiumStatus(daysRemaining: number, hasSchedule: boolean): SmartPremiumStatus {
+  const urgency = premiumUrgencyFromDays(daysRemaining, hasSchedule);
+  if (!hasSchedule) {
+    return { urgency: "neutral", emoji: "📅", label: "No schedule" };
+  }
+  if (urgency === "red") return { urgency, emoji: "🔴", label: "Overdue" };
+  if (urgency === "orange") return { urgency, emoji: "🟠", label: "Due Today" };
+  if (urgency === "yellow") {
+    return {
+      urgency,
+      emoji: "🟡",
+      label: daysRemaining === 1 ? "Due Tomorrow" : `Due in ${daysRemaining} days`,
+    };
+  }
+  return { urgency: "green", emoji: "🟢", label: "On Track" };
 }
 
 export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
@@ -315,30 +338,20 @@ export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): 
   }
 
   const todayIsoValue = toIsoDate(today);
-  let currentIndex = -1;
-  for (let i = 0; i < allDates.length; i += 1) {
-    if (allDates[i] <= todayIsoValue) currentIndex = i;
-    else break;
-  }
-
+  const nextIndex = allDates.findIndex((iso) => iso >= todayIsoValue);
   let dueDate: string;
   let overdue = false;
   let daysRemaining: number;
 
-  if (currentIndex < 0) {
-    dueDate = allDates[0];
+  if (nextIndex >= 0) {
+    // Next premium is today or in the future — past due dates are treated as paid.
+    dueDate = allDates[nextIndex];
     daysRemaining = daysUntil(dueDate, now);
   } else {
-    const currentDue = allDates[currentIndex];
-    const daysToCurrent = daysUntil(currentDue, now);
-    if (daysToCurrent < 0) {
-      dueDate = currentDue;
-      daysRemaining = daysToCurrent;
-      overdue = true;
-    } else {
-      dueDate = currentDue;
-      daysRemaining = daysToCurrent;
-    }
+    // Every scheduled date is in the past — last premium is overdue / term complete.
+    dueDate = allDates[allDates.length - 1];
+    daysRemaining = daysUntil(dueDate, now);
+    overdue = daysRemaining < 0;
   }
 
   const dueIndex = allDates.indexOf(dueDate);
@@ -354,19 +367,14 @@ export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): 
   const upcomingDates = allDates.filter((iso) => iso >= dueDate).slice(0, 6);
   const urgency = premiumUrgencyFromDays(daysRemaining, true);
 
+  const smart = smartPremiumStatus(daysRemaining, true);
   let detail: string;
   if (overdue) {
     const days = Math.abs(daysRemaining);
     detail = `Overdue by ${days} day${days === 1 ? "" : "s"}`;
-  } else if (daysRemaining === 0) {
-    detail = "Due today";
-  } else if (daysRemaining === 1) {
-    detail = "Due Tomorrow";
   } else {
-    detail = `Due in ${daysRemaining} days`;
+    detail = smart.label;
   }
-
-  const emoji = urgency === "red" ? "🔴" : urgency === "orange" ? "🟠" : urgency === "yellow" ? "🟡" : "🟢";
 
   return {
     hasSchedule: true,
@@ -374,13 +382,245 @@ export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): 
     daysRemaining,
     overdue,
     urgency,
-    emoji,
+    emoji: smart.emoji,
     headline: "Next Premium",
     detail,
     cycleProgressPct,
     lastPremiumPaidDate: previousDate,
     upcomingDates,
     frequency,
+  };
+}
+
+export type DurationParts = {
+  years: number;
+  months: number;
+  totalMonths: number;
+};
+
+export function diffYearsMonths(fromIso: string, toIso: string): DurationParts {
+  const from = parseLocalDate(fromIso);
+  const to = parseLocalDate(toIso);
+  if (!from || !to) return { years: 0, months: 0, totalMonths: 0 };
+
+  let years = to.getFullYear() - from.getFullYear();
+  let months = to.getMonth() - from.getMonth();
+  if (to.getDate() < from.getDate()) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) return { years: 0, months: 0, totalMonths: 0 };
+  return { years, months, totalMonths: years * 12 + months };
+}
+
+export function formatDurationParts(parts: DurationParts): string {
+  const bits: string[] = [];
+  if (parts.years > 0) bits.push(`${parts.years} Year${parts.years === 1 ? "" : "s"}`);
+  if (parts.months > 0) bits.push(`${parts.months} Month${parts.months === 1 ? "" : "s"}`);
+  if (bits.length === 0) return "Less than 1 Month";
+  return bits.join(" ");
+}
+
+export type PolicyTimeline = {
+  startedOn: string | null;
+  endsOn: string | null;
+  runningFor: DurationParts;
+  remaining: DurationParts;
+  runningForLabel: string;
+  remainingLabel: string;
+};
+
+export function resolvePolicyEndDate(policy: Pick<InsurancePolicy, "startDate" | "expiryDate" | "policyTermYears">): string | null {
+  if (policy.startDate && policy.policyTermYears > 0) {
+    return toIsoDate(addMonthsClamped(parseLocalDate(policy.startDate)!, policy.policyTermYears * 12));
+  }
+  return policy.expiryDate || null;
+}
+
+export function buildPolicyTimeline(policy: InsurancePolicy, now = new Date()): PolicyTimeline {
+  const todayIsoValue = toIsoDate(startOfLocalDay(now));
+  const startedOn = policy.startDate || null;
+  const endsOn = resolvePolicyEndDate(policy);
+  const runningFor = startedOn ? diffYearsMonths(startedOn, todayIsoValue) : { years: 0, months: 0, totalMonths: 0 };
+  const remaining =
+    endsOn && endsOn >= todayIsoValue
+      ? diffYearsMonths(todayIsoValue, endsOn)
+      : { years: 0, months: 0, totalMonths: 0 };
+
+  return {
+    startedOn,
+    endsOn,
+    runningFor,
+    remaining,
+    runningForLabel: startedOn ? formatDurationParts(runningFor) : "—",
+    remainingLabel: endsOn ? (endsOn < todayIsoValue ? "Ended" : formatDurationParts(remaining)) : "—",
+  };
+}
+
+export type PremiumInstallmentEntry = {
+  dueDate: string;
+  amountNpr: number;
+  status: "paid" | "due" | "overdue" | "upcoming";
+};
+
+export type PremiumTrackerSummary = {
+  policyTermYears: number;
+  totalInstallments: number;
+  installmentsPaid: number;
+  installmentsRemaining: number;
+  premiumPaidSoFarNpr: number;
+  remainingPremiumNpr: number;
+  nextPremiumDate: string | null;
+  nextPremiumAmountNpr: number;
+  history: PremiumInstallmentEntry[];
+  smartStatus: SmartPremiumStatus;
+};
+
+function computeTotalInstallments(
+  policy: Pick<InsurancePolicy, "paymentFrequency" | "policyTermYears" | "startDate" | "expiryDate">,
+): number {
+  if (policy.paymentFrequency === "one_time") return 1;
+  const perYear = premiumIntervalMonths(policy.paymentFrequency);
+  if (!perYear) return 0;
+
+  const termYears =
+    policy.policyTermYears > 0
+      ? policy.policyTermYears
+      : (() => {
+          const end = resolvePolicyEndDate(policy);
+          if (!policy.startDate || !end) return 0;
+          const parts = diffYearsMonths(policy.startDate, end);
+          return Math.max(1, parts.years + (parts.months > 0 ? 1 : 0));
+        })();
+
+  if (termYears <= 0) return 0;
+  return Math.round((termYears * 12) / perYear);
+}
+
+export function buildPremiumTracker(policy: InsurancePolicy, now = new Date()): PremiumTrackerSummary {
+  const dueInfo = buildPremiumDueInfo(policy, now);
+  const smartStatus = smartPremiumStatus(dueInfo.daysRemaining, dueInfo.hasSchedule);
+  const interval = premiumIntervalMonths(policy.paymentFrequency);
+  const amount = Math.max(0, policy.premiumNpr);
+  const endDate = resolvePolicyEndDate(policy);
+  const termYears =
+    policy.policyTermYears > 0
+      ? policy.policyTermYears
+      : policy.startDate && endDate
+        ? Math.max(1, Math.round(diffYearsMonths(policy.startDate, endDate).totalMonths / 12))
+        : 0;
+
+  if (policy.paymentFrequency === "one_time") {
+    const paid = policy.startDate && daysUntil(policy.startDate, now) <= 0 ? 1 : 0;
+    return {
+      policyTermYears: termYears,
+      totalInstallments: 1,
+      installmentsPaid: paid,
+      installmentsRemaining: 1 - paid,
+      premiumPaidSoFarNpr: paid * amount,
+      remainingPremiumNpr: (1 - paid) * amount,
+      nextPremiumDate: paid ? null : policy.startDate || null,
+      nextPremiumAmountNpr: paid ? 0 : amount,
+      history: policy.startDate
+        ? [
+            {
+              dueDate: policy.startDate,
+              amountNpr: amount,
+              status: paid ? "paid" : daysUntil(policy.startDate, now) === 0 ? "due" : "upcoming",
+            },
+          ]
+        : [],
+      smartStatus,
+    };
+  }
+
+  if (!interval || !policy.startDate) {
+    return {
+      policyTermYears: termYears,
+      totalInstallments: 0,
+      installmentsPaid: 0,
+      installmentsRemaining: 0,
+      premiumPaidSoFarNpr: 0,
+      remainingPremiumNpr: 0,
+      nextPremiumDate: null,
+      nextPremiumAmountNpr: amount,
+      history: [],
+      smartStatus,
+    };
+  }
+
+  const totalFromTerm = computeTotalInstallments({ ...policy, policyTermYears: termYears });
+  const untilIso =
+    endDate ||
+    toIsoDate(addMonthsClamped(parseLocalDate(policy.startDate)!, Math.max(termYears, 1) * 12));
+
+  const allDates = generatePremiumDueDates(policy.startDate, policy.paymentFrequency, {
+    untilIso,
+    maxCount: Math.max(totalFromTerm || 48, 48),
+  }).filter((iso) => {
+    if (!endDate) return true;
+    return iso <= endDate;
+  });
+
+  const boundedDates =
+    totalFromTerm > 0 ? allDates.slice(0, totalFromTerm) : allDates;
+  const totalInstallments = totalFromTerm > 0 ? totalFromTerm : boundedDates.length;
+
+  const todayIsoValue = toIsoDate(startOfLocalDay(now));
+  let unpaidIndex = boundedDates.findIndex((iso) => iso >= todayIsoValue);
+  if (unpaidIndex < 0) {
+    unpaidIndex = dueInfo.overdue ? Math.max(0, boundedDates.length - 1) : boundedDates.length;
+  }
+
+  const installmentsPaid = Math.max(0, Math.min(totalInstallments, unpaidIndex));
+  const installmentsRemaining = Math.max(0, totalInstallments - installmentsPaid);
+
+  const history: PremiumInstallmentEntry[] = boundedDates.map((dueDate, index) => {
+    let status: PremiumInstallmentEntry["status"];
+    if (index < installmentsPaid) status = "paid";
+    else if (dueInfo.overdue && dueDate === dueInfo.dueDate) status = "overdue";
+    else if (dueDate === todayIsoValue) status = "due";
+    else status = "upcoming";
+    return { dueDate, amountNpr: amount, status };
+  });
+
+  return {
+    policyTermYears: termYears,
+    totalInstallments,
+    installmentsPaid,
+    installmentsRemaining,
+    premiumPaidSoFarNpr: installmentsPaid * amount,
+    remainingPremiumNpr: installmentsRemaining * amount,
+    nextPremiumDate: dueInfo.dueDate,
+    nextPremiumAmountNpr: amount,
+    history,
+    smartStatus,
+  };
+}
+
+export type PolicyQuickSummary = {
+  policyValueNpr: number;
+  coverageNpr: number;
+  totalPremiumPaidNpr: number;
+  remainingPremiumNpr: number;
+  installmentsPaid: number;
+  installmentsRemaining: number;
+  nextPremiumDate: string | null;
+  nextPremiumAmountNpr: number;
+};
+
+export function buildPolicyQuickSummary(policy: InsurancePolicy, now = new Date()): PolicyQuickSummary {
+  const tracker = buildPremiumTracker(policy, now);
+  return {
+    policyValueNpr: Math.max(0, policy.coverageAmountNpr),
+    coverageNpr: Math.max(0, policy.coverageAmountNpr),
+    totalPremiumPaidNpr: tracker.premiumPaidSoFarNpr,
+    remainingPremiumNpr: tracker.remainingPremiumNpr,
+    installmentsPaid: tracker.installmentsPaid,
+    installmentsRemaining: tracker.installmentsRemaining,
+    nextPremiumDate: tracker.nextPremiumDate,
+    nextPremiumAmountNpr: tracker.nextPremiumAmountNpr,
   };
 }
 
