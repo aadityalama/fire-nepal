@@ -3,6 +3,7 @@ import type {
   InsurancePolicy,
   InsurancePolicyStatus,
   InsuranceType,
+  PremiumHistoryEntry,
 } from "@/lib/insurance/insurance-types";
 import { INSURANCE_TYPE_LABELS, PAYMENT_FREQUENCY_LABELS } from "@/lib/insurance/insurance-types";
 
@@ -261,17 +262,54 @@ export function generatePremiumDueDates(
 export function premiumUrgencyFromDays(daysRemaining: number, hasSchedule: boolean): PremiumUrgency {
   if (!hasSchedule) return "neutral";
   if (daysRemaining < 0) return "red";
-  if (daysRemaining <= 6) return "orange";
+  if (daysRemaining === 0) return "orange";
   if (daysRemaining <= 30) return "yellow";
   return "green";
 }
 
-export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
-  const frequency = policy.paymentFrequency;
-  const interval = premiumIntervalMonths(frequency);
-  const today = startOfLocalDay(now);
+export type SmartPremiumStatus = {
+  urgency: PremiumUrgency;
+  emoji: string;
+  label: string;
+};
 
-  if (!interval || !policy.startDate) {
+export function smartPremiumStatus(daysRemaining: number, hasSchedule: boolean): SmartPremiumStatus {
+  const urgency = premiumUrgencyFromDays(daysRemaining, hasSchedule);
+  if (!hasSchedule) {
+    return { urgency: "neutral", emoji: "📅", label: "No schedule" };
+  }
+  if (urgency === "red") return { urgency, emoji: "🔴", label: "Overdue" };
+  if (urgency === "orange") return { urgency, emoji: "🟠", label: "Due Today" };
+  if (urgency === "yellow") {
+    if (daysRemaining === 30) return { urgency, emoji: "🟡", label: "Due in 30 Days" };
+    if (daysRemaining === 1) return { urgency, emoji: "🟡", label: "Due Tomorrow" };
+    return { urgency, emoji: "🟡", label: `Due in ${daysRemaining} Days` };
+  }
+  return { urgency: "green", emoji: "🟢", label: "On Track" };
+}
+
+export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): PremiumDueInfo {
+  const tracker = buildPremiumTracker(policy, now);
+  const frequency = policy.paymentFrequency || "yearly";
+
+  if (!tracker.nextPremiumDate && tracker.totalInstallments > 0 && tracker.installmentsRemaining === 0) {
+    return {
+      hasSchedule: true,
+      dueDate: null,
+      daysRemaining: Number.POSITIVE_INFINITY,
+      overdue: false,
+      urgency: "green",
+      emoji: "🟢",
+      headline: "Next Premium",
+      detail: "All installments paid",
+      cycleProgressPct: 100,
+      lastPremiumPaidDate: tracker.history.filter((h) => h.status === "paid").at(-1)?.dueDate ?? null,
+      upcomingDates: [],
+      frequency,
+    };
+  }
+
+  if (!tracker.nextPremiumDate) {
     return {
       hasSchedule: false,
       dueDate: null,
@@ -288,99 +326,382 @@ export function buildPremiumDueInfo(policy: InsurancePolicy, now = new Date()): 
     };
   }
 
-  const horizon = addMonthsClamped(today, interval * 8);
-  const allDates = generatePremiumDueDates(policy.startDate, frequency, {
-    untilIso: toIsoDate(horizon),
-    maxCount: 96,
-  }).filter((iso) => {
-    if (!policy.expiryDate) return true;
-    return iso <= policy.expiryDate;
-  });
-
-  if (allDates.length === 0) {
-    return {
-      hasSchedule: false,
-      dueDate: null,
-      daysRemaining: Number.POSITIVE_INFINITY,
-      overdue: false,
-      urgency: "neutral",
-      emoji: "📅",
-      headline: "Next Premium",
-      detail: "No premium dates in policy term",
-      cycleProgressPct: 0,
-      lastPremiumPaidDate: null,
-      upcomingDates: [],
-      frequency,
-    };
-  }
-
-  const todayIsoValue = toIsoDate(today);
-  let currentIndex = -1;
-  for (let i = 0; i < allDates.length; i += 1) {
-    if (allDates[i] <= todayIsoValue) currentIndex = i;
-    else break;
-  }
-
-  let dueDate: string;
-  let overdue = false;
-  let daysRemaining: number;
-
-  if (currentIndex < 0) {
-    dueDate = allDates[0];
-    daysRemaining = daysUntil(dueDate, now);
-  } else {
-    const currentDue = allDates[currentIndex];
-    const daysToCurrent = daysUntil(currentDue, now);
-    if (daysToCurrent < 0) {
-      dueDate = currentDue;
-      daysRemaining = daysToCurrent;
-      overdue = true;
-    } else {
-      dueDate = currentDue;
-      daysRemaining = daysToCurrent;
-    }
-  }
-
-  const dueIndex = allDates.indexOf(dueDate);
-  const previousDate = dueIndex > 0 ? allDates[dueIndex - 1] : null;
-  const cycleEnd = parseLocalDate(dueDate)!;
-  const cycleStart = previousDate
-    ? parseLocalDate(previousDate)!
-    : addMonthsClamped(cycleEnd, -interval);
-  const totalMs = Math.max(1, cycleEnd.getTime() - cycleStart.getTime());
-  const elapsedMs = Math.min(totalMs, Math.max(0, today.getTime() - cycleStart.getTime()));
-  const cycleProgressPct = overdue ? 100 : Math.max(0, Math.min(100, Math.round((elapsedMs / totalMs) * 100)));
-
-  const upcomingDates = allDates.filter((iso) => iso >= dueDate).slice(0, 6);
-  const urgency = premiumUrgencyFromDays(daysRemaining, true);
-
-  let detail: string;
-  if (overdue) {
-    const days = Math.abs(daysRemaining);
-    detail = `Overdue by ${days} day${days === 1 ? "" : "s"}`;
-  } else if (daysRemaining === 0) {
-    detail = "Due today";
-  } else if (daysRemaining === 1) {
-    detail = "Due Tomorrow";
-  } else {
-    detail = `Due in ${daysRemaining} days`;
-  }
-
-  const emoji = urgency === "red" ? "🔴" : urgency === "orange" ? "🟠" : urgency === "yellow" ? "🟡" : "🟢";
+  const daysRemaining = daysUntil(tracker.nextPremiumDate, now);
+  const overdue = daysRemaining < 0;
+  const smart = tracker.smartStatus;
+  const lastPaid = tracker.history.filter((h) => h.status === "paid").at(-1)?.dueDate ?? null;
+  const upcomingDates = tracker.history.filter((h) => h.status !== "paid").map((h) => h.dueDate).slice(0, 6);
 
   return {
     hasSchedule: true,
-    dueDate,
+    dueDate: tracker.nextPremiumDate,
     daysRemaining,
     overdue,
-    urgency,
-    emoji,
+    urgency: smart.urgency,
+    emoji: smart.emoji,
     headline: "Next Premium",
-    detail,
-    cycleProgressPct,
-    lastPremiumPaidDate: previousDate,
+    detail: overdue
+      ? `Overdue by ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? "" : "s"}`
+      : smart.label,
+    cycleProgressPct: overdue
+      ? 100
+      : Math.max(0, Math.min(100, Math.round((tracker.installmentsPaid / Math.max(1, tracker.totalInstallments)) * 100))),
+    lastPremiumPaidDate: lastPaid,
     upcomingDates,
     frequency,
+  };
+}
+
+export type DurationParts = {
+  years: number;
+  months: number;
+  totalMonths: number;
+};
+
+export function diffYearsMonths(fromIso: string, toIso: string): DurationParts {
+  const from = parseLocalDate(fromIso);
+  const to = parseLocalDate(toIso);
+  if (!from || !to) return { years: 0, months: 0, totalMonths: 0 };
+
+  let years = to.getFullYear() - from.getFullYear();
+  let months = to.getMonth() - from.getMonth();
+  if (to.getDate() < from.getDate()) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) return { years: 0, months: 0, totalMonths: 0 };
+  return { years, months, totalMonths: years * 12 + months };
+}
+
+export function formatDurationParts(parts: DurationParts): string {
+  const bits: string[] = [];
+  if (parts.years > 0) bits.push(`${parts.years} Year${parts.years === 1 ? "" : "s"}`);
+  if (parts.months > 0) bits.push(`${parts.months} Month${parts.months === 1 ? "" : "s"}`);
+  if (bits.length === 0) return "Less than 1 Month";
+  return bits.join(" ");
+}
+
+export type PolicyTimeline = {
+  startedOn: string | null;
+  endsOn: string | null;
+  runningFor: DurationParts;
+  remaining: DurationParts;
+  runningForLabel: string;
+  remainingLabel: string;
+};
+
+export function resolvePolicyEndDate(
+  policy: Pick<InsurancePolicy, "startDate" | "expiryDate" | "policyTermYears">,
+): string | null {
+  const termYears = Number(policy.policyTermYears);
+  if (policy.startDate && Number.isFinite(termYears) && termYears > 0) {
+    const start = parseLocalDate(policy.startDate);
+    if (!start) return policy.expiryDate || null;
+    return toIsoDate(addMonthsClamped(start, termYears * 12));
+  }
+  return policy.expiryDate || null;
+}
+
+export function buildPolicyTimeline(policy: InsurancePolicy, now = new Date()): PolicyTimeline {
+  const todayIsoValue = toIsoDate(startOfLocalDay(now));
+  const startedOn = policy.startDate || null;
+  const endsOn = resolvePolicyEndDate(policy);
+  const runningFor = startedOn ? diffYearsMonths(startedOn, todayIsoValue) : { years: 0, months: 0, totalMonths: 0 };
+  const remaining =
+    endsOn && endsOn >= todayIsoValue
+      ? diffYearsMonths(todayIsoValue, endsOn)
+      : { years: 0, months: 0, totalMonths: 0 };
+
+  return {
+    startedOn,
+    endsOn,
+    runningFor,
+    remaining,
+    runningForLabel: startedOn ? formatDurationParts(runningFor) : "—",
+    remainingLabel: endsOn ? (endsOn < todayIsoValue ? "Ended" : formatDurationParts(remaining)) : "—",
+  };
+}
+
+export type PremiumInstallmentEntry = {
+  dueDate: string;
+  amountNpr: number;
+  status: "paid" | "due" | "overdue" | "upcoming";
+  paidAt?: string | null;
+};
+
+export type PremiumTrackerSummary = {
+  policyTermYears: number;
+  totalInstallments: number;
+  installmentsPaid: number;
+  installmentsRemaining: number;
+  premiumPaidSoFarNpr: number;
+  remainingPremiumNpr: number;
+  nextPremiumDate: string | null;
+  nextPremiumAmountNpr: number;
+  history: PremiumInstallmentEntry[];
+  smartStatus: SmartPremiumStatus;
+};
+
+function computeTotalInstallments(
+  policy: Pick<InsurancePolicy, "paymentFrequency" | "policyTermYears" | "startDate" | "expiryDate">,
+): number {
+  if (policy.paymentFrequency === "one_time") return 1;
+  const perYear = premiumIntervalMonths(policy.paymentFrequency);
+  if (!perYear) return 0;
+
+  const explicitTerm = Number(policy.policyTermYears);
+  const termYears =
+    Number.isFinite(explicitTerm) && explicitTerm > 0
+      ? explicitTerm
+      : (() => {
+          const end = resolvePolicyEndDate(policy);
+          if (!policy.startDate || !end) return 0;
+          const parts = diffYearsMonths(policy.startDate, end);
+          return Math.max(1, parts.years + (parts.months > 0 ? 1 : 0));
+        })();
+
+  if (termYears <= 0) return 0;
+  return Math.round((termYears * 12) / perYear);
+}
+
+function emptyPremiumTracker(
+  amount: number,
+  termYears: number,
+  smartStatus: SmartPremiumStatus,
+): PremiumTrackerSummary {
+  return {
+    policyTermYears: termYears,
+    totalInstallments: 0,
+    installmentsPaid: 0,
+    installmentsRemaining: 0,
+    premiumPaidSoFarNpr: 0,
+    remainingPremiumNpr: 0,
+    nextPremiumDate: null,
+    nextPremiumAmountNpr: Math.max(0, amount),
+    history: [],
+    smartStatus,
+  };
+}
+
+function paidDueDateSet(history: PremiumHistoryEntry[] | undefined | null): Set<string> {
+  const set = new Set<string>();
+  if (!Array.isArray(history)) return set;
+  for (const entry of history) {
+    if (!entry || typeof entry.dueDate !== "string") continue;
+    if (entry.status === "paid" || entry.paidAt) set.add(entry.dueDate);
+  }
+  return set;
+}
+
+/** Build / refresh the installment timeline from start date, frequency, term, and explicit paid marks. */
+export function buildPremiumTracker(policy: InsurancePolicy, now = new Date()): PremiumTrackerSummary {
+  try {
+    const safePolicy: InsurancePolicy = {
+      ...policy,
+      startDate: typeof policy.startDate === "string" ? policy.startDate : "",
+      expiryDate: typeof policy.expiryDate === "string" ? policy.expiryDate : "",
+      policyTermYears: Number.isFinite(Number(policy.policyTermYears))
+        ? Math.max(0, Math.round(Number(policy.policyTermYears)))
+        : 0,
+      premiumNpr: Number.isFinite(Number(policy.premiumNpr)) ? Math.max(0, Number(policy.premiumNpr)) : 0,
+      paymentFrequency: policy.paymentFrequency || "yearly",
+      documents: Array.isArray(policy.documents) ? policy.documents : [],
+      familyMembersCovered: Array.isArray(policy.familyMembersCovered) ? policy.familyMembersCovered : [],
+      premiumHistory: Array.isArray(policy.premiumHistory) ? policy.premiumHistory : [],
+    };
+
+    const interval = premiumIntervalMonths(safePolicy.paymentFrequency);
+    const amount = Math.max(0, safePolicy.premiumNpr);
+    const endDate = resolvePolicyEndDate(safePolicy);
+    const explicitTerm = Number(safePolicy.policyTermYears) || 0;
+    const termYears: number =
+      explicitTerm > 0
+        ? explicitTerm
+        : safePolicy.startDate && endDate
+          ? Math.max(1, Math.round(diffYearsMonths(safePolicy.startDate, endDate).totalMonths / 12))
+          : 0;
+
+    const hasExplicitPaidMarks = (safePolicy.premiumHistory ?? []).some(
+      (entry) => entry && (entry.status === "paid" || Boolean(entry.paidAt)),
+    );
+    const paidSet = paidDueDateSet(safePolicy.premiumHistory);
+    const todayIsoValue = toIsoDate(startOfLocalDay(now));
+
+    if (safePolicy.paymentFrequency === "one_time") {
+      const dueDate = safePolicy.startDate || todayIsoValue;
+      const explicitlyPaid = paidSet.has(dueDate);
+      const autoPaid = !hasExplicitPaidMarks && safePolicy.startDate && daysUntil(safePolicy.startDate, now) <= 0;
+      const paid = explicitlyPaid || Boolean(autoPaid);
+      const status: PremiumHistoryEntry["status"] = paid
+        ? "paid"
+        : dueDate === todayIsoValue
+          ? "due"
+          : dueDate < todayIsoValue
+            ? "overdue"
+            : "upcoming";
+      const history: PremiumInstallmentEntry[] = dueDate
+        ? [{ dueDate, amountNpr: amount, status, paidAt: paid ? safePolicy.premiumHistory?.find((e) => e.dueDate === dueDate)?.paidAt ?? (paid ? now.toISOString() : null) : null }]
+        : [];
+      const daysRemaining = dueDate ? daysUntil(dueDate, now) : Number.POSITIVE_INFINITY;
+      const smartStatus = smartPremiumStatus(paid ? Number.POSITIVE_INFINITY : daysRemaining, Boolean(dueDate));
+      return {
+        policyTermYears: termYears,
+        totalInstallments: 1,
+        installmentsPaid: paid ? 1 : 0,
+        installmentsRemaining: paid ? 0 : 1,
+        premiumPaidSoFarNpr: paid ? amount : 0,
+        remainingPremiumNpr: paid ? 0 : amount,
+        nextPremiumDate: paid ? null : dueDate || null,
+        nextPremiumAmountNpr: paid ? 0 : amount,
+        history,
+        smartStatus: paid ? { urgency: "green", emoji: "🟢", label: "On Track" } : smartStatus,
+      };
+    }
+
+    const start = parseLocalDate(safePolicy.startDate);
+    if (!interval || !safePolicy.startDate || !start) {
+      return emptyPremiumTracker(amount, termYears, { urgency: "neutral", emoji: "📅", label: "No schedule" });
+    }
+
+    const totalFromTerm = computeTotalInstallments({ ...safePolicy, policyTermYears: termYears });
+    const untilIso = endDate || toIsoDate(addMonthsClamped(start, Math.max(termYears, 1) * 12));
+    const allDates = generatePremiumDueDates(safePolicy.startDate, safePolicy.paymentFrequency, {
+      untilIso,
+      maxCount: Math.max(totalFromTerm || 48, 48),
+    }).filter((iso) => {
+      if (!endDate) return true;
+      return iso <= endDate;
+    });
+
+    const boundedDates = totalFromTerm > 0 ? allDates.slice(0, totalFromTerm) : allDates;
+    const totalInstallments = totalFromTerm > 0 ? totalFromTerm : boundedDates.length;
+
+    const history: PremiumInstallmentEntry[] = boundedDates.map((dueDate) => {
+      const explicitlyPaid = paidSet.has(dueDate);
+      const autoPaid = !hasExplicitPaidMarks && dueDate < todayIsoValue;
+      const paid = explicitlyPaid || autoPaid;
+      let status: PremiumHistoryEntry["status"];
+      if (paid) status = "paid";
+      else if (dueDate < todayIsoValue) status = "overdue";
+      else if (dueDate === todayIsoValue) status = "due";
+      else status = "upcoming";
+      const prior = (safePolicy.premiumHistory ?? []).find((entry) => entry.dueDate === dueDate);
+      return {
+        dueDate,
+        amountNpr: amount,
+        status,
+        paidAt: paid ? prior?.paidAt ?? (autoPaid ? `${dueDate}T00:00:00.000Z` : null) : null,
+      };
+    });
+
+    const installmentsPaid = history.filter((item) => item.status === "paid").length;
+    const installmentsRemaining = Math.max(0, totalInstallments - installmentsPaid);
+    const nextUnpaid = history.find((item) => item.status !== "paid") ?? null;
+    const daysRemaining = nextUnpaid ? daysUntil(nextUnpaid.dueDate, now) : Number.POSITIVE_INFINITY;
+    const smartStatus = nextUnpaid
+      ? smartPremiumStatus(daysRemaining, true)
+      : { urgency: "green" as const, emoji: "🟢", label: "On Track" };
+
+    return {
+      policyTermYears: termYears,
+      totalInstallments,
+      installmentsPaid,
+      installmentsRemaining,
+      premiumPaidSoFarNpr: installmentsPaid * amount,
+      remainingPremiumNpr: installmentsRemaining * amount,
+      nextPremiumDate: nextUnpaid?.dueDate ?? null,
+      nextPremiumAmountNpr: nextUnpaid ? amount : 0,
+      history,
+      smartStatus,
+    };
+  } catch {
+    return emptyPremiumTracker(
+      Number.isFinite(Number(policy?.premiumNpr)) ? Math.max(0, Number(policy.premiumNpr)) : 0,
+      0,
+      { urgency: "neutral", emoji: "📅", label: "No schedule" },
+    );
+  }
+}
+
+/** Snapshot tracker fields onto a policy / form payload for persistence. */
+export function applyTrackerSnapshot<T extends Partial<InsurancePolicy> | InsurancePolicy>(
+  policy: T,
+  now = new Date(),
+): T & {
+  premiumHistory: PremiumHistoryEntry[];
+  totalInstallments: number;
+  installmentsPaid: number;
+  installmentsRemaining: number;
+  totalPremiumPaid: number;
+  remainingPremium: number;
+  nextPremiumDate: string | null;
+  nextPremiumAmount: number;
+} {
+  const tracker = buildPremiumTracker(policy as InsurancePolicy, now);
+  return {
+    ...policy,
+    premiumHistory: tracker.history.map((item) => ({
+      dueDate: item.dueDate,
+      amountNpr: item.amountNpr,
+      status: item.status,
+      paidAt: item.paidAt ?? null,
+    })),
+    totalInstallments: tracker.totalInstallments,
+    installmentsPaid: tracker.installmentsPaid,
+    installmentsRemaining: tracker.installmentsRemaining,
+    totalPremiumPaid: tracker.premiumPaidSoFarNpr,
+    remainingPremium: tracker.remainingPremiumNpr,
+    nextPremiumDate: tracker.nextPremiumDate,
+    nextPremiumAmount: tracker.nextPremiumAmountNpr,
+  };
+}
+
+/** Mark a due-date installment as paid and return updated policy fields. */
+export function markInstallmentPaid(policy: InsurancePolicy, dueDate: string, paidAt = new Date()): InsurancePolicy {
+  const tracker = buildPremiumTracker(policy, paidAt);
+  const history = tracker.history.map((item) => {
+    if (item.dueDate !== dueDate) return item;
+    return {
+      ...item,
+      status: "paid" as const,
+      paidAt: paidAt.toISOString(),
+    };
+  });
+  const withPaid: InsurancePolicy = {
+    ...policy,
+    premiumHistory: history,
+  };
+  return applyTrackerSnapshot(withPaid, paidAt);
+}
+
+export type PolicyQuickSummary = {
+  policyValueNpr: number;
+  coverageNpr: number;
+  totalPremiumPaidNpr: number;
+  remainingPremiumNpr: number;
+  installmentsPaid: number;
+  installmentsRemaining: number;
+  nextPremiumDate: string | null;
+  nextPremiumAmountNpr: number;
+  policyAgeLabel: string;
+  remainingTermLabel: string;
+};
+
+export function buildPolicyQuickSummary(policy: InsurancePolicy, now = new Date()): PolicyQuickSummary {
+  const tracker = buildPremiumTracker(policy, now);
+  const timeline = buildPolicyTimeline(policy, now);
+  return {
+    policyValueNpr: Math.max(0, policy.coverageAmountNpr),
+    coverageNpr: Math.max(0, policy.coverageAmountNpr),
+    totalPremiumPaidNpr: tracker.premiumPaidSoFarNpr,
+    remainingPremiumNpr: tracker.remainingPremiumNpr,
+    installmentsPaid: tracker.installmentsPaid,
+    installmentsRemaining: tracker.installmentsRemaining,
+    nextPremiumDate: tracker.nextPremiumDate,
+    nextPremiumAmountNpr: tracker.nextPremiumAmountNpr,
+    policyAgeLabel: timeline.runningForLabel,
+    remainingTermLabel: timeline.remainingLabel,
   };
 }
 

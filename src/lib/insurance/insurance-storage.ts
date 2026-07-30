@@ -1,4 +1,5 @@
 import { INSURANCE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { normalizeInsurancePolicy } from "@/lib/insurance/insurance-normalize";
 import type { InsurancePolicy, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 
 export const INSURANCE_WORKSPACE_STORAGE_KEY = "fire-nepal-insurance-workspace-v1";
@@ -25,7 +26,7 @@ export function loadInsuranceWorkspaceState(): InsuranceWorkspaceState {
     if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.policies)) return DEFAULT_STATE;
     return {
       version: 1,
-      policies: sortPolicies(parsed.policies),
+      policies: sortPolicies(parsed.policies.map((policy) => normalizeInsurancePolicy(policy))),
     };
   } catch {
     return DEFAULT_STATE;
@@ -38,7 +39,7 @@ export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState) {
     INSURANCE_WORKSPACE_STORAGE_KEY,
     JSON.stringify({
       ...state,
-      policies: sortPolicies(state.policies),
+      policies: sortPolicies(state.policies.map((policy) => normalizeInsurancePolicy(policy))),
     }),
   );
   window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));

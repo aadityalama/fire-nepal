@@ -32,12 +32,18 @@ import {
 } from "@/lib/insurance/insurance-premium-reminders";
 import { createPolicyId, loadInsuranceWorkspaceState, saveInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
+import {
+  normalizeInsurancePolicy,
+  resolveExpiryFromTerm,
+  syncLegacyDocumentFields,
+} from "@/lib/insurance/insurance-normalize";
 import { useInsuranceEngineInputs } from "@/lib/insurance/use-insurance-engine-inputs";
 import {
   derivePolicyStatus,
   formatDisplayDate,
   formatNprCompact,
   formatRs,
+  applyTrackerSnapshot,
   sortPoliciesByPremiumDue,
   summarizePoliciesPremiumPaying,
   upcomingRenewals,
@@ -57,10 +63,13 @@ function MetricTile({ label, value, hint }: { label: string; value: string; hint
 }
 
 function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
-  return policies.map((policy) => ({
-    ...policy,
-    status: derivePolicyStatus(policy.expiryDate),
-  }));
+  return policies.map((policy) => {
+    const normalized = normalizeInsurancePolicy(policy);
+    return {
+      ...normalized,
+      status: derivePolicyStatus(normalized.expiryDate),
+    };
+  });
 }
 
 function createLocalPolicy(
@@ -69,25 +78,42 @@ function createLocalPolicy(
   existing?: InsurancePolicy,
 ): InsurancePolicy {
   const now = new Date().toISOString();
-  return {
-    id: existing?.id ?? createPolicyId(),
-    type: input.type,
-    provider: input.provider.trim() || "Unknown provider",
-    coverageAmountNpr: Math.max(0, Math.round(input.coverageAmountNpr)),
-    premiumNpr: Math.max(0, Math.round(input.premiumNpr)),
-    paymentFrequency: input.paymentFrequency,
-    startDate: input.startDate,
-    expiryDate: input.expiryDate,
-    nominee: input.nominee.trim(),
-    familyMembersCovered: input.familyMembersCovered,
-    notes: input.notes.trim(),
-    documentDataUrl: input.documentDataUrl,
-    documentFileName: input.documentFileName,
-    status: derivePolicyStatus(input.expiryDate),
-    sortOrder: existing?.sortOrder ?? sortOrder,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
+  const safeTrim = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const docs = syncLegacyDocumentFields({
+    documents: Array.isArray(input.documents) ? input.documents : [],
+    documentDataUrl: input.documentDataUrl ?? null,
+    documentFileName: input.documentFileName ?? null,
+  });
+  const expiryDate = resolveExpiryFromTerm(input.startDate ?? "", input.policyTermYears ?? 0, input.expiryDate ?? "");
+  return applyTrackerSnapshot(
+    normalizeInsurancePolicy({
+      id: existing?.id ?? createPolicyId(),
+      type: input.type,
+      provider: safeTrim(input.provider) || "Unknown provider",
+      coverageAmountNpr: Math.max(0, Math.round(Number(input.coverageAmountNpr) || 0)),
+      premiumNpr: Math.max(0, Math.round(Number(input.premiumNpr) || 0)),
+      paymentFrequency: input.paymentFrequency || "yearly",
+      startDate: typeof input.startDate === "string" ? input.startDate : "",
+      expiryDate,
+      policyTermYears: Math.max(0, Math.round(Number(input.policyTermYears) || 0)),
+      nominee: safeTrim(input.nominee),
+      familyMembersCovered: Array.isArray(input.familyMembersCovered) ? input.familyMembersCovered : [],
+      notes: safeTrim(input.notes),
+      agentName: safeTrim(input.agentName),
+      agentPhone: safeTrim(input.agentPhone),
+      branch: safeTrim(input.branch),
+      policyNumber: safeTrim(input.policyNumber),
+      proposalNumber: safeTrim(input.proposalNumber),
+      pan: safeTrim(input.pan),
+      medicalNotes: safeTrim(input.medicalNotes),
+      premiumHistory: Array.isArray(input.premiumHistory) ? input.premiumHistory : existing?.premiumHistory ?? [],
+      ...docs,
+      status: derivePolicyStatus(expiryDate),
+      sortOrder: existing?.sortOrder ?? sortOrder,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }),
+  );
 }
 
 export function InsuranceWorkspaceDashboard() {
@@ -194,24 +220,70 @@ export function InsuranceWorkspaceDashboard() {
       try {
         if (cloudReady && isSupabaseConfigured() && user?.id) {
           try {
+            let saved: InsurancePolicy;
             if (editingId) {
-              await updateInsurancePolicy(editingId, input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy updated.", { id: "insurance-save" });
+              saved = await updateInsurancePolicy(editingId, input);
             } else {
-              await createInsurancePolicy(input);
-              await reloadPoliciesFromCloud();
-              appToast.success("Policy saved.", { id: "insurance-save" });
+              saved = await createInsurancePolicy(input);
             }
+
+            try {
+              await reloadPoliciesFromCloud();
+            } catch (reloadError) {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("[insurance-workspace] reload after save failed; applying returned policy", reloadError);
+              }
+              const normalized = normalizeInsurancePolicy(saved);
+              persistLocalState({
+                version: 1,
+                policies: editingId
+                  ? state.policies.map((policy) => (policy.id === editingId ? normalized : policy))
+                  : [...state.policies.filter((policy) => policy.id !== normalized.id), normalized],
+              });
+            }
+
+            appToast.success(editingId ? "Policy updated." : "Policy saved.", { id: "insurance-save" });
             setSheetOpen(false);
             setEditingPolicy(null);
             recalculate();
             return;
           } catch (error) {
+            const message = error instanceof Error ? error.message : "Could not save policy. Please try again.";
             if (process.env.NODE_ENV !== "production") {
-              console.error("[insurance-workspace] cloud save failed; keeping local state", error);
+              console.error("[insurance-workspace] cloud save failed; falling back to local", error);
             }
+            // Schema / sync unavailable → keep working offline. Other failures still try local
+            // so the form never blanks, then surface the original message if local also fails.
             setCloudReady(false);
+            try {
+              if (editingId) {
+                const existing = state.policies.find((policy) => policy.id === editingId);
+                const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
+                persistLocalState({
+                  version: 1,
+                  policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
+                });
+              } else {
+                persistLocalState({
+                  version: 1,
+                  policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
+                });
+              }
+              appToast.success(
+                `${editingId ? "Policy updated" : "Policy saved"} locally. Cloud sync issue: ${message}`,
+                { id: "insurance-save" },
+              );
+              setSheetOpen(false);
+              setEditingPolicy(null);
+              recalculate();
+              return;
+            } catch (localError) {
+              appToast.error(
+                localError instanceof Error ? localError.message : message,
+                { id: "insurance-save-error" },
+              );
+              return;
+            }
           }
         }
 
@@ -237,7 +309,7 @@ export function InsuranceWorkspaceDashboard() {
         appToast.error(error instanceof Error ? error.message : "Could not save policy. Please try again.", {
           id: "insurance-save-error",
         });
-        throw error;
+        // Keep the form open — never rethrow (avoids blanking the page).
       } finally {
         setSaving(false);
       }
@@ -277,6 +349,14 @@ export function InsuranceWorkspaceDashboard() {
     [cloudReady, persistLocalState, recalculate, reloadPoliciesFromCloud, state.policies, user?.id],
   );
 
+  useEffect(() => {
+    if (!detailsPolicy) return;
+    const fresh = policies.find((policy) => policy.id === detailsPolicy.id);
+    if (fresh && fresh.updatedAt !== detailsPolicy.updatedAt) {
+      setDetailsPolicy(fresh);
+    }
+  }, [policies, detailsPolicy]);
+
   const riskStyles =
     recommendation.riskLevel === "low"
       ? "border-emerald-300/35 bg-emerald-400/15 text-lime-100"
@@ -304,7 +384,7 @@ export function InsuranceWorkspaceDashboard() {
               Insurance
             </h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">
-              FIRE AI protection workspace for your Nepal return.
+              Policy management with premium tracking for your Nepal return.
             </p>
           </div>
           <button
@@ -520,12 +600,29 @@ export function InsuranceWorkspaceDashboard() {
 
       <InsurancePolicyDetailsSheet
         open={Boolean(detailsPolicy)}
-        policy={detailsPolicy}
+        policy={detailsPolicy ? withDerivedStatus([detailsPolicy])[0] : null}
         onClose={() => setDetailsPolicy(null)}
         onEdit={(item) => {
           setDetailsPolicy(null);
           setEditingPolicy(item);
           setSheetOpen(true);
+        }}
+        onUpdate={async (input, policyId) => {
+          try {
+            await handleSavePolicy(input, policyId);
+            setDetailsPolicy((current) => {
+              if (!current || current.id !== policyId) return current;
+              try {
+                return createLocalPolicy(input, current.sortOrder, current);
+              } catch {
+                return current;
+              }
+            });
+          } catch (error) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[insurance-workspace] details update failed", error);
+            }
+          }
         }}
       />
 
