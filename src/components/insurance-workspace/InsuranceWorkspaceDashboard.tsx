@@ -22,7 +22,9 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import {
   createInsurancePolicy,
   deleteInsurancePolicy,
+  ensureInsuranceSchema,
   fetchInsurancePolicies,
+  syncInsurancePoliciesFromLocal,
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
 import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine";
@@ -142,24 +144,61 @@ export function InsuranceWorkspaceDashboard() {
     async function hydrate() {
       const local = loadInsuranceWorkspaceState();
       if (!cancelled) {
+        // Show local immediately, then converge onto the single cloud table.
         setState({ version: 1, policies: withDerivedStatus(local.policies) });
       }
 
       if (isSupabaseConfigured() && user?.id) {
         try {
-          const remote = await fetchInsurancePolicies();
+          // Ensure public.finance_insurance_policies exists before read/write.
+          await ensureInsuranceSchema();
+
+          const synced = await syncInsurancePoliciesFromLocal(local.policies);
+          if (process.env.NODE_ENV !== "production") {
+            console.info("[insurance-workspace] cloud sync", {
+              table: synced.meta?.table,
+              supabaseUrl: synced.meta?.supabaseUrl,
+              sql: synced.meta?.listSql,
+              policyIds: synced.policyIds,
+              uploadedIds: synced.uploadedIds,
+            });
+          } else {
+            console.info("[insurance-workspace] source", {
+              supabaseUrl: synced.meta?.supabaseUrl,
+              schema: synced.meta?.schema,
+              table: synced.meta?.table,
+              sql: synced.meta?.listSql,
+              policyIds: synced.policyIds,
+              uploadedCount: synced.uploadedIds.length,
+            });
+          }
+
           if (!cancelled) {
-            const next = { version: 1 as const, policies: withDerivedStatus(remote) };
+            const next = { version: 1 as const, policies: withDerivedStatus(synced.policies) };
             setState(next);
             saveInsuranceWorkspaceState(next);
             setCloudReady(true);
           }
         } catch (error) {
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[insurance-workspace] hydrate failed", error);
-          }
-          if (!cancelled) {
-            setCloudReady(false);
+          console.error("[insurance-workspace] hydrate/sync failed — falling back to local only", error);
+          // Last resort: try a plain fetch (no local upload) so one browser can still see cloud rows.
+          try {
+            const remote = await fetchInsurancePolicies();
+            console.info("[insurance-workspace] fallback fetch", {
+              supabaseUrl: remote.meta?.supabaseUrl,
+              table: remote.meta?.table,
+              sql: remote.meta?.listSql,
+              policyIds: remote.policyIds,
+            });
+            if (!cancelled) {
+              const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
+              setState(next);
+              saveInsuranceWorkspaceState(next);
+              setCloudReady(true);
+            }
+          } catch (fetchError) {
+            console.error("[insurance-workspace] cloud fetch failed", fetchError);
+            if (!cancelled) setCloudReady(false);
           }
         }
       }
@@ -249,7 +288,7 @@ export function InsuranceWorkspaceDashboard() {
 
   const reloadPoliciesFromCloud = useCallback(async () => {
     const remote = await fetchInsurancePolicies();
-    const next = { version: 1 as const, policies: withDerivedStatus(remote) };
+    const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
     setState(next);
     saveInsuranceWorkspaceState(next);
     return next;
