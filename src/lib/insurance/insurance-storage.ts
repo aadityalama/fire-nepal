@@ -157,6 +157,27 @@ export function markInsuranceFingerprintsMigrated(userId: string, fingerprints: 
   }
 }
 
+/** Wipe insurance workspace cache (localStorage policies). */
+export function clearInsuranceWorkspaceCache() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(INSURANCE_WORKSPACE_STORAGE_KEY);
+    window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** After cloud sync: drop stale local rows, keep only the Supabase snapshot as cache. */
+export function replaceInsuranceCacheWithCloud(policies: InsurancePolicy[]) {
+  clearInsuranceWorkspaceCache();
+  cacheInsurancePoliciesLocally(policies);
+}
+
+export function countInsurancePoliciesInLocalStorage(): number {
+  return loadInsuranceWorkspaceState().policies.length;
+}
+
 export function createPolicyId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `policy-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;

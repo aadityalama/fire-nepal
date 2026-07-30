@@ -24,6 +24,7 @@ import {
   deleteInsurancePolicy,
   ensureInsuranceSchema,
   fetchInsurancePolicies,
+  publishInsuranceRuntimeProbe,
   syncInsurancePoliciesFromLocal,
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
@@ -35,11 +36,13 @@ import {
 import {
   cacheInsurancePoliciesLocally,
   clearInsuranceCloudPrimary,
+  clearInsuranceWorkspaceCache,
+  countInsurancePoliciesInLocalStorage,
   createPolicyId,
-  isInsuranceCloudPrimary,
   loadInsuranceWorkspaceState,
   markInsuranceCloudPrimary,
   markInsuranceFingerprintsMigrated,
+  replaceInsuranceCacheWithCloud,
   saveInsuranceWorkspaceState,
 } from "@/lib/insurance/insurance-storage";
 import { buildInsuranceImportFingerprint } from "@/lib/insurance/insurance-mapper";
@@ -153,82 +156,162 @@ export function InsuranceWorkspaceDashboard() {
 
     async function hydrate() {
       const local = loadInsuranceWorkspaceState();
-      const alreadyCloudPrimary = Boolean(user?.id && isInsuranceCloudPrimary(user.id));
+      const localCountBefore = local.policies.length;
+      const browser = typeof navigator !== "undefined" ? navigator.userAgent : "unknown";
 
-      if (!cancelled) {
-        // Offline cache for instant paint; cloud replaces this after login sync.
-        setState({ version: 1, policies: withDerivedStatus(local.policies) });
-        if (alreadyCloudPrimary) setCloudReady(true);
+      publishInsuranceRuntimeProbe({
+        at: new Date().toISOString(),
+        browser,
+        userId: user?.id ?? null,
+        dataLoadedFrom: "pending",
+        renderedSource: "pending",
+        supabasePolicyCount: 0,
+        localStoragePolicyCount: localCountBefore,
+        localStoragePolicyCountAfterCache: localCountBefore,
+        policyIds: [],
+        uploadedCount: 0,
+        protectionScorePct: null,
+        table: "finance_insurance_policies",
+        supabaseUrl: null,
+      });
+
+      if (!(isSupabaseConfigured() && user?.id)) {
+        // Signed-out / no Supabase: local cache only.
+        if (!cancelled) {
+          setState({ version: 1, policies: withDerivedStatus(local.policies) });
+          setCloudReady(false);
+          setHydrated(true);
+          publishInsuranceRuntimeProbe({
+            at: new Date().toISOString(),
+            browser,
+            userId: user?.id ?? null,
+            dataLoadedFrom: "localStorage",
+            renderedSource: "localStorage",
+            supabasePolicyCount: 0,
+            localStoragePolicyCount: localCountBefore,
+            localStoragePolicyCountAfterCache: localCountBefore,
+            policyIds: local.policies.map((p) => p.id),
+            uploadedCount: 0,
+            protectionScorePct: null,
+            table: null,
+            supabaseUrl: null,
+          });
+        }
+        return;
       }
 
-      if (isSupabaseConfigured() && user?.id) {
-        try {
-          // Ensure public.finance_insurance_policies exists before read/write.
-          const schema = await ensureInsuranceSchema();
-          if (!schema.tableExists && !schema.ok) {
-            throw new Error(schema.message || "Insurance cloud table is not available yet.");
-          }
+      // Instant paint from cache only — must be replaced by Supabase before hydrate completes.
+      if (!cancelled) {
+        setState({ version: 1, policies: withDerivedStatus(local.policies) });
+        setCloudReady(false);
+      }
 
-          const synced = await syncInsurancePoliciesFromLocal(local.policies);
-          const syncedFingerprints = local.policies.map((policy) =>
-            buildInsuranceImportFingerprint({
-              type: policy.type,
-              provider: policy.provider,
-              coverageAmountNpr: policy.coverageAmountNpr,
-              premiumNpr: policy.premiumNpr,
-              startDate: policy.startDate,
-              policyNumber: policy.policyNumber,
-            }),
-          );
-          markInsuranceFingerprintsMigrated(user.id, syncedFingerprints);
-          markInsuranceCloudPrimary(user.id);
+      try {
+        const schema = await ensureInsuranceSchema();
+        if (!schema.tableExists && !schema.ok) {
+          throw new Error(schema.message || "Insurance cloud table is not available yet.");
+        }
 
-          console.info("[insurance-workspace] cloud primary", {
-            supabaseUrl: synced.meta?.supabaseUrl,
-            schema: synced.meta?.schema,
-            table: synced.meta?.table,
-            sql: synced.meta?.listSql,
-            policyIds: synced.policyIds,
+        // 1) Migrate any browser-local orphans into Supabase (deduped server-side).
+        const synced = await syncInsurancePoliciesFromLocal(local.policies);
+        const syncedFingerprints = local.policies.map((policy) =>
+          buildInsuranceImportFingerprint({
+            type: policy.type,
+            provider: policy.provider,
+            coverageAmountNpr: policy.coverageAmountNpr,
+            premiumNpr: policy.premiumNpr,
+            startDate: policy.startDate,
+            policyNumber: policy.policyNumber,
+          }),
+        );
+        markInsuranceFingerprintsMigrated(user.id, syncedFingerprints);
+
+        // 2) Force a fresh Supabase read after migration (do not trust sync body alone).
+        const fresh = await fetchInsurancePolicies();
+        const cloudPolicies = withDerivedStatus(fresh.policies);
+
+        // 3) Clear stale localStorage, keep cloud snapshot as offline cache only.
+        replaceInsuranceCacheWithCloud(cloudPolicies);
+        markInsuranceCloudPrimary(user.id);
+
+        if (!cancelled) {
+          setState({ version: 1, policies: cloudPolicies });
+          setCloudReady(true);
+          setHydrated(true);
+          publishInsuranceRuntimeProbe({
+            at: new Date().toISOString(),
+            browser,
+            userId: user.id,
+            dataLoadedFrom: "supabase",
+            renderedSource: "supabase",
+            supabasePolicyCount: cloudPolicies.length,
+            localStoragePolicyCount: localCountBefore,
+            localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
+            policyIds: fresh.policyIds,
             uploadedCount: synced.uploadedIds.length,
-            cacheOnly: true,
+            protectionScorePct: null,
+            table: fresh.meta?.table ?? "finance_insurance_policies",
+            supabaseUrl: fresh.meta?.supabaseUrl ?? null,
           });
-
+        }
+      } catch (error) {
+        console.error("[insurance-workspace] hydrate/sync failed — trying fresh Supabase fetch", error);
+        try {
+          const remote = await fetchInsurancePolicies();
+          const cloudPolicies = withDerivedStatus(remote.policies);
+          replaceInsuranceCacheWithCloud(cloudPolicies);
+          markInsuranceCloudPrimary(user.id);
           if (!cancelled) {
-            const next = { version: 1 as const, policies: withDerivedStatus(synced.policies) };
-            setState(next);
-            cacheInsurancePoliciesLocally(next.policies);
+            setState({ version: 1, policies: cloudPolicies });
             setCloudReady(true);
-          }
-        } catch (error) {
-          console.error("[insurance-workspace] hydrate/sync failed — using offline cache", error);
-          // Last resort: try a plain fetch so one browser can still see cloud rows.
-          try {
-            const remote = await fetchInsurancePolicies();
-            console.info("[insurance-workspace] fallback fetch", {
-              supabaseUrl: remote.meta?.supabaseUrl,
-              table: remote.meta?.table,
-              sql: remote.meta?.listSql,
+            setHydrated(true);
+            publishInsuranceRuntimeProbe({
+              at: new Date().toISOString(),
+              browser,
+              userId: user.id,
+              dataLoadedFrom: "supabase",
+              renderedSource: "supabase",
+              supabasePolicyCount: cloudPolicies.length,
+              localStoragePolicyCount: localCountBefore,
+              localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
               policyIds: remote.policyIds,
+              uploadedCount: 0,
+              protectionScorePct: null,
+              table: remote.meta?.table ?? "finance_insurance_policies",
+              supabaseUrl: remote.meta?.supabaseUrl ?? null,
+              error: error instanceof Error ? error.message : String(error),
             });
-            if (!cancelled) {
-              const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
-              setState(next);
-              cacheInsurancePoliciesLocally(next.policies);
-              markInsuranceCloudPrimary(user.id);
-              setCloudReady(true);
-            }
-          } catch (fetchError) {
-            console.error("[insurance-workspace] cloud fetch failed", fetchError);
-            if (!cancelled) {
-              // Keep offline cache only — do not mark cloud primary.
-              clearInsuranceCloudPrimary(user.id);
-              setCloudReady(false);
-            }
+          }
+        } catch (fetchError) {
+          console.error("[insurance-workspace] cloud fetch failed — offline cache only", fetchError);
+          clearInsuranceCloudPrimary(user.id);
+          clearInsuranceWorkspaceCache();
+          // Keep in-memory local for offline continuity, but wipe durable primary storage
+          // so a later successful login cannot resurrect a divergent browser-only set.
+          if (!cancelled) {
+            setState({ version: 1, policies: withDerivedStatus(local.policies) });
+            cacheInsurancePoliciesLocally(local.policies);
+            setCloudReady(false);
+            setHydrated(true);
+            publishInsuranceRuntimeProbe({
+              at: new Date().toISOString(),
+              browser,
+              userId: user.id,
+              dataLoadedFrom: "localStorage",
+              renderedSource: "localStorage",
+              supabasePolicyCount: 0,
+              localStoragePolicyCount: localCountBefore,
+              localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
+              policyIds: local.policies.map((p) => p.id),
+              uploadedCount: 0,
+              protectionScorePct: null,
+              table: "finance_insurance_policies",
+              supabaseUrl: null,
+              error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+            });
           }
         }
       }
-
-      if (!cancelled) setHydrated(true);
     }
 
     void hydrate();
@@ -239,9 +322,10 @@ export function InsuranceWorkspaceDashboard() {
 
   useEffect(() => {
     if (!hydrated) return;
-    // Always write-through cache; once cloudReady, this is not the primary store.
+    // While logged-in hydrate is in flight, do not persist pre-cloud local as durable cache.
+    if (user?.id && isSupabaseConfigured() && !cloudReady) return;
     cacheInsurancePoliciesLocally(state.policies);
-  }, [state, hydrated]);
+  }, [state, hydrated, cloudReady, user?.id]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -294,6 +378,41 @@ export function InsuranceWorkspaceDashboard() {
   }, [policies]);
 
   useEffect(() => {
+    if (!hydrated || !cloudReady) return;
+    publishInsuranceRuntimeProbe({
+      at: new Date().toISOString(),
+      browser: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
+      userId: user?.id ?? null,
+      dataLoadedFrom: "supabase",
+      renderedSource: "supabase",
+      supabasePolicyCount: policies.length,
+      localStoragePolicyCount: countInsurancePoliciesInLocalStorage(),
+      localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
+      policyIds: policies.map((p) => p.id),
+      uploadedCount: 0,
+      protectionScorePct: recommendation.protectionScorePct,
+      engineInputs: {
+        monthlyIncomeNpr: inputs.monthlyIncomeNpr,
+        adults: inputs.adults,
+        children: inputs.children,
+        totalSavingsNpr: inputs.totalSavingsNpr,
+      },
+      table: "finance_insurance_policies",
+      supabaseUrl: null,
+    });
+  }, [
+    hydrated,
+    cloudReady,
+    policies,
+    recommendation.protectionScorePct,
+    inputs.monthlyIncomeNpr,
+    inputs.adults,
+    inputs.children,
+    inputs.totalSavingsNpr,
+    user?.id,
+  ]);
+
+  useEffect(() => {
     if (!hydrated) return;
     try {
       const notifications = collectPremiumReminderNotifications(policies);
@@ -316,7 +435,7 @@ export function InsuranceWorkspaceDashboard() {
     const remote = await fetchInsurancePolicies();
     const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
     setState(next);
-    cacheInsurancePoliciesLocally(next.policies);
+    replaceInsuranceCacheWithCloud(next.policies);
     return next;
   }, []);
 
@@ -500,6 +619,13 @@ export function InsuranceWorkspaceDashboard() {
             </h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">
               Policy management with premium tracking for your Nepal return.
+            </p>
+            <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-100/40" data-insurance-source={cloudReady ? "supabase" : "local"}>
+              {cloudReady
+                ? `Synced · Supabase · ${policies.length} policies`
+                : hydrated
+                  ? `Offline cache · ${policies.length} policies`
+                  : "Syncing from Supabase…"}
             </p>
           </div>
           <button
