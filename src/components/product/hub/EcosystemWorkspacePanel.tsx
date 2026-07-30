@@ -4,6 +4,7 @@ import { ArrowRight, Flame, LayoutGrid } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SafeWorkspaceLink } from "@/components/navigation/SafeWorkspaceLink";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 
@@ -12,6 +13,8 @@ export type EcosystemWorkspaceItem = {
   label: string;
   description: string;
   icon: LucideIcon;
+  /** Force full page load on Chrome iOS (avoids stale soft-nav chunk graphs). */
+  hardOnChromeIOS?: boolean;
 };
 
 type EcosystemWorkspacePanelProps = {
@@ -103,9 +106,10 @@ export function EcosystemWorkspacePanel({ title, eyebrow, description, items }: 
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {items.map((item) => (
-                <Link
+                <SafeWorkspaceLink
                   key={item.href}
                   href={item.href}
+                  hardOnChromeIOS={Boolean(item.hardOnChromeIOS)}
                   className={`group relative flex min-h-[112px] touch-manipulation flex-col justify-between overflow-hidden rounded-2xl border p-4 transition duration-200 active:scale-[0.98] sm:min-h-[120px] sm:p-5 ${
                     light
                       ? "border-emerald-200/80 bg-white/95 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.12)] hover:border-emerald-400/50"
@@ -127,7 +131,7 @@ export function EcosystemWorkspacePanel({ title, eyebrow, description, items }: 
                     <h2 className={`text-base font-black leading-tight sm:text-lg ${titleCls}`}>{item.label}</h2>
                     <p className={`mt-1 line-clamp-2 text-xs font-semibold leading-snug sm:text-sm ${subtitleCls}`}>{item.description}</p>
                   </div>
-                </Link>
+                </SafeWorkspaceLink>
               ))}
             </div>
           </div>

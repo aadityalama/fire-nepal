@@ -69,36 +69,54 @@ export function useInsuranceEngineInputs(): {
 
   const inputs = useMemo((): InsuranceEngineInputs => {
     void tick;
-    const cashflow = loadCashflowState(uid);
-    const live = computeCashflowLiveMetrics(cashflow);
-    const wealth = summary.wealthTotals;
-    const onboarding = loadProductOnboarding();
-    const ssf = loadSsfPensionWorkspace();
-    const returnState = loadReturnPlannerState();
-    const snapshot = computePlannerSnapshot(returnState);
-    const age =
-      onboarding.age > 0
-        ? onboarding.age
-        : ssf.projection.currentAge > 0
-          ? ssf.projection.currentAge
-          : 32;
+    try {
+      const cashflow = loadCashflowState(uid);
+      const live = computeCashflowLiveMetrics(cashflow);
+      const wealth = summary.wealthTotals;
+      const onboarding = loadProductOnboarding();
+      const ssf = loadSsfPensionWorkspace();
+      const returnState = loadReturnPlannerState();
+      const snapshot = computePlannerSnapshot(returnState);
+      const age =
+        onboarding.age > 0
+          ? onboarding.age
+          : ssf.projection.currentAge > 0
+            ? ssf.projection.currentAge
+            : 32;
 
-    return {
-      monthlyIncomeNpr: live.monthlyIncome > 0 ? live.monthlyIncome : onboarding.salaryMonthlyNpr,
-      monthlyExpenseNpr: live.monthlyExpense,
-      totalSavingsNpr: live.totalSavings,
-      investableNpr: wealth.investableNpr,
-      emergencyFundMonths: summary.emergencyFundCoverageMonths,
-      fireGoalNpr: profile?.fireGoalAmount ?? 0,
-      fireProgressPct: summary.fireProgressPct,
-      age,
-      adults: Math.max(1, returnState.adults || 1),
-      children: Math.max(0, returnState.children || 0),
-      ssfMonthlyContributionNpr: ssf.projection.monthlySsfContributionNpr,
-      yearsToReturn: snapshot.yearsToReturn,
-      returnReadinessPct: snapshot.returnReadinessPct,
-    };
-  }, [tick, uid, profile?.fireGoalAmount, summary.emergencyFundCoverageMonths, summary.fireProgressPct]);
+      return {
+        monthlyIncomeNpr: live.monthlyIncome > 0 ? live.monthlyIncome : onboarding.salaryMonthlyNpr,
+        monthlyExpenseNpr: live.monthlyExpense,
+        totalSavingsNpr: live.totalSavings,
+        investableNpr: wealth.investableNpr,
+        emergencyFundMonths: summary.emergencyFundCoverageMonths,
+        fireGoalNpr: profile?.fireGoalAmount ?? 0,
+        fireProgressPct: summary.fireProgressPct,
+        age,
+        adults: Math.max(1, returnState.adults || 1),
+        children: Math.max(0, returnState.children || 0),
+        ssfMonthlyContributionNpr: ssf.projection.monthlySsfContributionNpr,
+        yearsToReturn: snapshot.yearsToReturn,
+        returnReadinessPct: snapshot.returnReadinessPct,
+      };
+    } catch {
+      return {
+        monthlyIncomeNpr: 0,
+        monthlyExpenseNpr: 0,
+        totalSavingsNpr: 0,
+        investableNpr: 0,
+        emergencyFundMonths: 0,
+        fireGoalNpr: profile?.fireGoalAmount ?? 0,
+        fireProgressPct: summary.fireProgressPct ?? 0,
+        age: 32,
+        adults: 1,
+        children: 0,
+        ssfMonthlyContributionNpr: 0,
+        yearsToReturn: null,
+        returnReadinessPct: 0,
+      };
+    }
+  }, [tick, uid, profile?.fireGoalAmount, summary.emergencyFundCoverageMonths, summary.fireProgressPct, summary.wealthTotals]);
 
   return { inputs, tick, recalculate };
 }

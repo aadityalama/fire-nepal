@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   alternates: buildCanonicalAlternates("/insurance"),
 };
 
+/** Avoid long-lived static HTML that Chrome iOS can keep after deploys. */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function InsuranceWorkspacePage() {
   return (
     <DashboardAccessGuard>

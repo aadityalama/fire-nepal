@@ -9,7 +9,7 @@ const FINANCE_ITEMS: EcosystemWorkspaceItem[] = [
   { href: "/expense-dashboard?finance=personal", label: "Expense", description: "Personal expenses, categories, receipts, reports, and analytics.", icon: ReceiptText },
   { href: "/budget", label: "Budget", description: "Monthly budget workspace for FIRE planning.", icon: Banknote },
   { href: "/savings-tracker", label: "Savings", description: "Savings targets, glide path, and progress.", icon: PiggyBank },
-  { href: "/insurance", label: "Insurance", description: "FIRE AI protection score, policies, and coverage gaps.", icon: ShieldCheck },
+  { href: "/insurance", label: "Insurance", description: "FIRE AI protection score, policies, and coverage gaps.", icon: ShieldCheck, hardOnChromeIOS: true },
 ];
 
 export default function FinanceWorkspacePage() {

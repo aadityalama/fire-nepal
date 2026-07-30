@@ -10,14 +10,22 @@ import { INSURANCE_TYPE_LABELS, PAYMENT_FREQUENCY_LABELS } from "@/lib/insurance
 export function formatRs(amount: number): string {
   if (!Number.isFinite(amount)) return "Rs. 0";
   const rounded = Math.round(amount);
-  return `Rs. ${rounded.toLocaleString("en-NP")}`;
+  try {
+    return `Rs. ${rounded.toLocaleString("en-NP")}`;
+  } catch {
+    return `Rs. ${rounded.toLocaleString("en-US")}`;
+  }
 }
 
 export function formatNprCompact(amount: number): string {
   if (!Number.isFinite(amount) || amount <= 0) return "NPR 0";
   if (amount >= 10_000_000) return `NPR ${(amount / 10_000_000).toFixed(amount % 10_000_000 === 0 ? 0 : 1)} Cr`;
   if (amount >= 100_000) return `NPR ${(amount / 100_000).toFixed(amount % 100_000 === 0 ? 0 : 1)} Lakh`;
-  return `NPR ${Math.round(amount).toLocaleString("en-NP")}`;
+  try {
+    return `NPR ${Math.round(amount).toLocaleString("en-NP")}`;
+  } catch {
+    return `NPR ${Math.round(amount).toLocaleString("en-US")}`;
+  }
 }
 
 export function formatDisplayDate(isoDate: string): string {

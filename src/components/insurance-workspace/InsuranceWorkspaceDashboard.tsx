@@ -192,18 +192,52 @@ export function InsuranceWorkspaceDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort when calendar day changes
     [policies, todayKey],
   );
-  const recommendation = useMemo(
-    () => computeInsuranceRecommendation(policies, inputs),
-    [policies, inputs],
-  );
-  const renewals = useMemo(() => upcomingRenewals(policies, 90), [policies]);
+  const recommendation = useMemo(() => {
+    try {
+      return computeInsuranceRecommendation(policies, inputs);
+    } catch {
+      return {
+        recommendedHealthCoverageNpr: 0,
+        recommendedLifeCoverageNpr: 0,
+        recommendedCriticalIllnessNpr: 0,
+        incomeProtectionNeedNpr: 0,
+        recommendedMonthlyPremiumNpr: 0,
+        protectionScorePct: 0,
+        protectionBadge: "Needs attention" as const,
+        riskLevel: "moderate" as const,
+        coverageGapNpr: 0,
+        healthGapNpr: 0,
+        lifeGapNpr: 0,
+        criticalGapNpr: 0,
+        currentHealthCoverageNpr: 0,
+        currentLifeCoverageNpr: 0,
+        currentCriticalCoverageNpr: 0,
+        currentMonthlyPremiumNpr: 0,
+        aiSummary: "Protection score temporarily unavailable. Your policies are still listed below.",
+        suggestionTitle: "Policies ready",
+        suggestionBody: "Open a policy card to manage premiums, documents, and renewals.",
+        suggestionIncreaseLifeNpr: 0,
+      };
+    }
+  }, [policies, inputs]);
+  const renewals = useMemo(() => {
+    try {
+      return upcomingRenewals(policies, 90);
+    } catch {
+      return [];
+    }
+  }, [policies]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const notifications = collectPremiumReminderNotifications(policies);
-    for (const item of notifications) {
-      appToast.info(item.message, { id: `insurance-premium-${item.key}` });
-      dismissPremiumReminder(item.key);
+    try {
+      const notifications = collectPremiumReminderNotifications(policies);
+      for (const item of notifications) {
+        appToast.info(item.message, { id: `insurance-premium-${item.key}` });
+        dismissPremiumReminder(item.key);
+      }
+    } catch {
+      /* ignore reminder failures — never blank the page */
     }
   }, [hydrated, policies, todayKey]);
 

@@ -35,14 +35,42 @@ export function loadInsuranceWorkspaceState(): InsuranceWorkspaceState {
 
 export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    INSURANCE_WORKSPACE_STORAGE_KEY,
-    JSON.stringify({
-      ...state,
-      policies: sortPolicies(state.policies.map((policy) => normalizeInsurancePolicy(policy))),
-    }),
-  );
-  window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
+  try {
+    window.localStorage.setItem(
+      INSURANCE_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({
+        ...state,
+        policies: sortPolicies(state.policies.map((policy) => normalizeInsurancePolicy(policy))),
+      }),
+    );
+    window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
+  } catch (error) {
+    // Chrome iOS can throw QuotaExceededError when legacy policies store large document dataUrls.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[insurance-storage] save failed", error);
+    }
+    try {
+      const slim = {
+        version: 1 as const,
+        policies: sortPolicies(
+          state.policies.map((policy) => {
+            const normalized = normalizeInsurancePolicy(policy);
+            return {
+              ...normalized,
+              documents: [],
+              documentDataUrl: null,
+              documentFileName: null,
+              premiumHistory: (normalized.premiumHistory ?? []).slice(-24),
+            };
+          }),
+        ),
+      };
+      window.localStorage.setItem(INSURANCE_WORKSPACE_STORAGE_KEY, JSON.stringify(slim));
+      window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
+    } catch {
+      /* ignore — keep in-memory state only */
+    }
+  }
 }
 
 export function createPolicyId() {
