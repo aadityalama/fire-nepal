@@ -41,13 +41,28 @@ export async function updateBudgetRecord(id: string, input: CreateBudgetInput): 
   return json.budget;
 }
 
-export async function deleteBudgetRecord(id: string): Promise<void> {
-  const res = await fetch(`/api/budgets/${encodeURIComponent(id)}`, {
+export type DeleteBudgetResult = {
+  alreadyDeleted: boolean;
+};
+
+export async function deleteBudgetRecord(id: string): Promise<DeleteBudgetResult> {
+  const budgetId = id.trim();
+  if (!budgetId) {
+    throw new Error("The budget has already been deleted.");
+  }
+
+  const res = await fetch(`/api/budgets/${encodeURIComponent(budgetId)}`, {
     method: "DELETE",
     credentials: "include",
+    cache: "no-store",
   });
-  const json = await parseJson<{ ok: boolean; error?: string }>(res);
+  const json = await parseJson<{ ok: boolean; alreadyDeleted?: boolean; error?: string }>(res);
   if (!res.ok || !json.ok) {
-    throw new Error(json.error ?? "Could not delete your budget.");
+    const message = json.error ?? "Could not delete your budget.";
+    if (/budget not found/i.test(message)) {
+      throw new Error("The budget has already been deleted.");
+    }
+    throw new Error(message);
   }
+  return { alreadyDeleted: Boolean(json.alreadyDeleted) };
 }

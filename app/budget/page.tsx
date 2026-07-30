@@ -792,7 +792,10 @@ export default function BudgetWorkspacePage() {
       setBudgets((prev) => sortBudgetRecords([...prev, optimisticRecord]));
 
       try {
-        await createBudgetRecord(input);
+        const saved = await createBudgetRecord(input);
+        setBudgets((prev) =>
+          sortBudgetRecords(prev.map((item) => (item.id === optimisticId ? saved : item))),
+        );
         await reloadBudgets();
         toast.success("Budget saved successfully");
       } catch (error) {
@@ -850,21 +853,46 @@ export default function BudgetWorkspacePage() {
     if (!deletingBudget) return;
 
     const removedId = deletingBudget.id;
+    const previousBudgets = budgets;
     setDeletingBudgetBusy(true);
+    // Remove immediately so summary, allocation chart, active count, and AI panel update.
     setBudgets((prev) => prev.filter((item) => item.id !== removedId));
+    setDetailBudget((prev) => (prev?.id === removedId ? null : prev));
 
     try {
-      await deleteBudgetRecord(removedId);
-      toast.success("Budget deleted");
+      const result = await deleteBudgetRecord(removedId);
       setDeletingBudget(null);
-      setDetailBudget(null);
-    } catch (error) {
+      if (result.alreadyDeleted) {
+        toast.message("The budget has already been deleted.");
+      } else {
+        toast.success("Budget deleted");
+      }
+      // Reconcile with server so soft-deleted rows never linger in local state.
       await reloadBudgets();
-      toast.error(error instanceof Error ? error.message : "Could not delete budget.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not delete budget.";
+      if (/already been deleted/i.test(message)) {
+        setDeletingBudget(null);
+        setDetailBudget((prev) => (prev?.id === removedId ? null : prev));
+        toast.message("The budget has already been deleted.");
+        try {
+          await reloadBudgets();
+        } catch {
+          setBudgets((prev) => prev.filter((item) => item.id !== removedId));
+        }
+      } else {
+        setBudgets(previousBudgets);
+        try {
+          await reloadBudgets();
+        } catch {
+          /* keep optimistic restore */
+        }
+        toast.error(message);
+      }
     } finally {
       setDeletingBudgetBusy(false);
     }
-  }, [deletingBudget, reloadBudgets]);
+  }, [budgets, deletingBudget, reloadBudgets]);
 
   const handleDuplicateBudget = useCallback(
     async (budget: BudgetRecord) => {
@@ -1211,7 +1239,8 @@ export default function BudgetWorkspacePage() {
               onEdit={() => openEditForm(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget)}
               onDuplicate={() => void handleDuplicateBudget(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget)}
               onDelete={() => {
-                setDeletingBudget(budgets.find((item) => item.id === detailBudget.id) ?? detailBudget);
+                const selected = budgets.find((item) => item.id === detailBudget.id) ?? detailBudget;
+                setDeletingBudget(selected);
                 setDetailBudget(null);
               }}
             />

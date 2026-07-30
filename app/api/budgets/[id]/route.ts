@@ -97,7 +97,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const budget = await updateBudgetRecordForUser(sb, data.user.id, id, input);
     return NextResponse.json({ ok: true, budget });
   } catch (e) {
-    return bad(e instanceof Error ? e.message : "Could not update budget.", 500);
+    const message = e instanceof Error ? e.message : "Could not update budget.";
+    if (message === "The budget has already been deleted.") {
+      return bad(message, 404);
+    }
+    return bad(message, 500);
   }
 }
 
@@ -105,16 +109,23 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
 
   const { id } = await params;
-  if (!id) return bad("Missing budget id");
+  if (!id?.trim()) return bad("Missing budget id");
 
   try {
     const sb = await createServerSupabaseClient();
     const { data } = await sb.auth.getUser();
     if (!data.user) return bad("Please sign in to delete your budget.", 401);
 
-    await deleteBudgetRecordForUser(sb, data.user.id, id);
-    return NextResponse.json({ ok: true });
+    const result = await deleteBudgetRecordForUser(sb, data.user.id, id);
+    return NextResponse.json({
+      ok: true,
+      alreadyDeleted: result.status === "already_deleted",
+    });
   } catch (e) {
-    return bad(e instanceof Error ? e.message : "Could not delete budget.", 500);
+    const message = e instanceof Error ? e.message : "Could not delete budget.";
+    if (message === "The budget has already been deleted.") {
+      return NextResponse.json({ ok: true, alreadyDeleted: true });
+    }
+    return bad(message, 500);
   }
 }
