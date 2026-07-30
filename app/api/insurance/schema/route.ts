@@ -29,22 +29,24 @@ export async function GET() {
 
   let tableExists = false;
   let probeError: string | null = null;
+  let probeStatus: number | null = null;
   const admin = createSupabaseServiceRoleClient();
   if (admin) {
-    const probe = await admin.from(INSURANCE_TABLE).select("id", { head: true, count: "exact" }).limit(1);
+    const probe = await admin.from(INSURANCE_TABLE).select("id").limit(1);
+    probeStatus = probe.error ? Number(probe.error.code === "PGRST205" ? 404 : 500) : 200;
     if (!probe.error) {
       tableExists = true;
     } else {
-      probeError = probe.error.message;
-      // Schema cache may lag briefly after CREATE TABLE.
+      probeError = `${probe.error.code ?? "error"}: ${probe.error.message}`;
       if (ensure.ok) {
-        await new Promise((r) => setTimeout(r, 800));
-        const retry = await admin.from(INSURANCE_TABLE).select("id", { head: true, count: "exact" }).limit(1);
+        await new Promise((r) => setTimeout(r, 1200));
+        const retry = await admin.from(INSURANCE_TABLE).select("id").limit(1);
         if (!retry.error) {
           tableExists = true;
           probeError = null;
+          probeStatus = 200;
         } else {
-          probeError = retry.error.message;
+          probeError = `${retry.error.code ?? "error"}: ${retry.error.message}`;
         }
       }
     }
@@ -57,7 +59,11 @@ export async function GET() {
     ensure,
     tableExists,
     probeError,
-    meta: ensure.meta,
+    probeStatus,
+    meta: {
+      ...ensure.meta,
+      hasAccessToken: Boolean((process.env.SUPABASE_ACCESS_TOKEN ?? "").trim()),
+    },
     note:
       "Single production table: public.finance_insurance_policies. No duplicate insurance_* tables are used.",
   });

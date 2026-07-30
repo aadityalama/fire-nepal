@@ -180,74 +180,113 @@ export type EnsureInsuranceSchemaResult = {
 export async function ensureFinanceInsurancePoliciesSchema(): Promise<EnsureInsuranceSchemaResult> {
   const meta = getInsuranceSupabaseMeta();
   const dbUrl = resolveDbUrl();
-  if (!dbUrl) {
-    return {
-      ok: false,
-      createdOrVerified: false,
-      message:
-        "SUPABASE_DB_URL is not configured on the server. Cannot create public.finance_insurance_policies.",
-      meta,
-    };
-  }
+  const accessToken = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let pg: any;
-  try {
-    // @ts-expect-error — pg ships without types in this repo; scripts already use it untyped.
-    pg = await import("pg");
-  } catch {
-    return {
-      ok: false,
-      createdOrVerified: false,
-      message: "pg driver is unavailable in this runtime.",
-      meta,
-    };
-  }
-
-  const attempts = [dbUrl, ...poolerFallbackUrls(dbUrl)];
-  let lastError = "unknown error";
-  let attemptCount = 0;
-  const Client = pg.Client ?? pg.default?.Client;
-
-  if (!Client) {
-    return {
-      ok: false,
-      createdOrVerified: false,
-      message: "pg.Client is unavailable in this runtime.",
-      meta,
-    };
-  }
-
-  for (const url of attempts) {
-    attemptCount += 1;
-    const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  if (dbUrl) {
+    let pg: any;
     try {
-      await client.connect();
-      await client.query(ENSURE_INSURANCE_SCHEMA_SQL);
-      await client.end();
+      // @ts-expect-error — pg ships without types in this repo; scripts already use it untyped.
+      pg = await import("pg");
+    } catch {
       return {
-        ok: true,
-        createdOrVerified: true,
-        message: "public.finance_insurance_policies is ready.",
+        ok: false,
+        createdOrVerified: false,
+        message: "pg driver is unavailable in this runtime.",
+        meta,
+      };
+    }
+
+    const attempts = [dbUrl, ...poolerFallbackUrls(dbUrl)];
+    let lastError = "unknown error";
+    let attemptCount = 0;
+    const Client = pg.Client ?? pg.default?.Client;
+
+    if (!Client) {
+      return {
+        ok: false,
+        createdOrVerified: false,
+        message: "pg.Client is unavailable in this runtime.",
+        meta,
+      };
+    }
+
+    for (const url of attempts) {
+      attemptCount += 1;
+      const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+      try {
+        await client.connect();
+        await client.query(ENSURE_INSURANCE_SCHEMA_SQL);
+        await client.end();
+        return {
+          ok: true,
+          createdOrVerified: true,
+          message: "public.finance_insurance_policies is ready (pg).",
+          meta,
+          attempts: attemptCount,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        try {
+          await client.end();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    // Fall through to Management API if available.
+    if (!accessToken || !meta.projectRef) {
+      return {
+        ok: false,
+        createdOrVerified: false,
+        message: `Could not ensure insurance schema via pg: ${lastError}`,
         meta,
         attempts: attemptCount,
       };
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      try {
-        await client.end();
-      } catch {
-        /* ignore */
+    }
+  }
+
+  if (accessToken && meta.projectRef) {
+    try {
+      const res = await fetch(`https://api.supabase.com/v1/projects/${meta.projectRef}/database/query`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: ENSURE_INSURANCE_SCHEMA_SQL }),
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        return {
+          ok: false,
+          createdOrVerified: false,
+          message: `Management API failed (${res.status}): ${body.slice(0, 300)}`,
+          meta,
+        };
       }
+      return {
+        ok: true,
+        createdOrVerified: true,
+        message: "public.finance_insurance_policies is ready (management api).",
+        meta,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        createdOrVerified: false,
+        message: `Management API error: ${error instanceof Error ? error.message : String(error)}`,
+        meta,
+      };
     }
   }
 
   return {
     ok: false,
     createdOrVerified: false,
-    message: `Could not ensure insurance schema: ${lastError}`,
+    message:
+      "Neither SUPABASE_DB_URL nor SUPABASE_ACCESS_TOKEN is configured on the server. Cannot create public.finance_insurance_policies.",
     meta,
-    attempts: attemptCount,
   };
 }
 
