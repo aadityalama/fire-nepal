@@ -24,6 +24,7 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { fetchSavingsWorkspace, saveSavingsWorkspaceToCloud } from "@/lib/savings/savings-api";
 import {
   appendSavingsTransaction,
+  clearSavingsWorkspaceLocalCache,
   createGoalId,
   loadSavingsWorkspaceState,
   saveSavingsWorkspaceState,
@@ -97,16 +98,15 @@ export function SavingsWorkspaceDashboard() {
         if (cancelled) return;
         // Empty cloud ⇒ empty UI. Never merge or seed from browser-local data.
         const next = remote ?? emptySavingsWorkspaceState();
+        clearSavingsWorkspaceLocalCache();
         setState(next);
-        saveSavingsWorkspaceState(next);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[savings-workspace] hydrate failed", error);
         }
         if (!cancelled) {
-          const empty = emptySavingsWorkspaceState();
-          setState(empty);
-          saveSavingsWorkspaceState(empty);
+          clearSavingsWorkspaceLocalCache();
+          setState(emptySavingsWorkspaceState());
           toast.error(error instanceof Error ? error.message : "Could not load savings from Supabase.");
         }
       } finally {
@@ -121,9 +121,10 @@ export function SavingsWorkspaceDashboard() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || user?.id) return;
+    // Guests only: authenticated users never treat localStorage as source of truth.
     saveSavingsWorkspaceState(state);
-  }, [state, hydrated]);
+  }, [state, hydrated, user?.id]);
 
   const goals = useMemo(() => sortGoalsStable(state.goals), [state.goals]);
   const summary = useMemo(() => computeDashboardSummary(goals, state.transactions), [goals, state.transactions]);
@@ -142,8 +143,8 @@ export function SavingsWorkspaceDashboard() {
       }
       const saved = await saveSavingsWorkspaceToCloud(next);
       const remote = (await fetchSavingsWorkspace()) ?? saved;
+      clearSavingsWorkspaceLocalCache();
       setState(remote);
-      saveSavingsWorkspaceState(remote);
       return remote;
     },
     [user?.id],

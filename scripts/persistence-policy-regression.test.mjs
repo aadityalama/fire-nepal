@@ -70,11 +70,13 @@ test("Savings and Insurance do not show temporary storage setup placeholders", (
   assert.doesNotMatch(insurance, /storage is being set up/i);
 });
 
-test("Savings cloud hydrate merges local and remote state instead of replacing local history", () => {
+test("Savings authenticated hydrate is cloud-only and clears localStorage cache", () => {
   const source = read("src/components/savings-workspace/SavingsWorkspaceDashboard.tsx");
-  assert.match(source, /mergeSavingsWorkspaceState\(local, remote\)/);
-  assert.match(source, /mergeDurableRecords\(local\.goals, remote\.goals\)/);
-  assert.match(source, /mergeDurableRecords\(local\.transactions, remote\.transactions\)/);
+  assert.match(source, /clearSavingsWorkspaceLocalCache\(/);
+  assert.match(source, /Authenticated users must use Supabase only/);
+  assert.match(source, /Never merge or seed from browser-local data/);
+  assert.doesNotMatch(source, /mergeSavingsWorkspaceState\(/);
+  assert.match(source, /if \(!hydrated \|\| user\?\.id\) return;/);
 });
 
 test("Group expense local backfill is guarded by existing remote rows", () => {

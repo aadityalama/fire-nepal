@@ -1,5 +1,5 @@
--- Persist the Savings finance workspace in Supabase.
--- One workspace snapshot per authenticated user, protected by RLS.
+-- Ensure Savings workspace table exists with grants + PostgREST schema reload.
+-- Idempotent. Preferred storage for /api/savings; app falls back to fire_goals when missing.
 
 create table if not exists public.finance_savings_workspace (
   user_id uuid primary key references auth.users (id) on delete cascade,

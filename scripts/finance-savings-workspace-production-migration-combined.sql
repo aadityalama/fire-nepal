@@ -1,5 +1,5 @@
--- Persist the Savings finance workspace in Supabase.
--- One workspace snapshot per authenticated user, protected by RLS.
+-- Production SQL Editor paste: ensure finance_savings_workspace + RLS + grants.
+-- Safe to re-run. After applying, PostgREST schema cache is reloaded.
 
 create table if not exists public.finance_savings_workspace (
   user_id uuid primary key references auth.users (id) on delete cascade,

@@ -53,6 +53,17 @@ export function saveSavingsWorkspaceState(state: SavingsWorkspaceState) {
   window.dispatchEvent(new Event(SAVINGS_MODULE_SYNC_EVENT));
 }
 
+/** Clears browser-local savings cache. Authenticated users must not treat this as source of truth. */
+export function clearSavingsWorkspaceLocalCache() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(SAVINGS_WORKSPACE_STORAGE_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
+  window.dispatchEvent(new Event(SAVINGS_MODULE_SYNC_EVENT));
+}
+
 export function createGoalId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `goal-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;

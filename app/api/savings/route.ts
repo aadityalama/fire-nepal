@@ -22,7 +22,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(req: Request) {
+async function save(req: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   try {
     const sb = await createServerSupabaseClient();
@@ -36,4 +36,12 @@ export async function PUT(req: Request) {
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Could not save savings workspace.", 500);
   }
+}
+
+export async function PUT(req: Request) {
+  return save(req);
+}
+
+export async function POST(req: Request) {
+  return save(req);
 }
