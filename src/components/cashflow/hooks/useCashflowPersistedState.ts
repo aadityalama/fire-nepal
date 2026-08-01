@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import {
@@ -19,6 +19,7 @@ import {
   sanitizeCashflowState,
 } from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState, ExpenseCategoryKey, IncomeEntry, IncomeSourceKey } from "@/components/cashflow/types";
+import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { useLocalStorageJsonState } from "@/hooks/useLocalStorageJsonState";
 import { hasCashflowData } from "@/services/cashflow-supabase";
 
@@ -46,46 +47,82 @@ export type UseCashflowPersistedStateResult = {
 };
 
 /**
- * Cashflow dashboard persistence: all income keys, expense keys, emergency reserve,
- * and monthly burn override are saved to `localStorage` and restored on refresh.
- * FIRE metric tiles read from `metrics`, which is derived from that same persisted state.
+ * Cashflow persistence.
+ * Guests: localStorage is the store.
+ * Authenticated: Supabase `cashflow_snapshots` is the only source of truth;
+ * localStorage is overwritten after every successful cloud sync (offline cache only).
  */
 export function useCashflowPersistedState(userId?: string | null): UseCashflowPersistedStateResult {
   const storageKey = cashflowStorageKey(userId);
-  const [state, setState, hydrated] = useLocalStorageJsonState<CashflowDashboardState>({
+  /** When signed in, UI/sync must wait until cloud GET has applied (including empty). */
+  const [cloudReady, setCloudReady] = useState(!userId);
+  const [state, setState, localHydrated] = useLocalStorageJsonState<CashflowDashboardState>({
     storageKey,
     getDefault: defaultCashflowState,
     sanitize: sanitizeCashflowState,
+    // Authenticated: never paint browser-local cashflow; wait for Supabase.
+    hydrateFromStorage: !userId,
+    // Do not overwrite the offline cache with empty defaults before cloud GET finishes.
+    persistEnabled: !userId || cloudReady,
   });
+
+  const hydrated = userId ? localHydrated && cloudReady : localHydrated;
 
   useEffect(() => {
     const onExternal = () => setState(loadCashflowState(userId));
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-    return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    return () => {
+      window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    };
   }, [setState, userId]);
 
   useEffect(() => {
-    if (!hydrated || !userId) return;
+    if (!localHydrated) return;
+    if (!userId) {
+      setCloudReady(true);
+      return;
+    }
+
     let alive = true;
+    setCloudReady(false);
+
     void fetch("/api/cashflow", { credentials: "include", cache: "no-store" })
-      .then((res) => res.json() as Promise<{ ok: boolean; snapshot?: { state: CashflowDashboardState } | null }>)
+      .then((res) => res.json() as Promise<{ ok: boolean; snapshot?: { state: CashflowDashboardState } | null; error?: string }>)
       .then((json) => {
-        if (!alive || !json.ok || !json.snapshot?.state) return;
-        setState(sanitizeCashflowState(json.snapshot.state));
+        if (!alive) return;
+        if (!json.ok) {
+          // Never keep browser-local data as truth after login.
+          setState(defaultCashflowState());
+          toast.error(json.error ?? "Could not load cashflow from Supabase.");
+          setCloudReady(true);
+          return;
+        }
+        const next = json.snapshot?.state
+          ? sanitizeCashflowState(json.snapshot.state)
+          : defaultCashflowState();
+        setState(next);
+        setCloudReady(true);
       })
       .catch((error) => {
+        if (!alive) return;
+        setState(defaultCashflowState());
         if (process.env.NODE_ENV !== "production") {
           console.error("[cashflow] cloud hydrate failed", error);
         }
         toast.error(error instanceof Error ? error.message : "Could not load cashflow history from Supabase.");
+        setCloudReady(true);
       });
+
     return () => {
       alive = false;
     };
-  }, [hydrated, setState, userId]);
+  }, [localHydrated, setState, userId]);
 
   useEffect(() => {
-    if (!hydrated || !userId || !hasCashflowData(state)) return;
+    // Never PUT local/browser state until cloud GET has finished — prevents Safari/Chrome races.
+    if (!hydrated || !userId || !cloudReady || !hasCashflowData(state)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       void fetch("/api/cashflow", {
@@ -105,13 +142,13 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
           if (error?.name !== "AbortError" && process.env.NODE_ENV !== "production") {
             console.error("[cashflow] background sync failed", error);
           }
-      });
+        });
     }, 700);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [hydrated, state, userId]);
+  }, [hydrated, cloudReady, state, userId]);
 
   const metrics = useMemo((): CashflowDerivedMetrics => {
     return {

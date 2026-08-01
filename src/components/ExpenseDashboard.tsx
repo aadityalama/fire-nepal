@@ -89,6 +89,7 @@ import {
   listGroupMonthKeys,
   loadGroupExpenseState,
   saveGroupExpenseState,
+  emptyGroupExpenseState,
   type GroupTimelineActivity,
 } from "@/lib/group-expenses/storage";
 import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel } from "@/lib/finance/categories";
@@ -108,6 +109,7 @@ import {
 import {
   loadPersonalExpenseState,
   savePersonalExpenseState,
+  emptyPersonalExpenseState,
 } from "@/lib/personal-expense-storage";
 import { emptyGroupProfile, type GroupProfile } from "@/lib/group-profile";
 import { buildRoommateExpenseSummaryText, isDesktopShareUi } from "@/lib/roommate-expense-share";
@@ -129,6 +131,8 @@ import {
   upsertExpenseTransactionByLocalId,
 } from "@/services/expense-transactions-supabase";
 import {
+  groupExpenseRowToExpense,
+  listGroupExpenses,
   recordSettlement,
   softDeleteGroupExpenseByLocalId,
   upsertGroupExpenseByLocalId,
@@ -794,13 +798,14 @@ export function ExpenseDashboard({
   mode?: ExpenseDashboardMode;
   initialView?: ExpenseDashboardView;
 }) {
-  const { user } = useProductAuth();
+  const { user, loading: authLoading } = useProductAuth();
   const { profile } = useCurrentUserProfile();
   const personalMode = mode === "personal";
   const normalizeExpenseCategory = personalMode ? normalizePersonalCategory : normalizeGroupExpenseCategory;
   const expenseCategoryIds = personalMode ? EXPENSE_CATEGORIES : GROUP_EXPENSE_CATEGORIES;
   const getCategoryLabel = personalMode ? getFinanceCategoryLabel : getGroupCategoryLabel;
   const [hydrated, setHydrated] = useState(false);
+  const [cloudHydrated, setCloudHydrated] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>(() => tabForExpenseView(initialView));
   const [currency, setCurrency] = useState<Currency>("NPR");
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
@@ -897,6 +902,17 @@ export function ExpenseDashboard({
   );
 
   useEffect(() => {
+    if (authLoading) return;
+
+    // Authenticated users must not paint browser-local expenses — wait for Supabase.
+    if (user?.id && isSupabaseConfigured()) {
+      setExpenses([]);
+      setActivities([]);
+      setHydrated(true);
+      setCloudHydrated(false);
+      return;
+    }
+
     if (personalMode) {
       const stored = loadPersonalExpenseState();
       if (stored) {
@@ -930,8 +946,9 @@ export function ExpenseDashboard({
         }
       }
     }
+    setCloudHydrated(true);
     setHydrated(true);
-  }, [personalMode]);
+  }, [personalMode, user?.id, authLoading]);
 
   useEffect(() => {
     if (!hydrated || !user?.id || !isSupabaseConfigured()) return;
@@ -951,7 +968,7 @@ export function ExpenseDashboard({
           setGroupProfile(remote);
         }
       } catch {
-        /* local fallback remains */
+        /* settings optional */
       }
     })();
     return () => {
@@ -966,18 +983,77 @@ export function ExpenseDashboard({
       try {
         const client = getSupabaseBrowserClient();
         const rows = await listPersistedPersonalExpenses(client, user.id);
-        if (cancelled || rows.length === 0) return;
+        if (cancelled) return;
 
+        // Always apply cloud — including empty. Never keep browser-local as truth.
         const remoteExpenses = rows.map(expenseFromTransactionRow);
-        const remoteMembers = Array.from(new Set(rows.map((row) => row.member_id || "personal-user")));
-        setExpenses(remoteExpenses);
-        setMembers(remoteMembers.length > 0 ? remoteMembers : ["personal-user"]);
-        setProfiles((current) => deriveProfilesFromPersonalTransactions(rows, current).profiles);
+        if (rows.length === 0) {
+          const empty = emptyPersonalExpenseState();
+          setExpenses(empty.expenses);
+          setMembers(empty.members.length > 0 ? empty.members : ["personal-user"]);
+          setProfiles(empty.profiles);
+          setActivities(empty.activities);
+        } else {
+          const remoteMembers = Array.from(new Set(rows.map((row) => row.member_id || "personal-user")));
+          setExpenses(remoteExpenses);
+          setMembers(remoteMembers.length > 0 ? remoteMembers : ["personal-user"]);
+          setProfiles((current) => deriveProfilesFromPersonalTransactions(rows, current).profiles);
+        }
+        setCloudHydrated(true);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[expense-dashboard] personal expense hydrate failed", error);
         }
-        toast.error(error instanceof Error ? error.message : "Could not load saved expenses from Supabase.");
+        if (!cancelled) {
+          const empty = emptyPersonalExpenseState();
+          setExpenses(empty.expenses);
+          setMembers(["personal-user"]);
+          setProfiles({});
+          setActivities([]);
+          setCloudHydrated(true);
+          toast.error(error instanceof Error ? error.message : "Could not load saved expenses from Supabase.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, personalMode, user?.id]);
+
+  useEffect(() => {
+    if (!hydrated || personalMode || !user?.id || !isSupabaseConfigured()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const client = getSupabaseBrowserClient();
+        const all = [];
+        let cursor: string | null = null;
+        do {
+          const page = await listGroupExpenses(client, user.id, { limit: 100, cursor });
+          all.push(...page.rows);
+          cursor = page.nextCursor;
+        } while (cursor && !cancelled);
+        if (cancelled) return;
+
+        const remoteExpenses = all.map(groupExpenseRowToExpense);
+        const remoteMembers = Array.from(new Set(remoteExpenses.map((e) => e.payerId).filter(Boolean)));
+        setExpenses(remoteExpenses);
+        if (remoteMembers.length > 0) {
+          setMembers((current) => (current.length > 0 ? current : remoteMembers));
+        } else if (remoteExpenses.length === 0) {
+          const empty = emptyGroupExpenseState();
+          setExpenses(empty.expenses);
+        }
+        setCloudHydrated(true);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[expense-dashboard] group expense hydrate failed", error);
+        }
+        if (!cancelled) {
+          setExpenses([]);
+          setCloudHydrated(true);
+          toast.error(error instanceof Error ? error.message : "Could not load group expenses from Supabase.");
+        }
       }
     })();
     return () => {
@@ -991,6 +1067,8 @@ export function ExpenseDashboard({
 
   useEffect(() => {
     if (!hydrated) return;
+    // Authenticated: do not write stale local blobs until cloud has overwritten React state.
+    if (user?.id && isSupabaseConfigured() && !cloudHydrated) return;
     if (skipNextSave.current) {
       skipNextSave.current = false;
       return;
@@ -1022,7 +1100,7 @@ export function ExpenseDashboard({
         logoUrl: groupProfile.logoUrl,
       });
     }
-  }, [hydrated, personalMode, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, groupProfile]);
+  }, [hydrated, cloudHydrated, personalMode, user?.id, expenses, members, profiles, activities, exchangeRate, currency, settlementOverrides, groupProfile]);
 
   useEffect(() => {
     if (!members.length) return;

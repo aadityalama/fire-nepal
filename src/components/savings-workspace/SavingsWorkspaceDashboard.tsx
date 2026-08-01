@@ -27,8 +27,8 @@ import {
   createGoalId,
   loadSavingsWorkspaceState,
   saveSavingsWorkspaceState,
+  sanitizeSavingsWorkspaceState,
 } from "@/lib/savings/savings-storage";
-import { mergeDurableRecords } from "@/lib/persistence/permanent-data-policy";
 import {
   buildSavingsAiInsight,
   computeDashboardSummary,
@@ -41,13 +41,8 @@ import type { SavingsGoal, SavingsGoalFormInput, SavingsWorkspaceState } from "@
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
 
-function mergeSavingsWorkspaceState(local: SavingsWorkspaceState, remote: SavingsWorkspaceState): SavingsWorkspaceState {
-  return {
-    version: 1,
-    goals: sortGoalsStable(mergeDurableRecords(local.goals, remote.goals)),
-    transactions: mergeDurableRecords(local.transactions, remote.transactions).slice(0, 100),
-    balanceHidden: remote.balanceHidden || local.balanceHidden,
-  };
+function emptySavingsWorkspaceState(): SavingsWorkspaceState {
+  return sanitizeSavingsWorkspaceState(null);
 }
 
 function SummaryCard({
@@ -77,7 +72,7 @@ function SummaryCard({
 
 export function SavingsWorkspaceDashboard() {
   const { user } = useProductAuth();
-  const [state, setState] = useState<SavingsWorkspaceState>(() => loadSavingsWorkspaceState());
+  const [state, setState] = useState<SavingsWorkspaceState>(() => emptySavingsWorkspaceState());
   const [hydrated, setHydrated] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
@@ -87,11 +82,11 @@ export function SavingsWorkspaceDashboard() {
     let cancelled = false;
 
     async function hydrate() {
-      const local = loadSavingsWorkspaceState();
-      if (!cancelled) setState(local);
-
+      // Guests may use localStorage. Authenticated users must use Supabase only.
       if (!user?.id) {
+        const local = loadSavingsWorkspaceState();
         if (!cancelled) {
+          setState(local);
           setHydrated(true);
         }
         return;
@@ -100,31 +95,19 @@ export function SavingsWorkspaceDashboard() {
       try {
         const remote = await fetchSavingsWorkspace();
         if (cancelled) return;
-        if (remote) {
-          const merged = mergeSavingsWorkspaceState(local, remote);
-          setState(merged);
-          saveSavingsWorkspaceState(merged);
-          if (JSON.stringify(merged) !== JSON.stringify(remote)) {
-            void saveSavingsWorkspaceToCloud(merged).catch((error) => {
-              if (process.env.NODE_ENV !== "production") {
-                console.error("[savings-workspace] background merge sync failed", error);
-              }
-            });
-          }
-        } else if (local.goals.length > 0 || local.transactions.length > 0) {
-          const saved = await saveSavingsWorkspaceToCloud(local);
-          if (cancelled) return;
-          setState(saved);
-          saveSavingsWorkspaceState(saved);
-        } else {
-          setState(local);
-        }
+        // Empty cloud ⇒ empty UI. Never merge or seed from browser-local data.
+        const next = remote ?? emptySavingsWorkspaceState();
+        setState(next);
+        saveSavingsWorkspaceState(next);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[savings-workspace] hydrate failed", error);
         }
         if (!cancelled) {
-          setState(local);
+          const empty = emptySavingsWorkspaceState();
+          setState(empty);
+          saveSavingsWorkspaceState(empty);
+          toast.error(error instanceof Error ? error.message : "Could not load savings from Supabase.");
         }
       } finally {
         if (!cancelled) setHydrated(true);
@@ -157,28 +140,11 @@ export function SavingsWorkspaceDashboard() {
         saveSavingsWorkspaceState(next);
         return next;
       }
-      try {
-        const saved = await saveSavingsWorkspaceToCloud(next);
-        const remote = (await fetchSavingsWorkspace()) ?? saved;
-        const fresh = mergeSavingsWorkspaceState(next, remote);
-        setState(fresh);
-        saveSavingsWorkspaceState(fresh);
-        if (JSON.stringify(fresh) !== JSON.stringify(remote)) {
-          void saveSavingsWorkspaceToCloud(fresh).catch((error) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[savings-workspace] background merge sync failed", error);
-            }
-          });
-        }
-        return fresh;
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[savings-workspace] cloud save failed; keeping local state", error);
-        }
-        setState(next);
-        saveSavingsWorkspaceState(next);
-        return next;
-      }
+      const saved = await saveSavingsWorkspaceToCloud(next);
+      const remote = (await fetchSavingsWorkspace()) ?? saved;
+      setState(remote);
+      saveSavingsWorkspaceState(remote);
+      return remote;
     },
     [user?.id],
   );

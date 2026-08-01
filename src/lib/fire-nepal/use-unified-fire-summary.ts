@@ -7,6 +7,7 @@ import { loadWealthPortfolioState, portfolioStorageKey } from "@/components/port
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
+import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
@@ -64,7 +65,11 @@ export function useUnifiedFireSummary(): {
   useEffect(() => {
     const onExternal = () => resync();
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-    return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    return () => {
+      window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    };
   }, [resync]);
 
   useEffect(() => {

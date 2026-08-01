@@ -9,6 +9,7 @@ import {
   INSURANCE_MODULE_SYNC_EVENT,
   SAVINGS_MODULE_SYNC_EVENT,
 } from "@/lib/cashflow/live-sync-events";
+import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { computeCashflowLiveMetrics } from "@/lib/cashflow/cashflow-live-metrics";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
@@ -54,6 +55,7 @@ export function useInsuranceEngineInputs(): {
     window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
     window.addEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, bump);
     window.addEventListener("storage", bump);
     window.addEventListener("focus", bump);
     document.addEventListener("visibilitychange", bump);
@@ -61,6 +63,7 @@ export function useInsuranceEngineInputs(): {
       window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, bump);
       window.removeEventListener("storage", bump);
       window.removeEventListener("focus", bump);
       document.removeEventListener("visibilitychange", bump);

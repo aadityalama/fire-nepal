@@ -15,6 +15,7 @@ import {
   setSupabaseAuthRememberMe,
 } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { hydrateAuthenticatedFinanceCache } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { upsertUserProfileFields } from "@/services/user-profile-supabase";
 
 export type SignupOptions = {
@@ -271,6 +272,19 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !user?.id) return;
+    let cancelled = false;
+    void hydrateAuthenticatedFinanceCache(user.id).catch((error) => {
+      if (!cancelled && process.env.NODE_ENV !== "production") {
+        console.error("[auth] finance cloud cache hydrate failed", error);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const login = useCallback(async (email: string, password: string, rememberMe = true): Promise<LoginResult> => {
     if (loginInFlightRef.current) return loginInFlightRef.current;

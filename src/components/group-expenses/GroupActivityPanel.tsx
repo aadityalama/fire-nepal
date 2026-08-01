@@ -16,7 +16,6 @@ import {
   groupExpensePayerName,
   groupExpenseRowToExpense,
   listGroupExpenses,
-  syncLocalExpensesToGroupExpenses,
   type GroupExpenseRow,
 } from "@/services/group-expenses-supabase";
 import { buildActivityMessage } from "@/components/ExpenseTimeline";
@@ -88,19 +87,9 @@ export function GroupActivityPanel({
   useEffect(() => {
     if (!canUseRemote || !userId || syncedRef.current) return;
     syncedRef.current = true;
-    void (async () => {
-      try {
-        const client = getSupabaseBrowserClient();
-        await syncLocalExpensesToGroupExpenses(client, userId, expenses);
-        await loadPage(true);
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[group-expenses] local sync failed", error);
-        }
-        await loadPage(true);
-      }
-    })();
-  }, [canUseRemote, userId, expenses, loadPage]);
+    // Cloud is source of truth — never seed browser-local expenses into an empty workspace.
+    void loadPage(true);
+  }, [canUseRemote, userId, loadPage]);
 
   useEffect(() => {
     if (!canUseRemote) return;
