@@ -25,7 +25,6 @@ import {
   ensureInsuranceSchema,
   fetchInsurancePolicies,
   publishInsuranceRuntimeProbe,
-  syncInsurancePoliciesFromLocal,
   updateInsurancePolicy,
 } from "@/lib/insurance/insurance-api";
 import { computeInsuranceRecommendation } from "@/lib/insurance/insurance-engine";
@@ -41,11 +40,9 @@ import {
   createPolicyId,
   loadInsuranceWorkspaceState,
   markInsuranceCloudPrimary,
-  markInsuranceFingerprintsMigrated,
   replaceInsuranceCacheWithCloud,
   saveInsuranceWorkspaceState,
 } from "@/lib/insurance/insurance-storage";
-import { buildInsuranceImportFingerprint } from "@/lib/insurance/insurance-mapper";
 import type { InsurancePolicy, InsurancePolicyFormInput, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
 import {
   normalizeInsurancePolicy,
@@ -200,9 +197,10 @@ export function InsuranceWorkspaceDashboard() {
         return;
       }
 
-      // Instant paint from cache only — must be replaced by Supabase before hydrate completes.
+      // Authenticated: never paint browser-local policies as source of truth.
+      // Instant empty shell until Supabase responds; localStorage is offline cache only.
       if (!cancelled) {
-        setState({ version: 1, policies: withDerivedStatus(local.policies) });
+        setState({ version: 1, policies: [] });
         setCloudReady(false);
       }
 
@@ -212,25 +210,13 @@ export function InsuranceWorkspaceDashboard() {
           throw new Error(schema.message || "Insurance cloud table is not available yet.");
         }
 
-        // 1) Migrate any browser-local orphans into Supabase (deduped server-side).
-        const synced = await syncInsurancePoliciesFromLocal(local.policies);
-        const syncedFingerprints = local.policies.map((policy) =>
-          buildInsuranceImportFingerprint({
-            type: policy.type,
-            provider: policy.provider,
-            coverageAmountNpr: policy.coverageAmountNpr,
-            premiumNpr: policy.premiumNpr,
-            startDate: policy.startDate,
-            policyNumber: policy.policyNumber,
-          }),
-        );
-        markInsuranceFingerprintsMigrated(user.id, syncedFingerprints);
-
-        // 2) Force a fresh Supabase read after migration (do not trust sync body alone).
+        // Supabase is the only source of truth after login.
+        // Do NOT upload browser-local policies into cloud on hydrate — that causes
+        // Chrome/Safari/Naver divergence for the same user.
         const fresh = await fetchInsurancePolicies();
         const cloudPolicies = withDerivedStatus(fresh.policies);
 
-        // 3) Clear stale localStorage, keep cloud snapshot as offline cache only.
+        // Overwrite offline cache with cloud snapshot (including empty).
         replaceInsuranceCacheWithCloud(cloudPolicies);
         markInsuranceCloudPrimary(user.id);
 
@@ -248,14 +234,14 @@ export function InsuranceWorkspaceDashboard() {
             localStoragePolicyCount: localCountBefore,
             localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
             policyIds: fresh.policyIds,
-            uploadedCount: synced.uploadedIds.length,
+            uploadedCount: 0,
             protectionScorePct: null,
             table: fresh.meta?.table ?? "finance_insurance_policies",
             supabaseUrl: fresh.meta?.supabaseUrl ?? null,
           });
         }
       } catch (error) {
-        console.error("[insurance-workspace] hydrate/sync failed — trying fresh Supabase fetch", error);
+        console.error("[insurance-workspace] hydrate failed — trying fresh Supabase fetch", error);
         try {
           const remote = await fetchInsurancePolicies();
           const cloudPolicies = withDerivedStatus(remote.policies);
@@ -283,32 +269,33 @@ export function InsuranceWorkspaceDashboard() {
             });
           }
         } catch (fetchError) {
-          console.error("[insurance-workspace] cloud fetch failed — offline cache only", fetchError);
+          console.error("[insurance-workspace] cloud fetch failed — empty UI (not localStorage)", fetchError);
           clearInsuranceCloudPrimary(user.id);
           clearInsuranceWorkspaceCache();
-          // Keep in-memory local for offline continuity, but wipe durable primary storage
-          // so a later successful login cannot resurrect a divergent browser-only set.
           if (!cancelled) {
-            setState({ version: 1, policies: withDerivedStatus(local.policies) });
-            cacheInsurancePoliciesLocally(local.policies);
+            setState({ version: 1, policies: [] });
             setCloudReady(false);
             setHydrated(true);
             publishInsuranceRuntimeProbe({
               at: new Date().toISOString(),
               browser,
               userId: user.id,
-              dataLoadedFrom: "localStorage",
-              renderedSource: "localStorage",
+              dataLoadedFrom: "supabase",
+              renderedSource: "supabase",
               supabasePolicyCount: 0,
               localStoragePolicyCount: localCountBefore,
               localStoragePolicyCountAfterCache: countInsurancePoliciesInLocalStorage(),
-              policyIds: local.policies.map((p) => p.id),
+              policyIds: [],
               uploadedCount: 0,
               protectionScorePct: null,
               table: "finance_insurance_policies",
               supabaseUrl: null,
               error: fetchError instanceof Error ? fetchError.message : String(fetchError),
             });
+            appToast.error(
+              fetchError instanceof Error ? fetchError.message : "Could not load insurance from Supabase.",
+              { id: "insurance-hydrate-error" },
+            );
           }
         }
       }
