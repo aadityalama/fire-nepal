@@ -59,7 +59,7 @@ async function hydrateSavingsCache(): Promise<void> {
 }
 
 async function hydrateInsuranceCache(): Promise<void> {
-  const policies = await fetchInsurancePolicies();
+  const { policies } = await fetchInsurancePolicies();
   replaceInsuranceCacheWithCloud(policies);
 }
 
@@ -161,7 +161,7 @@ export async function hydrateAuthenticatedFinanceCache(
         result.insuranceOk = true;
       })
       .catch((error) => {
-        saveInsuranceWorkspaceState({ version: 1, policies: [] });
+        replaceInsuranceCacheWithCloud([]);
         if (process.env.NODE_ENV !== "production") {
           console.error("[finance-cache] insurance hydrate failed", error);
         }
