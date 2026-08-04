@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeCashflowState } from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
-import { isMissingCashflowTableError } from "@/services/ensure-cashflow-schema";
 import type { Database, Json } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
@@ -14,6 +13,24 @@ export type CashflowSnapshotRow = {
 /** Marker row in public.fire_goals used when cashflow_snapshots is unavailable. */
 export const CASHFLOW_FIRE_GOALS_MARKER = "__fire_nepal_cashflow_snapshots_v1__";
 export const CASHFLOW_FIRE_GOALS_TITLE = "Cashflow workspace";
+
+export function isMissingCashflowTableError(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : error instanceof Error
+        ? error.message
+        : String(error ?? "");
+  const code =
+    error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const lower = message.toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    (lower.includes("cashflow_snapshots") &&
+      (lower.includes("does not exist") || lower.includes("schema cache") || lower.includes("could not find the table")))
+  );
+}
 
 export function hasCashflowData(state: CashflowDashboardState): boolean {
   const income = Object.values(state.income).some((value) => typeof value === "number" && value > 0);

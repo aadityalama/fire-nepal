@@ -226,20 +226,4 @@ export async function ensureCashflowSnapshotsSchema(): Promise<EnsureCashflowSch
   };
 }
 
-export function isMissingCashflowTableError(error: unknown): boolean {
-  const message =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message?: unknown }).message ?? "")
-      : error instanceof Error
-        ? error.message
-        : String(error ?? "");
-  const code =
-    error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-  const lower = message.toLowerCase();
-  return (
-    code === "42P01" ||
-    code === "PGRST205" ||
-    (lower.includes("cashflow_snapshots") &&
-      (lower.includes("does not exist") || lower.includes("schema cache") || lower.includes("could not find the table")))
-  );
-}
+export { isMissingCashflowTableError } from "@/services/cashflow-supabase";

@@ -77,6 +77,8 @@ test("Cashflow falls back to fire_goals when cashflow_snapshots is missing", () 
   assert.match(source, /isMissingCashflowTableError/);
   assert.match(source, /loadCashflowFromFireGoals/);
   assert.match(source, /saveCashflowToFireGoals/);
+  assert.doesNotMatch(source, /ensure-cashflow-schema/);
+  assert.doesNotMatch(source, /from ["']pg["']/);
 });
 
 test("Savings authenticated hydrate is cloud-only and clears localStorage cache", () => {

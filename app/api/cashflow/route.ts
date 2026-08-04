@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { sanitizeCashflowState } from "@/components/cashflow/cashflow-storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { ensureCashflowSnapshotsSchema, isMissingCashflowTableError } from "@/services/ensure-cashflow-schema";
-import { loadCashflowFromSupabase, saveCashflowToSupabase } from "@/services/cashflow-supabase";
+import { ensureCashflowSnapshotsSchema } from "@/services/ensure-cashflow-schema";
+import {
+  isMissingCashflowTableError,
+  loadCashflowFromSupabase,
+  saveCashflowToSupabase,
+} from "@/services/cashflow-supabase";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
