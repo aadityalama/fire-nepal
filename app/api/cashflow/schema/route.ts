@@ -138,8 +138,18 @@ async function runHttpVerify(
     const origin = new URL(req.url).origin;
     const token = signedIn.data.session.access_token;
     const sampleState = {
-      income: { salary: 120000 },
-      incomeEntries: [],
+      income: {},
+      incomeEntries: [
+        {
+          id: "verify-salary-1",
+          name: "Verify Salary",
+          amount: 120000,
+          incomeType: "salary",
+          frequency: "monthly",
+          date: "2026-08-01",
+          createdAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
       expenses: { rent: 30000 },
       emergencyCashReserve: 75000,
     };
@@ -162,15 +172,21 @@ async function runHttpVerify(
     });
     const getJson = (await getRes.json().catch(() => null)) as {
       ok?: boolean;
-      snapshot?: { state?: { income?: { salary?: number } } } | null;
+      snapshot?: {
+        state?: {
+          emergencyCashReserve?: number;
+          incomeEntries?: Array<{ amount?: number; id?: string }>;
+        };
+      } | null;
       error?: string;
     } | null;
 
+    const entries = getJson?.snapshot?.state?.incomeEntries ?? [];
+    const hasEntry = entries.some((e) => e.id === "verify-salary-1" && Number(e.amount) === 120000);
+    const reserveOk = Number(getJson?.snapshot?.state?.emergencyCashReserve ?? 0) === 75000;
+
     const putOk = putRes.status === 200 && putJson?.ok === true;
-    const getOk =
-      getRes.status === 200 &&
-      getJson?.ok === true &&
-      Number(getJson?.snapshot?.state?.income?.salary ?? 0) === 120000;
+    const getOk = getRes.status === 200 && getJson?.ok === true && hasEntry && reserveOk;
 
     return {
       ok: putOk && getOk,
