@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sanitizeCashflowState } from "@/components/cashflow/cashflow-storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureCashflowSnapshotsSchema, isMissingCashflowTableError } from "@/services/ensure-cashflow-schema";
 import { loadCashflowFromSupabase, saveCashflowToSupabase } from "@/services/cashflow-supabase";
 
 function bad(msg: string, status = 400) {
@@ -38,7 +39,15 @@ export async function PUT(req: Request) {
     if (!data.user) return bad("Unauthorized", 401);
 
     const state = sanitizeCashflowState((raw as { state?: unknown })?.state);
-    const result = await saveCashflowToSupabase(sb, data.user.id, state);
+    let result = await saveCashflowToSupabase(sb, data.user.id, state);
+
+    if (!result.ok && isMissingCashflowTableError({ message: result.error })) {
+      const ensure = await ensureCashflowSnapshotsSchema();
+      if (ensure.ok) {
+        result = await saveCashflowToSupabase(sb, data.user.id, state);
+      }
+    }
+
     if (!result.ok) return bad(result.error, 500);
     return NextResponse.json({ ok: true, updatedAt: result.updatedAt });
   } catch (e) {

@@ -70,6 +70,15 @@ test("Savings and Insurance do not show temporary storage setup placeholders", (
   assert.doesNotMatch(insurance, /storage is being set up/i);
 });
 
+test("Cashflow falls back to fire_goals when cashflow_snapshots is missing", () => {
+  const source = read("src/services/cashflow-supabase.ts");
+  assert.match(source, /CASHFLOW_FIRE_GOALS_MARKER/);
+  assert.match(source, /cashflow_snapshots_v1/);
+  assert.match(source, /isMissingCashflowTableError/);
+  assert.match(source, /loadCashflowFromFireGoals/);
+  assert.match(source, /saveCashflowToFireGoals/);
+});
+
 test("Savings authenticated hydrate is cloud-only and clears localStorage cache", () => {
   const source = read("src/components/savings-workspace/SavingsWorkspaceDashboard.tsx");
   assert.match(source, /clearSavingsWorkspaceLocalCache\(/);
