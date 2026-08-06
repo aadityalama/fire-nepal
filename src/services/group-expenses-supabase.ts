@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeGroupCategory } from "@/lib/group-expenses/categories";
-import { memberDisplayName } from "@/lib/expense-members";
+import { memberDisplayName, removeMemberFromExpenseList } from "@/lib/expense-members";
 import type { Expense, RoommateProfile } from "@/lib/expense-utils";
 import type { Database, Json } from "@/types/supabase-database";
 import { ensureAuthenticatedWorkspace } from "@/services/workspace-supabase";
@@ -427,6 +427,18 @@ export async function upsertGroupMember(
   }
 
   if (existing) {
+    // Never resurrect soft-deleted members via upsert — hydrate used to clear
+    // deleted_at after expense rows still referenced the member, bringing them
+    // back as "Member N" placeholders.
+    if (existing.deleted_at) {
+      console.info("[group-members] upsert skipped soft-deleted member", {
+        workspaceId: workspace.id,
+        localMemberId,
+        memberRowId: existing.id,
+      });
+      return null;
+    }
+
     const { data, error } = await client
       .from("group_members")
       .update(updatePayload)
@@ -446,7 +458,6 @@ export async function upsertGroupMember(
       workspaceId: workspace.id,
       localMemberId,
       name: data.name,
-      restored: Boolean(existing.deleted_at),
     });
     return data;
   }
@@ -487,12 +498,14 @@ export async function softDeleteGroupMemberByLocalId(
     return false;
   }
 
-  const { error } = await client
+  const deletedAt = new Date().toISOString();
+  const { data, error } = await client
     .from("group_members")
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ deleted_at: deletedAt, updated_at: deletedAt })
     .eq("workspace_id", workspace.id)
     .eq("local_member_id", localMemberId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .select("id");
 
   if (error) {
     console.error("[group-members] soft delete failed", {
@@ -503,8 +516,141 @@ export async function softDeleteGroupMemberByLocalId(
     return false;
   }
 
-  console.info("[group-members] soft delete ok", { workspaceId: workspace.id, localMemberId });
+  if (!data?.length) {
+    // Already soft-deleted counts as success so cascade retries stay idempotent.
+    console.info("[group-members] soft delete noop (already deleted or missing)", {
+      workspaceId: workspace.id,
+      localMemberId,
+    });
+    return true;
+  }
+
+  console.info("[group-members] soft delete ok", {
+    workspaceId: workspace.id,
+    localMemberId,
+    rows: data.length,
+  });
   return true;
+}
+
+export async function findSoftDeletedLocalMemberIds(
+  client: Client,
+  userId: string,
+  localMemberIds: string[],
+): Promise<string[]> {
+  if (localMemberIds.length === 0) return [];
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-member-deleted-lookup");
+  if (!workspace) return [];
+
+  const { data, error } = await client
+    .from("group_members")
+    .select("local_member_id")
+    .eq("workspace_id", workspace.id)
+    .in("local_member_id", localMemberIds)
+    .not("deleted_at", "is", null);
+
+  if (error) {
+    console.warn("[group-members] soft-deleted lookup failed", {
+      workspaceId: workspace.id,
+      localMemberIds,
+      error,
+    });
+    return [];
+  }
+
+  return Array.from(new Set((data ?? []).map((row) => row.local_member_id)));
+}
+
+async function persistExpenseMemberRemoval(
+  client: Client,
+  userId: string,
+  expenses: Expense[],
+  memberId: string,
+): Promise<{ ok: boolean; kept: Expense[]; error?: string }> {
+  const { kept, removedIds, updated } = removeMemberFromExpenseList(expenses, memberId);
+
+  for (const localExpenseId of removedIds) {
+    const ok = await softDeleteGroupExpenseByLocalId(client, userId, localExpenseId);
+    if (!ok) {
+      return {
+        ok: false,
+        kept: expenses,
+        error: "Could not remove expenses paid by this member from Supabase.",
+      };
+    }
+  }
+
+  for (const expense of updated) {
+    const row = await upsertGroupExpenseByLocalId(client, userId, {
+      localExpenseId: expense.id,
+      title: expense.title,
+      amount: expense.amount,
+      payerMemberId: expense.payerId,
+      category: expense.category,
+      splitEqually: expense.splitEqually !== false,
+      expenseDate: expense.date,
+      splitAmong: expense.splitAmong,
+      splitPercentages: expense.splitPercentages,
+      amountCurrency: expense.amountCurrency,
+      receiptImageUrl: expense.receiptImage,
+      notes: expense.notes,
+    });
+    if (!row) {
+      return {
+        ok: false,
+        kept: expenses,
+        error: "Could not update expenses that included this member in Supabase.",
+      };
+    }
+  }
+
+  return { ok: true, kept };
+}
+
+/** Soft-delete a member and cascade-clean related group_expenses so hydrate cannot resurrect them. */
+export async function deleteGroupMemberCascade(
+  client: Client,
+  userId: string,
+  localMemberId: string,
+  expenses: Expense[],
+): Promise<{ ok: boolean; keptExpenses: Expense[]; error?: string }> {
+  const expenseResult = await persistExpenseMemberRemoval(client, userId, expenses, localMemberId);
+  if (!expenseResult.ok) {
+    return { ok: false, keptExpenses: expenses, error: expenseResult.error };
+  }
+
+  const deleted = await softDeleteGroupMemberByLocalId(client, userId, localMemberId);
+  if (!deleted) {
+    return {
+      ok: false,
+      keptExpenses: expenseResult.kept,
+      error: "Could not delete member from group_members.",
+    };
+  }
+
+  return { ok: true, keptExpenses: expenseResult.kept };
+}
+
+/** Clean expense rows that still reference soft-deleted members (repair after prior broken deletes). */
+export async function purgeSoftDeletedMemberExpenseRefs(
+  client: Client,
+  userId: string,
+  expenses: Expense[],
+  softDeletedLocalIds: string[],
+): Promise<Expense[]> {
+  let next = expenses;
+  for (const memberId of softDeletedLocalIds) {
+    const result = await persistExpenseMemberRemoval(client, userId, next, memberId);
+    if (!result.ok) {
+      console.warn("[group-members] failed to purge expense refs for soft-deleted member", {
+        memberId,
+        error: result.error,
+      });
+      continue;
+    }
+    next = result.kept;
+  }
+  return next;
 }
 
 export async function syncGroupMembers(

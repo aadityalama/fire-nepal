@@ -27,6 +27,7 @@ import {
   History,
   Info,
   LayoutDashboard,
+  Loader2,
   MessageCircle,
   MoreHorizontal,
   Pencil,
@@ -131,13 +132,15 @@ import {
   upsertExpenseTransactionByLocalId,
 } from "@/services/expense-transactions-supabase";
 import {
+  deleteGroupMemberCascade,
+  findSoftDeletedLocalMemberIds,
   groupExpenseRowToExpense,
   groupMemberRowToProfile,
   listGroupExpenses,
   listGroupMembers,
+  purgeSoftDeletedMemberExpenseRefs,
   recordSettlement,
   softDeleteGroupExpenseByLocalId,
-  softDeleteGroupMemberByLocalId,
   syncGroupMembers,
   upsertGroupExpenseByLocalId,
   upsertGroupMember,
@@ -147,6 +150,7 @@ import {
   generateMemberId,
   memberDisplayName,
   memberNameMap,
+  removeMemberFromExpenseList,
   resolveExpensePayerName,
 } from "@/lib/expense-members";
 import {
@@ -831,6 +835,7 @@ export function ExpenseDashboard({
   const [receiptOcrText, setReceiptOcrText] = useState("");
   const [showCelebration, setShowCelebration] = useState(false);
   const [settlementOverrides, setSettlementOverrides] = useState<Record<string, Record<string, number>>>({});
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [shareModal, setShareModal] = useState<null | { text: string; pageUrl: string }>(null);
   const [shareModalKey, setShareModalKey] = useState(0);
   const [settlementShareOpen, setSettlementShareOpen] = useState(false);
@@ -1053,14 +1058,34 @@ export function ExpenseDashboard({
         } while (cursor && !cancelled);
         if (cancelled) return;
 
-        const remoteExpenses = all.map(groupExpenseRowToExpense);
+        const remoteExpenseRows = all.map(groupExpenseRowToExpense);
         console.info("[group-expenses] fetch ok", {
           userId: user.id,
-          expenseCount: remoteExpenses.length,
-          payerIds: remoteExpenses.map((expense) => expense.payerId),
+          expenseCount: remoteExpenseRows.length,
+          payerIds: remoteExpenseRows.map((expense) => expense.payerId),
         });
 
-        const referencedIds = collectExpenseMemberIds(remoteExpenses);
+        let remoteExpenses = remoteExpenseRows;
+        let referencedIds = collectExpenseMemberIds(remoteExpenses);
+        const missingFromRoster = referencedIds.filter((id) => !nextProfiles[id]?.name?.trim());
+        if (missingFromRoster.length > 0) {
+          const softDeletedIds = await findSoftDeletedLocalMemberIds(client, user.id, missingFromRoster);
+          if (softDeletedIds.length > 0) {
+            console.info("[group-members] purging expense refs for soft-deleted members", {
+              userId: user.id,
+              softDeletedIds,
+            });
+            remoteExpenses = await purgeSoftDeletedMemberExpenseRefs(
+              client,
+              user.id,
+              remoteExpenses,
+              softDeletedIds,
+            );
+            if (cancelled) return;
+            referencedIds = collectExpenseMemberIds(remoteExpenses);
+          }
+        }
+
         const unresolvedFromCloud = referencedIds.filter((id) => !nextProfiles[id]?.name?.trim());
 
         // One-time recovery: older clients kept names only in localStorage and never
@@ -1500,34 +1525,44 @@ export function ExpenseDashboard({
     setNewMember("");
   }
 
-  function removeMember(memberId: string) {
-    if (members.length <= 2) return;
+  async function removeMember(memberId: string) {
+    if (members.length <= 2) {
+      toast.error("Keep at least 2 members for group expenses.");
+      return;
+    }
+    if (removingMemberId) return;
+
+    const displayName = memberDisplayName(memberId, profiles);
     const remaining = members.filter((member) => member !== memberId);
-    setMembers((current) => current.filter((member) => member !== memberId));
+    const previousMembers = members;
+    const previousProfiles = profiles;
+    const previousExpenses = expenses;
+    const previousOverrides = settlementOverrides;
+    const previousSelected = selectedMember;
+    const previousForm = form;
+    const { kept } = removeMemberFromExpenseList(expenses, memberId);
+
+    setRemovingMemberId(memberId);
+    setMembers(remaining);
     setProfiles((current) => {
       const next = { ...current };
       delete next[memberId];
       return next;
     });
-    if (!personalMode && user?.id && isSupabaseConfigured()) {
-      void softDeleteGroupMemberByLocalId(getSupabaseBrowserClient(), user.id, memberId);
-    }
-    setExpenses((current) =>
-      current
-        .filter((expense) => expense.payerId !== memberId)
-        .map((expense) => {
-          if (!expense.splitAmong?.includes(memberId)) return expense;
-          const nextAmong = expense.splitAmong.filter((m) => m !== memberId);
-          const nextPct =
-            expense.splitPercentages &&
-            Object.fromEntries(Object.entries(expense.splitPercentages).filter(([k]) => k !== memberId));
-          return {
-            ...expense,
-            splitAmong: nextAmong.length > 0 ? nextAmong : undefined,
-            splitPercentages: nextPct && Object.keys(nextPct).length > 0 ? nextPct : undefined,
-          };
-        }),
-    );
+    setExpenses(kept);
+    setSettlementOverrides((current) => {
+      const next: Record<string, Record<string, number>> = {};
+      for (const [monthKey, map] of Object.entries(current)) {
+        const cleaned = Object.fromEntries(
+          Object.entries(map).filter(([key]) => {
+            const [from, to] = key.split("|");
+            return from !== memberId && to !== memberId;
+          }),
+        );
+        if (Object.keys(cleaned).length > 0) next[monthKey] = cleaned;
+      }
+      return next;
+    });
     setSelectedMember((current) => (current === memberId ? null : current));
     setForm((current) => {
       const payerNext = current.payerId === memberId ? remaining[0] ?? current.payerId : current.payerId;
@@ -1536,6 +1571,31 @@ export function ExpenseDashboard({
         filteredAmong.length > 0 ? filteredAmong : remaining.length > 0 ? remaining : current.splitAmong;
       return { ...current, payerId: payerNext, splitAmong: splitAmongNext };
     });
+
+    try {
+      if (!personalMode && user?.id && isSupabaseConfigured()) {
+        const result = await deleteGroupMemberCascade(
+          getSupabaseBrowserClient(),
+          user.id,
+          memberId,
+          previousExpenses,
+        );
+        if (!result.ok) {
+          throw new Error(result.error ?? "Could not delete member from Supabase.");
+        }
+      }
+      toast.success(`${displayName} removed`);
+    } catch (error) {
+      setMembers(previousMembers);
+      setProfiles(previousProfiles);
+      setExpenses(previousExpenses);
+      setSettlementOverrides(previousOverrides);
+      setSelectedMember(previousSelected);
+      setForm(previousForm);
+      toast.error(error instanceof Error ? error.message : "Could not delete member.");
+    } finally {
+      setRemovingMemberId(null);
+    }
   }
 
   function openAddExpenseModal() {
@@ -2580,6 +2640,7 @@ export function ExpenseDashboard({
               addMember={addMember}
               onOpenProfile={setSelectedMember}
               removeMember={removeMember}
+              removingMemberId={removingMemberId}
             />
           </section>
         )}
@@ -3502,6 +3563,7 @@ function GroupMembers({
   addMember,
   onOpenProfile,
   removeMember,
+  removingMemberId = null,
   compact = false,
   loading = false,
 }: {
@@ -3514,7 +3576,8 @@ function GroupMembers({
   setNewMember: (value: string) => void;
   addMember: () => void;
   onOpenProfile: (name: string) => void;
-  removeMember: (name: string) => void;
+  removeMember: (memberId: string) => void | Promise<void>;
+  removingMemberId?: string | null;
   compact?: boolean;
   loading?: boolean;
 }) {
@@ -3589,14 +3652,19 @@ function GroupMembers({
               </div>
               <button
                 type="button"
+                disabled={Boolean(removingMemberId) || members.length <= 2}
                 onClick={(event) => {
                   event.stopPropagation();
-                  removeMember(member);
+                  void removeMember(member);
                 }}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-50 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-50 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={`Remove ${memberDisplayName(member, profiles)}`}
               >
-                <Trash2 size={16} aria-hidden />
+                {removingMemberId === member ? (
+                  <Loader2 size={16} className="animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 size={16} aria-hidden />
+                )}
               </button>
             </div>
             {!compact ? (

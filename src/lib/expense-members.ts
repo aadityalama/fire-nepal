@@ -49,6 +49,52 @@ export function collectExpenseMemberIds(expenses: Expense[]): string[] {
   return Array.from(ids);
 }
 
+/** Drop a member from the expense list: delete rows they paid; strip them from splits. */
+export function removeMemberFromExpenseList(
+  expenses: Expense[],
+  memberId: string,
+): { kept: Expense[]; removedIds: number[]; updated: Expense[] } {
+  const kept: Expense[] = [];
+  const removedIds: number[] = [];
+  const updated: Expense[] = [];
+
+  for (const expense of expenses) {
+    if (expense.payerId === memberId) {
+      removedIds.push(expense.id);
+      continue;
+    }
+
+    const inAmong = expense.splitAmong?.includes(memberId) ?? false;
+    const inPct = Boolean(expense.splitPercentages && memberId in expense.splitPercentages);
+    if (!inAmong && !inPct) {
+      kept.push(expense);
+      continue;
+    }
+
+    const nextAmong = (expense.splitAmong ?? []).filter((id) => id !== memberId);
+    const nextPct = expense.splitPercentages
+      ? Object.fromEntries(Object.entries(expense.splitPercentages).filter(([key]) => key !== memberId))
+      : undefined;
+    const next: Expense = {
+      ...expense,
+      splitAmong: nextAmong.length > 0 ? nextAmong : undefined,
+      splitPercentages: nextPct && Object.keys(nextPct).length > 0 ? nextPct : undefined,
+    };
+    kept.push(next);
+    updated.push(next);
+  }
+
+  return { kept, removedIds, updated };
+}
+
+export function removeMembersFromExpenseList(expenses: Expense[], memberIds: string[]): Expense[] {
+  let next = expenses;
+  for (const memberId of memberIds) {
+    next = removeMemberFromExpenseList(next, memberId).kept;
+  }
+  return next;
+}
+
 type LegacyExpenseRow = Expense & { payer?: string };
 
 export function migrateExpenseToMemberIds(
