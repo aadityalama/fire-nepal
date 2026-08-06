@@ -71,6 +71,11 @@ export const SETTLEMENT_COLOR_PAYS = "#DC2626";
 export const SETTLEMENT_COLOR_NEUTRAL = "#111827";
 export const SETTLEMENT_COLOR_MUTED = "#6B7280";
 
+/** Fixed amount column (px) so Paid/Share/Balance stay fully visible in mobile PDF viewers. */
+const SETTLEMENT_AMOUNT_COL_WIDTH = 120;
+/** Distance from content right edge to amount right edge (~28px further left than the old 14px inset). */
+const SETTLEMENT_AMOUNT_RIGHT_INSET = 42;
+
 export function normalizeSettlementSetting(value?: string | null): string {
   return value?.trim() ?? "";
 }
@@ -614,14 +619,30 @@ function drawLabelAmountRow(
   fontSize = 12,
   amountWeight = 700,
 ) {
+  // Keep amounts clear of the page/card right edge (mobile PDF viewers often clip ~20–30px).
+  const amountRight = x + innerW - SETTLEMENT_AMOUNT_RIGHT_INSET;
+  const amountLeft = amountRight - SETTLEMENT_AMOUNT_COL_WIDTH;
+
   ctx.textAlign = "left";
   ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   ctx.fillStyle = "#6B7280";
   ctx.fillText(label, x, y);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(amountLeft, y - fontSize - 2, SETTLEMENT_AMOUNT_COL_WIDTH, fontSize + 8);
+  ctx.clip();
   ctx.textAlign = "right";
   ctx.font = `${amountWeight} ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
   ctx.fillStyle = amountColor;
-  ctx.fillText(amount, x + innerW, y);
+  // fillText never wraps; maxWidth only shrinks if a label exceeds the fixed column.
+  const textWidth = ctx.measureText(amount).width;
+  if (textWidth > SETTLEMENT_AMOUNT_COL_WIDTH) {
+    ctx.fillText(amount, amountRight, y, SETTLEMENT_AMOUNT_COL_WIDTH);
+  } else {
+    ctx.fillText(amount, amountRight, y);
+  }
+  ctx.restore();
   ctx.textAlign = "left";
 }
 
@@ -834,7 +855,8 @@ function drawSettlementCard(
     y = rowTop + 36;
 
     const detailX = textX;
-    const detailW = contentRight - detailX - 14;
+    // Full width to content edge; drawLabelAmountRow applies the amount-column inset.
+    const detailW = contentRight - detailX;
     drawLabelAmountRow(ctx, "Paid:", member.paidLabel, detailX, y, detailW, "#6B7280", 12, 500);
     y += 18;
     drawLabelAmountRow(ctx, "Share:", member.shareLabel, detailX, y, detailW, "#6B7280", 12, 500);
@@ -860,10 +882,26 @@ function drawSettlementCard(
       const transferCardH = 52;
       drawMemberCard(ctx, innerX, y, innerW, transferCardH);
       drawTransferNames(ctx, innerX + 14, y + 18, transfer.fromName, transfer.toName);
+      const transferAmountRight = contentRight - SETTLEMENT_AMOUNT_RIGHT_INSET;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(
+        transferAmountRight - SETTLEMENT_AMOUNT_COL_WIDTH,
+        y + 22,
+        SETTLEMENT_AMOUNT_COL_WIDTH,
+        22,
+      );
+      ctx.clip();
       ctx.textAlign = "right";
       ctx.font = "800 15px ui-sans-serif, system-ui, sans-serif";
       ctx.fillStyle = "#111827";
-      ctx.fillText(transfer.amountLabel, contentRight - 14, y + 38);
+      const transferAmountW = ctx.measureText(transfer.amountLabel).width;
+      if (transferAmountW > SETTLEMENT_AMOUNT_COL_WIDTH) {
+        ctx.fillText(transfer.amountLabel, transferAmountRight, y + 38, SETTLEMENT_AMOUNT_COL_WIDTH);
+      } else {
+        ctx.fillText(transfer.amountLabel, transferAmountRight, y + 38);
+      }
+      ctx.restore();
       ctx.textAlign = "left";
       y += transferCardH + 12;
     }
@@ -879,7 +917,8 @@ function drawSettlementCard(
   drawMemberCard(ctx, innerX, y, innerW, summaryCardH);
   let summaryY = y + 22;
   const summaryPadX = innerX + 14;
-  const summaryW = innerW - 28;
+  // Full width to content edge; drawLabelAmountRow applies the amount-column inset.
+  const summaryW = contentRight - summaryPadX;
 
   drawLabelAmountRow(
     ctx,

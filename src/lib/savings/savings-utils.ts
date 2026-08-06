@@ -17,7 +17,8 @@ export function formatPct(n: number, digits = 1) {
   return `${sign}${n.toFixed(digits)}%`;
 }
 
-function parseIsoDate(iso: string) {
+function parseIsoDate(iso: string | null | undefined) {
+  if (typeof iso !== "string" || !iso.trim()) return null;
   const [year, month, day] = iso.split("-").map(Number);
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day);
