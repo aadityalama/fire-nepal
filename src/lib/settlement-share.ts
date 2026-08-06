@@ -70,6 +70,25 @@ export const SETTLEMENT_COLOR_RECEIVES = "#10B981";
 export const SETTLEMENT_COLOR_PAYS = "#DC2626";
 export const SETTLEMENT_COLOR_NEUTRAL = "#111827";
 export const SETTLEMENT_COLOR_MUTED = "#6B7280";
+/** Official FIRE Nepal green used for footer + header brand lockup text. */
+export const SETTLEMENT_BRAND_GREEN = "#16a34a";
+
+/** Previous logo draw height was 36px; ~300% larger ⇒ 4× = 144px. */
+const SETTLEMENT_BRAND_LOGO_SIZE = 144;
+const SETTLEMENT_BRAND_CARD_PAD = 16;
+const SETTLEMENT_BRAND_TITLE_SIZE = 18;
+const SETTLEMENT_BRAND_SUBTITLE_SIZE = 13;
+const SETTLEMENT_BRAND_AFTER_LOGO_GAP = 12;
+const SETTLEMENT_BRAND_TEXT_GAP = 5;
+const SETTLEMENT_BRAND_CARD_W = SETTLEMENT_BRAND_LOGO_SIZE + SETTLEMENT_BRAND_CARD_PAD * 2;
+const SETTLEMENT_BRAND_CARD_H =
+  SETTLEMENT_BRAND_CARD_PAD +
+  SETTLEMENT_BRAND_LOGO_SIZE +
+  SETTLEMENT_BRAND_AFTER_LOGO_GAP +
+  SETTLEMENT_BRAND_TITLE_SIZE +
+  SETTLEMENT_BRAND_TEXT_GAP +
+  SETTLEMENT_BRAND_SUBTITLE_SIZE +
+  SETTLEMENT_BRAND_CARD_PAD;
 
 /** Fixed amount column (px) so Paid/Share/Balance stay fully visible in mobile PDF viewers. */
 const SETTLEMENT_AMOUNT_COL_WIDTH = 120;
@@ -440,21 +459,54 @@ async function preloadFireNepalLogo(): Promise<HTMLImageElement | null> {
   return loadImageSafe(FIRE_NEPAL_LOGO_SRC);
 }
 
-function drawFireNepalBrandLogo(
+function drawFireNepalBrandLockup(
   ctx: CanvasRenderingContext2D,
   logo: HTMLImageElement | null,
-  rightX: number,
+  contentRight: number,
   topY: number,
-  height: number,
-) {
-  if (!logo) return;
-  const aspect = logo.naturalWidth / Math.max(logo.naturalHeight, 1);
-  const drawH = height;
-  const drawW = drawH * aspect;
-  const x = rightX - drawW;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(logo, x, topY, drawW, drawH);
+): { width: number; height: number } {
+  const cardW = SETTLEMENT_BRAND_CARD_W;
+  const cardH = SETTLEMENT_BRAND_CARD_H;
+  const pad = SETTLEMENT_BRAND_CARD_PAD;
+  const logoSize = SETTLEMENT_BRAND_LOGO_SIZE;
+  const cardX = contentRight - cardW;
+  const cardY = topY;
+
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#E5E7EB";
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 18);
+  ctx.fill();
+  ctx.stroke();
+
+  const logoX = cardX + pad;
+  const logoY = cardY + pad;
+  if (logo) {
+    ctx.save();
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 22);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = "#ecfdf5";
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 22);
+    ctx.fill();
+  }
+
+  const centerX = cardX + cardW / 2;
+  let textY = logoY + logoSize + SETTLEMENT_BRAND_AFTER_LOGO_GAP + SETTLEMENT_BRAND_TITLE_SIZE - 2;
+  ctx.textAlign = "center";
+  ctx.fillStyle = SETTLEMENT_BRAND_GREEN;
+  ctx.font = `800 ${SETTLEMENT_BRAND_TITLE_SIZE}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillText("FIRE Nepal", centerX, textY);
+  textY += SETTLEMENT_BRAND_TITLE_SIZE + SETTLEMENT_BRAND_TEXT_GAP;
+  ctx.font = `600 ${SETTLEMENT_BRAND_SUBTITLE_SIZE}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillText("Smart Finance", centerX, textY);
+  ctx.textAlign = "left";
+
+  return { width: cardW, height: cardH };
 }
 
 function drawGroupLogo(
@@ -492,12 +544,12 @@ function drawSettlementBrandingHeader(
   logo: HTMLImageElement | null,
   fireNepalLogo: HTMLImageElement | null,
 ): number {
+  const brand = drawFireNepalBrandLockup(ctx, fireNepalLogo, contentRight, y);
+  const titleMaxRight = contentRight - brand.width - 18;
   const logoSize = 48;
   const textX = logo ? innerX + logoSize + 14 : innerX;
+  const titleMaxWidth = Math.max(80, titleMaxRight - textX);
   let cursorY = y;
-  const brandLogoH = 36;
-
-  drawFireNepalBrandLogo(ctx, fireNepalLogo, contentRight, y, brandLogoH);
 
   if (logo) {
     drawGroupLogo(ctx, innerX, y - 2, logoSize, logo);
@@ -508,31 +560,31 @@ function drawSettlementBrandingHeader(
     ctx.textAlign = "left";
     ctx.fillStyle = "#111827";
     ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(`🏠 ${DEFAULT_SETTLEMENT_TITLE}`, innerX, cursorY);
-    return cursorY + 28;
+    ctx.fillText(`🏠 ${DEFAULT_SETTLEMENT_TITLE}`, innerX, cursorY, Math.max(80, titleMaxRight - innerX));
+    return Math.max(cursorY + 28, y + brand.height + 10);
   }
 
   ctx.textAlign = "left";
   if (data.companyName) {
     ctx.fillStyle = "#111827";
     ctx.font = "800 22px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(data.companyName, textX, cursorY);
+    ctx.fillText(data.companyName, textX, cursorY, titleMaxWidth);
     cursorY += 26;
   }
   if (data.roomNumber) {
     ctx.fillStyle = "#10B981";
     ctx.font = "500 16px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(`Room ${data.roomNumber}`, textX, cursorY);
+    ctx.fillText(`Room ${data.roomNumber}`, textX, cursorY, titleMaxWidth);
     cursorY += 22;
   }
   if (data.reportSubtitle) {
     cursorY += 6;
     ctx.fillStyle = "#6B7280";
     ctx.font = "500 12px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(data.reportSubtitle, textX, cursorY);
+    ctx.fillText(data.reportSubtitle, textX, cursorY, titleMaxWidth);
     cursorY += 18;
   }
-  return Math.max(cursorY + 6, y + brandLogoH + 4);
+  return Math.max(cursorY + 6, y + brand.height + 10);
 }
 
 function drawDivider(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
@@ -765,7 +817,7 @@ function drawGeneratedOnSection(
 function drawSettlementReportFooter(ctx: CanvasRenderingContext2D, width: number, y: number) {
   const centerX = width / 2;
   ctx.textAlign = "center";
-  ctx.fillStyle = "#9CA3AF";
+  ctx.fillStyle = SETTLEMENT_BRAND_GREEN;
   ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText(SETTLEMENT_REPORT_FOOTER.poweredBy, centerX, y);
   ctx.font = "500 10px ui-sans-serif, system-ui, sans-serif";
@@ -952,13 +1004,15 @@ function drawSettlementCard(
 
 function settlementCardHeight(data: SettlementShareData): number {
   const pad = 36;
-  let headerH = 168;
+  // Brand lockup (logo card ~4× prior logo) drives header height so layout never clips.
+  const brandBlock = SETTLEMENT_BRAND_CARD_H + 18;
+  let headerH = brandBlock + 88;
   if (data.hasGroupBranding) {
-    headerH = 128;
+    headerH = brandBlock + 48;
     if (data.companyName) headerH += 24;
     if (data.roomNumber) headerH += 22;
     if (data.reportSubtitle) headerH += 24;
-    if (data.logoUrl) headerH = Math.max(headerH, 128);
+    if (data.logoUrl) headerH = Math.max(headerH, brandBlock + 56);
   }
   const dividerBlock = 20;
   const memberHeader = 24;

@@ -84,7 +84,7 @@ function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
   return (
     <div className="overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_8px_32px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pr-2">
           <SettlementBrandingHeader
             companyName={data.companyName}
             roomNumber={data.roomNumber}
@@ -94,7 +94,15 @@ function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
             variant="export"
           />
         </div>
-        <FireNepalBrandLogo className="h-7 w-auto max-w-[88px] sm:h-9 sm:max-w-[104px]" />
+        <div className="flex w-[11rem] shrink-0 flex-col items-center rounded-[18px] border border-[#E5E7EB] bg-white p-4 sm:w-[12rem]">
+          <FireNepalBrandLogo className="h-28 w-28 rounded-[22px] object-cover sm:h-32 sm:w-32" />
+          <p className="mt-3 text-center text-[15px] font-extrabold leading-tight text-[#16a34a] sm:text-[17px]">
+            FIRE Nepal
+          </p>
+          <p className="mt-1 text-center text-[11px] font-semibold leading-tight text-[#16a34a] sm:text-[12px]">
+            Smart Finance
+          </p>
+        </div>
       </div>
 
       <div className="mt-6">
