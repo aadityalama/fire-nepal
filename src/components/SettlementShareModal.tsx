@@ -94,14 +94,8 @@ function SettlementShareCardPreview({ data }: { data: SettlementShareData }) {
             variant="export"
           />
         </div>
-        <div className="flex w-[11rem] shrink-0 flex-col items-center rounded-[18px] border border-[#E5E7EB] bg-white p-4 sm:w-[12rem]">
+        <div className="flex shrink-0 items-center justify-center rounded-[18px] border border-[#E5E7EB] bg-white p-4">
           <FireNepalBrandLogo className="h-28 w-28 rounded-[22px] object-cover sm:h-32 sm:w-32" />
-          <p className="mt-3 text-center text-[15px] font-extrabold leading-tight text-[#16a34a] sm:text-[17px]">
-            FIRE Nepal
-          </p>
-          <p className="mt-1 text-center text-[11px] font-semibold leading-tight text-[#16a34a] sm:text-[12px]">
-            Smart Finance
-          </p>
         </div>
       </div>
 

@@ -70,25 +70,14 @@ export const SETTLEMENT_COLOR_RECEIVES = "#10B981";
 export const SETTLEMENT_COLOR_PAYS = "#DC2626";
 export const SETTLEMENT_COLOR_NEUTRAL = "#111827";
 export const SETTLEMENT_COLOR_MUTED = "#6B7280";
-/** Official FIRE Nepal green used for footer + header brand lockup text. */
+/** Official FIRE Nepal green used for footer branding text. */
 export const SETTLEMENT_BRAND_GREEN = "#16a34a";
 
 /** Previous logo draw height was 36px; ~300% larger ⇒ 4× = 144px. */
 const SETTLEMENT_BRAND_LOGO_SIZE = 144;
 const SETTLEMENT_BRAND_CARD_PAD = 16;
-const SETTLEMENT_BRAND_TITLE_SIZE = 18;
-const SETTLEMENT_BRAND_SUBTITLE_SIZE = 13;
-const SETTLEMENT_BRAND_AFTER_LOGO_GAP = 12;
-const SETTLEMENT_BRAND_TEXT_GAP = 5;
 const SETTLEMENT_BRAND_CARD_W = SETTLEMENT_BRAND_LOGO_SIZE + SETTLEMENT_BRAND_CARD_PAD * 2;
-const SETTLEMENT_BRAND_CARD_H =
-  SETTLEMENT_BRAND_CARD_PAD +
-  SETTLEMENT_BRAND_LOGO_SIZE +
-  SETTLEMENT_BRAND_AFTER_LOGO_GAP +
-  SETTLEMENT_BRAND_TITLE_SIZE +
-  SETTLEMENT_BRAND_TEXT_GAP +
-  SETTLEMENT_BRAND_SUBTITLE_SIZE +
-  SETTLEMENT_BRAND_CARD_PAD;
+const SETTLEMENT_BRAND_CARD_H = SETTLEMENT_BRAND_LOGO_SIZE + SETTLEMENT_BRAND_CARD_PAD * 2;
 
 /** Fixed amount column (px) so Paid/Share/Balance stay fully visible in mobile PDF viewers. */
 const SETTLEMENT_AMOUNT_COL_WIDTH = 120;
@@ -494,17 +483,6 @@ function drawFireNepalBrandLockup(
     drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 22);
     ctx.fill();
   }
-
-  const centerX = cardX + cardW / 2;
-  let textY = logoY + logoSize + SETTLEMENT_BRAND_AFTER_LOGO_GAP + SETTLEMENT_BRAND_TITLE_SIZE - 2;
-  ctx.textAlign = "center";
-  ctx.fillStyle = SETTLEMENT_BRAND_GREEN;
-  ctx.font = `800 ${SETTLEMENT_BRAND_TITLE_SIZE}px ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillText("FIRE Nepal", centerX, textY);
-  textY += SETTLEMENT_BRAND_TITLE_SIZE + SETTLEMENT_BRAND_TEXT_GAP;
-  ctx.font = `600 ${SETTLEMENT_BRAND_SUBTITLE_SIZE}px ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillText("Smart Finance", centerX, textY);
-  ctx.textAlign = "left";
 
   return { width: cardW, height: cardH };
 }
