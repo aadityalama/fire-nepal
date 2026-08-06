@@ -97,6 +97,28 @@ test("Group expense local backfill is guarded by existing remote rows", () => {
   assert.match(syncBody, /if \(\(count \?\? 0\) > 0\) return;/);
 });
 
+test("Group members are loaded from Supabase before expenses hydrate", () => {
+  const dashboard = read("src/components/ExpenseDashboard.tsx");
+  const service = read("src/services/group-expenses-supabase.ts");
+  assert.match(service, /export async function listGroupMembers/);
+  assert.match(service, /export async function upsertGroupMember/);
+  assert.match(service, /export async function syncGroupMembers/);
+  assert.match(dashboard, /listGroupMembers\(/);
+  assert.match(dashboard, /Members must resolve before expenses render/);
+  assert.match(dashboard, /void persistGroupMember\(/);
+  assert.match(dashboard, /softDeleteGroupMemberByLocalId\(/);
+  assert.doesNotMatch(dashboard, /remoteMembers = Array\.from\(new Set\(remoteExpenses\.map/);
+});
+
+test("Group expenses never fall back to Unknown member", () => {
+  const members = read("src/lib/expense-members.ts");
+  const dashboard = read("src/components/ExpenseDashboard.tsx");
+  assert.doesNotMatch(members, /Unknown member/);
+  assert.doesNotMatch(dashboard, /Unknown member/);
+  assert.match(members, /unresolved member lookup/);
+  assert.match(members, /Loading member…/);
+});
+
 test("Budget and Insurance delete handlers soft-delete instead of hard-delete", () => {
   for (const file of ["src/services/budget-supabase.ts", "src/services/insurance-supabase.ts"]) {
     const source = read(file);

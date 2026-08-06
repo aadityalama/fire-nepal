@@ -25,6 +25,7 @@ const report = { ok: false, steps: [] };
 let ownerUserId = null;
 let otherUserId = null;
 let probeId = null;
+let probeMemberId = null;
 
 function step(name, ok, detail) {
   report.steps.push({ name, ok, detail });
@@ -140,6 +141,10 @@ async function ensureWorkspace(client, userId) {
 }
 
 async function cleanup(admin) {
+  if (probeMemberId) {
+    await admin.from("group_members").delete().eq("id", probeMemberId);
+    probeMemberId = null;
+  }
   if (probeId) {
     await admin.from("group_expenses").delete().eq("id", probeId);
     probeId = null;
@@ -184,6 +189,38 @@ try {
   const workspaceId = await ensureWorkspace(owner.client, owner.userId);
   step("authenticated workspace ready", true, workspaceId);
 
+  const memberColumns =
+    "id,workspace_id,user_id,local_member_id,name,avatar_url,phone,kakao_id,bank_name,account_number,emergency_contact,notes,sort_order,deleted_at,created_at,updated_at";
+  const membersVisible = await admin.from("group_members").select(memberColumns, { count: "exact", head: true });
+  if (membersVisible.error) {
+    fail("group_members visible to PostgREST", membersVisible.error.message);
+  }
+  step("group_members visible to PostgREST", true, `${membersVisible.count ?? 0} existing rows`);
+
+  const memberPayload = {
+    workspace_id: workspaceId,
+    user_id: owner.userId,
+    local_member_id: `m_verify_${Date.now().toString(36)}`,
+    name: "Verify Member",
+    phone: "+82 10-0000-0000",
+    kakao_id: "verify.kr",
+    bank_name: "Test Bank",
+    account_number: "000-000-000000",
+    emergency_contact: "+977 9800000000",
+    notes: "member persistence probe",
+    sort_order: 0,
+  };
+  const savedMember = await owner.client
+    .from("group_members")
+    .insert(memberPayload)
+    .select("id,local_member_id,name")
+    .single();
+  if (savedMember.error || !savedMember.data?.id) {
+    fail("authenticated member save", savedMember.error?.message ?? "no inserted member");
+  }
+  probeMemberId = savedMember.data.id;
+  step("authenticated member save", true, `${savedMember.data.local_member_id}=${savedMember.data.name}`);
+
   const localExpenseId = Date.now();
   const payload = {
     workspace_id: workspaceId,
@@ -191,12 +228,12 @@ try {
     local_expense_id: localExpenseId,
     title: "Group Expenses History verify",
     amount: 1234.56,
-    payer_member_id: "member-1",
+    payer_member_id: memberPayload.local_member_id,
     category: "Other",
     split_equally: true,
     expense_date: "2026-07-11",
-    split_among: ["member-1", "member-2"],
-    split_percentages: { "member-1": 50, "member-2": 50 },
+    split_among: [memberPayload.local_member_id],
+    split_percentages: { [memberPayload.local_member_id]: 100 },
     amount_currency: "NPR",
     notes: "Automated Group Expenses History verification row",
   };
@@ -214,9 +251,29 @@ try {
     fail("refresh sign-in", refreshedSignIn.error?.message ?? "no refreshed session");
   }
 
+  const memberRefresh = await refreshedClient
+    .from("group_members")
+    .select("id,local_member_id,name")
+    .eq("workspace_id", workspaceId)
+    .eq("id", probeMemberId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (memberRefresh.error) {
+    fail("member save -> refresh", memberRefresh.error.message);
+  }
+  const memberNamePersisted =
+    memberRefresh.data?.id === probeMemberId && memberRefresh.data?.name === "Verify Member";
+  step(
+    "member save -> refresh -> name",
+    memberNamePersisted,
+    memberNamePersisted
+      ? `${memberRefresh.data.local_member_id}=${memberRefresh.data.name}`
+      : "member name missing after refresh",
+  );
+
   const history = await refreshedClient
     .from("group_expenses")
-    .select("id,title,local_expense_id,expense_date,created_at")
+    .select("id,title,local_expense_id,expense_date,created_at,payer_member_id")
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
     .order("expense_date", { ascending: false })
@@ -227,6 +284,12 @@ try {
   }
   const found = (history.data ?? []).some((row) => row.id === probeId && row.local_expense_id === localExpenseId);
   step("save -> refresh -> history", found, found ? "probe row returned in Full History query" : "probe row missing");
+
+  const otherMemberRead = await other.client.from("group_members").select("id").eq("id", probeMemberId);
+  if (otherMemberRead.error) {
+    fail("RLS blocks other user member read", otherMemberRead.error.message);
+  }
+  step("RLS blocks other user member read", (otherMemberRead.data ?? []).length === 0);
 
   const otherRead = await other.client.from("group_expenses").select("id").eq("id", probeId);
   if (otherRead.error) {
@@ -240,6 +303,13 @@ try {
   }
   probeId = null;
   step("authenticated cleanup delete", true);
+
+  const removedMember = await owner.client.from("group_members").delete().eq("id", probeMemberId);
+  if (removedMember.error) {
+    fail("authenticated member cleanup delete", removedMember.error.message);
+  }
+  probeMemberId = null;
+  step("authenticated member cleanup delete", true);
 
   const afterCount = await admin.from("group_expenses").select("id", { count: "exact", head: true });
   if (afterCount.error) {

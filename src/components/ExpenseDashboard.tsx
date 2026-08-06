@@ -132,12 +132,18 @@ import {
 } from "@/services/expense-transactions-supabase";
 import {
   groupExpenseRowToExpense,
+  groupMemberRowToProfile,
   listGroupExpenses,
+  listGroupMembers,
   recordSettlement,
   softDeleteGroupExpenseByLocalId,
+  softDeleteGroupMemberByLocalId,
+  syncGroupMembers,
   upsertGroupExpenseByLocalId,
+  upsertGroupMember,
 } from "@/services/group-expenses-supabase";
 import {
+  collectExpenseMemberIds,
   generateMemberId,
   memberDisplayName,
   memberNameMap,
@@ -907,6 +913,8 @@ export function ExpenseDashboard({
     // Authenticated users must not paint browser-local expenses — wait for Supabase.
     if (user?.id && isSupabaseConfigured()) {
       setExpenses([]);
+      setMembers([]);
+      setProfiles({});
       setActivities([]);
       setHydrated(true);
       setCloudHydrated(false);
@@ -1026,6 +1034,16 @@ export function ExpenseDashboard({
     void (async () => {
       try {
         const client = getSupabaseBrowserClient();
+
+        // Members must resolve before expenses render — names live in group_members.
+        const memberRows = await listGroupMembers(client, user.id);
+        if (cancelled) return;
+
+        let nextMembers = memberRows.map((row) => row.local_member_id);
+        let nextProfiles: Record<string, RoommateProfile> = Object.fromEntries(
+          memberRows.map((row) => [row.local_member_id, groupMemberRowToProfile(row)]),
+        );
+
         const all = [];
         let cursor: string | null = null;
         do {
@@ -1036,21 +1054,108 @@ export function ExpenseDashboard({
         if (cancelled) return;
 
         const remoteExpenses = all.map(groupExpenseRowToExpense);
-        const remoteMembers = Array.from(new Set(remoteExpenses.map((e) => e.payerId).filter(Boolean)));
+        console.info("[group-expenses] fetch ok", {
+          userId: user.id,
+          expenseCount: remoteExpenses.length,
+          payerIds: remoteExpenses.map((expense) => expense.payerId),
+        });
+
+        const referencedIds = collectExpenseMemberIds(remoteExpenses);
+        const unresolvedFromCloud = referencedIds.filter((id) => !nextProfiles[id]?.name?.trim());
+
+        // One-time recovery: older clients kept names only in localStorage and never
+        // wrote group_members. Promote those profiles so refresh/cross-device works.
+        if (unresolvedFromCloud.length > 0 || nextMembers.length === 0) {
+          const local = loadGroupExpenseState();
+          if (local) {
+            const recoveredIds = [
+              ...new Set([
+                ...nextMembers,
+                ...local.members,
+                ...referencedIds,
+              ]),
+            ];
+            const recoveredProfiles: Record<string, RoommateProfile> = { ...nextProfiles };
+            for (const memberId of recoveredIds) {
+              const localProfile = local.profiles[memberId];
+              if (!recoveredProfiles[memberId]?.name?.trim() && localProfile?.name?.trim()) {
+                recoveredProfiles[memberId] = localProfile;
+              }
+            }
+            const recoverable = recoveredIds.filter((id) => recoveredProfiles[id]?.name?.trim());
+            if (recoverable.length > 0 && (nextMembers.length === 0 || unresolvedFromCloud.length > 0)) {
+              console.info("[group-members] recovering names from device cache into Supabase", {
+                userId: user.id,
+                recovering: recoverable.map((id) => ({ id, name: recoveredProfiles[id]?.name })),
+                previouslyUnresolved: unresolvedFromCloud,
+              });
+              await syncGroupMembers(client, user.id, recoverable, recoveredProfiles);
+              if (cancelled) return;
+              const refreshed = await listGroupMembers(client, user.id);
+              if (cancelled) return;
+              nextMembers = refreshed.map((row) => row.local_member_id);
+              nextProfiles = Object.fromEntries(
+                refreshed.map((row) => [row.local_member_id, groupMemberRowToProfile(row)]),
+              );
+            }
+          }
+        }
+
+        // Keep every expense-referenced member in the roster even if sort order
+        // only contained payers historically.
+        for (const memberId of referencedIds) {
+          if (!nextMembers.includes(memberId)) nextMembers.push(memberId);
+        }
+
+        const stillUnresolved = referencedIds.filter((id) => !nextProfiles[id]?.name?.trim());
+        if (stillUnresolved.length > 0) {
+          console.error("[group-members] unresolved member IDs after hydrate — seeding rename placeholders", {
+            userId: user.id,
+            stillUnresolved,
+            knownMembers: nextMembers,
+            knownNames: Object.fromEntries(
+              Object.entries(nextProfiles).map(([id, profile]) => [id, profile.name]),
+            ),
+            expenseCount: remoteExpenses.length,
+          });
+
+          const placeholders: Record<string, RoommateProfile> = { ...nextProfiles };
+          stillUnresolved.forEach((memberId, index) => {
+            const suffix = memberId.replace(/^m_/, "").slice(-6);
+            placeholders[memberId] = createProfile(`Member ${index + 1} (${suffix})`);
+            if (!nextMembers.includes(memberId)) nextMembers.push(memberId);
+          });
+          await syncGroupMembers(client, user.id, stillUnresolved, placeholders);
+          if (cancelled) return;
+          const afterPlaceholders = await listGroupMembers(client, user.id);
+          if (cancelled) return;
+          nextMembers = afterPlaceholders.map((row) => row.local_member_id);
+          nextProfiles = Object.fromEntries(
+            afterPlaceholders.map((row) => [row.local_member_id, groupMemberRowToProfile(row)]),
+          );
+          for (const memberId of referencedIds) {
+            if (!nextMembers.includes(memberId)) nextMembers.push(memberId);
+            if (!nextProfiles[memberId]) nextProfiles[memberId] = placeholders[memberId];
+          }
+          toast.message("Some member names were missing. Placeholder names were saved — rename them in Members.");
+        }
+
+        setMembers(nextMembers);
+        setProfiles(nextProfiles);
         setExpenses(remoteExpenses);
-        if (remoteMembers.length > 0) {
-          setMembers((current) => (current.length > 0 ? current : remoteMembers));
-        } else if (remoteExpenses.length === 0) {
+        if (remoteExpenses.length === 0 && nextMembers.length === 0) {
           const empty = emptyGroupExpenseState();
           setExpenses(empty.expenses);
+          setMembers(empty.members);
+          setProfiles(empty.profiles);
         }
         setCloudHydrated(true);
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[expense-dashboard] group expense hydrate failed", error);
-        }
+        console.error("[expense-dashboard] group expense hydrate failed", error);
         if (!cancelled) {
           setExpenses([]);
+          setMembers([]);
+          setProfiles({});
           setCloudHydrated(true);
           toast.error(error instanceof Error ? error.message : "Could not load group expenses from Supabase.");
         }
@@ -1176,6 +1281,25 @@ export function ExpenseDashboard({
     [personalMode, user?.id, actorName],
   );
 
+  const persistGroupMember = useCallback(
+    async (memberId: string, profile: RoommateProfile, sortOrder: number) => {
+      if (personalMode) return;
+      if (!user?.id || !isSupabaseConfigured()) return;
+      const row = await upsertGroupMember(
+        getSupabaseBrowserClient(),
+        user.id,
+        memberId,
+        profile,
+        sortOrder,
+      );
+      if (!row) {
+        console.error("[group-members] persist failed", { memberId, name: profile.name, sortOrder });
+        toast.error("Could not save member to Supabase.");
+      }
+    },
+    [personalMode, user?.id],
+  );
+
   const persistGroupExpense = useCallback(
     async (expense: Expense) => {
       if (personalMode) return null;
@@ -1198,9 +1322,7 @@ export function ExpenseDashboard({
       });
       if (!row) {
         const error = new Error("Could not save group expense to Supabase. Check RLS permissions and try again.");
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[group-expenses] persist failed", error);
-        }
+        console.error("[group-expenses] persist failed", error);
         throw error;
       }
       return row;
@@ -1361,11 +1483,14 @@ export function ExpenseDashboard({
       return;
     }
     const memberId = generateMemberId();
+    const profile = createProfile(name);
+    const sortOrder = members.length;
     setMembers((current) => [...current, memberId]);
     setProfiles((current) => ({
       ...current,
-      [memberId]: current[memberId] ?? createProfile(name),
+      [memberId]: current[memberId] ?? profile,
     }));
+    void persistGroupMember(memberId, profile, sortOrder);
     appendActivity({
       type: "member_added",
       monthKey: selectedMonthKey,
@@ -1384,6 +1509,9 @@ export function ExpenseDashboard({
       delete next[memberId];
       return next;
     });
+    if (!personalMode && user?.id && isSupabaseConfigured()) {
+      void softDeleteGroupMemberByLocalId(getSupabaseBrowserClient(), user.id, memberId);
+    }
     setExpenses((current) =>
       current
         .filter((expense) => expense.payerId !== memberId)
@@ -3056,12 +3184,14 @@ export function ExpenseDashboard({
           memberId={selectedMember}
           profiles={profiles}
           onClose={() => setSelectedMember(null)}
-          onSave={(updatedProfile) =>
+          onSave={(updatedProfile) => {
             setProfiles((current) => ({
               ...current,
               [selectedMember]: updatedProfile,
-            }))
-          }
+            }));
+            const sortOrder = Math.max(0, members.indexOf(selectedMember));
+            void persistGroupMember(selectedMember, updatedProfile, sortOrder);
+          }}
           onSaveExpenseAmount={saveExpenseAmount}
           paidTotal={paidByMember[selectedMember] ?? 0}
           profile={selectedProfile}
@@ -3143,7 +3273,7 @@ function CompactGroupMembersRow({
         {members.map((memberId) => {
           const balance = balances[memberId] ?? 0;
           const settled = Math.abs(balance) < 1;
-          const displayName = profiles[memberId]?.name ?? memberId;
+          const displayName = memberDisplayName(memberId, profiles);
           return (
             <button
               key={memberId}
@@ -3433,7 +3563,7 @@ function GroupMembers({
                 >
                   {profiles[member]?.avatarUrl ? (
                     <Image
-                      alt={`${profiles[member]?.name ?? member} avatar`}
+                      alt={`${memberDisplayName(member, profiles)} avatar`}
                       className="h-full w-full object-cover"
                       height={compact ? 36 : 48}
                       src={profiles[member]?.avatarUrl}
@@ -3441,12 +3571,12 @@ function GroupMembers({
                       width={compact ? 36 : 48}
                     />
                   ) : (
-                    initials(profiles[member]?.name ?? member)
+                    initials(memberDisplayName(member, profiles))
                   )}
                 </div>
                 <div className="min-w-0">
                   <p className={`truncate font-black text-emerald-950 ${compact ? "text-sm" : "text-base"}`}>
-                    {profiles[member]?.name ?? member}
+                    {memberDisplayName(member, profiles)}
                   </p>
                   <p className={`truncate font-bold text-slate-500 ${compact ? "text-[10px]" : "text-sm"}`}>
                     {fmt(paidByMember[member] ?? 0)} paid ·{" "}
@@ -3464,7 +3594,7 @@ function GroupMembers({
                   removeMember(member);
                 }}
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-50 text-red-600 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-                aria-label={`Remove ${profiles[member]?.name ?? member}`}
+                aria-label={`Remove ${memberDisplayName(member, profiles)}`}
               >
                 <Trash2 size={16} aria-hidden />
               </button>

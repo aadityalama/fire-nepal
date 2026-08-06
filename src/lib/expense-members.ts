@@ -8,7 +8,17 @@ export function memberDisplayName(
   memberId: string,
   profiles: Record<string, RoommateProfile>,
 ): string {
-  return profiles[memberId]?.name?.trim() || "Unknown member";
+  const name = profiles[memberId]?.name?.trim();
+  if (name) return name;
+
+  console.error("[group-members] unresolved member lookup", {
+    memberId,
+    knownMemberIds: Object.keys(profiles),
+    knownNames: Object.values(profiles).map((profile) => profile.name),
+  });
+
+  // Prefer a stable readable placeholder while member profiles finish loading.
+  return "Loading member…";
 }
 
 export function memberNameMap(
@@ -23,6 +33,20 @@ export function resolveExpensePayerName(
   profiles: Record<string, RoommateProfile>,
 ): string {
   return memberDisplayName(expense.payerId, profiles);
+}
+
+export function collectExpenseMemberIds(expenses: Expense[]): string[] {
+  const ids = new Set<string>();
+  for (const expense of expenses) {
+    if (expense.payerId) ids.add(expense.payerId);
+    for (const memberId of expense.splitAmong ?? []) {
+      if (memberId) ids.add(memberId);
+    }
+    for (const memberId of Object.keys(expense.splitPercentages ?? {})) {
+      if (memberId) ids.add(memberId);
+    }
+  }
+  return Array.from(ids);
 }
 
 type LegacyExpenseRow = Expense & { payer?: string };

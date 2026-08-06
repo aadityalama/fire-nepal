@@ -194,9 +194,7 @@ export async function listGroupExpenses(
 
   const { data, error } = await query;
   if (error || !data) {
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[group-expenses] list failed", { workspaceId: workspace.id, error });
-    }
+    console.error("[group-expenses] list failed", { workspaceId: workspace.id, userId, error });
     throw new GroupExpenseHistoryError(
       formatGroupExpenseError(error, "Could not load group expense history."),
       "group-expense-list",
@@ -208,6 +206,14 @@ export async function listGroupExpenses(
   const slice = hasMore ? data.slice(0, limit) : data;
   const rows = slice.map(rowToGroupExpense);
   const nextCursor = hasMore ? slice[slice.length - 1]?.created_at ?? null : null;
+  console.info("[group-expenses] list ok", {
+    workspaceId: workspace.id,
+    userId,
+    count: rows.length,
+    hasMore,
+    payerMemberIds: rows.map((row) => row.payer_member_id),
+    splitAmongIds: rows.flatMap((row) => row.split_among),
+  });
   return { rows, nextCursor };
 }
 
@@ -294,21 +300,89 @@ export async function recordSettlement(
   };
 }
 
+const GROUP_MEMBER_COLUMNS =
+  "id,workspace_id,user_id,local_member_id,name,avatar_url,phone,kakao_id,bank_name,account_number,emergency_contact,notes,sort_order,deleted_at,created_at,updated_at" as const;
+
+export type GroupMemberRow = Database["public"]["Tables"]["group_members"]["Row"];
+
+export function groupMemberRowToProfile(row: GroupMemberRow): RoommateProfile {
+  return {
+    name: row.name,
+    avatarUrl: row.avatar_url ?? undefined,
+    phone: row.phone ?? "",
+    kakaoId: row.kakao_id ?? "",
+    bankName: row.bank_name ?? "",
+    accountNumber: row.account_number ?? "",
+    emergencyContact: row.emergency_contact ?? "",
+    notes: row.notes ?? "",
+  };
+}
+
+export async function listGroupMembers(
+  client: Client,
+  userId: string,
+): Promise<GroupMemberRow[]> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-member-list");
+  if (!workspace) {
+    console.error("[group-members] list aborted: no workspace", { userId });
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("group_members")
+    .select(GROUP_MEMBER_COLUMNS)
+    .eq("workspace_id", workspace.id)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[group-members] fetch failed", {
+      workspaceId: workspace.id,
+      userId,
+      error,
+    });
+    throw new GroupExpenseHistoryError(
+      formatGroupExpenseError(error, "Could not load group members."),
+      "group-member-list",
+      error,
+    );
+  }
+
+  const rows = data ?? [];
+  console.info("[group-members] fetch ok", {
+    workspaceId: workspace.id,
+    count: rows.length,
+    localMemberIds: rows.map((row) => row.local_member_id),
+    names: rows.map((row) => row.name),
+  });
+  return rows;
+}
+
 export async function upsertGroupMember(
   client: Client,
   userId: string,
   localMemberId: string,
   profile: RoommateProfile,
   sortOrder: number,
-): Promise<void> {
+): Promise<GroupMemberRow | null> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-member-upsert");
-  if (!workspace) return;
+  if (!workspace) {
+    console.error("[group-members] upsert aborted: no workspace", { userId, localMemberId });
+    return null;
+  }
+
+  const name = profile.name?.trim();
+  if (!name) {
+    console.error("[group-members] upsert aborted: empty name", { workspaceId: workspace.id, localMemberId });
+    return null;
+  }
 
   const insertPayload: Database["public"]["Tables"]["group_members"]["Insert"] = {
     workspace_id: workspace.id,
     user_id: userId,
     local_member_id: localMemberId,
-    name: profile.name,
+    name,
     avatar_url: profile.avatarUrl ?? null,
     phone: profile.phone,
     kakao_id: profile.kakaoId,
@@ -317,10 +391,11 @@ export async function upsertGroupMember(
     emergency_contact: profile.emergencyContact,
     notes: profile.notes,
     sort_order: sortOrder,
+    deleted_at: null,
   };
 
   const updatePayload: Database["public"]["Tables"]["group_members"]["Update"] = {
-    name: profile.name,
+    name,
     avatar_url: profile.avatarUrl ?? null,
     phone: profile.phone,
     kakao_id: profile.kakaoId,
@@ -329,22 +404,130 @@ export async function upsertGroupMember(
     emergency_contact: profile.emergencyContact,
     notes: profile.notes,
     sort_order: sortOrder,
+    deleted_at: null,
     updated_at: new Date().toISOString(),
   };
 
-  const { data: existing } = await client
+  const { data: existing, error: existingError } = await client
     .from("group_members")
-    .select("id")
+    .select("id,deleted_at")
     .eq("workspace_id", workspace.id)
     .eq("local_member_id", localMemberId)
-    .is("deleted_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (existing) {
-    await client.from("group_members").update(updatePayload).eq("id", existing.id);
-  } else {
-    await client.from("group_members").insert(insertPayload);
+  if (existingError) {
+    console.error("[group-members] upsert lookup failed", {
+      workspaceId: workspace.id,
+      localMemberId,
+      error: existingError,
+    });
+    return null;
   }
+
+  if (existing) {
+    const { data, error } = await client
+      .from("group_members")
+      .update(updatePayload)
+      .eq("id", existing.id)
+      .select(GROUP_MEMBER_COLUMNS)
+      .single();
+    if (error || !data) {
+      console.error("[group-members] update failed", {
+        workspaceId: workspace.id,
+        localMemberId,
+        memberRowId: existing.id,
+        error,
+      });
+      return null;
+    }
+    console.info("[group-members] update ok", {
+      workspaceId: workspace.id,
+      localMemberId,
+      name: data.name,
+      restored: Boolean(existing.deleted_at),
+    });
+    return data;
+  }
+
+  const { data, error } = await client
+    .from("group_members")
+    .insert(insertPayload)
+    .select(GROUP_MEMBER_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    console.error("[group-members] insert failed", {
+      workspaceId: workspace.id,
+      localMemberId,
+      name,
+      error,
+    });
+    return null;
+  }
+
+  console.info("[group-members] insert ok", {
+    workspaceId: workspace.id,
+    localMemberId,
+    name: data.name,
+    id: data.id,
+  });
+  return data;
+}
+
+export async function softDeleteGroupMemberByLocalId(
+  client: Client,
+  userId: string,
+  localMemberId: string,
+): Promise<boolean> {
+  const workspace = await ensureAuthenticatedWorkspace(client, userId, "group-member-delete");
+  if (!workspace) {
+    console.error("[group-members] soft delete aborted: no workspace", { userId, localMemberId });
+    return false;
+  }
+
+  const { error } = await client
+    .from("group_members")
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("workspace_id", workspace.id)
+    .eq("local_member_id", localMemberId)
+    .is("deleted_at", null);
+
+  if (error) {
+    console.error("[group-members] soft delete failed", {
+      workspaceId: workspace.id,
+      localMemberId,
+      error,
+    });
+    return false;
+  }
+
+  console.info("[group-members] soft delete ok", { workspaceId: workspace.id, localMemberId });
+  return true;
+}
+
+export async function syncGroupMembers(
+  client: Client,
+  userId: string,
+  memberIds: string[],
+  profiles: Record<string, RoommateProfile>,
+): Promise<void> {
+  console.info("[group-members] sync start", {
+    userId,
+    count: memberIds.length,
+    localMemberIds: memberIds,
+  });
+  for (let index = 0; index < memberIds.length; index += 1) {
+    const memberId = memberIds[index];
+    const profile = profiles[memberId];
+    if (!profile?.name?.trim()) {
+      console.error("[group-members] sync skipped member without name", { memberId, index });
+      continue;
+    }
+    await upsertGroupMember(client, userId, memberId, profile, index);
+  }
+  console.info("[group-members] sync complete", { userId, count: memberIds.length });
 }
 
 export function groupExpenseRowToExpense(row: GroupExpenseRow): Expense {
