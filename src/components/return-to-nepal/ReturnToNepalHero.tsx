@@ -21,6 +21,7 @@ const FLIGHT_PATH = "M 48 168 Q 170 52, 305 98 T 518 44";
 const SLIDE_INTERVAL_MS = 5000;
 const PROGRESS_SEGMENTS = 20;
 
+/** Compact glass chrome for small interactive surfaces (slides, badges) — not full hero panels. */
 const GLASS_CARD_STYLE = {
   background: "rgba(12,20,18,0.42)",
   backdropFilter: "blur(12px)",
@@ -529,8 +530,8 @@ export function ReturnToNepalHero({
 
       <div className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-6 lg:p-7">
         <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-start lg:gap-8">
-          {/* Transparent glassmorphism card — mountains stay visible behind */}
-          <div className="min-w-0 p-4 shadow-[0_20px_60px_-28px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] sm:p-5" style={GLASS_CARD_STYLE}>
+          {/* Content sits directly on the hero — no inner glass card */}
+          <div className="min-w-0 p-4 sm:p-5">
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-200/85 [text-shadow:0_1px_10px_rgba(0,0,0,0.35)]">
               Recommended Return Date
             </p>
