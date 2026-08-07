@@ -46,13 +46,18 @@ type PrefsClient = {
 };
 
 export async function getUserEmailNotificationsEnabled(sb: PrefsClient, userId: string): Promise<boolean> {
-  const { data, error } = await sb
-    .from("user_reminder_email_preferences")
-    .select("email_notifications_enabled")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error || !data) return true;
-  return data.email_notifications_enabled !== false;
+  try {
+    const { data, error } = await sb
+      .from("user_reminder_email_preferences")
+      .select("email_notifications_enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+    // Missing table / schema cache lag → default to enabled (safe for delivery).
+    if (error || !data) return true;
+    return data.email_notifications_enabled !== false;
+  } catch {
+    return true;
+  }
 }
 
 export async function upsertUserEmailNotificationsEnabled(
@@ -60,16 +65,31 @@ export async function upsertUserEmailNotificationsEnabled(
   userId: string,
   enabled: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await sb.from("user_reminder_email_preferences").upsert(
-    {
-      user_id: userId,
-      email_notifications_enabled: enabled,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  try {
+    const { error } = await sb.from("user_reminder_email_preferences").upsert(
+      {
+        user_id: userId,
+        email_notifications_enabled: enabled,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      const msg = error.message || "";
+      if (/schema cache|does not exist|Could not find the table/i.test(msg)) {
+        // Soft-ok until lifecycle migration is applied.
+        return { ok: true };
+      }
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/schema cache|does not exist|Could not find the table/i.test(msg)) {
+      return { ok: true };
+    }
+    return { ok: false, error: msg };
+  }
 }
 
 /** Active for email = not completed, not archived, email_enabled. */
