@@ -4,24 +4,46 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  NEPSE_HUB_ADMIN_DOMAIN_LABELS,
   NEPSE_HUB_ADMIN_FIELDS,
+  NEPSE_HUB_CMS_TABS,
   type NepseHubAdminDomain,
+  type NepseHubCmsTabId,
 } from "@/lib/market/nepse-hub-admin-fields";
+import { appToast } from "@/lib/toast";
 
 type CompanyHit = { symbol: string; company_name: string | null; sector: string | null };
-type OverrideRow = {
-  id: string;
-  symbol: string;
-  domain: string;
-  record_key: string;
-  field_key: string;
-  value_json: unknown;
-  official_snapshot_json: unknown;
-  note: string | null;
-  updated_at: string;
-  updated_by_email: string;
+
+type CmsFieldCell = {
+  key: string;
+  label: string;
+  type: string;
+  value: unknown;
+  officialValue: unknown;
+  overridden: boolean;
+  options?: { value: string; label: string }[];
 };
+
+type CmsRow = {
+  recordKey: string;
+  origin: "official" | "cms";
+  label: string;
+  values: Record<string, unknown>;
+  officialValues: Record<string, unknown>;
+  overriddenFields: string[];
+  deleted: boolean;
+};
+
+type CmsSection = {
+  tabId: NepseHubCmsTabId;
+  label: string;
+  domain: NepseHubAdminDomain;
+  kind: "fields" | "rows";
+  description?: string;
+  allowCreate: boolean;
+  fields: CmsFieldCell[];
+  rows: CmsRow[];
+};
+
 type AuditRow = {
   id: string;
   domain: string;
@@ -32,11 +54,23 @@ type AuditRow = {
   note: string | null;
   created_at: string;
 };
+
+type OverrideRow = {
+  id: string;
+  domain: string;
+  record_key: string;
+  field_key: string;
+  value_json: unknown;
+  updated_at: string;
+  updated_by_email: string;
+};
+
 type CompanyMasterSyncView = {
   latestRun: Record<string, unknown> | null;
   latestValidation: Record<string, unknown> | null;
   liveSectorCounts: Record<string, number>;
 };
+
 type OfficialLiveSyncView = {
   latestSnapshot: {
     syncedAt: string;
@@ -46,16 +80,10 @@ type OfficialLiveSyncView = {
     indexChangeNpr: number | null;
     indexChangePct: number | null;
     totalTurnoverNpr: number | null;
-    totalVolume: number | null;
-    totalTrades: number | null;
     advancing: number | null;
     declining: number | null;
     unchanged: number | null;
-    upperCircuit: number | null;
-    lowerCircuit: number | null;
-    isMarketOpen: boolean | null;
   } | null;
-  latestRun: Record<string, unknown> | null;
   source: string;
 };
 
@@ -66,41 +94,75 @@ function unwrap(valueJson: unknown): unknown {
   return valueJson;
 }
 
+function displayValue(value: unknown): string {
+  if (value == null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function parseFieldValue(raw: string, type: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (type === "number") {
+    if (trimmed === "") return { ok: true, value: null };
+    const n = Number(trimmed.replace(/,/g, ""));
+    if (!Number.isFinite(n)) return { ok: false, error: "Enter a valid number." };
+    return { ok: true, value: n };
+  }
+  if (type === "boolean") return { ok: true, value: trimmed.toLowerCase() === "true" };
+  if (type === "json") {
+    if (trimmed === "") return { ok: true, value: null };
+    try {
+      return { ok: true, value: JSON.parse(trimmed) };
+    } catch {
+      return { ok: false, error: "Invalid JSON." };
+    }
+  }
+  return { ok: true, value: trimmed };
+}
+
+function toastSaved(message: string, onUndo?: () => void) {
+  appToast.success(message, {
+    id: "nepse-cms-save",
+    action: onUndo
+      ? {
+          label: "Undo",
+          onClick: onUndo,
+        }
+      : undefined,
+  });
+}
+
 export function NepseHubAdminClient() {
   const searchParams = useSearchParams();
   const initialSymbol = (searchParams.get("symbol") ?? "NABIL").trim().toUpperCase() || "NABIL";
   const [query, setQuery] = useState("");
   const [companies, setCompanies] = useState<CompanyHit[]>([]);
   const [symbol, setSymbol] = useState(initialSymbol);
-  const [domain, setDomain] = useState<NepseHubAdminDomain>("profile");
-  const [recordKey, setRecordKey] = useState("_");
-  const [fieldKey, setFieldKey] = useState("companyName");
-  const [valueText, setValueText] = useState("");
-  const [note, setNote] = useState("");
+  const [tab, setTab] = useState<NepseHubCmsTabId>("overview");
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [forceSyncBusy, setForceSyncBusy] = useState(false);
   const [syncInfo, setSyncInfo] = useState<CompanyMasterSyncView | null>(null);
   const [liveSyncInfo, setLiveSyncInfo] = useState<OfficialLiveSyncView | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editingRow, setEditingRow] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
 
-  const fields = NEPSE_HUB_ADMIN_FIELDS[domain] ?? [];
+  const cms = (snapshot?.cms as CmsSection[] | undefined) ?? [];
+  const section = cms.find((s) => s.tabId === tab) ?? cms[0] ?? null;
   const overrides = (snapshot?.overrides as OverrideRow[] | undefined) ?? [];
   const audit = (snapshot?.audit as AuditRow[] | undefined) ?? [];
-  const statementPeriods =
-    (snapshot?.statementPeriods as { period_key: string; period_label: string | null; period_type: string }[] | undefined) ??
-    [];
 
   const loadCatalog = useCallback(async (q: string) => {
     const r = await fetch(`/api/admin/nepse-hub?q=${encodeURIComponent(q)}`, { credentials: "include", cache: "no-store" });
     if (r.status === 403 || r.status === 401) {
-      setError("Forbidden — NEPSE Hub Admin is restricted.");
+      appToast.error("Forbidden — NEPSE Hub Admin is restricted.");
       return;
     }
     if (!r.ok) {
-      setError("Failed to load company catalog.");
+      appToast.error("Failed to load company catalog.");
       return;
     }
     const j = (await r.json()) as { companies?: CompanyHit[] };
@@ -109,25 +171,27 @@ export function NepseHubAdminClient() {
 
   const loadSymbol = useCallback(async (sym: string) => {
     setBusy(true);
-    setError(null);
-    setMessage(null);
     try {
       const r = await fetch(`/api/admin/nepse-hub/${encodeURIComponent(sym)}`, {
         credentials: "include",
         cache: "no-store",
       });
       if (r.status === 403 || r.status === 401) {
-        setError("Forbidden — NEPSE Hub Admin is restricted.");
+        appToast.error("Forbidden — NEPSE Hub Admin is restricted.");
         setSnapshot(null);
         return;
       }
       if (!r.ok) {
-        setError("Failed to load company admin snapshot.");
+        appToast.error("Failed to load company CMS snapshot.");
         return;
       }
       const j = (await r.json()) as Record<string, unknown>;
       setSnapshot(j);
       setSymbol(String(j.symbol ?? sym).toUpperCase());
+      setEditingField(null);
+      setEditingRow(null);
+      setCreating(false);
+      setDraft({});
     } finally {
       setBusy(false);
     }
@@ -136,15 +200,13 @@ export function NepseHubAdminClient() {
   const loadSyncInfo = useCallback(async () => {
     const r = await fetch("/api/admin/nepse-hub/company-master-sync", { credentials: "include", cache: "no-store" });
     if (!r.ok) return;
-    const j = (await r.json()) as CompanyMasterSyncView;
-    setSyncInfo(j);
+    setSyncInfo((await r.json()) as CompanyMasterSyncView);
   }, []);
 
   const loadLiveSyncInfo = useCallback(async () => {
     const r = await fetch("/api/admin/nepse-hub/force-sync", { credentials: "include", cache: "no-store" });
     if (!r.ok) return;
-    const j = (await r.json()) as OfficialLiveSyncView;
-    setLiveSyncInfo(j);
+    setLiveSyncInfo((await r.json()) as OfficialLiveSyncView);
   }, []);
 
   useEffect(() => {
@@ -154,77 +216,25 @@ export function NepseHubAdminClient() {
     void loadLiveSyncInfo();
   }, [loadCatalog, loadSymbol, initialSymbol, loadSyncInfo, loadLiveSyncInfo]);
 
-  useEffect(() => {
-    const first = fields[0]?.key;
-    if (first && !fields.some((f) => f.key === fieldKey)) setFieldKey(first);
-  }, [domain, fields, fieldKey]);
-
-  useEffect(() => {
-    if (domain === "statements" && statementPeriods[0]?.period_key) {
-      setRecordKey(statementPeriods[0].period_key);
-    } else if (domain !== "statements" && domain !== "dividends" && domain !== "actions" && domain !== "news" && domain !== "technical") {
-      setRecordKey("_");
+  const undo = useCallback(async () => {
+    const r = await fetch(`/api/admin/nepse-hub/${encodeURIComponent(symbol)}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "undo" }),
+    });
+    const j = (await r.json().catch(() => ({}))) as { error?: string; undoneAction?: string };
+    if (!r.ok) {
+      appToast.error(j.error ?? "Undo failed");
+      return;
     }
-  }, [domain, statementPeriods]);
+    appToast.info(`Undid ${j.undoneAction ?? "change"}`, { id: "nepse-cms-undo" });
+    await loadSymbol(symbol);
+  }, [symbol, loadSymbol]);
 
-  const officialHint = useMemo(() => {
-    if (!snapshot) return null;
-    const fundamentals = snapshot.fundamentals as Record<string, unknown> | null;
-    if (domain === "profile" || domain === "ownership" || domain === "market") {
-      const profile = (fundamentals?.profile ?? {}) as Record<string, unknown>;
-      return profile[fieldKey] ?? null;
-    }
-    if (domain === "ratios") {
-      const valuation = (fundamentals?.valuation ?? {}) as Record<string, unknown>;
-      const ratios = ((snapshot.financialIntelligence as Record<string, unknown> | null)?.ratios ?? {}) as Record<
-        string,
-        unknown
-      >;
-      return valuation[fieldKey] ?? ratios[fieldKey] ?? null;
-    }
-    return null;
-  }, [snapshot, domain, fieldKey]);
-
-  async function mutate(action: "set" | "restore_field" | "restore_company") {
+  async function patch(body: Record<string, unknown>, successMessage: string) {
     setBusy(true);
-    setError(null);
-    setMessage(null);
     try {
-      let value: unknown = valueText;
-      const fieldDef = fields.find((f) => f.key === fieldKey);
-      if (action === "set") {
-        if (fieldDef?.type === "number") {
-          const n = Number(valueText);
-          if (!Number.isFinite(n)) {
-            setError("Enter a valid number.");
-            return;
-          }
-          value = n;
-        } else if (fieldDef?.type === "boolean") {
-          value = valueText.trim().toLowerCase() === "true";
-        } else if (fieldDef?.type === "json") {
-          try {
-            value = JSON.parse(valueText);
-          } catch {
-            setError("Invalid JSON.");
-            return;
-          }
-        }
-      }
-
-      const body =
-        action === "restore_company"
-          ? { action, note: note || undefined }
-          : {
-              action,
-              domain,
-              recordKey: recordKey || "_",
-              fieldKey,
-              value: action === "set" ? value : undefined,
-              officialSnapshot: action === "set" ? officialHint : undefined,
-              note: note || undefined,
-            };
-
       const r = await fetch(`/api/admin/nepse-hub/${encodeURIComponent(symbol)}`, {
         method: "PATCH",
         credentials: "include",
@@ -233,26 +243,156 @@ export function NepseHubAdminClient() {
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string; restored?: number };
       if (!r.ok) {
-        setError(j.error ?? "Request failed");
-        return;
+        appToast.error(j.error ?? "Request failed");
+        return false;
       }
-      setMessage(
-        action === "restore_company"
-          ? `Restored official data (${j.restored ?? 0} overrides removed).`
-          : action === "restore_field"
-            ? "Field restored to official data."
-            : "Override saved. Automatic ingestion still runs; this field stays manual until restored.",
-      );
+      toastSaved(successMessage, () => {
+        void undo();
+      });
       await loadSymbol(symbol);
+      return true;
     } finally {
       setBusy(false);
     }
   }
 
+  function beginEditField(field: CmsFieldCell) {
+    setEditingRow(null);
+    setCreating(false);
+    setEditingField(field.key);
+    setDraft({ [field.key]: field.value == null ? "" : String(field.value) });
+  }
+
+  function beginEditRow(row: CmsRow) {
+    setEditingField(null);
+    setCreating(false);
+    setEditingRow(row.recordKey);
+    const next: Record<string, string> = {};
+    for (const f of section?.fields ?? []) {
+      const v = row.values[f.key];
+      next[f.key] = v == null ? "" : String(v);
+    }
+    setDraft(next);
+  }
+
+  function beginCreateRow() {
+    setEditingField(null);
+    setEditingRow(null);
+    setCreating(true);
+    const next: Record<string, string> = {};
+    for (const f of section?.fields ?? []) next[f.key] = "";
+    setDraft(next);
+  }
+
+  async function saveField(field: CmsFieldCell) {
+    if (!section) return;
+    const parsed = parseFieldValue(draft[field.key] ?? "", field.type);
+    if (!parsed.ok) {
+      appToast.validation(parsed.error);
+      return;
+    }
+    await patch(
+      {
+        action: "set",
+        domain: section.domain,
+        recordKey: "_",
+        fieldKey: field.key,
+        value: parsed.value,
+        officialSnapshot: field.officialValue,
+      },
+      `Saved ${field.label}`,
+    );
+  }
+
+  async function saveRow(recordKey: string | null) {
+    if (!section) return;
+    const fields: Record<string, unknown> = {};
+    const officialSnapshots: Record<string, unknown> = {};
+    for (const f of section.fields) {
+      const parsed = parseFieldValue(draft[f.key] ?? "", f.type);
+      if (!parsed.ok) {
+        appToast.validation(`${f.label}: ${parsed.error}`);
+        return;
+      }
+      if (draft[f.key] === "" && f.type !== "number") continue;
+      fields[f.key] = parsed.value;
+      const existing = section.rows.find((r) => r.recordKey === recordKey);
+      if (existing) officialSnapshots[f.key] = existing.officialValues[f.key] ?? null;
+    }
+
+    if (creating || !recordKey) {
+      // Prefer fiscal year as record key for dividends
+      const preferred =
+        section.domain === "dividends" && typeof fields.fiscalYear === "string"
+          ? String(fields.fiscalYear)
+          : undefined;
+      await patch(
+        {
+          action: "create_record",
+          domain: section.domain,
+          fields,
+          preferredRecordKey: preferred,
+        },
+        "Row created",
+      );
+      return;
+    }
+
+    await patch(
+      {
+        action: "set_fields",
+        domain: section.domain,
+        recordKey,
+        fields,
+        officialSnapshots,
+      },
+      "Row saved",
+    );
+  }
+
+  async function restoreField(field: CmsFieldCell) {
+    if (!section) return;
+    await patch(
+      {
+        action: "restore_field",
+        domain: section.domain,
+        recordKey: "_",
+        fieldKey: field.key,
+      },
+      `Restored official ${field.label}`,
+    );
+  }
+
+  async function deleteRow(row: CmsRow) {
+    if (!section) return;
+    await patch(
+      {
+        action: "delete_record",
+        domain: section.domain,
+        recordKey: row.recordKey,
+      },
+      row.origin === "cms" ? "Row deleted" : "Official row hidden",
+    );
+  }
+
+  async function restoreRow(row: CmsRow) {
+    if (!section) return;
+    await patch(
+      {
+        action: "restore_record",
+        domain: section.domain,
+        recordKey: row.recordKey,
+      },
+      "Restored official row",
+    );
+  }
+
+  async function restoreCompany() {
+    await patch({ action: "restore_company" }, "Company restored to official data");
+  }
+
   async function runCompanyMasterSyncNow() {
     setSyncBusy(true);
-    setError(null);
-    setMessage(null);
     try {
       const r = await fetch("/api/admin/nepse-hub/company-master-sync", {
         method: "POST",
@@ -261,17 +401,14 @@ export function NepseHubAdminClient() {
       });
       const j = (await r.json().catch(() => ({}))) as {
         ok?: boolean;
-        result?: { message?: string; totalSeen?: number; sectorCounts?: Record<string, number> };
+        result?: { message?: string };
         error?: string;
       };
       if (!r.ok || !j.ok) {
-        setError(j.error ?? "Company master sync failed");
+        appToast.error(j.error ?? "Company master sync failed");
         return;
       }
-      setMessage(
-        j.result?.message ??
-          `Company master synchronized (${j.result?.totalSeen?.toLocaleString("en-IN") ?? "0"} companies).`,
-      );
+      appToast.success(j.result?.message ?? "Company master synchronized");
       await loadSyncInfo();
       await loadCatalog(query);
       await loadSymbol(symbol);
@@ -282,8 +419,6 @@ export function NepseHubAdminClient() {
 
   async function runOfficialMarketForceSync() {
     setForceSyncBusy(true);
-    setError(null);
-    setMessage(null);
     try {
       const r = await fetch("/api/admin/nepse-hub/force-sync", {
         method: "POST",
@@ -292,40 +427,47 @@ export function NepseHubAdminClient() {
       });
       const j = (await r.json().catch(() => ({}))) as {
         ok?: boolean;
-        result?: {
-          message?: string;
-          lastSuccessfulSyncAt?: string | null;
-          indexValue?: number | null;
-        };
+        result?: { message?: string; indexValue?: number | null };
         error?: string;
       };
       if (!r.ok || !j.ok) {
-        setError(j.result?.message ?? j.error ?? "Official NEPSE force sync failed");
+        appToast.error(j.result?.message ?? j.error ?? "Official NEPSE force sync failed");
         await loadLiveSyncInfo();
         return;
       }
-      setMessage(
-        j.result?.message ??
-          `Official NEPSE synchronized — index ${j.result?.indexValue ?? "n/a"} at ${j.result?.lastSuccessfulSyncAt ?? "n/a"}.`,
-      );
+      appToast.success(j.result?.message ?? `Official NEPSE synchronized — index ${j.result?.indexValue ?? "n/a"}`);
       await loadLiveSyncInfo();
     } finally {
       setForceSyncBusy(false);
     }
   }
 
+  const previewColumns = useMemo(() => {
+    if (!section || section.kind !== "rows") return [];
+    const preferred = (NEPSE_HUB_ADMIN_FIELDS[section.domain] ?? []).slice(0, 6);
+    return preferred;
+  }, [section]);
+
   return (
-    <div className="mx-auto max-w-[1200px] px-3 py-4 sm:px-5 sm:py-6">
+    <div className="mx-auto max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/80">Restricted</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/80">Institutional CMS</p>
           <h1 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">NEPSE Hub Admin</h1>
           <p className="mt-1 max-w-2xl text-xs font-medium text-zinc-400">
-            Manual field overrides for company data. Cron keeps ingesting official values; overrides win only for
-            edited fields. Restore returns a field or whole company to official data.
+            Spreadsheet-like content management for every company page section. Edit rows and cards directly — no
+            manual Record Keys. Cron keeps syncing official data; only edited fields override.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void undo()}
+            className="rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-[11px] font-black text-zinc-200 hover:bg-white/[0.06] disabled:opacity-50"
+          >
+            Undo
+          </button>
           <button
             type="button"
             disabled={forceSyncBusy}
@@ -340,7 +482,7 @@ export function NepseHubAdminClient() {
             onClick={() => void runCompanyMasterSyncNow()}
             className="rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-[11px] font-black text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
           >
-            {syncBusy ? "Syncing…" : "Sync Now (Official Company Master)"}
+            {syncBusy ? "Syncing…" : "Sync Now (Company Master)"}
           </button>
           <Link
             href="/market"
@@ -363,7 +505,8 @@ export function NepseHubAdminClient() {
             Official NEPSE live sync · {liveSyncInfo.source}
           </p>
           <p className="mt-1 font-bold">
-            Last successful sync: {new Date(liveSyncInfo.latestSnapshot.syncedAt).toLocaleString("en-GB", {
+            Last successful sync:{" "}
+            {new Date(liveSyncInfo.latestSnapshot.syncedAt).toLocaleString("en-GB", {
               timeZone: "Asia/Kathmandu",
               hour12: false,
             })}{" "}
@@ -376,15 +519,13 @@ export function NepseHubAdminClient() {
               maximumFractionDigits: 2,
             }) ?? "—"}{" "}
             ({liveSyncInfo.latestSnapshot.indexChangeNpr ?? "—"} / {liveSyncInfo.latestSnapshot.indexChangePct ?? "—"}
-            %) · Turnover {liveSyncInfo.latestSnapshot.totalTurnoverNpr?.toLocaleString("en-IN") ?? "—"} · Adv/Dec/Unch{" "}
-            {liveSyncInfo.latestSnapshot.advancing ?? "—"}/
-            {liveSyncInfo.latestSnapshot.declining ?? "—"}/
-            {liveSyncInfo.latestSnapshot.unchanged ?? "—"}
+            %) · Adv/Dec/Unch {liveSyncInfo.latestSnapshot.advancing ?? "—"}/
+            {liveSyncInfo.latestSnapshot.declining ?? "—"}/{liveSyncInfo.latestSnapshot.unchanged ?? "—"}
           </p>
         </section>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
           <label className="block text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
             Find company
@@ -398,14 +539,14 @@ export function NepseHubAdminClient() {
               className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/40"
             />
           </label>
-          <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
+          <div className="max-h-[70vh] space-y-1 overflow-y-auto pr-1">
             {companies.map((c) => (
               <button
                 key={c.symbol}
                 type="button"
                 onClick={() => void loadSymbol(c.symbol)}
                 className={`flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition ${
-                  symbol === c.symbol ? "bg-emerald-500/15 text-emerald-100" : "hover:bg-white/[0.04] text-zinc-300"
+                  symbol === c.symbol ? "bg-emerald-500/15 text-emerald-100" : "text-zinc-300 hover:bg-white/[0.04]"
                 }`}
               >
                 <span className="text-xs font-black">{c.symbol}</span>
@@ -418,8 +559,9 @@ export function NepseHubAdminClient() {
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Selected</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Selected company</p>
               <p className="text-lg font-black text-white">{symbol}</p>
+              <p className="text-[11px] text-zinc-500">{busy ? "Saving / loading…" : "Ready"}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link
@@ -431,7 +573,7 @@ export function NepseHubAdminClient() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void mutate("restore_company")}
+                onClick={() => void restoreCompany()}
                 className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] font-black text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
               >
                 Restore Official Data (Company)
@@ -441,121 +583,321 @@ export function NepseHubAdminClient() {
 
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 sm:p-4">
             <div className="mb-3 flex flex-wrap gap-1">
-              {(Object.keys(NEPSE_HUB_ADMIN_DOMAIN_LABELS) as NepseHubAdminDomain[]).map((id) => (
+              {NEPSE_HUB_CMS_TABS.map((t) => (
                 <button
-                  key={id}
+                  key={t.id}
                   type="button"
-                  onClick={() => setDomain(id)}
+                  onClick={() => {
+                    setTab(t.id);
+                    setEditingField(null);
+                    setEditingRow(null);
+                    setCreating(false);
+                    setDraft({});
+                  }}
                   className={`rounded-lg px-2.5 py-1.5 text-[10px] font-black transition sm:text-[11px] ${
-                    domain === id
+                    tab === t.id
                       ? "bg-emerald-500/18 text-emerald-100 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.28)]"
                       : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
                   }`}
                 >
-                  {NEPSE_HUB_ADMIN_DOMAIN_LABELS[id]}
+                  {t.label}
                 </button>
               ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(domain === "statements" || domain === "dividends" || domain === "actions" || domain === "news" || domain === "technical" || domain === "custom") && (
-                <label className="block text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">
-                  Record key
-                  {domain === "statements" && statementPeriods.length ? (
-                    <select
-                      value={recordKey}
-                      onChange={(e) => setRecordKey(e.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+            {section ? (
+              <>
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-black text-white">{section.label}</h2>
+                    {section.description ? <p className="mt-0.5 text-[11px] text-zinc-500">{section.description}</p> : null}
+                  </div>
+                  {section.allowCreate ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => beginCreateRow()}
+                      className="rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-black text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
                     >
-                      {statementPeriods.map((p) => (
-                        <option key={p.period_key} value={p.period_key}>
-                          {p.period_label || p.period_key} ({p.period_type})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={recordKey}
-                      onChange={(e) => setRecordKey(e.target.value)}
-                      placeholder={domain === "dividends" ? "fiscal year" : domain === "actions" || domain === "news" ? "row id" : "_"}
-                      className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                    />
-                  )}
-                </label>
-              )}
+                      Add Row
+                    </button>
+                  ) : null}
+                </div>
 
-              <label className="block text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">
-                Field
-                <select
-                  value={fieldKey}
-                  onChange={(e) => setFieldKey(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                >
-                  {fields.map((f) => (
-                    <option key={f.key} value={f.key}>
-                      {f.label}
-                    </option>
-                  ))}
-                  {domain === "custom" ? <option value="value">Custom JSON value</option> : null}
-                </select>
-              </label>
+                {section.kind === "fields" ? (
+                  <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+                    <table className="min-w-full text-left text-xs">
+                      <thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        <tr>
+                          <th className="px-3 py-2 font-black">Field</th>
+                          <th className="px-3 py-2 font-black">Value</th>
+                          <th className="px-3 py-2 font-black">Official</th>
+                          <th className="px-3 py-2 font-black">Status</th>
+                          <th className="px-3 py-2 font-black">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.fields.map((field) => {
+                          const isEditing = editingField === field.key;
+                          return (
+                            <tr key={field.key} className="border-t border-white/[0.04]">
+                              <td className="px-3 py-2 font-bold text-zinc-200">{field.label}</td>
+                              <td className="px-3 py-2 text-zinc-100">
+                                {isEditing ? (
+                                  field.options ? (
+                                    <select
+                                      value={draft[field.key] ?? ""}
+                                      onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                                      className="w-full rounded border border-white/15 bg-black/50 px-2 py-1.5 text-xs text-white"
+                                    >
+                                      <option value="">—</option>
+                                      {field.options.map((o) => (
+                                        <option key={o.value} value={o.value}>
+                                          {o.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      value={draft[field.key] ?? ""}
+                                      onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                                      className="w-full rounded border border-white/15 bg-black/50 px-2 py-1.5 text-xs text-white"
+                                      autoFocus
+                                    />
+                                  )
+                                ) : (
+                                  <span className="font-mono text-[11px]">{displayValue(field.value)}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 font-mono text-[11px] text-zinc-500">
+                                {displayValue(field.officialValue)}
+                              </td>
+                              <td className="px-3 py-2">
+                                {field.overridden ? (
+                                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-black text-amber-100">
+                                    Manual
+                                  </span>
+                                ) : (
+                                  <span className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-black text-zinc-400">
+                                    Official
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {isEditing ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void saveField(field)}
+                                        className="rounded bg-emerald-500 px-2 py-1 text-[10px] font-black text-emerald-950 disabled:opacity-50"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingField(null);
+                                          setDraft({});
+                                        }}
+                                        className="rounded border border-white/10 px-2 py-1 text-[10px] font-bold text-zinc-300"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => beginEditField(field)}
+                                        className="rounded border border-white/10 px-2 py-1 text-[10px] font-black text-zinc-200 hover:bg-white/[0.05]"
+                                      >
+                                        Edit
+                                      </button>
+                                      {field.overridden ? (
+                                        <button
+                                          type="button"
+                                          disabled={busy}
+                                          onClick={() => void restoreField(field)}
+                                          className="rounded border border-amber-400/30 px-2 py-1 text-[10px] font-black text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                                        >
+                                          Restore Official
+                                        </button>
+                                      ) : null}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(creating || editingRow) && (
+                      <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/[0.06] p-3">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-200/80">
+                          {creating ? "Add row" : "Edit row"}
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {section.fields.map((field) => (
+                            <label key={field.key} className="block text-[10px] font-black uppercase tracking-[0.12em] text-zinc-500">
+                              {field.label}
+                              {field.options ? (
+                                <select
+                                  value={draft[field.key] ?? ""}
+                                  onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white"
+                                >
+                                  <option value="">—</option>
+                                  {field.options.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                      {o.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  value={draft[field.key] ?? ""}
+                                  onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                                  className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white"
+                                />
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void saveRow(creating ? null : editingRow)}
+                            className="rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-black text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCreating(false);
+                              setEditingRow(null);
+                              setDraft({});
+                            }}
+                            className="rounded-lg border border-white/15 px-3 py-2 text-[11px] font-bold text-zinc-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-              <label className="block text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500 sm:col-span-2">
-                Override value
-                <textarea
-                  value={valueText}
-                  onChange={(e) => setValueText(e.target.value)}
-                  rows={3}
-                  placeholder="Enter the manual value (numbers without commas)"
-                  className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                />
-              </label>
-
-              <label className="block text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500 sm:col-span-2">
-                Note (optional)
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-                />
-              </label>
-            </div>
-
-            <p className="mt-3 text-[11px] text-zinc-500">
-              Current official snapshot for this field:{" "}
-              <span className="font-mono text-zinc-300">
-                {officialHint == null || officialHint === "" ? "null / unavailable" : String(officialHint)}
-              </span>
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void mutate("set")}
-                className="rounded-lg bg-emerald-500 px-3 py-2 text-[11px] font-black text-emerald-950 hover:bg-emerald-400 disabled:opacity-50"
-              >
-                Save override
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void mutate("restore_field")}
-                className="rounded-lg border border-white/15 px-3 py-2 text-[11px] font-black text-zinc-200 hover:bg-white/[0.05] disabled:opacity-50"
-              >
-                Restore Official Data (Field)
-              </button>
-            </div>
-
-            {error ? <p className="mt-3 text-xs font-bold text-rose-300">{error}</p> : null}
-            {message ? <p className="mt-3 text-xs font-bold text-emerald-300">{message}</p> : null}
+                    <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="bg-white/[0.03] text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                          <tr>
+                            <th className="px-3 py-2 font-black">Row</th>
+                            {previewColumns.map((c) => (
+                              <th key={c.key} className="px-3 py-2 font-black">
+                                {c.label}
+                              </th>
+                            ))}
+                            <th className="px-3 py-2 font-black">Status</th>
+                            <th className="px-3 py-2 font-black">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {section.rows.length === 0 ? (
+                            <tr>
+                              <td colSpan={previewColumns.length + 3} className="px-3 py-6 text-center text-zinc-500">
+                                No rows yet. Use Add Row to create one.
+                              </td>
+                            </tr>
+                          ) : (
+                            section.rows.map((row) => (
+                              <tr
+                                key={row.recordKey}
+                                className={`border-t border-white/[0.04] ${row.deleted ? "opacity-50" : ""}`}
+                              >
+                                <td className="px-3 py-2">
+                                  <p className="font-bold text-zinc-100">{row.label}</p>
+                                  <p className="text-[10px] text-zinc-500">
+                                    {row.origin === "cms" ? "CMS" : "Official"}
+                                  </p>
+                                </td>
+                                {previewColumns.map((c) => (
+                                  <td key={c.key} className="px-3 py-2 font-mono text-[11px] text-zinc-300">
+                                    {displayValue(row.values[c.key])}
+                                  </td>
+                                ))}
+                                <td className="px-3 py-2">
+                                  {row.deleted ? (
+                                    <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-black text-rose-100">
+                                      Deleted
+                                    </span>
+                                  ) : row.overriddenFields.length ? (
+                                    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-black text-amber-100">
+                                      {row.overriddenFields.length} edited
+                                    </span>
+                                  ) : (
+                                    <span className="rounded bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-black text-zinc-400">
+                                      Official
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {!row.deleted ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => beginEditRow(row)}
+                                          className="rounded border border-white/10 px-2 py-1 text-[10px] font-black text-zinc-200 hover:bg-white/[0.05]"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={busy}
+                                          onClick={() => void deleteRow(row)}
+                                          className="rounded border border-rose-400/30 px-2 py-1 text-[10px] font-black text-rose-100 hover:bg-rose-500/10 disabled:opacity-50"
+                                        >
+                                          Delete
+                                        </button>
+                                      </>
+                                    ) : null}
+                                    {(row.deleted || row.overriddenFields.length > 0 || row.origin === "cms") && (
+                                      <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void restoreRow(row)}
+                                        className="rounded border border-amber-400/30 px-2 py-1 text-[10px] font-black text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                                      >
+                                        Restore Official
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-zinc-500">Load a company to edit content.</p>
+            )}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Official Company Master</p>
               <p className="mt-1 text-xs text-zinc-400">
-                Automatic sync runs before open, after close, and weekly validation. This panel can trigger manual sync.
+                Automatic sync runs before open, after close, and weekly. Manual sync available above.
               </p>
               {syncInfo?.latestRun ? (
                 <div className="mt-3 rounded-lg border border-white/[0.05] bg-black/20 p-2.5 text-[11px] text-zinc-300">
@@ -566,35 +908,22 @@ export function NepseHubAdminClient() {
                   <p className="mt-0.5 text-zinc-500">{String(syncInfo.latestRun.message ?? "")}</p>
                 </div>
               ) : null}
-              {syncInfo?.liveSectorCounts ? (
-                <div className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-white/[0.05] bg-black/20 p-2.5">
-                  {Object.entries(syncInfo.liveSectorCounts)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .map(([sector, count]) => (
-                      <p key={sector} className="flex items-center justify-between text-[11px] text-zinc-300">
-                        <span className="truncate pr-2">{sector}</span>
-                        <span className="font-black">{count.toLocaleString("en-IN")}</span>
-                      </p>
-                    ))}
-                </div>
-              ) : null}
             </div>
 
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Active overrides</p>
-              <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+              <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
                 {overrides.length === 0 ? (
                   <p className="text-xs text-zinc-500">No manual overrides — all values from official ingestion.</p>
                 ) : (
-                  overrides.map((row) => (
+                  overrides.slice(0, 40).map((row) => (
                     <div key={row.id} className="rounded-lg border border-white/[0.05] bg-black/20 px-2.5 py-2">
                       <p className="text-[11px] font-black text-emerald-100">
                         {row.domain}.{row.field_key}
                         <span className="ml-1 font-medium text-zinc-500">({row.record_key})</span>
                       </p>
-                      <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-300">{String(unwrap(row.value_json))}</p>
-                      <p className="mt-1 text-[10px] text-zinc-500">
-                        {row.updated_by_email} · {new Date(row.updated_at).toLocaleString()}
+                      <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-300">
+                        {String(unwrap(row.value_json))}
                       </p>
                     </div>
                   ))
@@ -602,9 +931,9 @@ export function NepseHubAdminClient() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 lg:col-span-2">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">Audit log</p>
-              <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
+              <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
                 {audit.length === 0 ? (
                   <p className="text-xs text-zinc-500">No admin changes recorded yet.</p>
                 ) : (
@@ -613,6 +942,7 @@ export function NepseHubAdminClient() {
                       <p className="text-[11px] font-black text-zinc-200">
                         {row.action}
                         {row.field_key ? ` · ${row.domain}.${row.field_key}` : ` · ${row.domain}`}
+                        <span className="ml-1 font-medium text-zinc-500">({row.record_key})</span>
                       </p>
                       <p className="mt-1 text-[10px] text-zinc-500">
                         {row.actor_email} · {new Date(row.created_at).toLocaleString()}
