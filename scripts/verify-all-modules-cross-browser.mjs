@@ -84,7 +84,7 @@ function launchEngine(name) {
   return chromium;
 }
 
-async function seed() {
+async function seedSession() {
   const res = await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=seed`, { cache: "no-store" });
   const json = await res.json();
   if (!res.ok || !json.ok) throw new Error(`Seed failed: ${json.error ?? res.status}`);
@@ -654,7 +654,7 @@ async function updateFromFirefox(seed) {
 let userId = null;
 try {
   console.log(`Seeding production SoT user via ${baseUrl} ...`);
-  const seed = await seed();
+  const seed = await seedSession();
   userId = seed.userId;
   report.seed = {
     userId: seed.userId,
