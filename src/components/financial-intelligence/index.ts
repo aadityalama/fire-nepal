@@ -16,10 +16,14 @@ export type {
 
 export { buildFinancialIntelligenceModel, type BuildFinancialIntelligenceArgs } from "./build-financial-intelligence";
 export {
+  clearIntelRollupsLocalCache,
   currentIntelMonthKey,
   FIN_INTEL_ROLLUPS_KEY,
   loadIntelMonthRollups,
+  sanitizeIntelMonthRollups,
+  saveIntelMonthRollups,
   upsertCurrentMonthRollup,
+  upsertCurrentMonthRollupRows,
   type FinancialIntelMonthRollup,
 } from "./monthly-rollup-storage";
 export { SmartFinancialIntelligenceSection } from "./SmartFinancialIntelligenceSection";

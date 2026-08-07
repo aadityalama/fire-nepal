@@ -4,7 +4,8 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState,
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { replaceDepositInterestIncomeFromPortfolioNpr } from "@/components/cashflow/portfolio-fd-cashflow-sync";
 import { aggregateFdMonthlyInterestNpr } from "@/components/portfolio/banking-fd";
-import { cashflowStorageKey, defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
+import { defaultCashflowState, loadCashflowState, sanitizeCashflowState } from "@/components/cashflow/cashflow-storage";
+import type { CashflowDashboardState } from "@/components/cashflow/types";
 import {
   allocationPercents,
   computeRetirementDashboardSnapshot,
@@ -41,14 +42,21 @@ import type {
 } from "@/components/portfolio/types";
 import {
   buildFinancialIntelligenceModel,
-  loadIntelMonthRollups,
-  upsertCurrentMonthRollup,
+  sanitizeIntelMonthRollups,
+  upsertCurrentMonthRollupRows,
   type FinancialIntelMonthRollup,
 } from "@/components/financial-intelligence";
+import {
+  clearIntelRollupsLocalCache,
+  loadIntelMonthRollups,
+  saveIntelMonthRollups,
+} from "@/components/financial-intelligence/monthly-rollup-storage";
 import { buildFinancialCoachSnapshot } from "@/components/financial-coach/coach-snapshot";
 import type { FinancialCoachSnapshot } from "@/components/financial-coach/types";
 import { computePayslipTrendAnalytics } from "@/components/payslip-import/payslip-analytics";
-import { loadPayslipHistoryState, PAYSLIP_HISTORY_SYNC_EVENT } from "@/components/payslip-import/payslip-history-storage";
+import { PAYSLIP_HISTORY_SYNC_EVENT } from "@/components/payslip-import/payslip-history-storage";
+import { usePayslipHistoryState } from "@/hooks/usePayslipHistoryState";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { normalizeGoldSilverPriceResponse } from "@/lib/market/normalize-gold-silver-price-response";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
@@ -130,8 +138,17 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   const [bullionError, setBullionError] = useState<string | null>(null);
   const [bullionFetchInFlight, setBullionFetchInFlight] = useState(false);
   const [monthlyDividendNpr, setMonthlyDividendNpr] = useState(0);
+  const [cashflowForCoach, setCashflowForCoach] = useState<CashflowDashboardState>(defaultCashflowState);
   const [coachDataTick, setCoachDataTick] = useState(0);
-  const [intelRollups, setIntelRollups] = useState<FinancialIntelMonthRollup[]>([]);
+  const { entries: payslipHistoryEntries } = usePayslipHistoryState();
+  const { state: intelRollups, setState: setIntelRollups } = useCloudDocumentState({
+    moduleKey: "financial_intel_rollups",
+    getDefault: () => [] as FinancialIntelMonthRollup[],
+    sanitize: sanitizeIntelMonthRollups,
+    loadLocal: loadIntelMonthRollups,
+    saveLocal: saveIntelMonthRollups,
+    clearLocal: clearIntelRollupsLocalCache,
+  });
 
   useEffect(() => {
     const bump = () => setCoachDataTick((t) => t + 1);
@@ -143,15 +160,28 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  /** Guests hydrate from localStorage. Authenticated users wait for Supabase (never paint browser-local). */
+  const [cloudReady, setCloudReady] = useState(!user?.id);
+
   useLayoutEffect(() => {
     if (loading) return;
-    setState(loadWealthPortfolioState(user?.id));
+    if (user?.id) {
+      // Authenticated: empty shell until WealthPortfolioCloudSync applies Supabase.
+      setState(defaultWealthState());
+      setCloudReady(false);
+      setHydrated(true);
+      return;
+    }
+    setState(loadWealthPortfolioState(null));
+    setCloudReady(true);
     setHydrated(true);
   }, [loading, user?.id]);
 
   useEffect(() => {
+    // Guests may sync across tabs via localStorage. Authenticated: Supabase realtime only.
+    if (user?.id) return;
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== portfolioStorageKey(user?.id) || e.newValue == null) return;
+      if (e.key !== portfolioStorageKey(null) || e.newValue == null) return;
       try {
         const parsed = JSON.parse(e.newValue) as WealthPortfolioStateV2;
         setState(parsed);
@@ -165,7 +195,11 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const reloadFromDisk = () => {
-      setState(loadWealthPortfolioState(user?.id));
+      if (user?.id) {
+        // Authenticated: do not re-read localStorage as SoT.
+        return;
+      }
+      setState(loadWealthPortfolioState(null));
     };
     window.addEventListener(FIRE_NEPAL_PORTFOLIO_STORAGE_SYNC_EVENT, reloadFromDisk);
     window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, reloadFromDisk);
@@ -176,26 +210,38 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    // Guests: localStorage is the store. Authenticated: cache only after cloudReady (written by cloud sync).
+    if (!hydrated || user?.id) return;
     try {
-      window.localStorage.setItem(portfolioStorageKey(user?.id), JSON.stringify(state));
+      window.localStorage.setItem(portfolioStorageKey(null), JSON.stringify(state));
     } catch {
       /* quota */
     }
   }, [state, hydrated, user?.id]);
 
   useEffect(() => {
-    const readDividend = () => setMonthlyDividendNpr(loadCashflowState(user?.id).income.dividendIncome ?? 0);
+    let cancelled = false;
+    const readDividend = () => {
+      if (user?.id) {
+        void fetch("/api/cashflow", { credentials: "include", cache: "no-store" })
+          .then((r) => r.json() as Promise<{ ok: boolean; snapshot?: { state: { income?: { dividendIncome?: number } } } | null }>)
+          .then((json) => {
+            if (cancelled) return;
+            setMonthlyDividendNpr(json.ok ? (json.snapshot?.state?.income?.dividendIncome ?? 0) : 0);
+          })
+          .catch(() => {
+            if (!cancelled) setMonthlyDividendNpr(0);
+          });
+        return;
+      }
+      setMonthlyDividendNpr(loadCashflowState(null).income.dividendIncome ?? 0);
+    };
     readDividend();
     const onExternal = () => readDividend();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === cashflowStorageKey(user?.id)) readDividend();
-    };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-    window.addEventListener("storage", onStorage);
     return () => {
+      cancelled = true;
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-      window.removeEventListener("storage", onStorage);
     };
   }, [user?.id, hydrated]);
 
@@ -244,7 +290,8 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   }, [hydrated, loadBullion]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    // Wait for cloud hydrate so we never PUT empty defaults from another browser's race.
+    if (!hydrated || !cloudReady) return;
     const h = window.setTimeout(() => {
       replaceDepositInterestIncomeFromPortfolioNpr(
         aggregateFdMonthlyInterestNpr(state.fixedDeposits ?? [], krwPerNpr, usdPerNpr),
@@ -252,7 +299,7 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
       );
     }, 450);
     return () => window.clearTimeout(h);
-  }, [hydrated, state.fixedDeposits, krwPerNpr, usdPerNpr, user?.id]);
+  }, [hydrated, cloudReady, state.fixedDeposits, krwPerNpr, usdPerNpr, user?.id]);
 
   const bullionGramRatesNpr = useMemo((): BullionGramRatesNpr | null => {
     if (!bullionSpot) return null;
@@ -289,15 +336,35 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   );
   const monthDelta = useMemo(() => monthlyWealthGrowthNpr(state.netWorthHistory), [state.netWorthHistory]);
 
-  const cashflowForCoach = useMemo(() => {
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
     void coachDataTick;
-    if (typeof window === "undefined" || !hydrated) return defaultCashflowState();
-    return loadCashflowState(user?.id);
+    if (user?.id) {
+      void fetch("/api/cashflow", { credentials: "include", cache: "no-store" })
+        .then((r) => r.json() as Promise<{ ok: boolean; snapshot?: { state: CashflowDashboardState } | null }>)
+        .then((json) => {
+          if (cancelled) return;
+          setCashflowForCoach(
+            json.ok && json.snapshot?.state ? sanitizeCashflowState(json.snapshot.state) : defaultCashflowState(),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setCashflowForCoach(defaultCashflowState());
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setCashflowForCoach(loadCashflowState(null));
+    return () => {
+      cancelled = true;
+    };
   }, [hydrated, coachDataTick, user?.id]);
 
   const coachSnapshot = useMemo(() => {
     void coachDataTick;
-    const payslipMoM = computePayslipTrendAnalytics(loadPayslipHistoryState().entries).grossSalaryMoM_pct;
+    const payslipMoM = computePayslipTrendAnalytics(payslipHistoryEntries).grossSalaryMoM_pct;
     return buildFinancialCoachSnapshot({
       hydrated,
       totals,
@@ -321,15 +388,13 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     krwPerNpr,
     state.globalRetirementAssets,
     coachDataTick,
+    payslipHistoryEntries,
   ]);
 
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
-    upsertCurrentMonthRollup({ cashflow: cashflowForCoach, coach: coachSnapshot });
-    queueMicrotask(() => {
-      setIntelRollups(loadIntelMonthRollups());
-    });
-  }, [hydrated, coachDataTick, cashflowForCoach, coachSnapshot]);
+    setIntelRollups((prev) => upsertCurrentMonthRollupRows(prev, { cashflow: cashflowForCoach, coach: coachSnapshot }));
+  }, [hydrated, coachDataTick, cashflowForCoach, coachSnapshot, setIntelRollups]);
 
   const intelModel = useMemo(
     () =>
@@ -348,14 +413,14 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
   }, [allocation]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !cloudReady) return;
     queueMicrotask(() => {
       setState((prev) => ({
         ...prev,
         netWorthHistory: appendNetWorthHistory(prev.netWorthHistory, totals.netWorthNpr),
       }));
     });
-  }, [hydrated, totals.netWorthNpr]);
+  }, [hydrated, cloudReady, totals.netWorthNpr]);
 
   const updateLiquid = useCallback((id: string, patch: Partial<SimpleMoneyLine>) => {
     setState((s) => ({
@@ -610,7 +675,13 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
 
   return (
     <WealthPortfolioContext.Provider value={value}>
-      <WealthPortfolioCloudSync key={user?.id ?? "guest"} hydrated={hydrated} state={state} setState={setState} />
+      <WealthPortfolioCloudSync
+        key={user?.id ?? "guest"}
+        hydrated={hydrated}
+        state={state}
+        setState={setState}
+        onCloudReady={setCloudReady}
+      />
       {children}
     </WealthPortfolioContext.Provider>
   );

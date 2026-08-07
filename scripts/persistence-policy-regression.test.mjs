@@ -106,7 +106,8 @@ test("Group members are loaded from Supabase before expenses hydrate", () => {
   assert.match(dashboard, /listGroupMembers\(/);
   assert.match(dashboard, /Members must resolve before expenses render/);
   assert.match(dashboard, /void persistGroupMember\(/);
-  assert.match(dashboard, /softDeleteGroupMemberByLocalId\(/);
+  assert.match(dashboard, /deleteGroupMemberCascade\(/);
+  assert.match(service, /softDeleteGroupMemberByLocalId\(/);
   assert.doesNotMatch(dashboard, /remoteMembers = Array\.from\(new Set\(remoteExpenses\.map/);
 });
 
@@ -127,4 +128,30 @@ test("Budget and Insurance delete handlers soft-delete instead of hard-delete", 
     assert.match(deleteBody, /deleted_at/);
     assert.match(deleteBody, /updated_at/);
   }
+});
+
+test("Portfolio authenticated hydrate does not loadWealthPortfolioState as source of truth", () => {
+  const portfolio = read("src/contexts/WealthPortfolioContext.tsx");
+  const hydrateBlock = portfolio.slice(portfolio.indexOf("useLayoutEffect(() => {"), portfolio.indexOf("}, [loading, user?.id]);") + 20);
+  assert.match(hydrateBlock, /if \(user\?\.id\)/);
+  assert.match(hydrateBlock, /setState\(defaultWealthState\(\)\)/);
+  assert.doesNotMatch(hydrateBlock, /loadWealthPortfolioState\(user/);
+});
+
+test("useCloudDocumentState and user_module_snapshots module keys exist", () => {
+  const hook = read("src/hooks/useCloudDocumentState.ts");
+  const keys = read("src/lib/module-snapshots/keys.ts");
+  const migration = read("supabase/migrations/20260807120000_user_module_snapshots.sql");
+  assert.match(hook, /export function useCloudDocumentState/);
+  assert.match(hook, /fetchModuleSnapshot/);
+  assert.match(hook, /saveModuleSnapshotToCloud/);
+  assert.match(keys, /user_module_snapshots|"nepal_col"|"smart_loan"|"family_hub"/);
+  assert.match(migration, /user_module_snapshots/);
+});
+
+test("Insurance authenticated path has no offline Will sync when cloud is ready fork", () => {
+  const source = read("src/components/insurance-workspace/InsuranceWorkspaceDashboard.tsx");
+  assert.doesNotMatch(source, /Will sync when cloud is ready/i);
+  assert.match(source, /useState<InsuranceWorkspaceState>\(\(\) => \(\{ version: 1, policies: \[\] \}\)\)/);
+  assert.match(source, /Authenticated: never paint browser-local policies/);
 });

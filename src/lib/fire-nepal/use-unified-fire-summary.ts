@@ -2,15 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
-import { cashflowStorageKey, loadCashflowState } from "@/components/cashflow/cashflow-storage";
-import { loadWealthPortfolioState, portfolioStorageKey } from "@/components/portfolio/storage";
-import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import {
+  cashflowStorageKey,
+  defaultCashflowState,
+  loadCashflowState,
+  sanitizeCashflowState,
+} from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
+import {
+  defaultWealthState,
+  loadWealthPortfolioState,
+  portfolioStorageKey,
+} from "@/components/portfolio/storage";
+import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
 
 function storageTouchesSession(key: string | null, userId?: string | null): boolean {
   if (key == null) return false;
@@ -18,8 +30,9 @@ function storageTouchesSession(key: string | null, userId?: string | null): bool
 }
 
 /**
- * Live unified summary: reads portfolio + cashflow from `localStorage`, applies FX,
- * and recomputes whenever sources change (navigation, visibility, cross-tab storage).
+ * Live unified summary for FIRE Journey.
+ * Authenticated: reads portfolio + cashflow from Supabase (cache only after cloud hydrate).
+ * Guests: localStorage.
  */
 export function useUnifiedFireSummary(): {
   summary: UnifiedFireSummary;
@@ -30,15 +43,45 @@ export function useUnifiedFireSummary(): {
 } {
   const { user, loading } = useProductAuth();
   const uid = user?.id;
-  const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => loadWealthPortfolioState(uid));
-  const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => loadCashflowState(uid));
+  const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => defaultWealthState());
+  const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => defaultCashflowState());
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
 
   const resync = useCallback(() => {
-    setPortfolio(loadWealthPortfolioState(uid));
-    setCashflow(loadCashflowState(uid));
+    if (!uid || !isSupabaseConfigured()) {
+      setPortfolio(loadWealthPortfolioState(uid));
+      setCashflow(loadCashflowState(uid));
+      return;
+    }
+
+    void (async () => {
+      try {
+        const [cfRes, remotePortfolio] = await Promise.all([
+          fetch("/api/cashflow", { credentials: "include", cache: "no-store" }).then(
+            (r) =>
+              r.json() as Promise<{
+                ok: boolean;
+                snapshot?: { state: CashflowDashboardState } | null;
+              }>,
+          ),
+          loadWealthPortfolioFromSupabase(getSupabaseBrowserClient(), uid),
+        ]);
+        setPortfolio(remotePortfolio ?? defaultWealthState());
+        setCashflow(
+          cfRes.ok && cfRes.snapshot?.state
+            ? sanitizeCashflowState(cfRes.snapshot.state)
+            : defaultCashflowState(),
+        );
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[unified-fire-summary] cloud resync failed", error);
+        }
+        setPortfolio(defaultWealthState());
+        setCashflow(defaultCashflowState());
+      }
+    })();
   }, [uid]);
 
   useEffect(() => {
@@ -47,6 +90,8 @@ export function useUnifiedFireSummary(): {
   }, [loading, resync]);
 
   useEffect(() => {
+    // Guests: cross-tab localStorage. Authenticated: cloud events only.
+    if (uid) return;
     const onStorage = (e: StorageEvent) => {
       if (!storageTouchesSession(e.key, uid)) return;
       resync();

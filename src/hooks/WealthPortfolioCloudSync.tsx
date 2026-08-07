@@ -8,7 +8,7 @@ import { appToast } from "@/lib/toast";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase, saveWealthPortfolioToSupabase } from "@/services/portfolio-supabase";
-import { defaultWealthState } from "@/components/portfolio/storage";
+import { defaultWealthState, portfolioStorageKey } from "@/components/portfolio/storage";
 
 /** Debounce cloud writes so typing does not trigger constant sync work; pairs with stale-save / echo guards below. */
 const CLOUD_SAVE_DEBOUNCE_MS = 900;
@@ -19,17 +19,27 @@ function portfolioErrorMessage(error: unknown): string {
   return "Portfolio cloud sync failed.";
 }
 
+function cachePortfolioLocally(userId: string, state: WealthPortfolioStateV2) {
+  try {
+    window.localStorage.setItem(portfolioStorageKey(userId), JSON.stringify(state));
+  } catch {
+    /* quota */
+  }
+}
+
 type Props = {
   hydrated: boolean;
   state: WealthPortfolioStateV2;
   setState: Dispatch<SetStateAction<WealthPortfolioStateV2>>;
+  onCloudReady?: (ready: boolean) => void;
 };
 
 /**
  * When Supabase is configured and the user is signed in, loads the portfolio from Postgres,
  * debounces saves after edits, and listens for `portfolio_extensions` changes for multi-tab refresh.
+ * localStorage is written only after successful cloud load/save (optional offline cache).
  */
-export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
+export function WealthPortfolioCloudSync({ hydrated, state, setState, onCloudReady }: Props) {
   const { user } = useProductAuth();
   const needRemote = isSupabaseConfigured() && Boolean(user?.id);
   const [remoteLoaded, setRemoteLoaded] = useState(!needRemote);
@@ -41,8 +51,13 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
   }, [state]);
 
   useEffect(() => {
-    if (!hydrated || !isSupabaseConfigured() || !user?.id) return;
+    if (!hydrated || !isSupabaseConfigured() || !user?.id) {
+      setRemoteLoaded(!needRemote);
+      onCloudReady?.(!needRemote);
+      return;
+    }
     let cancelled = false;
+    onCloudReady?.(false);
     void (async () => {
       try {
         const client = getSupabaseBrowserClient();
@@ -51,26 +66,39 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
         if (remote) {
           setState(remote);
           lastSavedRef.current = JSON.stringify(remote);
+          cachePortfolioLocally(user.id, remote);
         } else {
-          // Critical: empty cloud must replace any prior in-memory / localStorage state from another account
-          // on the same browser; previously we only called setState when remote was non-null.
+          // Empty cloud must replace any prior in-memory / localStorage state.
           const empty = defaultWealthState();
           setState(empty);
           lastSavedRef.current = JSON.stringify(empty);
+          cachePortfolioLocally(user.id, empty);
         }
       } catch (e) {
         console.error(e);
-        appToast.error("Could not load portfolio from cloud. Showing local data.", {
+        // Never keep browser-local data as truth after login.
+        const empty = defaultWealthState();
+        setState(empty);
+        lastSavedRef.current = JSON.stringify(empty);
+        try {
+          window.localStorage.removeItem(portfolioStorageKey(user.id));
+        } catch {
+          /* ignore */
+        }
+        appToast.error("Could not load portfolio from cloud.", {
           id: "portfolio-cloud-load",
         });
       } finally {
-        if (!cancelled) setRemoteLoaded(true);
+        if (!cancelled) {
+          setRemoteLoaded(true);
+          onCloudReady?.(true);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [hydrated, user?.id, setState]);
+  }, [hydrated, user?.id, setState, needRemote, onCloudReady]);
 
   useEffect(() => {
     if (!hydrated || !remoteLoaded || !isSupabaseConfigured() || !user?.id) return;
@@ -87,20 +115,19 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
           throw new Error("Authenticated user changed before portfolio save. Please refresh and try again.");
         }
 
-        // Always persist the latest snapshot (avoids stale closure if the timer was scheduled on an older render).
         const toSave = stateRef.current;
         const snapshot = JSON.stringify(toSave);
         if (snapshot === lastSavedRef.current) return;
 
         const ok = await saveWealthPortfolioToSupabase(client, user.id, toSave);
         if (ok) {
-          // If the user kept typing while the request was in flight, do not mark as saved or toast — a new debounced save will run.
           if (JSON.stringify(stateRef.current) === snapshot) {
             lastSavedRef.current = snapshot;
+            cachePortfolioLocally(user.id, toSave);
             appToast.success("Portfolio synced to cloud.", { id: "portfolio-cloud-save", duration: 2200 });
           }
         } else {
-          appToast.error("Portfolio cloud sync failed. Your changes are still saved on this device.", {
+          appToast.error("Portfolio cloud sync failed. Changes were not saved to Supabase.", {
             id: "portfolio-cloud-save-error",
           });
         }
@@ -129,11 +156,10 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState }: Props) {
             const incoming = JSON.stringify(remote);
             const local = JSON.stringify(stateRef.current);
             if (incoming === local) return;
-            // Do not replace in-memory state while there are edits not yet reflected in `lastSavedRef`
-            // (avoids postgres echo / slow saves wiping text the user is still typing).
             if (local !== lastSavedRef.current) return;
             setState(remote);
             lastSavedRef.current = incoming;
+            cachePortfolioLocally(uid, remote);
             appToast.info("Portfolio updated from another session.", {
               id: "portfolio-cloud-remote",
               duration: 3200,

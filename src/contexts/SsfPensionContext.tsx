@@ -1,13 +1,17 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from "react";
 import {
+  clearSsfPensionLocalCache,
+  DEFAULT_SSF_PENSION_WORKSPACE_STATE,
   loadSsfPensionWorkspace,
   saveSsfPensionWorkspace,
+  sanitizeSsfPensionWorkspace,
   type SsfPensionWorkspaceState,
   type SsfReminderPrefs,
 } from "@/lib/ssf-pension/storage";
 import { FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT } from "@/lib/fire-nepal/workspace-data-reset";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 
 type SsfPensionContextValue = {
   workspace: SsfPensionWorkspaceState;
@@ -19,33 +23,43 @@ type SsfPensionContextValue = {
 const SsfPensionContext = createContext<SsfPensionContextValue | null>(null);
 
 export function SsfPensionProvider({ children }: { children: ReactNode }) {
-  const [workspace, setWorkspace] = useState<SsfPensionWorkspaceState>(() => loadSsfPensionWorkspace());
+  const { state: workspace, setState: setWorkspace, persistNow } = useCloudDocumentState({
+    moduleKey: "ssf_pension",
+    getDefault: () => DEFAULT_SSF_PENSION_WORKSPACE_STATE,
+    sanitize: sanitizeSsfPensionWorkspace,
+    loadLocal: loadSsfPensionWorkspace,
+    saveLocal: saveSsfPensionWorkspace,
+    clearLocal: clearSsfPensionLocalCache,
+  });
 
   useEffect(() => {
-    setWorkspace(loadSsfPensionWorkspace());
-  }, []);
-
-  useEffect(() => {
-    saveSsfPensionWorkspace(workspace);
-  }, [workspace]);
-
-  useEffect(() => {
-    const onGlobal = () => setWorkspace(loadSsfPensionWorkspace());
+    const onGlobal = () => {
+      void persistNow(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
+    };
     window.addEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
     return () => window.removeEventListener(FIRE_NEPAL_GLOBAL_WORKSPACE_RESET_EVENT, onGlobal);
-  }, []);
+  }, [persistNow]);
 
-  const setReminderPrefs = useCallback((patch: Partial<SsfReminderPrefs>) => {
-    setWorkspace((w) => ({ ...w, reminderPrefs: { ...w.reminderPrefs, ...patch } }));
-  }, []);
+  const setReminderPrefs = useCallback(
+    (patch: Partial<SsfReminderPrefs>) => {
+      setWorkspace((w) => ({ ...w, reminderPrefs: { ...w.reminderPrefs, ...patch } }));
+    },
+    [setWorkspace],
+  );
 
-  const setProjection = useCallback((patch: Partial<SsfPensionWorkspaceState["projection"]>) => {
-    setWorkspace((w) => ({ ...w, projection: { ...w.projection, ...patch } }));
-  }, []);
+  const setProjection = useCallback(
+    (patch: Partial<SsfPensionWorkspaceState["projection"]>) => {
+      setWorkspace((w) => ({ ...w, projection: { ...w.projection, ...patch } }));
+    },
+    [setWorkspace],
+  );
 
-  const setRetireNepal = useCallback((patch: Partial<SsfPensionWorkspaceState["retireNepal"]>) => {
-    setWorkspace((w) => ({ ...w, retireNepal: { ...w.retireNepal, ...patch } }));
-  }, []);
+  const setRetireNepal = useCallback(
+    (patch: Partial<SsfPensionWorkspaceState["retireNepal"]>) => {
+      setWorkspace((w) => ({ ...w, retireNepal: { ...w.retireNepal, ...patch } }));
+    },
+    [setWorkspace],
+  );
 
   const value = useMemo(
     () => ({ workspace, setReminderPrefs, setProjection, setRetireNepal }),

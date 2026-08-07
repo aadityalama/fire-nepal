@@ -98,7 +98,9 @@ export function SavingsWorkspaceDashboard() {
         if (cancelled) return;
         // Empty cloud ⇒ empty UI. Never merge or seed from browser-local data.
         const next = remote ?? emptySavingsWorkspaceState();
+        // Clear stale browser blobs, then cache the cloud snapshot (optional offline cache).
         clearSavingsWorkspaceLocalCache();
+        saveSavingsWorkspaceState(next);
         setState(next);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
@@ -143,7 +145,8 @@ export function SavingsWorkspaceDashboard() {
       }
       const saved = await saveSavingsWorkspaceToCloud(next);
       const remote = (await fetchSavingsWorkspace()) ?? saved;
-      clearSavingsWorkspaceLocalCache();
+      // Optional cache only after successful cloud sync.
+      saveSavingsWorkspaceState(remote);
       setState(remote);
       return remote;
     },

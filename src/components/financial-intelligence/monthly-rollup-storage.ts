@@ -44,47 +44,50 @@ export function currentIntelMonthKey(d = new Date()): string {
   return d.toISOString().slice(0, 7);
 }
 
+export function sanitizeIntelMonthRollups(raw: unknown): FinancialIntelMonthRollup[] {
+  if (!Array.isArray(raw)) return [];
+  const out: FinancialIntelMonthRollup[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Partial<FinancialIntelMonthRollup>;
+    if (typeof r.month !== "string" || !/^\d{4}-\d{2}$/.test(r.month)) continue;
+    const exp = {} as Record<ExpenseCategoryKey, number>;
+    for (const k of EXPENSE_KEYS) exp[k] = 0;
+    const src = r.expenseByCategory;
+    if (src && typeof src === "object") {
+      for (const k of EXPENSE_KEYS) {
+        const v = (src as Record<string, unknown>)[k];
+        exp[k] = typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0;
+      }
+    }
+    out.push({
+      month: r.month,
+      expenseByCategory: exp,
+      burnNpr: typeof r.burnNpr === "number" && Number.isFinite(r.burnNpr) ? Math.max(0, r.burnNpr) : 0,
+      incomeNpr: typeof r.incomeNpr === "number" && Number.isFinite(r.incomeNpr) ? Math.max(0, r.incomeNpr) : 0,
+      savingsRatePct:
+        typeof r.savingsRatePct === "number" && Number.isFinite(r.savingsRatePct) ? r.savingsRatePct : null,
+      fireYearsToFi:
+        typeof r.fireYearsToFi === "number" && Number.isFinite(r.fireYearsToFi) ? Math.max(0, r.fireYearsToFi) : null,
+      netWorthNpr: typeof r.netWorthNpr === "number" && Number.isFinite(r.netWorthNpr) ? r.netWorthNpr : 0,
+      updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : new Date().toISOString(),
+    });
+  }
+  return out.sort((a, b) => a.month.localeCompare(b.month));
+}
+
 export function loadIntelMonthRollups(): FinancialIntelMonthRollup[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(FIN_INTEL_ROLLUPS_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const out: FinancialIntelMonthRollup[] = [];
-    for (const row of parsed) {
-      if (!row || typeof row !== "object") continue;
-      const r = row as Partial<FinancialIntelMonthRollup>;
-      if (typeof r.month !== "string" || !/^\d{4}-\d{2}$/.test(r.month)) continue;
-      const exp = {} as Record<ExpenseCategoryKey, number>;
-      for (const k of EXPENSE_KEYS) exp[k] = 0;
-      const src = r.expenseByCategory;
-      if (src && typeof src === "object") {
-        for (const k of EXPENSE_KEYS) {
-          const v = (src as Record<string, unknown>)[k];
-          exp[k] = typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0;
-        }
-      }
-      out.push({
-        month: r.month,
-        expenseByCategory: exp,
-        burnNpr: typeof r.burnNpr === "number" && Number.isFinite(r.burnNpr) ? Math.max(0, r.burnNpr) : 0,
-        incomeNpr: typeof r.incomeNpr === "number" && Number.isFinite(r.incomeNpr) ? Math.max(0, r.incomeNpr) : 0,
-        savingsRatePct:
-          typeof r.savingsRatePct === "number" && Number.isFinite(r.savingsRatePct) ? r.savingsRatePct : null,
-        fireYearsToFi:
-          typeof r.fireYearsToFi === "number" && Number.isFinite(r.fireYearsToFi) ? Math.max(0, r.fireYearsToFi) : null,
-        netWorthNpr: typeof r.netWorthNpr === "number" && Number.isFinite(r.netWorthNpr) ? r.netWorthNpr : 0,
-        updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : new Date().toISOString(),
-      });
-    }
-    return out.sort((a, b) => a.month.localeCompare(b.month));
+    return sanitizeIntelMonthRollups(JSON.parse(raw) as unknown);
   } catch {
     return [];
   }
 }
 
-function saveIntelMonthRollups(rows: FinancialIntelMonthRollup[]) {
+export function saveIntelMonthRollups(rows: FinancialIntelMonthRollup[]) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(FIN_INTEL_ROLLUPS_KEY, JSON.stringify(rows));
@@ -93,17 +96,22 @@ function saveIntelMonthRollups(rows: FinancialIntelMonthRollup[]) {
   }
 }
 
-/**
- * Upserts the current calendar month from live cashflow + coach snapshot, trims history.
- * Safe to call on every dashboard tick — replaces same-month row.
- */
-export function upsertCurrentMonthRollup(args: {
-  cashflow: CashflowDashboardState;
-  coach: FinancialCoachSnapshot;
-}): void {
+export function clearIntelRollupsLocalCache(): void {
   if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(FIN_INTEL_ROLLUPS_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Upserts the current calendar month; returns trimmed sorted series (pure — no I/O). */
+export function upsertCurrentMonthRollupRows(
+  rows: FinancialIntelMonthRollup[],
+  args: { cashflow: CashflowDashboardState; coach: FinancialCoachSnapshot },
+): FinancialIntelMonthRollup[] {
   const month = currentIntelMonthKey();
-  const list = loadIntelMonthRollups().filter((r) => r.month !== month);
+  const list = rows.filter((r) => r.month !== month);
   const burnNpr = monthlyBurn(args.cashflow);
   const incomeNpr = sumIncome(args.cashflow);
   const row: FinancialIntelMonthRollup = {
@@ -118,6 +126,18 @@ export function upsertCurrentMonthRollup(args: {
   };
   list.push(row);
   const sorted = list.sort((a, b) => a.month.localeCompare(b.month));
-  const tail = sorted.slice(-MAX_MONTHS);
-  saveIntelMonthRollups(tail);
+  return sorted.slice(-MAX_MONTHS);
+}
+
+/**
+ * Guest/local path: upserts current month directly into localStorage.
+ * Authenticated callers should use cloud rollups via WealthPortfolioContext.
+ */
+export function upsertCurrentMonthRollup(args: {
+  cashflow: CashflowDashboardState;
+  coach: FinancialCoachSnapshot;
+}): void {
+  if (typeof window === "undefined") return;
+  const next = upsertCurrentMonthRollupRows(loadIntelMonthRollups(), args);
+  saveIntelMonthRollups(next);
 }

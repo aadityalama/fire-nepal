@@ -79,10 +79,6 @@ window.addEventListener("pageshow",function(ev){
       var stored=null;
       try{stored=localStorage.getItem(BUILD_KEY);}catch(e){}
       if(stored&&stored!==BUILD){hardReloadOnce();return;}
-      // Chrome iOS bfcache can restore a crashed Insurance tree after a deploy.
-      if(/CriOS/i.test(navigator.userAgent||"")&&/\\/insurance(?:\\/|$)/.test(location.pathname||"")){
-        hardReloadOnce();
-      }
     }
   }catch(e){}
 });

@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { defaultCashflowState, loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
 import {
   computeWealthTotals,
   fireReadinessScore,
   passiveIncomeMonthlyNpr,
 } from "@/components/portfolio/calculations";
-import { defaultWealthState, loadWealthPortfolioState } from "@/components/portfolio/storage";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { amountToNpr, FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { normalizeGoldSilverPriceResponse } from "@/lib/market/normalize-gold-silver-price-response";
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
-import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 
 function sumIncome(cf: CashflowDashboardState): number {
   return Object.values(cf.income).reduce<number>((a, v) => a + (typeof v === "number" && v > 0 ? v : 0), 0);
@@ -45,10 +43,9 @@ export function FireDashboardMetrics({
   monthlyInvestmentTarget,
   refreshKey = 0,
 }: FireDashboardMetricsProps) {
-  const { user, loading } = useProductAuth();
+  const { portfolio, cashflow, resync } = useUnifiedFireSummary();
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
-  const [tick, setTick] = useState(0);
   const [bullionSpot, setBullionSpot] = useState<GoldSilverPriceResponse | null>(null);
 
   useEffect(() => {
@@ -63,6 +60,11 @@ export function FireDashboardMetrics({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    void refreshKey;
+    resync();
+  }, [refreshKey, resync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,29 +85,15 @@ export function FireDashboardMetrics({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [tick, refreshKey]);
-
-  useEffect(() => {
-    const onStorage = () => setTick((t) => t + 1);
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [refreshKey]);
 
   const totals = useMemo(() => {
-    void tick;
     void refreshKey;
-    const state = loading ? defaultWealthState() : loadWealthPortfolioState(user?.id);
     const bullionGramRatesNpr = bullionSpot
       ? { goldNprPerGram: bullionSpot.goldPerGramNPR, silverNprPerGram: bullionSpot.silverPerGramNPR }
       : null;
-    return computeWealthTotals(state, krwPerNpr, usdPerNpr, { bullionGramRatesNpr });
-  }, [krwPerNpr, usdPerNpr, tick, refreshKey, bullionSpot, user?.id, loading]);
-
-  const cashflow = useMemo(() => {
-    void tick;
-    void refreshKey;
-    return loading ? defaultCashflowState() : loadCashflowState(user?.id);
-  }, [tick, refreshKey, user?.id, loading]);
+    return computeWealthTotals(portfolio, krwPerNpr, usdPerNpr, { bullionGramRatesNpr });
+  }, [portfolio, krwPerNpr, usdPerNpr, refreshKey, bullionSpot]);
 
   const income = useMemo(() => sumIncome(cashflow), [cashflow]);
   const expenses = useMemo(() => sumExpenses(cashflow), [cashflow]);

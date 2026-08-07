@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import {
@@ -62,14 +62,18 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
     sanitize: sanitizeCashflowState,
     // Authenticated: never paint browser-local cashflow; wait for Supabase.
     hydrateFromStorage: !userId,
-    // Do not overwrite the offline cache with empty defaults before cloud GET finishes.
-    persistEnabled: !userId || cloudReady,
+    // Guests persist continuously. Authenticated: cache only after successful cloud sync (manual write).
+    persistEnabled: !userId,
   });
 
   const hydrated = userId ? localHydrated && cloudReady : localHydrated;
+  const lastCloudSavedRef = useRef<string>("");
 
   useEffect(() => {
-    const onExternal = () => setState(loadCashflowState(userId));
+    const onExternal = () => {
+      // Prefer cloud-written cache; never treat pre-login browser blobs as truth.
+      setState(loadCashflowState(userId));
+    };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
     return () => {
@@ -94,7 +98,14 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
         if (!alive) return;
         if (!json.ok) {
           // Never keep browser-local data as truth after login.
-          setState(defaultCashflowState());
+          const empty = defaultCashflowState();
+          setState(empty);
+          lastCloudSavedRef.current = JSON.stringify(empty);
+          try {
+            window.localStorage.removeItem(cashflowStorageKey(userId));
+          } catch {
+            /* ignore */
+          }
           toast.error(json.error ?? "Could not load cashflow from Supabase.");
           setCloudReady(true);
           return;
@@ -103,11 +114,25 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
           ? sanitizeCashflowState(json.snapshot.state)
           : defaultCashflowState();
         setState(next);
+        lastCloudSavedRef.current = JSON.stringify(next);
+        // Optional cache only after successful cloud load.
+        try {
+          window.localStorage.setItem(cashflowStorageKey(userId), JSON.stringify(next));
+        } catch {
+          /* quota */
+        }
         setCloudReady(true);
       })
       .catch((error) => {
         if (!alive) return;
-        setState(defaultCashflowState());
+        const empty = defaultCashflowState();
+        setState(empty);
+        lastCloudSavedRef.current = JSON.stringify(empty);
+        try {
+          window.localStorage.removeItem(cashflowStorageKey(userId));
+        } catch {
+          /* ignore */
+        }
         if (process.env.NODE_ENV !== "production") {
           console.error("[cashflow] cloud hydrate failed", error);
         }
@@ -123,6 +148,8 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
   useEffect(() => {
     // Never PUT local/browser state until cloud GET has finished — prevents Safari/Chrome races.
     if (!hydrated || !userId || !cloudReady || !hasCashflowData(state)) return;
+    const serialized = JSON.stringify(state);
+    if (serialized === lastCloudSavedRef.current) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       void fetch("/api/cashflow", {
@@ -133,9 +160,19 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
         signal: controller.signal,
       })
         .then(async (res) => {
-          if (!res.ok && process.env.NODE_ENV !== "production") {
-            const json = (await res.json().catch(() => null)) as { error?: string } | null;
-            console.error("[cashflow] background sync failed", json?.error ?? res.statusText);
+          if (!res.ok) {
+            if (process.env.NODE_ENV !== "production") {
+              const json = (await res.json().catch(() => null)) as { error?: string } | null;
+              console.error("[cashflow] background sync failed", json?.error ?? res.statusText);
+            }
+            return;
+          }
+          lastCloudSavedRef.current = serialized;
+          // Optional cache only after successful cloud sync.
+          try {
+            window.localStorage.setItem(cashflowStorageKey(userId), JSON.stringify(state));
+          } catch {
+            /* quota */
           }
         })
         .catch((error) => {
@@ -206,7 +243,14 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
         throw new Error(loadJson.error ?? "Cashflow saved, but could not reload it.");
       }
 
-      setState(sanitizeCashflowState(loadJson.snapshot.state));
+      const confirmed = sanitizeCashflowState(loadJson.snapshot.state);
+      setState(confirmed);
+      lastCloudSavedRef.current = JSON.stringify(confirmed);
+      try {
+        window.localStorage.setItem(cashflowStorageKey(userId), JSON.stringify(confirmed));
+      } catch {
+        /* quota */
+      }
     },
     [setState, userId],
   );

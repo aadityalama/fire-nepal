@@ -48,20 +48,34 @@ export const DEFAULT_SSF_PENSION_WORKSPACE_STATE: SsfPensionWorkspaceState = {
   },
 };
 
+export function sanitizeSsfPensionWorkspace(raw: unknown): SsfPensionWorkspaceState {
+  if (!raw || typeof raw !== "object") return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
+  const parsed = raw as Partial<SsfPensionWorkspaceState>;
+  if (parsed.version !== 1) return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
+  return {
+    ...DEFAULT_SSF_PENSION_WORKSPACE_STATE,
+    ...parsed,
+    reminderPrefs: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.reminderPrefs, ...parsed.reminderPrefs },
+    projection: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.projection, ...parsed.projection },
+    retireNepal: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.retireNepal, ...parsed.retireNepal },
+  };
+}
+
+export function clearSsfPensionLocalCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(SSF_PENSION_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadSsfPensionWorkspace(): SsfPensionWorkspaceState {
   if (typeof window === "undefined") return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
   try {
     const raw = window.localStorage.getItem(SSF_PENSION_STORAGE_KEY);
     if (!raw) return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
-    const parsed = JSON.parse(raw) as Partial<SsfPensionWorkspaceState>;
-    if (parsed.version !== 1) return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
-    return {
-      ...DEFAULT_SSF_PENSION_WORKSPACE_STATE,
-      ...parsed,
-      reminderPrefs: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.reminderPrefs, ...parsed.reminderPrefs },
-      projection: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.projection, ...parsed.projection },
-      retireNepal: { ...DEFAULT_SSF_PENSION_WORKSPACE_STATE.retireNepal, ...parsed.retireNepal },
-    };
+    return sanitizeSsfPensionWorkspace(JSON.parse(raw) as unknown);
   } catch {
     return DEFAULT_SSF_PENSION_WORKSPACE_STATE;
   }

@@ -41,6 +41,7 @@ import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { SmartLoanReminderLog } from "@/lib/smart-loan/reminders";
 import { shouldSendSmartLoanReminder } from "@/lib/smart-loan/reminders";
+import { useSmartLoanCloudState } from "@/hooks/useSmartLoanCloudState";
 import {
   Area,
   AreaChart,
@@ -138,12 +139,6 @@ const editableMetricLabels: Record<EditableMetric, string> = {
   interestIncome: "Monthly interest income",
 };
 
-const editableMetricStorageKeys: Record<EditableMetric, string> = {
-  lentMoney: "lentMoney",
-  borrowedMoney: "borrowedMoney",
-  interestIncome: "interestIncome",
-};
-
 const SMART_LOAN_PIN_KEY = "fn-smart-loan-pin-v1";
 
 function readSmartLoanPin(): string {
@@ -156,16 +151,8 @@ function writeSmartLoanPin(pin: string) {
   window.localStorage.setItem(SMART_LOAN_PIN_KEY, pin);
 }
 
-const loanProfilesStorageKey = "smartLoan.profiles";
-const loanDocumentsStorageKey = "smartLoan.documents";
 const loanReminderDispatchStoragePrefix = "smartLoan.reminderDispatch";
 const chartColors = ["#10b981", "#22c55e", "#84cc16", "#f59e0b", "#ef4444"];
-
-const baseProfiles: Partial<LoanProfile>[] = [];
-
-const profiles = baseProfiles.map(normalizeLoanProfile);
-
-const baseDocuments: VaultDocument[] = [];
 
 const repaymentData = [{ month: "—", collected: 0, due: 0, overdue: 0 }];
 
@@ -257,25 +244,6 @@ function relationshipDuration(startedAt: string) {
   const years = Math.floor(months / 12);
   const remainder = months % 12;
   return remainder ? `${years} yr ${remainder} mo` : `${years} yr`;
-}
-
-function readStoredNumber(key: string, fallback: number) {
-  if (typeof window === "undefined") return fallback;
-  const saved = window.localStorage.getItem(key);
-  const parsed = saved ? Number(saved) : fallback;
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function readStoredJson<T>(key: string, fallback: T) {
-  if (typeof window === "undefined") return fallback;
-  const saved = window.localStorage.getItem(key);
-  if (!saved) return fallback;
-
-  try {
-    return JSON.parse(saved) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function loanInterest(profile: LoanProfile) {
@@ -567,6 +535,25 @@ function normalizeWhatsAppPhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
+function normalizeStoredLoanProfile(raw: unknown): LoanProfile {
+  return normalizeLoanProfile(raw as Partial<LoanProfile>);
+}
+
+function normalizeVaultDocument(raw: unknown): VaultDocument {
+  if (!raw || typeof raw !== "object") {
+    return { id: `doc-${Date.now()}`, name: "Document", folder: "General", type: "file", owner: "You", status: "Encrypted" };
+  }
+  const row = raw as Partial<VaultDocument>;
+  return {
+    id: typeof row.id === "string" ? row.id : `doc-${Date.now()}`,
+    name: typeof row.name === "string" ? row.name : "Document",
+    folder: typeof row.folder === "string" ? row.folder : "General",
+    type: typeof row.type === "string" ? row.type : "file",
+    owner: typeof row.owner === "string" ? row.owner : "You",
+    status: row.status === "OCR Ready" || row.status === "Needs Review" ? row.status : "Encrypted",
+  };
+}
+
 export function SmartLoanDashboard() {
   const [chartsReady, setChartsReady] = useState(false);
   const [locked, setLocked] = useState(true);
@@ -581,11 +568,23 @@ export function SmartLoanDashboard() {
   const [monthlyEmiDraft, setMonthlyEmiDraft] = useState("85000");
   const [searchTerm, setSearchTerm] = useState("");
   const [riskFilter, setRiskFilter] = useState<"All" | RiskLevel>("All");
-  const [loanProfiles, setLoanProfiles] = useState<LoanProfile[]>(() => readStoredJson(loanProfilesStorageKey, profiles).map(normalizeLoanProfile));
-  const [documents, setDocuments] = useState<VaultDocument[]>(() => readStoredJson(loanDocumentsStorageKey, baseDocuments));
-  const [lentMoney, setLentMoney] = useState(() => readStoredNumber(editableMetricStorageKeys.lentMoney, 1_564_400));
-  const [borrowedMoney, setBorrowedMoney] = useState(() => readStoredNumber(editableMetricStorageKeys.borrowedMoney, 900_000));
-  const [interestIncome, setInterestIncome] = useState(() => readStoredNumber(editableMetricStorageKeys.interestIncome, 21_493));
+  const {
+    loanProfiles,
+    setLoanProfiles,
+    documents,
+    setDocuments,
+    lentMoney,
+    setLentMoney,
+    borrowedMoney,
+    setBorrowedMoney,
+    interestIncome,
+    setInterestIncome,
+  } = useSmartLoanCloudState({
+    normalizeProfile: normalizeStoredLoanProfile,
+    normalizeDocument: normalizeVaultDocument,
+    defaultProfiles: [],
+    defaultDocuments: [],
+  });
   const [editingMetric, setEditingMetric] = useState<EditableMetric | null>(null);
   const [metricDraftValue, setMetricDraftValue] = useState(0);
   const [editingProfile, setEditingProfile] = useState<LoanProfile | null>(null);
@@ -604,26 +603,6 @@ export function SmartLoanDashboard() {
     const interval = window.setInterval(refreshToday, 3_600_000);
     return () => window.clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(editableMetricStorageKeys.lentMoney, String(lentMoney));
-  }, [lentMoney]);
-
-  useEffect(() => {
-    window.localStorage.setItem(editableMetricStorageKeys.borrowedMoney, String(borrowedMoney));
-  }, [borrowedMoney]);
-
-  useEffect(() => {
-    window.localStorage.setItem(editableMetricStorageKeys.interestIncome, String(interestIncome));
-  }, [interestIncome]);
-
-  useEffect(() => {
-    window.localStorage.setItem(loanProfilesStorageKey, JSON.stringify(loanProfiles));
-  }, [loanProfiles]);
-
-  useEffect(() => {
-    window.localStorage.setItem(loanDocumentsStorageKey, JSON.stringify(documents));
-  }, [documents]);
 
   const enrichedProfiles = useMemo(() => {
     return loanProfiles.map((profile) => {

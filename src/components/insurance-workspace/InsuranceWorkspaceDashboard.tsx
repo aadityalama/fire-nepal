@@ -139,7 +139,7 @@ function createLocalPolicy(
 export function InsuranceWorkspaceDashboard() {
   const { user } = useProductAuth();
   const { inputs, recalculate } = useInsuranceEngineInputs();
-  const [state, setState] = useState<InsuranceWorkspaceState>(() => loadInsuranceWorkspaceState());
+  const [state, setState] = useState<InsuranceWorkspaceState>(() => ({ version: 1, policies: [] }));
   const [hydrated, setHydrated] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -461,40 +461,10 @@ export function InsuranceWorkspaceDashboard() {
             return;
           } catch (error) {
             const message = error instanceof Error ? error.message : "Could not save policy. Please try again.";
-            const unavailable = /cloud sync is unavailable|does not exist|schema cache|not available/i.test(message);
             if (process.env.NODE_ENV !== "production") {
               console.error("[insurance-workspace] cloud save failed", error);
             }
-
-            if (!unavailable) {
-              // Keep cloud as primary — do not fork browser-local source of truth.
-              appToast.error(message, { id: "insurance-save-error" });
-              return;
-            }
-
-            // Table / schema unavailable → temporary offline cache mode.
-            clearInsuranceCloudPrimary(user.id);
-            setCloudReady(false);
-            if (editingId) {
-              const existing = state.policies.find((policy) => policy.id === editingId);
-              const nextPolicy = createLocalPolicy(input, state.policies.length, existing);
-              persistLocalState({
-                version: 1,
-                policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
-              });
-            } else {
-              persistLocalState({
-                version: 1,
-                policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
-              });
-            }
-            appToast.success(
-              `${editingId ? "Policy updated" : "Policy saved"} offline. Will sync when cloud is ready.`,
-              { id: "insurance-save" },
-            );
-            setSheetOpen(false);
-            setEditingPolicy(null);
-            recalculate();
+            appToast.error(message, { id: "insurance-save-error" });
             return;
           }
         }
@@ -541,18 +511,13 @@ export function InsuranceWorkspaceDashboard() {
             return;
           } catch (error) {
             const message = error instanceof Error ? error.message : "";
-            const unavailable = /cloud sync is unavailable|does not exist|schema cache|not available/i.test(message);
             if (process.env.NODE_ENV !== "production") {
               console.error("[insurance-workspace] cloud delete failed", error);
             }
-            if (!unavailable) {
-              appToast.error(message || "Could not delete policy. Please try again.", {
-                id: "insurance-delete-error",
-              });
-              return;
-            }
-            clearInsuranceCloudPrimary(user.id);
-            setCloudReady(false);
+            appToast.error(message || "Could not delete policy. Please try again.", {
+              id: "insurance-delete-error",
+            });
+            return;
           }
         }
         persistLocalState({

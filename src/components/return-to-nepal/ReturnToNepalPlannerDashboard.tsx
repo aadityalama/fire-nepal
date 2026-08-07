@@ -39,7 +39,11 @@ import {
 import { syncInsuranceSettlementFlags } from "@/lib/return-to-nepal/return-readiness-pillars";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
-import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { fetchSavingsWorkspace } from "@/lib/savings/savings-api";
+import { loadSavingsWorkspaceState, sanitizeSavingsWorkspaceState } from "@/lib/savings/savings-storage";
+import type { SavingsGoal } from "@/lib/savings/savings-types";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const PAGE_BG = "#000805";
 const GLASS = "rounded-[1.35rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.5rem]";
@@ -126,12 +130,33 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 
 export function ReturnToNepalPlannerDashboard() {
   const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
+  const { user } = useProductAuth();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
   const { summary, portfolio } = useUnifiedFireSummary();
   const wealth = summary.wealthTotals;
   const [mounted, setMounted] = useState(false);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (user?.id && isSupabaseConfigured()) {
+        try {
+          const remote = await fetchSavingsWorkspace();
+          if (!cancelled) setSavingsGoals((remote ?? sanitizeSavingsWorkspaceState(null)).goals);
+        } catch {
+          if (!cancelled) setSavingsGoals([]);
+        }
+        return;
+      }
+      if (!cancelled) setSavingsGoals(loadSavingsWorkspaceState().goals);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, snapshot.estimatedReturnYear]);
 
   useEffect(() => {
     const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs);
@@ -166,9 +191,8 @@ export function ReturnToNepalPlannerDashboard() {
   );
 
   const roadmap = useMemo(() => {
-    const goals = loadSavingsWorkspaceState().goals;
-    return computeReturnRoadmap(goals, snapshot, snapshot.estimatedReturnYear);
-  }, [snapshot]);
+    return computeReturnRoadmap(savingsGoals, snapshot, snapshot.estimatedReturnYear);
+  }, [savingsGoals, snapshot]);
 
   const scenarios = useMemo(
     () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),

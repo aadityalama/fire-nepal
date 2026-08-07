@@ -16,15 +16,10 @@ import { CashflowGlassCard, CashflowInsetCard } from "@/components/cashflow/Cash
 import { applyPayslipToCashflowStorage } from "@/components/payslip-import/apply-payslip-to-cashflow";
 import { computePayslipTrendAnalytics } from "@/components/payslip-import/payslip-analytics";
 import { parsePayslipFromOcr } from "@/components/payslip-import/payslip-from-ocr";
-import {
-  appendPayslipHistoryEntry,
-  loadPayslipHistoryState,
-  markPayslipEntryApplied,
-  PAYSLIP_HISTORY_SYNC_EVENT,
-} from "@/components/payslip-import/payslip-history-storage";
 import { krwToNpr } from "@/components/payslip-import/krw-normalize";
 import { mockOcrFromFileName } from "@/components/payslip-import/mock-ocr-responses";
-import type { PayslipHistoryEntry, PayslipOCRRaw, PayslipParsed } from "@/components/payslip-import/types";
+import type { PayslipOCRRaw, PayslipParsed } from "@/components/payslip-import/types";
+import { usePayslipHistoryState } from "@/hooks/usePayslipHistoryState";
 import { formatMoney } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR, getCachedExchangeRate } from "@/lib/exchange-rate";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
@@ -48,31 +43,19 @@ function row(label: string, value: string, sub?: string) {
 
 export function KoreanPayslipImportPanel() {
   const { user } = useProductAuth();
+  const { entries: history, appendEntry, markEntryApplied } = usePayslipHistoryState();
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [ocrRaw, setOcrRaw] = useState<PayslipOCRRaw | null>(null);
   const [parsed, setParsed] = useState<PayslipParsed | null>(null);
   const [stagedId, setStagedId] = useState<string | null>(null);
-  const [history, setHistory] = useState<PayslipHistoryEntry[]>([]);
-
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
 
   useEffect(() => {
     const snap = getCachedExchangeRate();
     if (snap?.krwPerNpr) setKrwPerNpr(snap.krwPerNpr);
-    setHistory(loadPayslipHistoryState().entries);
   }, []);
-
-  const refreshHistory = useCallback(() => {
-    setHistory(loadPayslipHistoryState().entries);
-  }, []);
-
-  useEffect(() => {
-    const onSync = () => refreshHistory();
-    window.addEventListener(PAYSLIP_HISTORY_SYNC_EVENT, onSync);
-    return () => window.removeEventListener(PAYSLIP_HISTORY_SYNC_EVENT, onSync);
-  }, [refreshHistory]);
 
   const analytics = useMemo(() => computePayslipTrendAnalytics(history), [history]);
 
@@ -98,7 +81,7 @@ export function KoreanPayslipImportPanel() {
         const p = parsePayslipFromOcr(raw);
         setOcrRaw(raw);
         setParsed(p);
-        const saved = appendPayslipHistoryEntry({
+        const saved = appendEntry({
           ocr: raw,
           parsed: p,
           applied: false,
@@ -107,12 +90,11 @@ export function KoreanPayslipImportPanel() {
           krwPerNprUsed: null,
         });
         setStagedId(saved.id);
-        refreshHistory();
         setProcessing(false);
         setToast({ tone: "ok", text: "Mock OCR pipeline finished — review fields, then apply to cashflow." });
       }, 720);
     },
-    [refreshHistory],
+    [appendEntry],
   );
 
   const onFiles = useCallback(
@@ -143,14 +125,13 @@ export function KoreanPayslipImportPanel() {
       setToast({ tone: "err", text: res.message });
       return;
     }
-    markPayslipEntryApplied(stagedId, {
+    markEntryApplied(stagedId, {
       appliedSalaryNpr: res.salaryNpr,
       appliedOvertimeNpr: res.overtimeNpr,
       krwPerNprUsed: krwPerNpr,
     });
-    refreshHistory();
     setToast({ tone: "ok", text: res.message });
-  }, [parsed, stagedId, krwPerNpr, refreshHistory, user?.id]);
+  }, [parsed, stagedId, krwPerNpr, markEntryApplied, user?.id]);
 
   return (
     <div id="payslip-import" className="scroll-mt-24">

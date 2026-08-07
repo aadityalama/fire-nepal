@@ -1576,6 +1576,25 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_module_snapshots: {
+        Row: {
+          user_id: string;
+          module_key: string;
+          state: Json;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          module_key: string;
+          state?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          state?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       finance_budget_records: {
         Row: {
           id: string;

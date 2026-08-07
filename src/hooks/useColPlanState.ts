@@ -1,72 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { defaultColPlan, sanitizeColPlan, type ColPlanState } from "@/lib/nepal-col-dashboard";
 import {
-  colPlanStorageKey,
+  clearColPlanLocalCache,
   loadColPlanDocument,
-  migrateAnonymousColPlanToUser,
   saveColPlanDocument,
   type ColPlanPersistedDocument,
 } from "@/lib/nepal-col-storage";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 
 /**
- * Cost-of-living plan state — local-first persistence keyed by signed-in user when available.
+ * Cost-of-living plan state.
+ * Authenticated: Supabase `nepal_col` module snapshot is the only source of truth.
+ * Guests: anonymous localStorage slot.
  */
 export function useColPlanState(): {
   plan: ColPlanState;
   setPlan: Dispatch<SetStateAction<ColPlanState>>;
   hydrated: boolean;
-  persistPlan: (next?: ColPlanState) => ColPlanPersistedDocument;
+  persistPlan: (next?: ColPlanState) => Promise<ColPlanPersistedDocument>;
   userId: string | undefined;
 } {
   const { user } = useProductAuth();
   const userId = user?.id;
-  const storageKey = colPlanStorageKey(userId);
-  const [plan, setPlanState] = useState<ColPlanState>(() => defaultColPlan());
-  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    setHydrated(false);
-    if (typeof window === "undefined") {
-      setHydrated(true);
-      return;
-    }
-
-    if (userId) {
-      const migrated = migrateAnonymousColPlanToUser(userId);
-      if (migrated) {
-        setPlanState(migrated);
-        setHydrated(true);
-        return;
-      }
-    }
-
-    const doc = loadColPlanDocument(userId);
-    setPlanState(doc.plan);
-    setHydrated(true);
-  }, [storageKey, userId]);
-
-  const setPlan = useCallback<Dispatch<SetStateAction<ColPlanState>>>(
-    (value) => {
-      setPlanState((current) => {
-        const next = typeof value === "function" ? value(current) : value;
-        const sanitized = sanitizeColPlan(next);
-        saveColPlanDocument(sanitized, userId);
-        return sanitized;
-      });
+  const { state: plan, setState: setPlan, hydrated, persistNow } = useCloudDocumentState({
+    moduleKey: "nepal_col",
+    getDefault: defaultColPlan,
+    sanitize: sanitizeColPlan,
+    loadLocal: () => loadColPlanDocument(null).plan,
+    saveLocal: (next) => {
+      saveColPlanDocument(next, userId ?? null);
     },
-    [userId],
-  );
+    clearLocal: userId ? () => clearColPlanLocalCache(userId) : undefined,
+  });
 
   const persistPlan = useCallback(
-    (next?: ColPlanState) => {
-      const snapshot = sanitizeColPlan(next ?? plan);
-      setPlanState(snapshot);
-      return saveColPlanDocument(snapshot, userId);
+    async (next?: ColPlanState) => {
+      const snapshot = await persistNow(next);
+      return {
+        version: 3 as const,
+        updatedAt: new Date().toISOString(),
+        plan: snapshot,
+      } satisfies ColPlanPersistedDocument;
     },
-    [plan, userId],
+    [persistNow],
   );
 
   return useMemo(

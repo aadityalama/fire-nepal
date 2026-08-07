@@ -46,7 +46,14 @@ import {
   totalNationalPensionFromSlip,
 } from "@/lib/pension-severance-math";
 import { downloadPensionReportPdf, estimateSeveranceYoYDelta } from "@/lib/pension-pdf-export";
-import { loadPensionState, savePensionState } from "@/lib/pension-storage";
+import {
+  clearPensionLocalCache,
+  defaultPensionDashboardState,
+  loadPensionState,
+  savePensionState,
+  sanitizePensionState,
+} from "@/lib/pension-storage";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 import { canAccessFeature } from "@/lib/fire-membership";
 import type { PensionDashboardState, PensionLocale, PensionSlipFields, SalarySlipRecord } from "@/lib/pension-types";
 import {
@@ -76,13 +83,15 @@ function newSlipId() {
 export function PensionSeveranceDashboard() {
   const { record } = useFireMembership();
   const pdfOk = canAccessFeature(record, "pdf_reports");
-  const [hydrated, setHydrated] = useState(false);
+  const { state, setState, hydrated } = useCloudDocumentState({
+    moduleKey: "pension_slips",
+    getDefault: defaultPensionDashboardState,
+    sanitize: sanitizePensionState,
+    loadLocal: loadPensionState,
+    saveLocal: savePensionState,
+    clearLocal: clearPensionLocalCache,
+  });
   const [locale, setLocale] = useState<PensionLocale>("en");
-  const [state, setState] = useState<PensionDashboardState>(() => ({
-    version: 1,
-    profile: { joinDate: new Date(new Date().getFullYear() - 3, 0, 2).toISOString().slice(0, 10) },
-    slips: [],
-  }));
   const [krwPerNpr, setKrwPerNpr] = useState(9.27);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -108,17 +117,10 @@ export function PensionSeveranceDashboard() {
   const t = useCallback((key: string, vars?: Record<string, string | number>) => pensionT(locale, key, vars), [locale]);
 
   useEffect(() => {
-    setHydrated(true);
-    setState(loadPensionState());
     void fetchLiveExchangeRate()
       .then((r) => setKrwPerNpr(r.krwPerNpr))
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    savePensionState(state);
-  }, [state, hydrated]);
 
   const sortedSlips = useMemo(
     () => [...state.slips].sort((a, b) => a.periodYm.localeCompare(b.periodYm)),

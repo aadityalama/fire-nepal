@@ -67,7 +67,17 @@ export function saveColPlanDocument(plan: ColPlanState, userId?: string | null):
   return document;
 }
 
-/** Copy anonymous plan into the signed-in user's storage slot on first login. */
+/** Remove stale browser cache for an authenticated user (never used as SoT after login). */
+export function clearColPlanLocalCache(userId: string): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    window.localStorage.removeItem(colPlanStorageKey(userId));
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Copy anonymous plan into the signed-in user's storage slot on first login (guest-only migration). */
 export function migrateAnonymousColPlanToUser(userId: string): ColPlanState | null {
   if (typeof window === "undefined" || !userId) return null;
   const userKey = colPlanStorageKey(userId);

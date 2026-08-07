@@ -4,9 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 import {
@@ -23,7 +21,14 @@ import {
 import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
-import { loadLendingStore, resetLendingStore, saveLendingStore } from "@/lib/fire-lending/storage";
+import {
+  clearFireLendingLocalCache,
+  createEmptyLendingStore,
+  loadLendingStore,
+  resetLendingStore,
+  saveLendingStore,
+  sanitizeFireLendingStore,
+} from "@/lib/fire-lending/storage";
 import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score";
 import type {
   FireLendingLoan,
@@ -33,6 +38,7 @@ import type {
   LoanWizardDraft,
   PaymentMethod,
 } from "@/lib/fire-lending/types";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 
 type FireLendingContextValue = {
   store: FireLendingStore;
@@ -65,25 +71,17 @@ type FireLendingContextValue = {
 
 const FireLendingContext = createContext<FireLendingContextValue | null>(null);
 
-function persist(updater: (prev: FireLendingStore) => FireLendingStore) {
-  return (prev: FireLendingStore) => {
-    const next = updater(prev);
-    saveLendingStore(next);
-    return next;
-  };
-}
-
 export function FireLendingProvider({ children }: { children: ReactNode }) {
-  const [store, setStore] = useState<FireLendingStore>(() => createEmptyClientStore());
-  const [loading, setLoading] = useState(true);
+  const { state: store, setState: setStore, hydrated, cloudReady } = useCloudDocumentState({
+    moduleKey: "fire_lending",
+    getDefault: createEmptyLendingStore,
+    sanitize: sanitizeFireLendingStore,
+    loadLocal: loadLendingStore,
+    saveLocal: saveLendingStore,
+    clearLocal: clearFireLendingLocalCache,
+  });
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setStore(loadLendingStore());
-      setLoading(false);
-    }, 0);
-    return () => window.clearTimeout(t);
-  }, []);
+  const loading = !hydrated || !cloudReady;
 
   const summary = useMemo(() => buildPortfolioSummary(store), [store]);
   const kpis = useMemo(() => buildKpis(summary), [summary]);
@@ -141,69 +139,65 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       months: installments,
     });
 
-    setStore(
-      persist((prev) => ({
-        ...prev,
-        loans: [loan, ...prev.loans],
-        installments: [...schedule, ...prev.installments],
-        agreements: [
-          {
-            id: uid("agr"),
-            loanId,
-            agreementNumber: agrNo,
-            status: "awaiting_signatures",
-            generatedAt: todayIso(),
-            terms: "FIRE Nepal Peer Lending Terms — digital agreement. Both parties must sign to activate.",
-            qrPayload: `fire-nepal://verify/agreement/${agrNo}`,
-          },
-          ...prev.agreements,
-        ],
-        notifications: [
-          {
-            id: uid("ntf"),
-            kind: "signature",
-            title: "Signature required",
-            body: `Agreement ${agrNo} is ready for digital signatures.`,
-            createdAt: todayIso(),
-            read: false,
-            href: `/fire-lending/agreements`,
-          },
-          ...prev.notifications,
-        ],
-      })),
-    );
+    setStore((prev) => ({
+      ...prev,
+      loans: [loan, ...prev.loans],
+      installments: [...schedule, ...prev.installments],
+      agreements: [
+        {
+          id: uid("agr"),
+          loanId,
+          agreementNumber: agrNo,
+          status: "awaiting_signatures",
+          generatedAt: todayIso(),
+          terms: "FIRE Nepal Peer Lending Terms — digital agreement. Both parties must sign to activate.",
+          qrPayload: `fire-nepal://verify/agreement/${agrNo}`,
+        },
+        ...prev.agreements,
+      ],
+      notifications: [
+        {
+          id: uid("ntf"),
+          kind: "signature",
+          title: "Signature required",
+          body: `Agreement ${agrNo} is ready for digital signatures.`,
+          createdAt: todayIso(),
+          read: false,
+          href: `/fire-lending/agreements`,
+        },
+        ...prev.notifications,
+      ],
+    }));
 
     return loanId;
-  }, [partyById, store.currentUserId, store.parties]);
+  }, [partyById, setStore, store.currentUserId, store.parties]);
 
   const respondToRequest = useCallback((id: string, action: FireLendingRequest["status"], note?: string) => {
-    setStore(
-      persist((prev) => ({
-        ...prev,
-        requests: prev.requests.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                status: action,
-                changeRequest: action === "changes_requested" ? note || r.changeRequest : r.changeRequest,
-              }
-            : r,
-        ),
-        notifications: [
-          {
-            id: uid("ntf"),
-            kind: "loan_request",
-            title: `Request ${action.replace("_", " ")}`,
-            body: note || `Loan request marked as ${action}.`,
-            createdAt: todayIso(),
-            read: false,
-            href: "/fire-lending/requests",
-          },
-          ...prev.notifications,
-        ],
-      })),
-    );
-  }, []);
+    setStore((prev) => ({
+      ...prev,
+      requests: prev.requests.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: action,
+              changeRequest: action === "changes_requested" ? note || r.changeRequest : r.changeRequest,
+            }
+          : r,
+      ),
+      notifications: [
+        {
+          id: uid("ntf"),
+          kind: "loan_request",
+          title: `Request ${action.replace("_", " ")}`,
+          body: note || `Loan request marked as ${action}.`,
+          createdAt: todayIso(),
+          read: false,
+          href: "/fire-lending/requests",
+        },
+        ...prev.notifications,
+      ],
+    }));
+  }, [setStore]);
 
   const recordPayment = useCallback(
     (input: {
@@ -226,108 +220,104 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         isSettlement: Boolean(input.isSettlement),
       };
 
-      setStore(
-        persist((prev) => {
-          const loan = prev.loans.find((l) => l.id === input.loanId);
-          if (!loan) return prev;
+      setStore((prev) => {
+        const loan = prev.loans.find((l) => l.id === input.loanId);
+        if (!loan) return prev;
 
-          let remaining = input.amount;
-          const installments = refreshInstallmentStatuses(
-            prev.installments.map((row) => {
-              if (row.loanId !== input.loanId || remaining <= 0 || row.status === "paid") return row;
-              const need = row.amount - row.paidAmount;
-              const apply = Math.min(need, remaining);
-              remaining -= apply;
-              const paidAmount = row.paidAmount + apply;
-              return {
-                ...row,
-                paidAmount,
-                status: paidAmount >= row.amount ? ("paid" as const) : ("partial" as const),
-              };
-            }),
-          );
+        let remaining = input.amount;
+        const installments = refreshInstallmentStatuses(
+          prev.installments.map((row) => {
+            if (row.loanId !== input.loanId || remaining <= 0 || row.status === "paid") return row;
+            const need = row.amount - row.paidAmount;
+            const apply = Math.min(need, remaining);
+            remaining -= apply;
+            const paidAmount = row.paidAmount + apply;
+            return {
+              ...row,
+              paidAmount,
+              status: paidAmount >= row.amount ? ("paid" as const) : ("partial" as const),
+            };
+          }),
+        );
 
-          const outstanding = Math.max(0, loan.outstanding - input.amount);
-          const interestBump = loan.role === "lender" ? Math.round(input.amount * (loan.interestRate / 100 / 12)) : 0;
-          const nextStatus = outstanding <= 0 ? ("settled" as const) : loan.status === "overdue" && outstanding > 0 ? ("active" as const) : loan.status;
+        const outstanding = Math.max(0, loan.outstanding - input.amount);
+        const interestBump = loan.role === "lender" ? Math.round(input.amount * (loan.interestRate / 100 / 12)) : 0;
+        const nextStatus = outstanding <= 0 ? ("settled" as const) : loan.status === "overdue" && outstanding > 0 ? ("active" as const) : loan.status;
 
-          return {
-            ...prev,
-            payments: [payment, ...prev.payments],
-            installments,
-            loans: prev.loans.map((l) =>
-              l.id === input.loanId
-                ? {
-                    ...l,
-                    outstanding,
-                    totalPaid: l.totalPaid + input.amount,
-                    interestEarned: l.interestEarned + interestBump,
-                    status: nextStatus,
-                  }
-                : l,
-            ),
-            parties: prev.parties.map((p) => {
-              if (p.id !== loan.counterpartyId && p.id !== prev.currentUserId) return p;
-              const updated = {
-                ...p,
-                onTimePayments: p.onTimePayments + (input.isPartial ? 0 : 1),
-              };
-              return { ...updated, trustScore: computeTrustScore(updated) };
-            }),
-            notifications: [
-              {
-                id: uid("ntf"),
-                kind: "payment_received",
-                title: "Payment recorded",
-                body: `Payment of ${input.amount.toLocaleString()} via ${input.method} saved.`,
-                createdAt: todayIso(),
-                read: false,
-                href: "/fire-lending/payments",
-              },
-              ...prev.notifications,
-            ],
-          };
-        }),
-      );
+        return {
+          ...prev,
+          payments: [payment, ...prev.payments],
+          installments,
+          loans: prev.loans.map((l) =>
+            l.id === input.loanId
+              ? {
+                  ...l,
+                  outstanding,
+                  totalPaid: l.totalPaid + input.amount,
+                  interestEarned: l.interestEarned + interestBump,
+                  status: nextStatus,
+                }
+              : l,
+          ),
+          parties: prev.parties.map((p) => {
+            if (p.id !== loan.counterpartyId && p.id !== prev.currentUserId) return p;
+            const updated = {
+              ...p,
+              onTimePayments: p.onTimePayments + (input.isPartial ? 0 : 1),
+            };
+            return { ...updated, trustScore: computeTrustScore(updated) };
+          }),
+          notifications: [
+            {
+              id: uid("ntf"),
+              kind: "payment_received",
+              title: "Payment recorded",
+              body: `Payment of ${input.amount.toLocaleString()} via ${input.method} saved.`,
+              createdAt: todayIso(),
+              read: false,
+              href: "/fire-lending/payments",
+            },
+            ...prev.notifications,
+          ],
+        };
+      });
     },
-    [],
+    [setStore],
   );
 
   const signAgreement = useCallback((loanId: string, as: "lender" | "borrower") => {
-    setStore(
-      persist((prev) => {
-        const loans = prev.loans.map((l) => {
-          if (l.id !== loanId) return l;
-          const next = {
-            ...l,
-            lenderSigned: as === "lender" ? true : l.lenderSigned,
-            borrowerSigned: as === "borrower" ? true : l.borrowerSigned,
-          };
-          const both = next.lenderSigned && next.borrowerSigned;
-          return {
-            ...next,
-            status: both ? ("active" as const) : ("pending_signature" as const),
-            startDate: both ? todayIso() : next.startDate,
-          };
-        });
-        const loan = loans.find((l) => l.id === loanId);
-        return {
-          ...prev,
-          loans,
-          agreements: prev.agreements.map((a) =>
-            a.loanId === loanId
-              ? {
-                  ...a,
-                  lenderSignedAt: as === "lender" ? todayIso() : a.lenderSignedAt,
-                  borrowerSignedAt: as === "borrower" ? todayIso() : a.borrowerSignedAt,
-                  status: loan?.lenderSigned && loan.borrowerSigned ? ("active" as const) : ("awaiting_signatures" as const),
-                }
-              : a,
-          ),
+    setStore((prev) => {
+      const loans = prev.loans.map((l) => {
+        if (l.id !== loanId) return l;
+        const next = {
+          ...l,
+          lenderSigned: as === "lender" ? true : l.lenderSigned,
+          borrowerSigned: as === "borrower" ? true : l.borrowerSigned,
         };
-      }),
-    );
-  }, []);
+        const both = next.lenderSigned && next.borrowerSigned;
+        return {
+          ...next,
+          status: both ? ("active" as const) : ("pending_signature" as const),
+          startDate: both ? todayIso() : next.startDate,
+        };
+      });
+      const loan = loans.find((l) => l.id === loanId);
+      return {
+        ...prev,
+        loans,
+        agreements: prev.agreements.map((a) =>
+          a.loanId === loanId
+            ? {
+                ...a,
+                lenderSignedAt: as === "lender" ? todayIso() : a.lenderSignedAt,
+                borrowerSignedAt: as === "borrower" ? todayIso() : a.borrowerSignedAt,
+                status: loan?.lenderSigned && loan.borrowerSigned ? ("active" as const) : ("awaiting_signatures" as const),
+              }
+            : a,
+        ),
+      };
+    });
+  }, [setStore]);
 
   const downloadAgreement = useCallback(
     async (loanId: string) => {
@@ -351,17 +341,15 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   );
 
   const markNotificationRead = useCallback((id: string) => {
-    setStore(
-      persist((prev) => ({
-        ...prev,
-        notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-      })),
-    );
-  }, []);
+    setStore((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    }));
+  }, [setStore]);
 
   const resetDemoData = useCallback(() => {
     setStore(resetLendingStore());
-  }, []);
+  }, [setStore]);
 
   const value: FireLendingContextValue = {
     store,
@@ -386,20 +374,6 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   };
 
   return <FireLendingContext.Provider value={value}>{children}</FireLendingContext.Provider>;
-}
-
-function createEmptyClientStore(): FireLendingStore {
-  return {
-    currentUserId: "party_me",
-    parties: [],
-    loans: [],
-    payments: [],
-    installments: [],
-    requests: [],
-    agreements: [],
-    notifications: [],
-    documents: [],
-  };
 }
 
 export function useFireLending() {
