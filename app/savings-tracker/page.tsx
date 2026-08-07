@@ -4,9 +4,9 @@ import { SavingsTrackerDashboard } from "@/components/savings-tracker/SavingsTra
 import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
 export const metadata: Metadata = {
-  title: "Savings Tracker | FIRE Nepal",
+  title: "Saving Goals | FIRE Nepal",
   description:
-    "Premium NPR savings dashboard — FIRE glide path, analytics, and AI-style insights for Nepalis abroad (local-first demo).",
+    "Premium NPR saving goals dashboard — FIRE glide path, analytics, and AI-style insights for Nepalis abroad (local-first demo).",
   alternates: buildCanonicalAlternates("/savings-tracker"),
 };
 

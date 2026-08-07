@@ -8,7 +8,7 @@ const FINANCE_ITEMS: EcosystemWorkspaceItem[] = [
   { href: "/cashflow-dashboard", label: "Cashflow", description: "Income, burn, savings rate, and runway.", icon: Wallet },
   { href: "/expense-dashboard?finance=personal", label: "Expense", description: "Personal expenses, categories, receipts, reports, and analytics.", icon: ReceiptText },
   { href: "/budget", label: "Budget", description: "Monthly budget workspace for FIRE planning.", icon: Banknote },
-  { href: "/savings-tracker", label: "Savings", description: "Savings targets, glide path, and progress.", icon: PiggyBank },
+  { href: "/savings-tracker", label: "Saving Goals", description: "Saving goal targets, glide path, and progress.", icon: PiggyBank },
   { href: "/insurance", label: "Insurance", description: "FIRE AI protection score, policies, and coverage gaps.", icon: ShieldCheck, hardOnChromeIOS: true },
 ];
 
@@ -18,7 +18,7 @@ export default function FinanceWorkspacePage() {
       <EcosystemWorkspacePanel
         title="Finance"
         eyebrow="Finance workspace"
-        description="Cashflow, expenses, budget, savings, and insurance in one focused FIRE Nepal workspace."
+        description="Cashflow, expenses, budget, saving goals, and insurance in one focused FIRE Nepal workspace."
         items={FINANCE_ITEMS}
       />
     </DashboardAccessGuard>

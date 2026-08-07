@@ -478,7 +478,7 @@ export function ReturnToNepalPlannerDashboard() {
               { href: "/cashflow-dashboard", label: "Income", icon: Wallet },
               { href: "/cost-of-living", label: "COL", icon: Home },
               { href: "/portfolio", label: "Portfolio", icon: TrendingUp },
-              { href: "/savings-tracker", label: "Savings", icon: Shield },
+              { href: "/savings-tracker", label: "Saving Goals", icon: Shield },
             ].map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}

@@ -87,7 +87,7 @@ const EXPENSE_ICONS: Record<ColExpenseCategoryId, LucideIcon> = {
 const NAV_LINKS = [
   { href: "/portfolio", label: "Wealth Dashboard" },
   { href: "/return-to-nepal", label: "Return to Nepal" },
-  { href: "/savings-tracker", label: "Savings Tracker" },
+  { href: "/savings-tracker", label: "Saving Goals" },
   { href: "/cost-of-living", label: "Cost of Living" },
 ] as const;
 

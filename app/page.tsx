@@ -67,7 +67,7 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Summary", "Unified net worth, runway & FIRE %", "/fire-summary", LayoutDashboard],
   ["Cashflow Dashboard", "Income, burn, emergency fund & FIRE speed", "/cashflow-dashboard", Banknote],
   ["Expense Tracker", "Track personal daily expenses", "/expense-dashboard?finance=personal", ReceiptText],
-  ["Savings Tracker", "Monthly KRW/NPR savings growth", "#dashboard", PiggyBank],
+  ["Saving Goals", "Monthly KRW/NPR savings growth", "#dashboard", PiggyBank],
   ["Reminder Planner", "Bills, visa, SIP, insurance reminders", "#learn", CalendarCheck],
   ["SIP Calculator", "Long term investment growth calculator", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Inflation-aware withdrawal & runway", "/swp-calculator", LineChart],
@@ -108,7 +108,7 @@ const footerSections = [
     heading: "Tools",
     links: [
       { label: "FIRE Calculator", href: "#dashboard" },
-      { label: "Savings Tracker", href: "/savings-tracker" },
+      { label: "Saving Goals", href: "/savings-tracker" },
       { label: "Investment Planner", href: "#investments" },
       { label: "AI Calculator", href: "/dashboard/ai-coach" },
     ],
@@ -389,7 +389,7 @@ export default function HomePage() {
 
           <SmartFinancialToolCard href="/savings-tracker">
             <PiggyBank className="mb-4 h-6 w-6 text-emerald-700" />
-            <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Savings Tracker</h3>
+            <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Saving Goals</h3>
             <div className="mt-4 flex flex-1 flex-col gap-4">
               <div>
                 <p className="text-sm font-bold text-slate-500">Monthly savings</p>

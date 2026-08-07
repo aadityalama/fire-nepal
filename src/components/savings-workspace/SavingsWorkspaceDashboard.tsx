@@ -287,7 +287,7 @@ export function SavingsWorkspaceDashboard() {
             >
               <ArrowLeft size={15} /> Finance
             </Link>
-            <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem] lg:text-5xl">Savings</h1>
+            <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem] lg:text-5xl">Saving Goals</h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">Premium savings goals built for FIRE Nepal.</p>
           </div>
         </header>

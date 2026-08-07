@@ -38,7 +38,7 @@ type ShellNavItem = { href: string; label: string; isActive: (pathname: string) 
 
 const SHELL_NAV_BEFORE_FAMILY: readonly ShellNavItem[] = [
   { href: "/portfolio", label: "Dashboard", isActive: (p) => p === "/portfolio" },
-  { href: "/savings-tracker", label: "Savings", isActive: (p) => p === "/savings-tracker" || p.startsWith("/savings-tracker/") },
+  { href: "/savings-tracker", label: "Saving Goals", isActive: (p) => p === "/savings-tracker" || p.startsWith("/savings-tracker/") },
   {
     href: "/return-to-nepal",
     label: "Nepal Return",

@@ -135,7 +135,7 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
       },
       {
         href: "/savings-tracker",
-        title: "Savings",
+        title: "Saving Goals",
         body: "Monthly KRW/NPR savings growth",
         icon: PiggyBank,
         accent: "from-lime-400/20 to-emerald-500/10",

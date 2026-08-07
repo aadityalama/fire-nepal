@@ -99,7 +99,7 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
       },
       {
         href: "/savings-tracker",
-        title: "Savings",
+        title: "Saving Goals",
         body: "Monthly KRW/NPR savings growth",
         icon: PiggyBank,
         accent: "from-lime-400/20 to-emerald-500/10",

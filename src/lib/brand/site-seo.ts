@@ -47,7 +47,7 @@ const FIRE_NEPAL_CORE_FEATURES = [
   "Financial Independence (FIRE)",
   "Expense Tracking",
   "Budget Management",
-  "Savings Tracking",
+  "Saving Goals",
   "Net Worth Tracking",
   "Portfolio Tracking",
   "Wealth Analytics",

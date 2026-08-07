@@ -9,7 +9,7 @@ import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 
 const WEALTH_STRIP = [
   { href: "/portfolio", label: "Net worth", icon: Home },
-  { href: "/savings-tracker", label: "Savings", icon: PiggyBank },
+  { href: "/savings-tracker", label: "Saving Goals", icon: PiggyBank },
   { href: "/portfolio/investments", label: "Investments", icon: TrendingUp },
   { href: "/portfolio/pension", label: "Pension", icon: Flame },
   { href: "/family", label: "Family Hub", icon: Users },
