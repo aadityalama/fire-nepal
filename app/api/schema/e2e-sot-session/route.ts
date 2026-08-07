@@ -571,7 +571,7 @@ async function seedPhase(req: Request, admin: AdminClient) {
       title: `E2E Group Expense ${stamp}`,
       amount: groupExpenseAmount,
       payer_member_id: localMemberId,
-      category: "food",
+      category: "Grocery",
       split_equally: true,
       expense_date: new Date().toISOString().slice(0, 10),
       split_among: [localMemberId],
