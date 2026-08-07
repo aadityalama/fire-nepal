@@ -146,7 +146,65 @@ export async function GET() {
       );
     }
     reminderId = ins.data.id;
-    push({ step: "create_reminder", ok: true, reminderId, dueDate, dueTime });
+    push({ step: "create_reminder", ok: true, reminderId, dueDate, dueTime, destinationEmail: email });
+
+    const { data: verifyRow, error: verifyErr } = await admin
+      .from("scheduled_reminders")
+      .select("*")
+      .eq("id", reminderId)
+      .maybeSingle();
+    push({
+      step: "reload_reminder",
+      ok: Boolean(verifyRow),
+      error: verifyErr?.message ?? null,
+      row: verifyRow
+        ? {
+            id: verifyRow.id,
+            due_date: verifyRow.due_date,
+            due_time: verifyRow.due_time,
+            timezone: verifyRow.timezone,
+            notify_at_due: verifyRow.notify_at_due,
+            notify_overdue: verifyRow.notify_overdue,
+            is_completed: verifyRow.is_completed,
+            email: verifyRow.email,
+            email_enabled: (verifyRow as { email_enabled?: boolean }).email_enabled ?? null,
+            is_archived: (verifyRow as { is_archived?: boolean }).is_archived ?? null,
+          }
+        : null,
+    });
+
+    if (verifyRow) {
+      const { firesDueCatchUp } = await import("@/lib/scheduled-reminders/schedule-logic");
+      const { dbRowToReminder } = await import("@/lib/scheduled-reminders/api-mapper");
+      const { isReminderActiveForEmail } = await import("@/lib/scheduled-reminders/email-lifecycle");
+      const r = dbRowToReminder(verifyRow as never);
+      const fires = firesDueCatchUp(
+        {
+          dueDate: r.dueDate,
+          dueTime: r.dueTime,
+          timezone: r.timezone,
+          repeatFrequency: r.repeatFrequency,
+          notify7DaysBefore: r.notify7DaysBefore,
+          notify3DaysBefore: r.notify3DaysBefore,
+          notify1DayBefore: r.notify1DayBefore,
+          notifyAtDueTime: r.notifyAtDueTime,
+          notifyOverdue: r.notifyOverdue,
+        },
+        new Date(),
+        { rollAnchor: true },
+      );
+      push({
+        step: "diagnose_fires",
+        ok: fires.length > 0,
+        active: isReminderActiveForEmail(verifyRow as never),
+        fireCount: fires.length,
+        slots: fires.map((f) => ({
+          slot: f.slot,
+          fireAtUtc: f.fireAtUtc.toISOString(),
+          anchorDueDate: f.anchorDueDate,
+        })),
+      });
+    }
 
     const cron1 = await runScheduledRemindersCron(new Date());
     push({
