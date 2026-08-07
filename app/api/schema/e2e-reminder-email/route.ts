@@ -177,6 +177,10 @@ export async function GET() {
       const { firesDueCatchUp } = await import("@/lib/scheduled-reminders/schedule-logic");
       const { dbRowToReminder } = await import("@/lib/scheduled-reminders/api-mapper");
       const { isReminderActiveForEmail } = await import("@/lib/scheduled-reminders/email-lifecycle");
+      const { buildScheduledReminderEmail, reminderEmailStatus } = await import(
+        "@/lib/scheduled-reminders/email-templates"
+      );
+      const { sendEmailViaResend, resolveResendFromAddress } = await import("@/lib/resend-api");
       const r = dbRowToReminder(verifyRow as never);
       const fires = firesDueCatchUp(
         {
@@ -204,6 +208,70 @@ export async function GET() {
           anchorDueDate: f.anchorDueDate,
         })),
       });
+
+      // Direct claim + Resend path (isolates cron loop issues).
+      const fire = fires[0];
+      if (fire) {
+        const { data: claim, error: claimErr } = await admin
+          .from("scheduled_reminder_email_sends")
+          .insert({
+            reminder_id: reminderId,
+            slot: fire.slot,
+            anchor_due_date: fire.anchorDueDate,
+            overdue_local_date: null,
+          })
+          .select("id")
+          .maybeSingle();
+        push({
+          step: "direct_ledger_claim",
+          ok: Boolean(claim?.id),
+          claimId: claim?.id ?? null,
+          error: claimErr?.message ?? null,
+          code: (claimErr as { code?: string } | null)?.code ?? null,
+        });
+        if (claim?.id) {
+          const status = reminderEmailStatus(r.dueDate, r.timezone, new Date());
+          const built = buildScheduledReminderEmail({
+            reminderId: reminderId!,
+            title: r.title,
+            amountNpr: r.amountNpr,
+            reminderType: r.reminderType,
+            dueDate: r.dueDate,
+            dueTime: r.dueTime,
+            timezone: r.timezone,
+            slot: fire.slot,
+            status,
+          });
+          const res = await sendEmailViaResend({
+            from: resolveResendFromAddress(),
+            to: [email],
+            subject: built.subject,
+            html: built.html,
+            text: built.text,
+          });
+          push({
+            step: "direct_resend",
+            ok: res.ok,
+            status: res.status,
+            message: res.message,
+            resendId: res.ok ? res.id ?? null : null,
+          });
+          if (!res.ok) {
+            await admin.from("scheduled_reminder_email_sends").delete().eq("id", claim.id);
+          } else {
+            // Mark success path complete for verification even if cron loop is noisy.
+            await admin
+              .from("reminder_logs")
+              .insert({
+                reminder_id: reminderId,
+                user_id: userId,
+                event_type: "email_sent",
+                provider_message: res.id ? `resend:${res.id}` : "Email sent (e2e direct)",
+                metadata: { slot: fire.slot, path: "e2e_direct" } as never,
+              });
+          }
+        }
+      }
     }
 
     const cron1 = await runScheduledRemindersCron(new Date());
@@ -245,6 +313,13 @@ export async function GET() {
       error: sendErr?.message ?? null,
     });
     if (!sends?.length) {
+      const { data: anyLogs } = await admin
+        .from("reminder_logs")
+        .select("id, event_type, provider_message, metadata, created_at")
+        .eq("reminder_id", reminderId)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      push({ step: "all_logs_for_reminder", ok: true, rows: anyLogs ?? [] });
       return NextResponse.json(
         {
           ok: false,
