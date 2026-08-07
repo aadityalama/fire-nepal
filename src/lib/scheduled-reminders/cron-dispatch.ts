@@ -217,12 +217,20 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
 
     for (const fire of fires) {
       // Re-check active right before claim (completed/deleted/archived/disabled mid-run).
-      const { data: fresh } = await sb
+      // Use select("*") so environments without lifecycle columns still work.
+      const { data: fresh, error: freshErr } = await sb
         .from("scheduled_reminders")
-        .select("id, is_completed, is_archived, email_enabled")
+        .select("*")
         .eq("id", row.id)
         .maybeSingle();
-      if (!fresh || !isReminderActiveForEmail(fresh as ScheduledReminderDbRow)) {
+      if (freshErr) {
+        console.warn(`${LOG_PREFIX} fresh active check failed; falling back to in-memory row`, {
+          reminderId: row.id,
+          message: freshErr.message,
+        });
+      }
+      const activeRow = (fresh as ScheduledReminderDbRow | null) ?? row;
+      if (!isReminderActiveForEmail(activeRow)) {
         skippedInactive += 1;
         skipped += 1;
         console.info(`${LOG_PREFIX} skip inactive before send`, { reminderId: row.id, slot: fire.slot });
@@ -336,10 +344,24 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
       }
 
       const sentAt = nowUtc.toISOString();
-      await sb
+      const { error: lastSentErr } = await sb
         .from("scheduled_reminders")
         .update({ last_email_sent_at: sentAt, email: to, updated_at: sentAt })
         .eq("id", row.id);
+      if (lastSentErr) {
+        // Lifecycle column may be absent until migration is applied.
+        const { error: emailOnlyErr } = await sb
+          .from("scheduled_reminders")
+          .update({ email: to, updated_at: sentAt })
+          .eq("id", row.id);
+        if (emailOnlyErr) {
+          console.warn(`${LOG_PREFIX} could not persist last_email_sent_at/email`, {
+            reminderId: row.id,
+            message: lastSentErr.message,
+            fallback: emailOnlyErr.message,
+          });
+        }
+      }
 
       await writeReminderLog(sb, {
         reminder_id: row.id,
