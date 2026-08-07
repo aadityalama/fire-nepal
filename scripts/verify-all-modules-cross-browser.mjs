@@ -388,10 +388,24 @@ async function updateFromFirefox(seed) {
       cashflowIncome: seed.expected.cashflowIncome + 1000,
       savingsSaved: seed.expected.savingsSaved + 2000,
       smartLoanLent: seed.expected.smartLoanLent + 3000,
+      budgetAmount: seed.expected.budgetAmount + 5000,
+      insuranceCoverage: seed.expected.insuranceCoverage + 100000,
+      nepalColSpend: seed.expected.nepalColSpend + 1500,
+      returnCity: seed.expected.returnCity === "pokhara" ? "kathmandu" : "pokhara",
+      portfolioBankAmount: seed.expected.portfolioBankAmount + 25000,
+      investmentQty: seed.expected.investmentQty + 10,
+      expenseAmount: seed.expected.expenseAmount + 777,
     };
     const result = await page.evaluate(
-      async ({ token, updated, stamp }) => {
+      async ({ token, updated, stamp, supabaseUrl, anonKey, seedExpected }) => {
         const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+        const sbHeaders = {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        };
+
         const putCash = await fetch("/api/cashflow", {
           method: "PUT",
           headers,
@@ -451,13 +465,185 @@ async function updateFromFirefox(seed) {
             },
           }),
         });
+
+        // Create an additional budget via API (sums into total)
+        const postBudget = await fetch("/api/budgets", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            name: `Updated Budget ${stamp}`,
+            category: "Living",
+            period: "Monthly",
+            amountNpr: 5000,
+            notes: "firefox-update",
+          }),
+        });
+
+        const putCol = await fetch("/api/module-snapshots/nepal_col", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: {
+              cityId: "nepal-national-average",
+              province: "Nepal",
+              lifestyle: "comfortable",
+              family: { adults: 2, children: 1, parents: 0 },
+              monthlyIncomeNpr: updated.nepalColSpend * 2,
+              monthlyKoreaSpendNpr: updated.nepalColSpend,
+              expenses: {
+                home: Math.round(updated.nepalColSpend * 0.35),
+                food: Math.round(updated.nepalColSpend * 0.25),
+                transportation: Math.round(updated.nepalColSpend * 0.1),
+                utilities: Math.round(updated.nepalColSpend * 0.08),
+                internet: Math.round(updated.nepalColSpend * 0.05),
+                healthcare: Math.round(updated.nepalColSpend * 0.05),
+                education: Math.round(updated.nepalColSpend * 0.05),
+                entertainment: Math.round(updated.nepalColSpend * 0.03),
+                clothing: Math.round(updated.nepalColSpend * 0.02),
+                miscellaneous: Math.round(updated.nepalColSpend * 0.02),
+              },
+            },
+          }),
+        });
+
+        const baseReturn = seedExpected.modules?.return_to_nepal_state ?? {
+          koreaSavingsKrw: 10_000_000,
+          nepalLiquidNpr: 500_000,
+          monthlySalaryKrw: 3_000_000,
+          salaryGrowthPct: 3,
+          monthlySavingsKrw: 800_000,
+          koreaYearsWorked: 5,
+          plannedKoreaYearsRemaining: 3,
+          nprPerKrw: 0.1,
+          nepalInflationPct: 5,
+          targetReturnYear: 2030,
+          adults: 2,
+          children: 1,
+          lifestyle: "comfortable",
+          landBudgetNpr: 0,
+          constructionBudgetNpr: 0,
+          interiorBudgetNpr: 0,
+          furnitureBudgetNpr: 0,
+          homeLoanPrincipalNpr: 0,
+          homeLoanAprPct: 0,
+          homeLoanYears: 0,
+          houseProgressPct: 0,
+          completedPhases: [],
+          pensionMonthlyNpr: 0,
+          dividendMonthlyNpr: 0,
+          fdMonthlyNpr: 0,
+          rentalMonthlyNpr: 0,
+          swpMonthlyNpr: 0,
+          severanceAutoCalculate: true,
+          severanceOverrideKrw: 0,
+          nationalPensionAutoCalculate: true,
+          nationalPensionMaturityOverrideKrw: 0,
+          settlementChecklist: [],
+        };
+        const putReturn = await fetch("/api/module-snapshots/return_to_nepal", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: { ...baseReturn, city: updated.returnCity, stamp },
+          }),
+        });
+
+        // Patch portfolio bank via Supabase REST
+        const banksRes = await fetch(
+          `${supabaseUrl}/rest/v1/bank_accounts?select=row_id,payload&account_kind=eq.liquid&limit=1`,
+          { headers: sbHeaders, cache: "no-store" },
+        );
+        const banks = await banksRes.json().catch(() => []);
+        let bankOk = false;
+        if (Array.isArray(banks) && banks[0]?.row_id) {
+          const payload = { ...(banks[0].payload || {}), amount: updated.portfolioBankAmount };
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/bank_accounts?row_id=eq.${encodeURIComponent(banks[0].row_id)}`,
+            {
+              method: "PATCH",
+              headers: sbHeaders,
+              body: JSON.stringify({ payload }),
+            },
+          );
+          bankOk = patch.ok;
+        }
+
+        const invRes = await fetch(`${supabaseUrl}/rest/v1/investments?select=row_id,payload&limit=1`, {
+          headers: sbHeaders,
+          cache: "no-store",
+        });
+        const invs = await invRes.json().catch(() => []);
+        let invOk = false;
+        if (Array.isArray(invs) && invs[0]?.row_id) {
+          const payload = { ...(invs[0].payload || {}), quantity: updated.investmentQty };
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/investments?row_id=eq.${encodeURIComponent(invs[0].row_id)}`,
+            {
+              method: "PATCH",
+              headers: sbHeaders,
+              body: JSON.stringify({ payload }),
+            },
+          );
+          invOk = patch.ok;
+        }
+
+        const expRes = await fetch(
+          `${supabaseUrl}/rest/v1/expense_transactions?select=id,description&description=ilike.*E2E%20Expense*&deleted_at=is.null&limit=1`,
+          { headers: sbHeaders, cache: "no-store" },
+        );
+        const exps = await expRes.json().catch(() => []);
+        let expOk = false;
+        if (Array.isArray(exps) && exps[0]?.id) {
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/expense_transactions?id=eq.${encodeURIComponent(exps[0].id)}`,
+            {
+              method: "PATCH",
+              headers: sbHeaders,
+              body: JSON.stringify({ amount: updated.expenseAmount }),
+            },
+          );
+          expOk = patch.ok;
+        }
+
+        // Insurance: create extra policy via API to bump coverage sum
+        const postIns = await fetch("/api/insurance", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            insuranceType: "life",
+            provider: `Firefox Update ${stamp}`,
+            coverageAmountNpr: 100000,
+            premiumNpr: 1000,
+            paymentFrequency: "yearly",
+          }),
+        });
+
         return {
           cashOk: putCash.ok,
           savOk: putSav.ok,
           loanOk: putLoan.ok,
+          budgetOk: postBudget.ok,
+          colOk: putCol.ok,
+          returnOk: putReturn.ok,
+          bankOk,
+          invOk,
+          expOk,
+          insOk: postIns.ok,
+          budgetStatus: postBudget.status,
+          insStatus: postIns.status,
+          returnStatus: putReturn.status,
         };
       },
-      { token: seed.accessToken, updated, stamp: seed.stamp },
+      {
+        token: seed.accessToken,
+        updated,
+        stamp: seed.stamp,
+        supabaseUrl: "https://mnxxcewvgnohsavojdzu.supabase.co",
+        anonKey: "sb_publishable_gu02yEcK905t8_HLd7ixtg_nORizZdB",
+        seedExpected: seed.expected,
+      },
     );
     return { ...updated, ...result };
   } finally {
@@ -489,14 +675,23 @@ try {
   report.identicalRound1 = r1.every((s) => s?.allPassed);
   report.noLocalStorageSoT = r1.every((s) => s?.checks?.notStaleCashflowLocal && s?.checks?.notStaleSavingsLocal);
 
-  console.log("Updating cashflow/savings/loan from Firefox...");
+  console.log("Updating modules from Firefox...");
   const updated = await updateFromFirefox(seed);
-  if (!updated.cashOk || !updated.savOk || !updated.loanOk) {
-    throw new Error(`Firefox update failed: ${JSON.stringify(updated)}`);
+  const requiredOk = updated.cashOk && updated.savOk && updated.loanOk;
+  if (!requiredOk) {
+    throw new Error(`Firefox core update failed: ${JSON.stringify(updated)}`);
   }
   seed.expected.cashflowIncome = updated.cashflowIncome;
   seed.expected.savingsSaved = updated.savingsSaved;
   seed.expected.smartLoanLent = updated.smartLoanLent;
+  if (updated.budgetOk) seed.expected.budgetAmount = updated.budgetAmount;
+  if (updated.insOk) seed.expected.insuranceCoverage = updated.insuranceCoverage;
+  if (updated.colOk) seed.expected.nepalColSpend = updated.nepalColSpend;
+  if (updated.returnOk) seed.expected.returnCity = updated.returnCity;
+  if (updated.bankOk) seed.expected.portfolioBankAmount = updated.portfolioBankAmount;
+  if (updated.invOk) seed.expected.investmentQty = updated.investmentQty;
+  if (updated.expOk) seed.expected.expenseAmount = updated.expenseAmount;
+  report.firefoxUpdate = updated;
 
   console.log("Round 2: confirm every browser sees Firefox updates...");
   for (const profile of browsers) {
@@ -510,7 +705,14 @@ try {
       s?.checks?.savings &&
       s?.checks?.smartLoan &&
       s?.income === updated.cashflowIncome &&
-      s?.savingsSaved === updated.savingsSaved,
+      s?.savingsSaved === updated.savingsSaved &&
+      (!updated.budgetOk || s?.checks?.budget) &&
+      (!updated.insOk || s?.checks?.insurance) &&
+      (!updated.colOk || s?.checks?.nepalCol) &&
+      (!updated.returnOk || s?.checks?.returnPlanner) &&
+      (!updated.bankOk || s?.checks?.portfolioBank) &&
+      (!updated.invOk || s?.checks?.investment) &&
+      (!updated.expOk || s?.checks?.expense),
   );
 
   // Per-module pass matrix from round1
@@ -538,12 +740,23 @@ try {
     "financialIntel",
   ];
   for (const mod of moduleNames) {
+    const updatedInRound2 = [
+      "cashflow",
+      "savings",
+      "smartLoan",
+      "budget",
+      "insurance",
+      "nepalCol",
+      "returnPlanner",
+      "portfolioBank",
+      "investment",
+      "expense",
+    ].includes(mod);
     report.modules[mod] = {
       round1: r1.every((s) => s?.checks?.[mod] === true),
-      round2AllSynced:
-        mod === "cashflow" || mod === "savings" || mod === "smartLoan"
-          ? report.identicalRound2
-          : r1.every((s) => s?.checks?.[mod] === true),
+      round2AllSynced: updatedInRound2
+        ? r2.every((s) => s?.checks?.[mod] === true)
+        : r1.every((s) => s?.checks?.[mod] === true) && r2.every((s) => s?.checks?.[mod] === true),
     };
   }
 
@@ -551,7 +764,7 @@ try {
     report.identicalRound1 &&
     report.identicalRound2 &&
     report.noLocalStorageSoT &&
-    Object.values(report.modules).every((m) => m.round1 === true);
+    Object.values(report.modules).every((m) => m.round1 === true && m.round2AllSynced === true);
 } catch (error) {
   report.error = error instanceof Error ? error.message : String(error);
   report.ok = false;

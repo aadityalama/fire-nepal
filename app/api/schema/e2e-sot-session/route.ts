@@ -53,6 +53,59 @@ function stampUnit(stamp: number, salt: number, min: number, span: number): numb
   return min + ((stamp + salt * 9973) % span);
 }
 
+/** Production schemas may predate optional columns (notes, deleted_at, etc.). */
+function missingColumnMessage(message: string | undefined, column: string) {
+  return Boolean(message && message.toLowerCase().includes(column.toLowerCase()));
+}
+
+async function insertBudgetRecord(
+  admin: AdminClient,
+  payload: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result = await admin.from("finance_budget_records").insert(payload as any);
+  if (result.error && missingColumnMessage(result.error.message, "notes")) {
+    const { notes: _drop, ...withoutNotes } = payload;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = await admin.from("finance_budget_records").insert(withoutNotes as any);
+  }
+  if (result.error && missingColumnMessage(result.error.message, "deleted_at")) {
+    const { deleted_at: _d, notes: _n, ...legacy } = payload;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = await admin.from("finance_budget_records").insert(legacy as any);
+    if (result.error && missingColumnMessage(result.error.message, "notes")) {
+      const { notes: _drop2, ...withoutNotes } = legacy;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await admin.from("finance_budget_records").insert(withoutNotes as any);
+    }
+  }
+  return { error: result.error ? { message: result.error.message } : null };
+}
+
+async function insertInsurancePolicy(
+  admin: AdminClient,
+  payload: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let result = await admin.from("finance_insurance_policies").insert(payload as any);
+  if (result.error && missingColumnMessage(result.error.message, "notes")) {
+    const { notes: _drop, ...withoutNotes } = payload;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = await admin.from("finance_insurance_policies").insert(withoutNotes as any);
+  }
+  if (result.error && missingColumnMessage(result.error.message, "deleted_at")) {
+    const { deleted_at: _d, ...legacy } = payload;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = await admin.from("finance_insurance_policies").insert(legacy as any);
+  }
+  if (result.error && missingColumnMessage(result.error.message, "policy_term_years")) {
+    const { policy_term_years: _p, ...legacy } = payload;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = await admin.from("finance_insurance_policies").insert(legacy as any);
+  }
+  return { error: result.error ? { message: result.error.message } : null };
+}
+
 function reservedFireGoalsMarkers(): Set<string> {
   const markers = new Set<string>([CASHFLOW_FIRE_GOALS_MARKER, SAVINGS_FIRE_GOALS_MARKER]);
   for (const key of MODULE_SNAPSHOT_KEYS) {
@@ -357,7 +410,8 @@ async function seedPhase(req: Request, admin: AdminClient) {
     }
 
     // Budgets API is cookie-session oriented — seed via service role.
-    const { error: budgetErr } = await admin.from("finance_budget_records").insert({
+    // Omit/fallback `notes` — some production schemas predate that column.
+    const { error: budgetErr } = await insertBudgetRecord(admin, {
       user_id: userId,
       name: `E2E Budget ${stamp}`,
       category: "Living",
@@ -375,7 +429,7 @@ async function seedPhase(req: Request, admin: AdminClient) {
       throw new Error(`budget insert failed: ${budgetErr.message}`);
     }
 
-    const { error: insuranceErr } = await admin.from("finance_insurance_policies").insert({
+    const { error: insuranceErr } = await insertInsurancePolicy(admin, {
       user_id: userId,
       insurance_type: "life",
       provider: `E2E Insurer ${stamp}`,
@@ -511,7 +565,7 @@ async function seedPhase(req: Request, admin: AdminClient) {
       throw new Error(`group_members insert failed: ${memberInsert.error?.message ?? "no id"}`);
     }
 
-    const { error: groupExpErr } = await admin.from("group_expenses").insert({
+    const groupExpPayload: Record<string, unknown> = {
       workspace_id: workspace.id,
       user_id: userId,
       title: `E2E Group Expense ${stamp}`,
@@ -523,8 +577,13 @@ async function seedPhase(req: Request, admin: AdminClient) {
       split_among: [localMemberId],
       amount_currency: "NPR",
       notes: `e2e-sot-${stamp}`,
-    });
-    if (groupExpErr) throw new Error(`group_expenses insert failed: ${groupExpErr.message}`);
+    };
+    let groupExpIns = await admin.from("group_expenses").insert(groupExpPayload as never);
+    if (groupExpIns.error && missingColumnMessage(groupExpIns.error.message, "notes")) {
+      const { notes: _drop, ...withoutNotes } = groupExpPayload;
+      groupExpIns = await admin.from("group_expenses").insert(withoutNotes as never);
+    }
+    if (groupExpIns.error) throw new Error(`group_expenses insert failed: ${groupExpIns.error.message}`);
 
     const markers = reservedFireGoalsMarkers();
     const goalNotes = `e2e-real-goal-${stamp}`;
