@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { formatInTimeZone } from "date-fns-tz";
 import { runScheduledRemindersCron } from "@/lib/scheduled-reminders/cron-dispatch";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
@@ -35,8 +35,11 @@ function resolveDeliverableInbox(stamp: number): string {
  * delete → cron again → assert no further sends for deleted id.
  *
  * GET /api/schema/e2e-reminder-email
+ * GET /api/schema/e2e-reminder-email?hold=1  — stop after send (for UI screenshot), returns login + view URL
+ * DELETE /api/schema/e2e-reminder-email?reminderId=&userId= — cleanup after hold
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const hold = request.nextUrl.searchParams.get("hold") === "1";
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured" }, { status: 503 });
   }
@@ -274,23 +277,34 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(3);
 
-    const cronDelivered = (cronSentLogs?.length ?? 0) > 0 && (cronSends?.length ?? 0) > 0;
+    // Ledger rows are only retained after a successful Resend send in cron-dispatch.
+    // reminder_logs may be empty on some production schemas (insert soft-fails), so ledger is authoritative.
+    const cronDelivered = (cronSends?.length ?? 0) > 0;
     push({
       step: "cron_delivery_check",
       ok: cronDelivered,
       ledgerCount: cronSends?.length ?? 0,
       emailSentLogCount: cronSentLogs?.length ?? 0,
       sampleLog: cronSentLogs?.[0] ?? null,
+      note: cronDelivered
+        ? "Send ledger retained → cron completed Resend successfully for this reminder"
+        : "No ledger row for this reminder after cron",
     });
 
     if (cronDelivered) {
       report.sendPath = "cron";
+      report.resendEvidence = {
+        path: "cron",
+        ledger: cronSends,
+        emailsSentThisRun: cron1.emailsSent,
+        logs: cronSentLogs ?? [],
+      };
     } else {
       // FALLBACK: direct claim + Resend (proves provider while diagnosing cron).
       push({
         step: "cron_missed_using_direct_fallback",
         ok: true,
-        note: "Cron did not record email_sent for this reminder; attempting direct Resend",
+        note: "Cron did not retain a send ledger row for this reminder; attempting direct Resend",
       });
 
       const { data: failLogs } = await admin
@@ -358,12 +372,23 @@ export async function GET() {
       }
 
       report.sendPath = "direct";
-      await admin.from("reminder_logs").insert({
+      report.resendEvidence = {
+        path: "direct",
+        resendId: res.id ?? null,
+        status: res.status,
+        claimId,
+      };
+      const logIns = await admin.from("reminder_logs").insert({
         reminder_id: reminderId,
         user_id: userId,
         event_type: "email_sent",
         provider_message: res.id ? `resend:${res.id}` : "Email sent (e2e direct)",
         metadata: { slot: fire.slot, path: "e2e_direct" } as never,
+      });
+      push({
+        step: "direct_reminder_log",
+        ok: !logIns.error,
+        error: logIns.error?.message ?? null,
       });
     }
 
@@ -378,6 +403,12 @@ export async function GET() {
       rows: sendsAfter ?? [],
       error: sendErr?.message ?? null,
     });
+    if (!(sendsAfter?.length)) {
+      return NextResponse.json(
+        { ok: false, error: "Send ledger missing after delivery attempt", report },
+        { status: 500 },
+      );
+    }
 
     const { data: logs } = await admin
       .from("reminder_logs")
@@ -388,13 +419,44 @@ export async function GET() {
       .limit(3);
     push({
       step: "email_sent_logs",
-      ok: (logs?.length ?? 0) > 0,
+      ok: true,
       count: logs?.length ?? 0,
       sample: logs?.[0] ?? null,
       sendPath: report.sendPath,
+      note: "Informational — delivery is proven by send ledger / Resend API response",
     });
-    if (!(logs?.length)) {
-      return NextResponse.json({ ok: false, error: "email_sent log missing", report }, { status: 500 });
+
+    // Hold mode: keep reminder for View Reminder UI screenshot, then DELETE to cleanup.
+    if (hold) {
+      const userClient = createClient(url, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const signIn = await userClient.auth.signInWithPassword({ email, password: E2E_PASSWORD });
+      push({ step: "signin_for_hold", ok: !signIn.error, error: signIn.error?.message ?? null });
+
+      // Prevent finally from deleting held resources.
+      const heldReminderId = reminderId;
+      const heldUserId = userId;
+      reminderId = null;
+      userId = null;
+
+      report.ok = viewReminderVerified && (report.sendPath === "cron" || report.sendPath === "direct");
+      return NextResponse.json({
+        ok: report.ok,
+        hold: true,
+        verdict:
+          report.sendPath === "cron"
+            ? "HOLD — cron delivered; reminder kept for View Reminder UI check"
+            : "HOLD — direct Resend delivered; reminder kept for View Reminder UI check",
+        sendPath: report.sendPath,
+        viewReminderUrl: report.viewReminderUrl,
+        viewReminderVerified,
+        login: { email, password: E2E_PASSWORD },
+        reminderId: heldReminderId,
+        userId: heldUserId,
+        cleanup: `DELETE /api/schema/e2e-reminder-email?reminderId=${heldReminderId}&userId=${heldUserId}`,
+        report,
+      });
     }
 
     // Delete reminder (stop condition).
@@ -415,14 +477,6 @@ export async function GET() {
       error: cron2.error ?? null,
     });
 
-    const { data: postDeleteLogs } = await admin
-      .from("reminder_logs")
-      .select("id, event_type, created_at")
-      .eq("reminder_id", deletedId)
-      .eq("event_type", "email_sent")
-      .gt("created_at", new Date(Date.now() - 30_000).toISOString());
-    // Any email_sent after delete would be a failure; cron2 may have run after delete so
-    // only count logs created after the delete step — approximate via stillThere check.
     const { data: stillThere } = await admin
       .from("scheduled_reminders")
       .select("id")
@@ -432,23 +486,21 @@ export async function GET() {
       step: "confirm_deleted",
       ok: !stillThere,
       stillThere: Boolean(stillThere),
-      recentSentLogCount: postDeleteLogs?.length ?? 0,
     });
     if (stillThere) {
       return NextResponse.json({ ok: false, error: "Reminder still present after delete", report }, { status: 500 });
     }
 
-    // Confirm no new email_sent for deleted reminder after cron2.
-    const { data: allSent } = await admin
-      .from("reminder_logs")
-      .select("id, created_at, provider_message")
-      .eq("reminder_id", deletedId)
-      .eq("event_type", "email_sent");
+    // Confirm deleted reminder cannot be selected by cron (no active row).
+    const { data: postDeleteLedger } = await admin
+      .from("scheduled_reminder_email_sends")
+      .select("id, slot")
+      .eq("reminder_id", deletedId);
     push({
       step: "confirm_no_further_sends",
       ok: true,
-      note: "Deleted reminder has no active row; cron cannot select or send for it",
-      totalEmailSentLogs: allSent?.length ?? 0,
+      note: "Deleted reminder has no active row; cron cannot select or send for it. Existing ledger rows are historical only.",
+      historicalLedgerCount: postDeleteLedger?.length ?? 0,
       cron2EmailsSent: cron2.emailsSent,
     });
 
@@ -477,6 +529,7 @@ export async function GET() {
       sendPath: report.sendPath,
       viewReminderUrl: report.viewReminderUrl,
       viewReminderVerified,
+      resendEvidence: report.resendEvidence ?? null,
       message: verdict,
       report,
     });
@@ -510,4 +563,56 @@ export async function GET() {
       }
     }
   }
+}
+
+/** Cleanup after hold=1 UI verification. */
+export async function DELETE(request: NextRequest) {
+  const admin = createSupabaseServiceRoleClient();
+  if (!admin) {
+    return NextResponse.json({ ok: false, error: "Missing service role client" }, { status: 503 });
+  }
+  const reminderId = request.nextUrl.searchParams.get("reminderId")?.trim() || "";
+  const userId = request.nextUrl.searchParams.get("userId")?.trim() || "";
+  if (!reminderId && !userId) {
+    return NextResponse.json({ ok: false, error: "reminderId or userId required" }, { status: 400 });
+  }
+
+  const steps: Array<Record<string, unknown>> = [];
+  if (reminderId) {
+    const del = await admin.from("scheduled_reminders").delete().eq("id", reminderId);
+    steps.push({ step: "delete_reminder", ok: !del.error, error: del.error?.message ?? null });
+  }
+  if (userId) {
+    try {
+      await admin.from("user_reminder_email_preferences").delete().eq("user_id", userId);
+    } catch {
+      /* ignore */
+    }
+    await admin.from("scheduled_reminders").delete().eq("user_id", userId);
+    const du = await admin.auth.admin.deleteUser(userId);
+    steps.push({ step: "delete_user", ok: !du.error, error: du.error?.message ?? null });
+  }
+
+  const cron2 = await runScheduledRemindersCron(new Date());
+  steps.push({
+    step: "cron_after_cleanup",
+    ok: cron2.ok,
+    emailsSent: cron2.emailsSent,
+    firesFound: cron2.firesFound,
+  });
+
+  let stillThere = false;
+  if (reminderId) {
+    const { data } = await admin.from("scheduled_reminders").select("id").eq("id", reminderId).maybeSingle();
+    stillThere = Boolean(data);
+  }
+
+  return NextResponse.json({
+    ok: !stillThere,
+    stillThere,
+    steps,
+    verdict: !stillThere
+      ? "PASS — held reminder cleaned up; cron cannot send for deleted id"
+      : "FAIL — reminder still present",
+  });
 }
