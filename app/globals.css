@@ -1329,6 +1329,124 @@ html[data-fire-theme="light"] .portfolio-wealth-dash .wealth-fire-score-inner {
   }
 }
 
+/* ── Admin Panel: increase all typography + icons by exactly 25% ── */
+.admin-panel-root {
+  --admin-type-scale: 1.25;
+  --admin-icon-scale: 1.25;
+  /* Inherited baseline for elements without an explicit text-* size */
+  font-size: calc(1em * var(--admin-type-scale));
+  overflow-x: clip;
+  /* Scale Tailwind v4 named text tokens for this subtree only */
+  --text-xs: calc(0.75rem * var(--admin-type-scale));
+  --text-sm: calc(0.875rem * var(--admin-type-scale));
+  --text-base: calc(1rem * var(--admin-type-scale));
+  --text-lg: calc(1.125rem * var(--admin-type-scale));
+  --text-xl: calc(1.25rem * var(--admin-type-scale));
+  --text-2xl: calc(1.5rem * var(--admin-type-scale));
+  --text-3xl: calc(1.875rem * var(--admin-type-scale));
+  --text-4xl: calc(2.25rem * var(--admin-type-scale));
+  --text-5xl: calc(3rem * var(--admin-type-scale));
+  --text-6xl: calc(3.75rem * var(--admin-type-scale));
+  --text-7xl: calc(4.5rem * var(--admin-type-scale));
+  --text-8xl: calc(6rem * var(--admin-type-scale));
+  --text-9xl: calc(8rem * var(--admin-type-scale));
+}
+
+/* Arbitrary text-[…] utilities used across Admin Panel */
+.admin-panel-root .text-\[8px\] {
+  font-size: calc(8px * var(--admin-type-scale));
+}
+.admin-panel-root .text-\[9px\] {
+  font-size: calc(9px * var(--admin-type-scale));
+}
+.admin-panel-root .text-\[10px\] {
+  font-size: calc(10px * var(--admin-type-scale));
+}
+.admin-panel-root .text-\[11px\] {
+  font-size: calc(11px * var(--admin-type-scale));
+}
+.admin-panel-root .text-\[12px\] {
+  font-size: calc(12px * var(--admin-type-scale));
+}
+.admin-panel-root .text-\[15px\] {
+  font-size: calc(15px * var(--admin-type-scale));
+}
+
+@media (min-width: 640px) {
+  .admin-panel-root .sm\:text-\[10px\] {
+    font-size: calc(10px * var(--admin-type-scale));
+  }
+  .admin-panel-root .sm\:text-\[11px\] {
+    font-size: calc(11px * var(--admin-type-scale));
+  }
+  .admin-panel-root .sm\:text-\[15px\] {
+    font-size: calc(15px * var(--admin-type-scale));
+  }
+}
+
+/* Lucide / SVG icons sized via Tailwind h/w utilities */
+.admin-panel-root svg.h-2 {
+  height: calc(0.5rem * var(--admin-icon-scale));
+  width: calc(0.5rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-2\.5 {
+  height: calc(0.625rem * var(--admin-icon-scale));
+  width: calc(0.625rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-3 {
+  height: calc(0.75rem * var(--admin-icon-scale));
+  width: calc(0.75rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-3\.5 {
+  height: calc(0.875rem * var(--admin-icon-scale));
+  width: calc(0.875rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-4 {
+  height: calc(1rem * var(--admin-icon-scale));
+  width: calc(1rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-5 {
+  height: calc(1.25rem * var(--admin-icon-scale));
+  width: calc(1.25rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-6 {
+  height: calc(1.5rem * var(--admin-icon-scale));
+  width: calc(1.5rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-7 {
+  height: calc(1.75rem * var(--admin-icon-scale));
+  width: calc(1.75rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-8 {
+  height: calc(2rem * var(--admin-icon-scale));
+  width: calc(2rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-9 {
+  height: calc(2.25rem * var(--admin-icon-scale));
+  width: calc(2.25rem * var(--admin-icon-scale));
+}
+.admin-panel-root svg.h-10 {
+  height: calc(2.5rem * var(--admin-icon-scale));
+  width: calc(2.5rem * var(--admin-icon-scale));
+}
+
+/* Avoid clipping/overflow from larger type without changing spacing tokens */
+.admin-panel-root :where(p, span, a, button, label, td, th, li, h1, h2, h3, h4, h5, h6, dt, dd, input, textarea, select) {
+  overflow-wrap: break-word;
+}
+.admin-panel-root .truncate {
+  overflow-wrap: normal;
+}
+
+@media (max-width: 767px) {
+  .admin-panel-root .fn-mobile-numeric-input,
+  .admin-panel-root input[type="number"],
+  .admin-panel-root input[inputmode="numeric"],
+  .admin-panel-root input[inputmode="decimal"] {
+    font-size: calc(18px * var(--admin-type-scale)) !important;
+  }
+}
+
 /* ── NEPSE Hub: increase all typography by exactly 20% (font-size only) ── */
 .nepse-hub-root {
   --nepse-type-scale: 1.2;
