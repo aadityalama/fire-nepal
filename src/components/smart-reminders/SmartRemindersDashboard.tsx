@@ -62,7 +62,7 @@ function defaultForm(emailFallback: string): Omit<Reminder, "id" | "createdAt"> 
     notify3DaysBefore: false,
     notify1DayBefore: false,
     notifyAtDueTime: true,
-    notifyOverdue: false,
+    notifyOverdue: true,
     sharedWithFamily: true,
     notes: "",
   };

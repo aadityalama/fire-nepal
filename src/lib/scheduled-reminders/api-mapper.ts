@@ -24,6 +24,9 @@ export type ScheduledReminderDbRow = {
   notes: string | null;
   shared_with_family: boolean;
   is_completed: boolean;
+  email_enabled?: boolean;
+  is_archived?: boolean;
+  last_email_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -81,9 +84,15 @@ export type CreateScheduledReminderBody = {
   reminderType: ReminderType;
   notes?: string;
   sharedWithFamily: boolean;
+  emailEnabled?: boolean;
+  isArchived?: boolean;
 };
 
-export function reminderToInsert(userId: string, body: CreateScheduledReminderBody) {
+export function reminderToInsert(
+  userId: string,
+  body: CreateScheduledReminderBody,
+  opts?: { emailEnabled?: boolean },
+) {
   return {
     user_id: userId,
     title: body.title.trim(),
@@ -102,10 +111,15 @@ export function reminderToInsert(userId: string, body: CreateScheduledReminderBo
     notes: body.notes?.trim() || null,
     shared_with_family: body.sharedWithFamily,
     is_completed: false,
+    is_archived: false,
+    email_enabled: opts?.emailEnabled ?? body.emailEnabled !== false,
   };
 }
 
-export function reminderPatchToUpdate(patch: Partial<CreateScheduledReminderBody>): ScheduledReminderUpdate {
+export function reminderPatchToUpdate(patch: Partial<CreateScheduledReminderBody> & {
+  emailEnabled?: boolean;
+  isArchived?: boolean;
+}): ScheduledReminderUpdate {
   const out: ScheduledReminderUpdate = {};
   if (patch.title != null) out.title = patch.title.trim();
   if (patch.amountNpr !== undefined) out.amount = patch.amountNpr;
@@ -122,6 +136,8 @@ export function reminderPatchToUpdate(patch: Partial<CreateScheduledReminderBody
   if (patch.reminderType != null) out.reminder_type = patch.reminderType;
   if (patch.notes !== undefined) out.notes = patch.notes?.trim() || null;
   if (patch.sharedWithFamily !== undefined) out.shared_with_family = patch.sharedWithFamily;
+  if (patch.emailEnabled !== undefined) out.email_enabled = patch.emailEnabled;
+  if (patch.isArchived !== undefined) out.is_archived = patch.isArchived;
   out.updated_at = new Date().toISOString();
   return out;
 }

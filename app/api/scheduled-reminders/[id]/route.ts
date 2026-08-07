@@ -25,7 +25,7 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
   if (!raw || typeof raw !== "object") return bad("Invalid body");
   const o = raw as Record<string, unknown>;
 
-  const patch: Partial<CreateScheduledReminderBody> = {};
+  const patch: Partial<CreateScheduledReminderBody> & { emailEnabled?: boolean; isArchived?: boolean } = {};
   if (typeof o.title === "string") patch.title = o.title;
   if ("amountNpr" in o) patch.amountNpr = o.amountNpr == null ? null : Number(o.amountNpr);
   if (typeof o.dueDate === "string") patch.dueDate = o.dueDate;
@@ -43,6 +43,8 @@ export async function PATCH(request: Request, ctx: { params: { id: string } | Pr
   if (typeof o.reminderType === "string") patch.reminderType = o.reminderType as CreateScheduledReminderBody["reminderType"];
   if (typeof o.notes === "string" || o.notes === null) patch.notes = typeof o.notes === "string" ? o.notes : undefined;
   if (typeof o.sharedWithFamily === "boolean") patch.sharedWithFamily = o.sharedWithFamily;
+  if (typeof o.emailEnabled === "boolean") patch.emailEnabled = o.emailEnabled;
+  if (typeof o.isArchived === "boolean") patch.isArchived = o.isArchived;
 
   const markPaid = o.markPaid === true;
 

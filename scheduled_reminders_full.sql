@@ -68,3 +68,9 @@ create policy "Users delete own scheduled reminders"
   using (auth.uid () = user_id);
 
 -- Send log is written only by the cron job (service role). No RLS policies for anon/auth.
+
+
+-- Email lifecycle (see 20260807120000_scheduled_reminders_email_lifecycle.sql)
+alter table public.scheduled_reminders add column if not exists email_enabled boolean not null default true;
+alter table public.scheduled_reminders add column if not exists is_archived boolean not null default false;
+alter table public.scheduled_reminders add column if not exists last_email_sent_at timestamptz;

@@ -107,9 +107,27 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
     if (!cloudEnabled) return;
     const t = window.setTimeout(() => {
       void refreshCloudReminders();
+      void fetch("/api/scheduled-reminders/preferences", { credentials: "include", cache: "no-store" })
+        .then(async (r) => {
+          if (!r.ok) return;
+          const j = (await r.json()) as { ok?: boolean; emailNotificationsEnabled?: boolean };
+          if (j.ok && typeof j.emailNotificationsEnabled === "boolean") {
+            setStore((prev) =>
+              prev.settings.emailNotificationsEnabled === j.emailNotificationsEnabled
+                ? prev
+                : {
+                    ...prev,
+                    settings: { ...prev.settings, emailNotificationsEnabled: j.emailNotificationsEnabled! },
+                  },
+            );
+          }
+        })
+        .catch(() => {
+          /* preference sync is best-effort */
+        });
     }, 0);
     return () => window.clearTimeout(t);
-  }, [cloudEnabled, user?.id, refreshCloudReminders]);
+  }, [cloudEnabled, user?.id, refreshCloudReminders, setStore]);
 
   useEffect(() => {
     const onGlobalReset = () => {
@@ -281,13 +299,14 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
               dueDate: input.dueDate,
               dueTime: input.dueTime,
               timezone: input.timezone,
+              // Server forces authenticated user email; kept for backward-compatible payloads.
               email: input.email,
               repeatFrequency: input.repeatFrequency,
               notify7DaysBefore: input.notify7DaysBefore,
               notify3DaysBefore: input.notify3DaysBefore,
               notify1DayBefore: input.notify1DayBefore,
               notifyAtDueTime: input.notifyAtDueTime,
-              notifyOverdue: input.notifyOverdue,
+              notifyOverdue: true,
               reminderType: input.reminderType,
               notes: input.notes,
               sharedWithFamily: input.sharedWithFamily,
@@ -438,7 +457,24 @@ export function SmartRemindersProvider({ children }: { children: ReactNode }) {
 
   const setEmailNotificationsEnabled = useCallback((enabled: boolean) => {
     setStore((prev) => ({ ...prev, settings: { ...prev.settings, emailNotificationsEnabled: enabled } }));
-  }, [setStore]);
+    if (cloudEnabled) {
+      void fetch("/api/scheduled-reminders/preferences", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailNotificationsEnabled: enabled }),
+      })
+        .then(async (r) => {
+          const j = (await r.json()) as { ok?: boolean; error?: string };
+          if (!r.ok || !j.ok) {
+            toast.error(j.error ?? "Could not update email preference.");
+          } else {
+            toast.success(enabled ? "Email reminders enabled" : "Email reminders disabled");
+          }
+        })
+        .catch(() => toast.error("Could not update email preference."));
+    }
+  }, [setStore, cloudEnabled]);
 
   const setUpcomingWithinDays = useCallback((days: number) => {
     setStore((prev) => ({

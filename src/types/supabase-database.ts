@@ -495,6 +495,9 @@ export type Database = {
           notes: string | null;
           shared_with_family: boolean;
           is_completed: boolean;
+          email_enabled: boolean;
+          is_archived: boolean;
+          last_email_sent_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -517,6 +520,9 @@ export type Database = {
           notes?: string | null;
           shared_with_family?: boolean;
           is_completed?: boolean;
+          email_enabled?: boolean;
+          is_archived?: boolean;
+          last_email_sent_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -537,6 +543,26 @@ export type Database = {
           notes?: string | null;
           shared_with_family?: boolean;
           is_completed?: boolean;
+          email_enabled?: boolean;
+          is_archived?: boolean;
+          last_email_sent_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      user_reminder_email_preferences: {
+        Row: {
+          user_id: string;
+          email_notifications_enabled: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          email_notifications_enabled?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          email_notifications_enabled?: boolean;
           updated_at?: string;
         };
         Relationships: [];
