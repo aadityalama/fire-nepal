@@ -298,7 +298,7 @@ async function readAllModules(page, accessToken, supabaseUrl, anonKey, expected)
         insurance: insuranceCoverage === expected.insuranceCoverage,
         portfolioBank: bankAmount === expected.portfolioBankAmount,
         investment: investmentQty === expected.investmentQty,
-        gold: Math.abs(goldGrams - Number(expected.goldGrams ?? 0)) < 0.01 || goldGrams > 0,
+        gold: Math.abs(goldGrams - Number(expected.goldGrams ?? 0)) < 0.05,
         realEstate: realEstateValue === expected.realEstateValue,
         expense: Number(expenseAmount) === expected.expenseAmount,
         groupExpense: Number(groupExpenseAmount) === expected.groupExpenseAmount,
@@ -308,10 +308,10 @@ async function readAllModules(page, accessToken, supabaseUrl, anonKey, expected)
         nepalCol: Number(modules.nepal_col?.state?.monthlyKoreaSpendNpr) === expected.nepalColSpend,
         returnPlanner: modules.return_to_nepal?.state?.city === expected.returnCity,
         familyHub: (modules.family_hub?.state?.emergencyContacts?.length ?? 0) === expected.familyMembersCount,
-        fireLending: modules.fire_lending?.ok === true,
-        ssfPension: modules.ssf_pension?.ok === true,
+        fireLending: Number(modules.fire_lending?.state?.e2ePrincipal) === expected.fireLendingPrincipal,
+        ssfPension: Number(modules.ssf_pension?.state?.e2eBalance) === expected.ssfBalance,
         pensionSlips: modules.pension_slips?.ok === true,
-        payslip: modules.payslip_history?.ok === true,
+        payslip: Number(modules.payslip_history?.state?.e2eEntryCount) === expected.payslipCount,
         financialIntel: modules.financial_intel_rollups?.ok === true,
         // localStorage must NOT be the stale seed values as SoT after hydrate
         notStaleCashflowLocal: localCashIncome !== 111111,
@@ -395,6 +395,13 @@ async function updateFromFirefox(seed) {
       portfolioBankAmount: seed.expected.portfolioBankAmount + 25000,
       investmentQty: seed.expected.investmentQty + 10,
       expenseAmount: seed.expected.expenseAmount + 777,
+      realEstateValue: seed.expected.realEstateValue + 50000,
+      groupExpenseAmount: seed.expected.groupExpenseAmount + 333,
+      familyMembersCount: seed.expected.familyMembersCount + 1,
+      fireLendingPrincipal: (seed.expected.modules?.fire_lending ?? 100000) + 11111,
+      ssfBalance: (seed.expected.modules?.ssf_pension ?? 200000) + 22222,
+      payslipCount: (seed.expected.modules?.payslip_history ?? 5) + 3,
+      goldGramsDelta: 0,
     };
     const result = await page.evaluate(
       async ({ token, updated, stamp, supabaseUrl, anonKey, seedExpected }) => {
@@ -611,12 +618,148 @@ async function updateFromFirefox(seed) {
         const postIns = await fetch("/api/insurance", {
           method: "POST",
           headers,
+          credentials: "include",
           body: JSON.stringify({
-            insuranceType: "life",
+            type: "life",
             provider: `Firefox Update ${stamp}`,
             coverageAmountNpr: 100000,
             premiumNpr: 1000,
             paymentFrequency: "yearly",
+            policyTermYears: 20,
+          }),
+        });
+
+        // Gold + real estate + group expense + family hub updates
+        const goldRes = await fetch(`${supabaseUrl}/rest/v1/gold_assets?select=row_id,payload&limit=1`, {
+          headers: sbHeaders,
+          cache: "no-store",
+        });
+        const golds = await goldRes.json().catch(() => []);
+        let goldOk = false;
+        if (Array.isArray(golds) && golds[0]?.row_id) {
+          const grams = Number(golds[0].payload?.grams || 0) + 1.5;
+          const payload = { ...(golds[0].payload || {}), grams };
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/gold_assets?row_id=eq.${encodeURIComponent(golds[0].row_id)}`,
+            { method: "PATCH", headers: sbHeaders, body: JSON.stringify({ payload }) },
+          );
+          goldOk = patch.ok;
+          if (goldOk) updated.goldGramsDelta = 1.5;
+        }
+
+        const reRes = await fetch(`${supabaseUrl}/rest/v1/real_estate?select=row_id,payload&limit=1`, {
+          headers: sbHeaders,
+          cache: "no-store",
+        });
+        const resRows = await reRes.json().catch(() => []);
+        let reOk = false;
+        if (Array.isArray(resRows) && resRows[0]?.row_id) {
+          const payload = {
+            ...(resRows[0].payload || {}),
+            estimatedValue: updated.realEstateValue,
+            purchaseValue: updated.realEstateValue,
+          };
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/real_estate?row_id=eq.${encodeURIComponent(resRows[0].row_id)}`,
+            { method: "PATCH", headers: sbHeaders, body: JSON.stringify({ payload }) },
+          );
+          reOk = patch.ok;
+        }
+
+        const gExpRes = await fetch(
+          `${supabaseUrl}/rest/v1/group_expenses?select=id,title&title=ilike.*E2E%20Group%20Expense*&deleted_at=is.null&limit=1`,
+          { headers: sbHeaders, cache: "no-store" },
+        );
+        const gExps = await gExpRes.json().catch(() => []);
+        let groupOk = false;
+        if (Array.isArray(gExps) && gExps[0]?.id) {
+          const patch = await fetch(
+            `${supabaseUrl}/rest/v1/group_expenses?id=eq.${encodeURIComponent(gExps[0].id)}`,
+            {
+              method: "PATCH",
+              headers: sbHeaders,
+              body: JSON.stringify({ amount: updated.groupExpenseAmount }),
+            },
+          );
+          groupOk = patch.ok;
+        }
+
+        const putFamily = await fetch("/api/module-snapshots/family_hub", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: {
+              stabilityScore: 70,
+              upcomingBills: [],
+              familyGoals: [],
+              emergencyContacts: Array.from({ length: updated.familyMembersCount }, (_, i) => ({
+                id: `e2e-contact-updated-${stamp}-${i}`,
+                name: `Updated Member ${i + 1}`,
+                relation: i === 0 ? "self" : "family",
+                phone: `9811111${String(i).padStart(3, "0")}`,
+              })),
+              hubInsights: [],
+              children: [],
+              attendanceWeek: [],
+              exam: { title: "", subject: "", examDate: "2026-08-01" },
+              studyStreakDays: 0,
+              activityMinutes: [],
+              sleepQuality: { score: 0, deepHours: 0, bedTime: "", wakeTime: "", note: "" },
+              homework: [],
+              tuition: { term: "", paidNpr: 0, totalNpr: 0, nextInstallment: "" },
+              gpa: { current: 0, target: 0, term: "" },
+              subjects: [],
+              educationFund: { monthlySipNpr: 0, yearsToUniversity: 0, projectedCorpusNpr: 0, gapNpr: 0 },
+              medicineReminders: [],
+              insurance: [],
+              vaccinations: [],
+              emergencyMedical: { bloodTypes: "", allergies: "", insurerCard: "" },
+              calendarEvents: [],
+              parentingNotes: [],
+              parentingInsights: [],
+              familyAlerts: [],
+              behaviorInsights: [],
+              smartRecommendations: [],
+              feePaymentHistory: [],
+              examResults: [],
+              gpaHistory: [],
+              subjectTrendPoints: [],
+              vaultDocuments: [],
+              vaultTimeline: [],
+              documentReminders: [],
+              vaultEducationInsights: [],
+              schedulePeriods: [],
+              examSchedule: [],
+              teacherNotes: [],
+              stamp,
+              familyMembersCount: updated.familyMembersCount,
+            },
+          }),
+        });
+
+        const putLending = await fetch("/api/module-snapshots/fire_lending", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: { version: 1, stamp, moduleKey: "fire_lending", e2ePrincipal: updated.fireLendingPrincipal },
+          }),
+        });
+        const putSsf = await fetch("/api/module-snapshots/ssf_pension", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: { version: 1, stamp, moduleKey: "ssf_pension", e2eBalance: updated.ssfBalance },
+          }),
+        });
+        const putPayslip = await fetch("/api/module-snapshots/payslip_history", {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            state: { version: 1, stamp, moduleKey: "payslip_history", e2eEntryCount: updated.payslipCount },
           }),
         });
 
@@ -631,9 +774,18 @@ async function updateFromFirefox(seed) {
           invOk,
           expOk,
           insOk: postIns.ok,
+          goldOk,
+          reOk,
+          groupOk,
+          familyOk: putFamily.ok,
+          lendingOk: putLending.ok,
+          ssfOk: putSsf.ok,
+          payslipOk: putPayslip.ok,
           budgetStatus: postBudget.status,
           insStatus: postIns.status,
+          insBody: await postIns.json().catch(() => null),
           returnStatus: putReturn.status,
+          familyStatus: putFamily.status,
         };
       },
       {
@@ -664,6 +816,9 @@ try {
   };
   // goldGrams for asserts
   seed.expected.goldGrams = Number(seed.expected.goldTola) * 11.6638038;
+  seed.expected.fireLendingPrincipal = Number(seed.expected.modules?.fire_lending ?? 0);
+  seed.expected.ssfBalance = Number(seed.expected.modules?.ssf_pension ?? 0);
+  seed.expected.payslipCount = Number(seed.expected.modules?.payslip_history ?? 0);
 
   console.log("Round 1: read all modules across browsers (with stale localStorage)...");
   for (const profile of browsers) {
@@ -677,21 +832,46 @@ try {
 
   console.log("Updating modules from Firefox...");
   const updated = await updateFromFirefox(seed);
-  const requiredOk = updated.cashOk && updated.savOk && updated.loanOk;
-  if (!requiredOk) {
-    throw new Error(`Firefox core update failed: ${JSON.stringify(updated)}`);
-  }
   seed.expected.cashflowIncome = updated.cashflowIncome;
   seed.expected.savingsSaved = updated.savingsSaved;
   seed.expected.smartLoanLent = updated.smartLoanLent;
-  if (updated.budgetOk) seed.expected.budgetAmount = updated.budgetAmount;
-  if (updated.insOk) seed.expected.insuranceCoverage = updated.insuranceCoverage;
-  if (updated.colOk) seed.expected.nepalColSpend = updated.nepalColSpend;
-  if (updated.returnOk) seed.expected.returnCity = updated.returnCity;
-  if (updated.bankOk) seed.expected.portfolioBankAmount = updated.portfolioBankAmount;
-  if (updated.invOk) seed.expected.investmentQty = updated.investmentQty;
-  if (updated.expOk) seed.expected.expenseAmount = updated.expenseAmount;
+  seed.expected.budgetAmount = updated.budgetAmount;
+  seed.expected.insuranceCoverage = updated.insuranceCoverage;
+  seed.expected.nepalColSpend = updated.nepalColSpend;
+  seed.expected.returnCity = updated.returnCity;
+  seed.expected.portfolioBankAmount = updated.portfolioBankAmount;
+  seed.expected.investmentQty = updated.investmentQty;
+  seed.expected.expenseAmount = updated.expenseAmount;
+  seed.expected.goldGrams = Number(seed.expected.goldGrams) + 1.5;
+  seed.expected.realEstateValue = updated.realEstateValue;
+  seed.expected.groupExpenseAmount = updated.groupExpenseAmount;
+  seed.expected.familyMembersCount = updated.familyMembersCount;
+  seed.expected.fireLendingPrincipal = updated.fireLendingPrincipal;
+  seed.expected.ssfBalance = updated.ssfBalance;
+  seed.expected.payslipCount = updated.payslipCount;
   report.firefoxUpdate = updated;
+
+  const criticalUpdatesOk =
+    updated.cashOk &&
+    updated.savOk &&
+    updated.loanOk &&
+    updated.budgetOk &&
+    updated.insOk &&
+    updated.colOk &&
+    updated.returnOk &&
+    updated.bankOk &&
+    updated.invOk &&
+    updated.expOk &&
+    updated.goldOk &&
+    updated.reOk &&
+    updated.groupOk &&
+    updated.familyOk &&
+    updated.lendingOk &&
+    updated.ssfOk &&
+    updated.payslipOk;
+  if (!criticalUpdatesOk) {
+    throw new Error(`Firefox module updates incomplete: ${JSON.stringify(updated)}`);
+  }
 
   console.log("Round 2: confirm every browser sees Firefox updates...");
   for (const profile of browsers) {
@@ -699,21 +879,7 @@ try {
     report.round2[profile.name] = await captureBrowser(profile, seed);
   }
   const r2 = browsers.map((b) => report.round2[b.name]);
-  report.identicalRound2 = r2.every(
-    (s) =>
-      s?.checks?.cashflow &&
-      s?.checks?.savings &&
-      s?.checks?.smartLoan &&
-      s?.income === updated.cashflowIncome &&
-      s?.savingsSaved === updated.savingsSaved &&
-      (!updated.budgetOk || s?.checks?.budget) &&
-      (!updated.insOk || s?.checks?.insurance) &&
-      (!updated.colOk || s?.checks?.nepalCol) &&
-      (!updated.returnOk || s?.checks?.returnPlanner) &&
-      (!updated.bankOk || s?.checks?.portfolioBank) &&
-      (!updated.invOk || s?.checks?.investment) &&
-      (!updated.expOk || s?.checks?.expense),
-  );
+  report.identicalRound2 = r2.every((s) => s?.allPassed === true);
 
   // Per-module pass matrix from round1
   const moduleNames = [
@@ -740,23 +906,9 @@ try {
     "financialIntel",
   ];
   for (const mod of moduleNames) {
-    const updatedInRound2 = [
-      "cashflow",
-      "savings",
-      "smartLoan",
-      "budget",
-      "insurance",
-      "nepalCol",
-      "returnPlanner",
-      "portfolioBank",
-      "investment",
-      "expense",
-    ].includes(mod);
     report.modules[mod] = {
       round1: r1.every((s) => s?.checks?.[mod] === true),
-      round2AllSynced: updatedInRound2
-        ? r2.every((s) => s?.checks?.[mod] === true)
-        : r1.every((s) => s?.checks?.[mod] === true) && r2.every((s) => s?.checks?.[mod] === true),
+      round2AllSynced: r2.every((s) => s?.checks?.[mod] === true),
     };
   }
 
