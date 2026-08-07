@@ -495,32 +495,32 @@ async function seedPhase(req: Request, admin: AdminClient) {
     });
     if (expenseErr) throw new Error(`expense_transactions insert failed: ${expenseErr.message}`);
 
+    const localMemberId = `e2e-member-${stamp}`;
     const memberInsert = await admin
       .from("group_members")
       .insert({
         workspace_id: workspace.id,
         user_id: userId,
-        local_member_id: `e2e-member-${stamp}`,
+        local_member_id: localMemberId,
         name: `E2E Member ${stamp}`,
         sort_order: 0,
       })
-      .select("id")
+      .select("id,local_member_id")
       .single();
-    if (memberInsert.error || !memberInsert.data?.id) {
+    if (memberInsert.error || !memberInsert.data?.local_member_id) {
       throw new Error(`group_members insert failed: ${memberInsert.error?.message ?? "no id"}`);
     }
-    const memberId = memberInsert.data.id;
 
     const { error: groupExpErr } = await admin.from("group_expenses").insert({
       workspace_id: workspace.id,
       user_id: userId,
       title: `E2E Group Expense ${stamp}`,
       amount: groupExpenseAmount,
-      payer_member_id: memberId,
+      payer_member_id: localMemberId,
       category: "food",
       split_equally: true,
       expense_date: new Date().toISOString().slice(0, 10),
-      split_among: [memberId],
+      split_among: [localMemberId],
       amount_currency: "NPR",
       notes: `e2e-sot-${stamp}`,
     });

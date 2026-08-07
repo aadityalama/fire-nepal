@@ -1,3 +1,4 @@
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
   BUDGET_NOTIFICATION_OPTIONS,
@@ -8,12 +9,31 @@ import {
   type BudgetPeriod,
   type CreateBudgetInput,
 } from "@/lib/budget/types";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getSupabaseAnonKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBudgetRecordForUser, listBudgetRecordsForUser } from "@/services/budget-supabase";
+import type { Database } from "@/types/supabase-database";
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
+}
+
+async function resolveAuthedClient(req?: Request): Promise<{
+  client: SupabaseClient<Database>;
+  user: User | null;
+}> {
+  const auth = req?.headers.get("authorization") ?? "";
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    const client = createClient<Database>(getSupabaseUrl(), getSupabaseAnonKey(), {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data } = await client.auth.getUser();
+    return { client, user: data.user };
+  }
+  const client = await createServerSupabaseClient();
+  const { data } = await client.auth.getUser();
+  return { client, user: data.user };
 }
 
 function sanitizePeriod(value: unknown): BudgetPeriod | null {
@@ -70,14 +90,13 @@ function sanitizeCreateInput(raw: unknown): CreateBudgetInput | null {
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   if (!isSupabaseConfigured()) return bad("Supabase is not configured", 503);
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
-    if (!data.user) return bad("Please sign in to view your budgets.", 401);
+    const { client, user } = await resolveAuthedClient(req);
+    if (!user) return bad("Please sign in to view your budgets.", 401);
 
-    const budgets = await listBudgetRecordsForUser(sb, data.user.id);
+    const budgets = await listBudgetRecordsForUser(client, user.id);
     return NextResponse.json({ ok: true, budgets });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
@@ -98,11 +117,10 @@ export async function POST(req: Request) {
   if (!input) return bad("Invalid budget payload");
 
   try {
-    const sb = await createServerSupabaseClient();
-    const { data } = await sb.auth.getUser();
-    if (!data.user) return bad("Please sign in to save your budget.", 401);
+    const { client, user } = await resolveAuthedClient(req);
+    if (!user) return bad("Please sign in to save your budget.", 401);
 
-    const budget = await createBudgetRecordForUser(sb, data.user.id, input);
+    const budget = await createBudgetRecordForUser(client, user.id, input);
     return NextResponse.json({ ok: true, budget });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
