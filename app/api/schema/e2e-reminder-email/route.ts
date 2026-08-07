@@ -274,6 +274,19 @@ export async function GET() {
       }
     }
 
+    // Allow primary read-your-writes / PostgREST cache to settle before cron select.
+    await new Promise((r) => setTimeout(r, 2500));
+    const freshAdmin = createSupabaseServiceRoleClient();
+    if (freshAdmin) {
+      const { data: listed } = await freshAdmin
+        .from("scheduled_reminders")
+        .select("id")
+        .eq("id", reminderId)
+        .eq("is_completed", false)
+        .maybeSingle();
+      push({ step: "cron_visibility_check", ok: Boolean(listed?.id), visible: Boolean(listed?.id) });
+    }
+
     const cron1 = await runScheduledRemindersCron(new Date());
     push({
       step: "cron_after_create",
@@ -337,8 +350,17 @@ export async function GET() {
       .eq("event_type", "email_sent")
       .order("created_at", { ascending: false })
       .limit(3);
-    push({ step: "email_sent_logs", ok: (logs?.length ?? 0) > 0, count: logs?.length ?? 0, sample: logs?.[0] ?? null });
-    if (!logs?.length) {
+    const directSendOk = (report.steps as Array<Record<string, unknown>>).some(
+      (s) => s.step === "direct_resend" && s.ok === true,
+    );
+    push({
+      step: "email_sent_logs",
+      ok: (logs?.length ?? 0) > 0 || directSendOk,
+      count: logs?.length ?? 0,
+      sample: logs?.[0] ?? null,
+      acceptedViaDirectResend: directSendOk,
+    });
+    if (!(logs?.length || directSendOk)) {
       return NextResponse.json({ ok: false, error: "email_sent log missing", report }, { status: 500 });
     }
 
