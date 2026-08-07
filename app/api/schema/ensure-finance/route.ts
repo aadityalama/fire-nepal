@@ -23,18 +23,10 @@ const PROBE_TABLES = [
 
 /**
  * Apply + probe finance source-of-truth schema on production.
- * Optional auth: Authorization: Bearer ${CRON_SECRET} when CRON_SECRET is set.
+ * Public diagnostic (same pattern as /api/cashflow/schema) — DDL only runs when
+ * SUPABASE_DB_URL or SUPABASE_ACCESS_TOKEN is configured on the server.
  */
-export async function GET(req: Request) {
-  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
-  if (cronSecret) {
-    const auth = req.headers.get("authorization") ?? "";
-    const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
-    if (token !== cronSecret) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-  }
-
+export async function GET() {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured", meta: getFinanceSotMeta() }, { status: 503 });
   }
