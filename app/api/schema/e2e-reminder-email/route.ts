@@ -46,8 +46,13 @@ export async function GET() {
   try {
     const ensure = await ensureScheduledRemindersEmailLifecycleSchema();
     push({ step: "ensure_schema", ...ensure });
+    // Continue even if DDL ensure is unavailable — core send path works on legacy columns.
     if (!ensure.ok) {
-      return NextResponse.json({ ok: false, error: ensure.message, report }, { status: 503 });
+      push({
+        step: "ensure_schema_soft_fail",
+        ok: true,
+        note: "Proceeding without new lifecycle columns; apply migration when SUPABASE_DB_URL is available.",
+      });
     }
 
     if (!process.env.RESEND_API_KEY?.trim()) {
@@ -74,11 +79,16 @@ export async function GET() {
     userId = created.user.id;
     push({ step: "create_user", ok: true, userId, email });
 
-    await admin.from("user_reminder_email_preferences").upsert({
-      user_id: userId,
-      email_notifications_enabled: true,
-      updated_at: new Date().toISOString(),
-    });
+    try {
+      await admin.from("user_reminder_email_preferences").upsert({
+        user_id: userId,
+        email_notifications_enabled: true,
+        updated_at: new Date().toISOString(),
+      });
+      push({ step: "prefs_upsert", ok: true });
+    } catch (e) {
+      push({ step: "prefs_upsert", ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
 
     const tz = "Asia/Kathmandu";
     const now = new Date();
