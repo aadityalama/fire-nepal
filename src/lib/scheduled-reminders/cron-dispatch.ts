@@ -3,6 +3,14 @@ import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { ScheduledReminderDbRow } from "@/lib/scheduled-reminders/api-mapper";
 import { dbRowToReminder } from "@/lib/scheduled-reminders/api-mapper";
 import {
+  getUserEmailNotificationsEnabled,
+  isReminderActiveForEmail,
+} from "@/lib/scheduled-reminders/email-lifecycle";
+import {
+  buildScheduledReminderEmail,
+  reminderEmailStatus,
+} from "@/lib/scheduled-reminders/email-templates";
+import {
   firesDueCatchUp,
   rollForwardDueYmdIfNeeded,
   type ScheduledReminderShape,
@@ -23,50 +31,6 @@ function rowToShape(row: ScheduledReminderDbRow): ScheduledReminderShape {
     notifyAtDueTime: r.notifyAtDueTime,
     notifyOverdue: r.notifyOverdue,
   };
-}
-
-function slotLabel(slot: string): string {
-  switch (slot) {
-    case "d7":
-      return "7 days before due";
-    case "d3":
-      return "3 days before due";
-    case "d1":
-      return "1 day before due";
-    case "due":
-      return "Due now";
-    case "overdue":
-      return "Overdue reminder";
-    default:
-      return slot;
-  }
-}
-
-function buildEmailHtml(input: {
-  title: string;
-  amountLine: string;
-  dueDate: string;
-  dueTime: string;
-  timezone: string;
-  slot: string;
-}): string {
-  const slot = slotLabel(input.slot);
-  return `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#0f172a">
-  <h2 style="margin:0 0 8px">FIRE Nepal reminder</h2>
-  <p style="margin:0 0 12px"><strong>${escapeHtml(input.title)}</strong></p>
-  <p style="margin:0 0 8px">${escapeHtml(slot)}</p>
-  <p style="margin:0 0 8px">Due: <strong>${escapeHtml(input.dueDate)}</strong> at <strong>${escapeHtml(input.dueTime)}</strong> (${escapeHtml(input.timezone)})</p>
-  ${input.amountLine ? `<p style="margin:0 0 8px">${escapeHtml(input.amountLine)}</p>` : ""}
-  <p style="margin:16px 0 0;font-size:13px;color:#64748b">Sent automatically by FIRE Nepal Smart Reminders.</p>
-</body></html>`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function isUniqueViolation(err: { code?: string; message?: string } | null | undefined): boolean {
@@ -100,12 +64,24 @@ async function writeReminderLog(
   }
 }
 
+async function resolveAuthUserEmail(sb: ServiceSb, userId: string, fallback: string): Promise<string> {
+  try {
+    const { data, error } = await sb.auth.admin.getUserById(userId);
+    if (error || !data?.user?.email) return fallback.trim().toLowerCase();
+    return data.user.email.trim().toLowerCase();
+  } catch {
+    return fallback.trim().toLowerCase();
+  }
+}
+
 export type ScheduledRemindersCronResult = {
   ok: boolean;
   remindersChecked: number;
   emailsSent: number;
   skipped: number;
   firesFound: number;
+  skippedInactive: number;
+  skippedPreferenceOff: number;
   resendConfigured: boolean;
   fromAddress: string;
   nowUtc: string;
@@ -120,6 +96,8 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
     emailsSent: 0,
     skipped: 0,
     firesFound: 0,
+    skippedInactive: 0,
+    skippedPreferenceOff: 0,
     resendConfigured,
     fromAddress,
     nowUtc: nowUtc.toISOString(),
@@ -174,17 +152,37 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
   let emailsSent = 0;
   let skipped = 0;
   let firesFound = 0;
+  let skippedInactive = 0;
+  let skippedPreferenceOff = 0;
+
+  const prefCache = new Map<string, boolean>();
 
   console.info(`${LOG_PREFIX} fetched incomplete reminders:`, list.length);
 
   for (const row of list) {
+    if (!isReminderActiveForEmail(row)) {
+      skippedInactive += 1;
+      skipped += 1;
+      continue;
+    }
+
+    let prefsOn = prefCache.get(row.user_id);
+    if (prefsOn === undefined) {
+      prefsOn = await getUserEmailNotificationsEnabled(sb as never, row.user_id);
+      prefCache.set(row.user_id, prefsOn);
+    }
+    if (!prefsOn) {
+      skippedPreferenceOff += 1;
+      skipped += 1;
+      continue;
+    }
+
     const shape = rowToShape(row);
     const rolledDue =
       shape.repeatFrequency !== "once"
         ? rollForwardDueYmdIfNeeded(shape.dueDate, shape.repeatFrequency, nowUtc, shape.timezone)
         : shape.dueDate;
 
-    // Persist rolled recurring anchors so admin/UI stay aligned with catch-up math.
     if (rolledDue !== row.due_date) {
       const { error: rollErr } = await sb
         .from("scheduled_reminders")
@@ -203,8 +201,8 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
     firesFound += fires.length;
 
     const r = dbRowToReminder(row);
-    const amountLine =
-      r.amountNpr != null && Number.isFinite(r.amountNpr) ? `Amount: NPR ${r.amountNpr.toLocaleString("en-IN")}` : "";
+    const status = reminderEmailStatus(r.dueDate, r.timezone, nowUtc);
+    const to = await resolveAuthUserEmail(sb, row.user_id, row.email);
 
     console.info(`${LOG_PREFIX} reminder due fires`, {
       id: row.id,
@@ -214,9 +212,23 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
       dueTime: r.dueTime,
       fireCount: fires.length,
       slots: fires.map((f) => f.slot),
+      to,
     });
 
     for (const fire of fires) {
+      // Re-check active right before claim (completed/deleted/archived/disabled mid-run).
+      const { data: fresh } = await sb
+        .from("scheduled_reminders")
+        .select("id, is_completed, is_archived, email_enabled")
+        .eq("id", row.id)
+        .maybeSingle();
+      if (!fresh || !isReminderActiveForEmail(fresh as ScheduledReminderDbRow)) {
+        skippedInactive += 1;
+        skipped += 1;
+        console.info(`${LOG_PREFIX} skip inactive before send`, { reminderId: row.id, slot: fire.slot });
+        continue;
+      }
+
       const overdueLocal = fire.slot === "overdue" ? fire.overdueLocalDate : null;
 
       const { data: sendRow, error: insErr } = await sb
@@ -258,7 +270,6 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
       }
 
       const sendId = sendRow.id as string;
-      const to = (row.email ?? "").trim();
       if (!to) {
         await sb.from("scheduled_reminder_email_sends").delete().eq("id", sendId);
         skipped += 1;
@@ -273,16 +284,17 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
         continue;
       }
 
-      const subject = `FIRE Nepal · ${r.title} (${slotLabel(fire.slot)})`;
-      const html = buildEmailHtml({
+      const built = buildScheduledReminderEmail({
+        reminderId: row.id,
         title: r.title,
-        amountLine,
+        amountNpr: r.amountNpr,
+        reminderType: r.reminderType,
         dueDate: r.dueDate,
         dueTime: r.dueTime,
         timezone: r.timezone,
         slot: fire.slot,
+        status: fire.slot === "overdue" ? "Overdue" : status,
       });
-      const text = `${r.title}\n${slotLabel(fire.slot)}\nDue ${r.dueDate} ${r.dueTime} (${r.timezone})\n${amountLine}`;
 
       console.info(`${LOG_PREFIX} sending via Resend`, {
         reminderId: row.id,
@@ -295,9 +307,9 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
       const res = await sendEmailViaResend({
         from: fromAddress,
         to: [to],
-        subject,
-        html,
-        text,
+        subject: built.subject,
+        html: built.html,
+        text: built.text,
       });
       if (!res.ok) {
         await writeReminderLog(sb, {
@@ -323,6 +335,12 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
         continue;
       }
 
+      const sentAt = nowUtc.toISOString();
+      await sb
+        .from("scheduled_reminders")
+        .update({ last_email_sent_at: sentAt, email: to, updated_at: sentAt })
+        .eq("id", row.id);
+
       await writeReminderLog(sb, {
         reminder_id: row.id,
         user_id: row.user_id,
@@ -335,6 +353,8 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
           fireAtUtc: fire.fireAtUtc.toISOString(),
           resendId: res.id ?? null,
           to,
+          status: built.subject,
+          lastEmailSentAt: sentAt,
         },
       });
       emailsSent += 1;
@@ -352,6 +372,8 @@ export async function runScheduledRemindersCron(nowUtc = new Date()): Promise<Sc
     emailsSent,
     skipped,
     firesFound,
+    skippedInactive,
+    skippedPreferenceOff,
     resendConfigured,
     fromAddress,
     nowUtc: baseMeta.nowUtc,
