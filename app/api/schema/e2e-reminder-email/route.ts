@@ -12,6 +12,17 @@ export const maxDuration = 120;
 
 const E2E_PASSWORD = "FinanceE2EVerify!23456";
 
+function resolveDeliverableInbox(stamp: number): string {
+  const admin = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+  if (admin && admin.includes("@")) return admin;
+  const from = process.env.RESEND_FROM_EMAIL?.trim() || process.env.EMAIL_FROM?.trim() || "";
+  const m = /<([^>]+)>/.exec(from) || /([^\s<>]+@[^\s<>]+)/.exec(from);
+  const fromEmail = m?.[1] ?? "noreply@firenepal.com";
+  const domain = fromEmail.split("@")[1] || "firenepal.com";
+  // Resend accepts mail to the verified sending domain; .test TLD is rejected.
+  return `reminder-e2e+${stamp}@${domain}`;
+}
+
 /**
  * Production e2e for reminder emails (server-side secrets):
  * ensure schema → create active reminder → run cron → assert ledger → delete → cron again → assert no active row.
@@ -41,7 +52,7 @@ export async function GET() {
   let userId: string | null = null;
   let reminderId: string | null = null;
   const stamp = Date.now();
-  const email = `finance-e2e-reminder-${stamp}@firenepal.test`;
+  const email = resolveDeliverableInbox(stamp);
 
   try {
     const ensure = await ensureScheduledRemindersEmailLifecycleSchema();
@@ -93,9 +104,9 @@ export async function GET() {
     const tz = "Asia/Kathmandu";
     const now = new Date();
     const dueDate = formatInTimeZone(now, tz, "yyyy-MM-dd");
-    const hm = formatInTimeZone(now, tz, "HH:mm");
-    const [hh, mm] = hm.split(":").map(Number);
-    const dueTime = `${String(hh).padStart(2, "0")}:${String(Math.max(0, mm - 5)).padStart(2, "0")}`;
+    // Fire well inside the catch-up window (due 2 hours ago local).
+    const dueAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const dueTime = formatInTimeZone(dueAt, tz, "HH:mm");
 
     const insertPayload = {
       user_id: userId,
@@ -149,6 +160,20 @@ export async function GET() {
     if (!cron1.ok) {
       return NextResponse.json({ ok: false, error: cron1.error ?? "cron failed", report }, { status: 503 });
     }
+
+    const { data: failLogs } = await admin
+      .from("reminder_logs")
+      .select("id, event_type, provider_message, metadata, created_at")
+      .eq("reminder_id", reminderId)
+      .eq("event_type", "email_failed")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    push({
+      step: "email_failed_logs",
+      ok: true,
+      count: failLogs?.length ?? 0,
+      rows: failLogs ?? [],
+    });
 
     const { data: sends, error: sendErr } = await admin
       .from("scheduled_reminder_email_sends")
