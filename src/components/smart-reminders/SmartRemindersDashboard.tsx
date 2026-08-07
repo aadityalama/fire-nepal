@@ -13,7 +13,8 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardSectionHeader } from "@/components/DashboardSectionHeader";
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
 import { AiReminderInsightsCard } from "@/components/smart-reminders/AiReminderInsightsCard";
@@ -27,6 +28,7 @@ import { useSmartReminders } from "@/contexts/SmartRemindersContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatNextSendLabel, nextTheoreticalEmailUtc, type ScheduledReminderShape } from "@/lib/scheduled-reminders/schedule-logic";
 import { formatYmd } from "@/lib/smart-reminders/date-utils";
+import { getInAppNotificationHref } from "@/lib/smart-reminders/notification-nav";
 import { reminderPriority } from "@/lib/smart-reminders/reminder-engine";
 import type { Reminder, ReminderType } from "@/lib/smart-reminders/types";
 import { REMINDER_TYPES, REPEAT_FREQUENCIES } from "@/lib/smart-reminders/types";
@@ -84,6 +86,9 @@ export function SmartRemindersDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const { user } = useProductAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusReminderId = searchParams.get("reminder");
   const {
     hydrated,
     store,
@@ -109,6 +114,18 @@ export function SmartRemindersDashboard() {
   const upcomingWithin = store.settings.upcomingWithinDays;
 
   const sorted = useMemo(() => [...reminders].sort(sortByDue), [reminders]);
+
+  useEffect(() => {
+    if (!hydrated || !focusReminderId) return;
+    const el = document.getElementById(`reminder-${focusReminderId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-emerald-400/70");
+    const t = window.setTimeout(() => {
+      el.classList.remove("ring-2", "ring-emerald-400/70");
+    }, 2400);
+    return () => window.clearTimeout(t);
+  }, [hydrated, focusReminderId, reminders]);
 
   let overdue = 0;
   let upcoming = 0;
@@ -331,11 +348,30 @@ export function SmartRemindersDashboard() {
               store.notifications.slice(0, 10).map((n) => (
                 <div
                   key={n.id}
-                  className={`flex items-start justify-between gap-3 rounded-2xl border p-3 ${
+                  className={`relative z-10 flex items-start justify-between gap-3 rounded-2xl border p-3 ${
                     light ? "border-emerald-100/90 bg-white/70" : "border-white/10 bg-black/25"
                   }`}
                 >
-                  <button type="button" className="min-w-0 text-left" onClick={() => markNotificationRead(n.id)}>
+                  <button
+                    type="button"
+                    className="min-h-[44px] min-w-0 flex-1 cursor-pointer touch-manipulation text-left"
+                    onClick={() => {
+                      markNotificationRead(n.id);
+                      const href = getInAppNotificationHref(n);
+                      if (href.startsWith("/smart-reminders")) {
+                        const id = n.reminderId;
+                        if (id) {
+                          const el = document.getElementById(`reminder-${id}`);
+                          if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            return;
+                          }
+                        }
+                      }
+                      router.push(href);
+                    }}
+                    aria-label={`${n.title}. Open related destination.`}
+                  >
                     <p className="text-xs font-black text-slate-900 dark:text-white">{n.title}</p>
                     <p className="mt-1 text-[11px] font-semibold leading-snug text-slate-600 dark:text-zinc-400">{n.body}</p>
                   </button>
@@ -343,7 +379,7 @@ export function SmartRemindersDashboard() {
                     type="button"
                     aria-label="Dismiss notification"
                     onClick={() => dismissNotification(n.id)}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition active:scale-[0.99] ${
+                    className={`grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-xl border transition touch-manipulation active:scale-[0.99] ${
                       light ? "border-slate-200/80 text-slate-700 hover:bg-slate-50" : "border-white/10 text-zinc-200 hover:bg-white/[0.06]"
                     }`}
                   >
@@ -377,9 +413,10 @@ export function SmartRemindersDashboard() {
               return (
                 <div
                   key={r.id}
-                  className={`flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:justify-between ${
+                  id={`reminder-${r.id}`}
+                  className={`flex flex-col gap-3 rounded-2xl border p-3 motion-safe:transition sm:flex-row sm:items-center sm:justify-between ${
                     light ? "border-emerald-100/90 bg-white/70" : "border-white/10 bg-black/25"
-                  }`}
+                  } ${focusReminderId === r.id ? "ring-2 ring-emerald-400/70" : ""}`}
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

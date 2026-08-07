@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { FireNepalMainBottomNav } from "@/components/navigation/FireNepalMainBottomNav";
+import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isPensionModulePath, PENSION_BASE } from "@/lib/pension/nav";
 
@@ -368,6 +369,7 @@ export function WealthDashboardShell({
               <Menu size={22} strokeWidth={2.25} />
             </button>
             <FireThemeToggle variant="header" />
+            <SmartRemindersHeaderBell />
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             <div
@@ -500,7 +502,8 @@ export function WealthDashboardShell({
                 light ? "border-emerald-200/60 text-slate-800" : "border-emerald-400/10 text-gray-100"
               }`}
             >
-              <div className="hidden xl:block">
+              <div className="hidden xl:flex xl:items-center xl:gap-2">
+                <SmartRemindersHeaderBell />
                 <FireThemeToggle variant="header" />
               </div>
               {footerNote}

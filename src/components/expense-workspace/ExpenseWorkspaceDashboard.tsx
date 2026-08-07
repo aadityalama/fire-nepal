@@ -668,23 +668,33 @@ export function ExpenseWorkspaceDashboard({
 
       <AnimatePresence>
         {notificationsOpen ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-[#020806]/85 backdrop-blur-xl"
+          >
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
-              className="mx-auto flex h-full max-w-lg flex-col bg-[#04140f]"
+              className="relative z-10 mx-auto flex h-full max-w-lg flex-col bg-[#04140f]"
             >
               <header className="flex items-center justify-between border-b border-white/10 px-4 py-4 pt-[calc(1rem+env(safe-area-inset-top,0px))]">
                 <div>
                   <h2 className="text-lg font-black text-white">Notifications</h2>
                   <p className="text-xs font-semibold text-emerald-100/55">Profile notification center</p>
                 </div>
-                <button type="button" onClick={() => setNotificationsOpen(false)} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(false)}
+                  className="grid min-h-[44px] min-w-[44px] cursor-pointer place-items-center rounded-full bg-white/[0.06] touch-manipulation"
+                  aria-label="Close notifications"
+                >
                   <X size={20} />
                 </button>
               </header>
-              <div className="flex-1 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+              <div className="relative z-10 flex-1 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
                 {notifications.length === 0 ? (
                   <p className="py-8 text-center text-sm font-semibold text-emerald-100/55">No notifications yet.</p>
                 ) : (
@@ -696,9 +706,12 @@ export function ExpenseWorkspaceDashboard({
                         read={uiState.readNotificationIds.includes(item.id)}
                         onOpen={() => {
                           const expense = expenses.find((entry) => entry.id === item.expenseId);
-                          if (expense) openDetail(expense);
                           markNotificationRead(item.id);
                           setNotificationsOpen(false);
+                          // Defer detail open so the center unmounts first (Mobile Safari overlay race).
+                          if (expense) {
+                            window.setTimeout(() => openDetail(expense), 0);
+                          }
                         }}
                       />
                     ))}
@@ -790,12 +803,21 @@ function NotificationRow({
     <button
       type="button"
       onClick={onOpen}
-      className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition active:scale-[0.99] ${
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={`relative z-10 flex w-full min-h-[56px] cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-left transition touch-manipulation active:scale-[0.99] ${
         read ? "border-white/8 bg-white/[0.03]" : "border-emerald-300/20 bg-emerald-400/10"
       }`}
+      aria-label={`${item.message}. Open expense details.`}
     >
-      <span className="text-lg">{NOTIFICATION_DOT[item.tone]}</span>
-      <div className="min-w-0 flex-1">
+      <span className="pointer-events-none text-lg" aria-hidden>
+        {NOTIFICATION_DOT[item.tone]}
+      </span>
+      <div className="min-w-0 flex-1 pointer-events-none">
         <p className="text-sm font-black text-white">{item.message}</p>
         <p className="mt-1 text-xs font-semibold text-emerald-100/55">
           {formatNpr(item.amountNpr)} · Due {formatDisplayDate(item.dueDate)}
@@ -831,7 +853,7 @@ function ExpenseDetailSheet({
       : meta.repeat;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[210] bg-[#020806]/85 backdrop-blur-xl">
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}

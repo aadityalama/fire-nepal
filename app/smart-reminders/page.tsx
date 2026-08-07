@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { SmartRemindersDashboard } from "@/components/smart-reminders/SmartRemindersDashboard";
 import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
@@ -10,5 +11,9 @@ export const metadata: Metadata = {
 };
 
 export default function SmartRemindersPage() {
-  return <SmartRemindersDashboard />;
+  return (
+    <Suspense fallback={null}>
+      <SmartRemindersDashboard />
+    </Suspense>
+  );
 }
