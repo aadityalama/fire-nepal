@@ -1182,7 +1182,7 @@ export function ExpenseDashboard({
           setMembers([]);
           setProfiles({});
           setCloudHydrated(true);
-          toast.error(error instanceof Error ? error.message : "Could not load group expenses from Supabase.");
+          toast.error(error instanceof Error ? error.message : "Could not load group/roommate expenses from Supabase.");
         }
       }
     })();
@@ -1328,8 +1328,8 @@ export function ExpenseDashboard({
   const persistGroupExpense = useCallback(
     async (expense: Expense) => {
       if (personalMode) return null;
-      if (!user?.id) throw new Error("Please sign in to save group expenses.");
-      if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
+      if (!user?.id) throw new Error("Please sign in to save group/roommate expenses.");
+      if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group/roommate expenses.");
       const client = getSupabaseBrowserClient();
       const row = await upsertGroupExpenseByLocalId(client, user.id, {
         localExpenseId: expense.id,
@@ -1346,7 +1346,7 @@ export function ExpenseDashboard({
         notes: expense.notes,
       });
       if (!row) {
-        const error = new Error("Could not save group expense to Supabase. Check RLS permissions and try again.");
+        const error = new Error("Could not save group/roommate expense to Supabase. Check RLS permissions and try again.");
         console.error("[group-expenses] persist failed", error);
         throw error;
       }
@@ -1527,7 +1527,7 @@ export function ExpenseDashboard({
 
   async function removeMember(memberId: string) {
     if (members.length <= 2) {
-      toast.error("Keep at least 2 members for group expenses.");
+      toast.error("Keep at least 2 members for group/roommate expenses.");
       return;
     }
     if (removingMemberId) return;
@@ -1849,10 +1849,10 @@ export function ExpenseDashboard({
           await softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
         }
       } else {
-        if (!user?.id) throw new Error("Please sign in to delete group expenses.");
-        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group expenses.");
+        if (!user?.id) throw new Error("Please sign in to delete group/roommate expenses.");
+        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group/roommate expenses.");
         const ok = await softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
-        if (!ok) throw new Error("Could not delete group expense from Supabase.");
+        if (!ok) throw new Error("Could not delete group/roommate expense from Supabase.");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete expense.");
@@ -2087,7 +2087,7 @@ export function ExpenseDashboard({
     if (!isDesktopShareUi() && typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "Group Expense Summary",
+          title: "Group/Roommate Expense Summary",
           text,
           url: pageUrl,
         });
@@ -2509,7 +2509,7 @@ export function ExpenseDashboard({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100/75">
-                    {personalMode ? "Personal Expenses" : "Group Expenses"}
+                    {personalMode ? "Personal Expenses" : "Group/Roommate Expenses"}
                   </p>
                   <p className="mt-1 text-[11px] font-medium text-emerald-100/80">
                     ₩1 = Rs {exchangeRate.nprPerKrw.toFixed(4)} · {formatRelativeTime(exchangeRate.updatedAt)}

@@ -5,7 +5,7 @@ import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 export const metadata: Metadata = {
   title: "Expense Dashboard | FIRE Nepal",
   description:
-    "Track personal and group expenses, categories, receipts, recurring costs, analytics, and reports inside FIRE Nepal.",
+    "Track personal and group/roommate expenses, categories, receipts, recurring costs, analytics, and reports inside FIRE Nepal.",
   alternates: buildCanonicalAlternates("/expense-dashboard"),
 };
 

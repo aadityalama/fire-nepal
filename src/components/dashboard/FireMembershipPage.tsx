@@ -149,7 +149,7 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
       },
       {
         href: "/group-expenses",
-        title: "Group Expenses",
+        title: "Group/Roommate Expenses",
         body: "Shared bills, roommates & settlements",
         icon: HandCoins,
         accent: "from-emerald-500/35 to-lime-300/15",

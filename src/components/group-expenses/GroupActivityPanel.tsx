@@ -74,7 +74,7 @@ export function GroupActivityPanel({
         const message =
           error instanceof GroupExpenseHistoryError || error instanceof Error
             ? error.message
-            : "Unable to load group expenses. Please try again.";
+            : "Unable to load group/roommate expenses. Please try again.";
         setLoadError(message);
         toast.error(message);
       } finally {
@@ -168,7 +168,7 @@ export function GroupActivityPanel({
           <div>
             <h2 className="text-base font-black text-emerald-950">Group Activity</h2>
             <p className="mt-0.5 text-xs font-semibold text-slate-500">
-              Shared group expenses only — no personal finance data.
+              Shared group/roommate expenses only — no personal finance data.
             </p>
           </div>
           {groupProfile.companyName ? (
@@ -183,7 +183,7 @@ export function GroupActivityPanel({
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search group expenses…"
+            placeholder="Search group/roommate expenses…"
             className="w-full rounded-xl border border-emerald-100 py-2.5 pl-9 pr-3 text-sm font-semibold outline-none focus:border-emerald-500"
           />
         </div>
@@ -210,7 +210,7 @@ export function GroupActivityPanel({
         {loadError ? (
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-6 text-center">
             <ReceiptText className="mx-auto mb-2 text-red-600" size={28} />
-            <p className="text-sm font-black text-red-700">Could not load group expense history</p>
+            <p className="text-sm font-black text-red-700">Could not load group/roommate expense history</p>
             <p className="mx-auto mt-2 max-w-md text-xs font-semibold leading-relaxed text-red-600">{loadError}</p>
             <button
               type="button"
@@ -223,7 +223,7 @@ export function GroupActivityPanel({
         ) : displayRows.length === 0 ? (
           <div className="py-8 text-center">
             <ReceiptText className="mx-auto mb-2 text-emerald-600" size={28} />
-            <p className="text-sm font-bold text-slate-500">No group expenses yet</p>
+            <p className="text-sm font-bold text-slate-500">No group/roommate expenses yet</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">

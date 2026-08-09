@@ -268,7 +268,7 @@ const english: HomepageCopy = {
       { title: "Retirement Readiness", value: "82% ready for Nepal return", detail: "FIRE score updates live" },
       { title: "Goal Tracking", value: "Kathmandu corpus target", detail: "रु 2.41Cr target mapped" },
       { title: "Emergency Planner", value: "7.8 months protected", detail: "Safety fund on track" },
-      { title: "Shared Group Expenses", value: "Group expenses settled", detail: "Open Group Expenses" },
+      { title: "Shared Group/Roommate Expenses", value: "Group/roommate expenses settled", detail: "Open Group/Roommate Expenses" },
     ],
     smartInsights: [
       { title: "AI Recommendation", insight: "Increase monthly savings by ₩180K to reach FIRE 14 months earlier." },
@@ -277,7 +277,7 @@ const english: HomepageCopy = {
     ],
     osBadge: "FIRE Nepal OS",
     osTitle: "Your premium financial operating system for Nepalis worldwide.",
-    osBody: "One emotionally motivating dashboard for savings, FIRE readiness, emergency safety, AI recommendations, live currency, and group expense tracking.",
+    osBody: "One emotionally motivating dashboard for savings, FIRE readiness, emergency safety, AI recommendations, live currency, and group/roommate expense tracking.",
     osStats: [
       { label: "Monthly savings", value: "₩1.2M" },
       { label: "Nepal target", value: "रु 2.41Cr" },

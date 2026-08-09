@@ -196,7 +196,7 @@ export async function listGroupExpenses(
   if (error || !data) {
     console.error("[group-expenses] list failed", { workspaceId: workspace.id, userId, error });
     throw new GroupExpenseHistoryError(
-      formatGroupExpenseError(error, "Could not load group expense history."),
+      formatGroupExpenseError(error, "Could not load group/roommate expense history."),
       "group-expense-list",
       error,
     );
