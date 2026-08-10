@@ -1,0 +1,75 @@
+# One-shot / on-demand production sync for the abroad-salary blog post.
+# Uses the same CRON_SECRET already configured for scheduled-reminders.
+name: Sync abroad-salary blog seed
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/sync-abroad-salary-blog.yml"
+
+concurrency:
+  group: sync-abroad-salary-blog
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Sync published abroad-salary blog post via production ensure endpoint
+        env:
+          TOKEN: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, re, sys, urllib.request, urllib.error
+
+          def normalize(raw: str) -> str:
+              s = raw.encode("utf-8").decode("utf-8-sig").replace("\r", "").replace("\n", "")
+              s = s.strip().strip("\u00a0\u200b\ufeff")
+              if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                  s = s[1:-1].strip()
+              return re.sub(r"^[Bb]earer\s+", "", s).strip()
+
+          token = normalize(os.environ.get("TOKEN") or "")
+          if not token:
+              print("::error::CRON_SECRET is empty")
+              sys.exit(1)
+
+          url = "https://www.firenepal.com/api/schema/ensure-admin-content?syncSeed=1&slug=how-to-invest-your-abroad-salary-for-nepal-goals"
+          req = urllib.request.Request(
+              url,
+              method="GET",
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/json",
+                  "User-Agent": "fire-nepal-sync-abroad-salary-blog/1.0",
+              },
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=90) as resp:
+                  body = resp.read().decode("utf-8", errors="replace")
+                  code = resp.getcode()
+          except urllib.error.HTTPError as e:
+              body = e.read().decode("utf-8", errors="replace")
+              code = e.code
+
+          print(f"HTTP {code}")
+          print(body[:3000])
+          if code != 200:
+              sys.exit(1)
+          payload = json.loads(body)
+          results = payload.get("seedSync") or []
+          if not results:
+              print("::error::seedSync missing from response")
+              sys.exit(1)
+          row = results[0]
+          if row.get("slug") != "how-to-invest-your-abroad-salary-for-nepal-goals":
+              print("::error::unexpected slug", row)
+              sys.exit(1)
+          if row.get("updated") is not True and row.get("reason") != "already in sync":
+              print("::error::sync failed", row)
+              sys.exit(1)
+          print("OK sync result:", row)
+          PY
