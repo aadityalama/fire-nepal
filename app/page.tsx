@@ -21,7 +21,6 @@ import {
   LineChart,
   PiggyBank,
   Plane,
-  Play,
   ReceiptText,
   ShieldCheck,
   TrendingUp,
@@ -37,6 +36,7 @@ import { ProductHomeMobileDock } from "@/components/product/landing/ProductHomeM
 import { ProductMarketingNav } from "@/components/product/landing/ProductMarketingNav";
 import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSection";
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
+import { LatestYoutubeVideosSection } from "@/components/youtube-videos/LatestYoutubeVideosSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { FooterSocialFollow } from "@/components/FooterSocialFollow";
 import { HomeTopInfoBar } from "@/components/smart-nepal-info/HomeTopInfoBar";
@@ -76,12 +76,6 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
   ["Return Planner", "Nepal return target planning", "#investments", Plane],
   ["Emergency Fund", "Safety fund progress tracker", "#investments", ShieldCheck],
   ["Investment Planner", "Stocks, SIP, mutual fund planning", "#investments", Coins],
-];
-
-const videos: Array<[string, string, string]> = [
-  ["Overseas income to FIRE strategy", "9:05", "from-green-950 to-emerald-700"],
-  ["Passive income after returning", "12:18", "from-amber-600 to-yellow-400"],
-  ["Nepal bazaar investment basics", "8:29", "from-slate-900 to-green-700"],
 ];
 
 const posts: Array<[string, string, string]> = [
@@ -478,21 +472,16 @@ export default function HomePage() {
           <SectionCard>
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-black leading-snug text-emerald-950 sm:text-2xl">Latest YouTube Videos</h2>
-              <a className="text-xs font-black text-emerald-700" href="#videos">View All</a>
+              <a
+                className="text-xs font-black text-emerald-700"
+                href="https://www.youtube.com/@Firenepal853"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View All
+              </a>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              {videos.map(([title, duration, gradient]) => (
-                <article key={title} className="overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur transition hover:-translate-y-1">
-                  <div className={`grid h-28 place-items-center bg-gradient-to-br ${gradient} p-4 text-center text-sm font-black text-white`}>
-                    <Play size={26} fill="currentColor" />
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm font-black text-emerald-950">{title}</p>
-                    <p className="mt-2 text-xs font-bold text-slate-500">FIRE Nepal - {duration}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <LatestYoutubeVideosSection />
           </SectionCard>
 
           <SectionCard>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Download, Mail, MessageSquareHeart, Receipt, Users } from "lucide-react";
+import { Bot, Download, Mail, MessageSquareHeart, Play, Receipt, Users } from "lucide-react";
 import Link from "next/link";
 
 const ACTIONS = [
@@ -8,6 +8,7 @@ const ACTIONS = [
   { href: "/admin/membership-requests", label: "Membership Payments", icon: Receipt },
   { href: "/admin/ai-analytics", label: "AI Analytics", icon: Bot },
   { href: "/admin/reviews", label: "Reviews", icon: MessageSquareHeart },
+  { href: "#youtube-videos", label: "YouTube Videos", icon: Play, hash: true },
   { href: "/admin/members?filter=expiring_soon", label: "Reminder Center", icon: Mail },
   { href: "#export-center", label: "Export Center", icon: Download, hash: true },
 ] as const;

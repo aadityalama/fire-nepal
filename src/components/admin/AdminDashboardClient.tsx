@@ -9,6 +9,7 @@ import { QuickActions } from "@/components/admin/QuickActions";
 import { RecentActivity } from "@/components/admin/RecentActivity";
 import { SystemHealth } from "@/components/admin/SystemHealth";
 import { ExportCenterPanel } from "@/components/admin/DashboardAnalyticsPanels";
+import { AdminYoutubeVideosPanel } from "@/components/admin/AdminYoutubeVideosPanel";
 
 const MembershipAnalyticsPanel = dynamic(
   () => import("@/components/admin/DashboardAnalyticsPanels").then((m) => m.MembershipAnalyticsPanel),
@@ -58,6 +59,13 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
       <QuickActions />
       <SystemHealth snapshot={snapshot} />
       <RecentActivity snapshot={snapshot} />
+
+      <section className="space-y-2">
+        <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/45">Content</h2>
+        <DashboardAccordion title="YouTube Videos" id="youtube-videos" defaultOpen>
+          <AdminYoutubeVideosPanel />
+        </DashboardAccordion>
+      </section>
 
       <section className="space-y-2">
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/45">Detailed analytics</h2>
