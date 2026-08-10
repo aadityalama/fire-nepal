@@ -18,8 +18,10 @@ loadDotEnvLocal();
 process.env.SUPABASE_CLI_DISABLE_TELEMETRY = "1";
 process.env.DO_NOT_TRACK = "1";
 
-const migrationFile = "20260810130000_blog_posts.sql";
-const migrations = [migrationFile];
+const migrations = [
+  "20260810130000_blog_posts.sql",
+  "20260810140000_upgrade_abroad_salary_blog_post.sql",
+];
 
 function resolveDbUrl() {
   const direct = (
@@ -80,7 +82,6 @@ function poolerFallbackUrls(dbUrl) {
 }
 
 async function applyWithPg(dbUrl) {
-  const sql = readFileSync(join(root, "supabase", "migrations", migrationFile), "utf8");
   let pg;
   try {
     pg = (await import("pg")).default;
@@ -96,7 +97,11 @@ async function applyWithPg(dbUrl) {
     try {
       console.log(`\nMethod: pg direct SQL (${url.includes("pooler") ? "pooler IPv4" : "direct"})\n`);
       await client.connect();
-      await client.query(sql);
+      for (const file of migrations) {
+        const sql = readFileSync(join(root, "supabase", "migrations", file), "utf8");
+        console.log(`Applying ${file}...`);
+        await client.query(sql);
+      }
       await client.query("notify pgrst, 'reload schema'");
       await client.end();
       console.log("\nOK: migration SQL applied via pg.\n");

@@ -1,16 +1,14 @@
-import type { BlogPostListItem, BlogPostPublic } from "@/lib/blog-posts/types";
+-- Upgrade existing published post: How to invest your abroad salary for Nepal goals
+-- Keeps slug, category, published status, and display order.
+-- Idempotent: safe to re-run.
 
-/** Hardcoded homepage posts preserved as fallback + migration seed source of truth. */
-export const HOMEPAGE_BLOG_SEED: BlogPostPublic[] = [
-  {
-    id: "seed-1",
-    title: "How to invest your abroad salary for Nepal goals",
-    slug: "how-to-invest-your-abroad-salary-for-nepal-goals",
-    category: "Money guide",
-    reading_time: "16 min read",
-    excerpt:
-      "A practical system for Nepali workers abroad to convert foreign salary into Nepal-focused wealth — emergency funds, remittance strategy, investments, and FIRE planning.",
-    content: `A foreign salary can be one of the strongest wealth-building advantages a Nepali professional ever gets. Whether you earn in **KRW, USD, AUD, GBP, AED, QAR**, or another currency, your income buys more optionality than the same effort often produces at home.
+update public.blog_posts
+set
+  title = $title$How to invest your abroad salary for Nepal goals$title$,
+  category = $category$Money guide$category$,
+  reading_time = $reading_time$16 min read$reading_time$,
+  excerpt = $excerpt$A practical system for Nepali workers abroad to convert foreign salary into Nepal-focused wealth — emergency funds, remittance strategy, investments, and FIRE planning.$excerpt$,
+  content = $content$A foreign salary can be one of the strongest wealth-building advantages a Nepali professional ever gets. Whether you earn in **KRW, USD, AUD, GBP, AED, QAR**, or another currency, your income buys more optionality than the same effort often produces at home.
 
 But earning abroad is not the finish line.
 
@@ -337,93 +335,8 @@ The workers who build durable Nepal-based independence usually do ordinary thing
 
 **The objective is not simply to send more money home. The objective is to turn overseas income into lasting financial freedom.**
 
-Start with the framework. Fund the emergency buffer. Fix the monthly Nepal allocation. Measure all-in NPR received. Match risk to time. Then let years of disciplined overseas work compound into a life that feels secure when you return — or when you choose not to need a paycheck at all.`,
-    cover_image_url: null,
-    display_order: 1,
-    published_at: null,
-  },
-  {
-    id: "seed-2",
-    title: "FIRE mistakes Nepali workers make abroad",
-    slug: "fire-mistakes-nepali-workers-make-abroad",
-    category: "Retirement",
-    reading_time: "7 min read",
-    excerpt:
-      "Common FIRE traps for Nepalis working overseas — and practical fixes that protect your return timeline.",
-    content: `## FIRE mistakes that delay Nepal return
-
-Many Nepali workers abroad save hard but still miss FIRE targets. These are the mistakes we see most often — and how to fix them.
-
-### 1. No written Nepal return number
-Without a corpus target in NPR (and a date), saving feels endless. Define housing, lifestyle, and buffer in today's NPR, then inflate forward.
-
-### 2. Ignoring currency and remittance drag
-Sending money home ad hoc can erase years of discipline. Plan transfers when spreads are reasonable and automate a baseline amount.
-
-### 3. Lifestyle creep abroad
-A higher KRW salary often expands rent, gadgets, and dining. Lock a savings rate first; let lifestyle grow only after goals are funded.
-
-### 4. All cash, no growth assets
-Parking everything in a bank account feels safe but loses to inflation. Pair safety cash with long-term SIPs sized to your FIRE date.
-
-### 5. Skipping insurance and emergency funds
-One medical or visa shock can force early withdrawals. Keep 6–12 months of expenses liquid before aggressive investing.
-
-### 6. No review cadence
-FIRE is a system, not a one-time plan. Review savings rate, FX, and progress every month — then adjust.
-
-Use FIRE Nepal's readiness score, reminders, and planners to catch these issues early.`,
-    cover_image_url: null,
-    display_order: 2,
-    published_at: null,
-  },
-  {
-    id: "seed-3",
-    title: "Multi-currency remittance: what to track before coming home",
-    slug: "multi-currency-remittance-what-to-track-before-coming-home",
-    category: "Currency",
-    reading_time: "4 min read",
-    excerpt:
-      "A practical checklist for KRW→NPR remittance before you return — fees, timing, and records that matter.",
-    content: `## Remittance checklist before returning to Nepal
-
-Moving money home is part logistics, part strategy. Track these items so your final months abroad do not leak value.
-
-### Fee + FX spread
-Always compare **all-in NPR received**, not just the mid-market rate. Note weekends, holidays, and bank cut-offs.
-
-### Transfer timing
-Large one-time transfers near departure can hit poor rates. Ladder transfers over weeks when your schedule allows.
-
-### Destination account readiness
-Confirm NPR account limits, KYC, and whether family accounts can receive funds if you travel.
-
-### Tax and documentation
-Keep remittance receipts, employment proof, and bank statements organized for Nepal banking or property purchases.
-
-### Emergency buffer abroad
-Leave enough KRW for final rent, flights, deposits, and contingencies so you are not forced into a panic transfer.
-
-### Goal tagging
-Label each transfer: emergency fund, home down payment, SIP capital, family support. Clarity prevents “mystery money” later.
-
-FIRE Nepal's Remittance Calculator and Currency Converter make fee and rate comparisons faster before you hit send.`,
-    cover_image_url: null,
-    display_order: 3,
-    published_at: null,
-  },
-];
-
-export function homepageBlogFallbackList(): BlogPostListItem[] {
-  return HOMEPAGE_BLOG_SEED.map((post) => ({
-    id: post.id,
-    title: post.title,
-    slug: post.slug,
-    category: post.category,
-    reading_time: post.reading_time,
-    excerpt: post.excerpt,
-    cover_image_url: post.cover_image_url,
-    display_order: post.display_order,
-    published_at: post.published_at,
-  }));
-}
+Start with the framework. Fund the emergency buffer. Fix the monthly Nepal allocation. Measure all-in NPR received. Match risk to time. Then let years of disciplined overseas work compound into a life that feels secure when you return — or when you choose not to need a paycheck at all.$content$,
+  updated_at = now()
+where slug = 'how-to-invest-your-abroad-salary-for-nepal-goals'
+  and deleted_at is null
+  and status = 'published';
