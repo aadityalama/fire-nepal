@@ -50,6 +50,7 @@ export function AdminYoutubeVideosPanel() {
   const [videos, setVideos] = useState<YoutubeVideoRow[]>([]);
   const [stats, setStats] = useState<YoutubeVideoAdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<YoutubeVideoStatus | "all">("all");
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -64,6 +65,7 @@ export function AdminYoutubeVideosPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams({ status: statusFilter });
       if (includeDeleted) params.set("include_deleted", "1");
@@ -77,13 +79,16 @@ export function AdminYoutubeVideosPanel() {
         error?: string;
       };
       if (!r.ok) {
-        toast.error(j.error ?? "Could not load videos");
+        const msg = j.error ?? "Could not load videos";
+        setLoadError(msg);
+        toast.error(msg);
         setVideos([]);
         return;
       }
       setVideos(j.videos ?? []);
       setStats(j.stats ?? null);
     } catch {
+      setLoadError("Network error");
       toast.error("Network error");
       setVideos([]);
     } finally {
@@ -239,6 +244,12 @@ export function AdminYoutubeVideosPanel() {
           Add video
         </button>
       </div>
+
+      {loadError ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs font-semibold text-amber-100">
+          {loadError}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-3 gap-2">
         {statCards.map((card) => (
