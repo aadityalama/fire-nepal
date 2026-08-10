@@ -1912,6 +1912,52 @@ export type Database = {
         };
         Relationships: [];
       };
+      youtube_videos: {
+        Row: {
+          id: string;
+          title: string;
+          youtube_url: string;
+          youtube_video_id: string;
+          duration: string;
+          thumbnail_url: string;
+          display_order: number;
+          status: "draft" | "published";
+          created_at: string;
+          updated_at: string;
+          published_at: string | null;
+          updated_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          youtube_url: string;
+          youtube_video_id: string;
+          duration?: string;
+          thumbnail_url: string;
+          display_order?: number;
+          status?: "draft" | "published";
+          created_at?: string;
+          updated_at?: string;
+          published_at?: string | null;
+          updated_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          title?: string;
+          youtube_url?: string;
+          youtube_video_id?: string;
+          duration?: string;
+          thumbnail_url?: string;
+          display_order?: number;
+          status?: "draft" | "published";
+          updated_at?: string;
+          published_at?: string | null;
+          updated_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
