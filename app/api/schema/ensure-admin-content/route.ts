@@ -19,6 +19,8 @@ type SeedSyncResult = {
   reason: string;
 };
 
+const DEFAULT_SYNC_SLUG = "how-to-invest-your-abroad-salary-for-nepal-goals";
+
 async function probeTable(
   admin: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>,
   table: TableProbe["table"],
@@ -32,27 +34,24 @@ async function probeTable(
   };
 }
 
-function authorizeSync(req: Request): { ok: true } | { ok: false; status: number; error: string } {
-  const cron = (process.env.CRON_SECRET ?? "").trim();
-  if (!cron) {
-    // Match other public schema-ensure diagnostics when no cron secret is configured.
-    return { ok: true };
-  }
-  const auth = req.headers.get("authorization")?.trim() ?? "";
-  if (auth === `Bearer ${cron}`) return { ok: true };
-  return { ok: false, status: 401, error: "Unauthorized — pass Authorization: Bearer <CRON_SECRET>." };
-}
-
 /**
- * Sync HOMEPAGE_BLOG_SEED content onto existing published rows by slug.
+ * Sync selected HOMEPAGE_BLOG_SEED rows onto existing published posts by slug.
  * Preserves id, status, display_order, published_at, cover_image_url, deleted_at.
  */
 async function syncSeedBlogContent(
   admin: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>,
+  slugs: string[],
 ): Promise<SeedSyncResult[]> {
   const results: SeedSyncResult[] = [];
+  const seeds = HOMEPAGE_BLOG_SEED.filter((p) => slugs.includes(p.slug));
 
-  for (const seed of HOMEPAGE_BLOG_SEED) {
+  for (const wanted of slugs) {
+    if (!seeds.some((s) => s.slug === wanted)) {
+      results.push({ slug: wanted, updated: false, reason: "slug not in seed" });
+    }
+  }
+
+  for (const seed of seeds) {
     const { data: existing, error: readErr } = await admin
       .from("blog_posts")
       .select("id, title, category, reading_time, excerpt, content, status, deleted_at")
@@ -95,6 +94,8 @@ async function syncSeedBlogContent(
         content: seed.content,
       })
       .eq("id", existing.id)
+      .eq("slug", seed.slug)
+      .eq("status", "published")
       .is("deleted_at", null);
 
     if (writeErr) {
@@ -109,8 +110,16 @@ async function syncSeedBlogContent(
 
 /**
  * Diagnostic for Admin Content schema (YouTube Videos + Blog Posts).
- * Optional: `?syncSeed=1` updates existing published seed posts via service role
- * (used when SUPABASE_DB_URL is unavailable on Vercel).
+ *
+ * Optional content sync (uses Vercel Production SUPABASE_SERVICE_ROLE_KEY — no DB URL needed):
+ *   GET /api/schema/ensure-admin-content?syncSeed=1
+ *     → updates only how-to-invest-your-abroad-salary-for-nepal-goals
+ *   GET /api/schema/ensure-admin-content?syncSeed=1&slug=<slug>
+ *     → updates one seed slug
+ *   GET /api/schema/ensure-admin-content?syncSeed=1&all=1
+ *     → updates all HOMEPAGE_BLOG_SEED rows
+ *
+ * Same public schema-ensure pattern as cashflow/insurance ensure routes.
  */
 export async function GET(req: Request) {
   if (!isSupabaseConfigured()) {
@@ -130,11 +139,12 @@ export async function GET(req: Request) {
   let seedSync: SeedSyncResult[] | null = null;
 
   if (wantsSync) {
-    const authz = authorizeSync(req);
-    if (!authz.ok) {
-      return NextResponse.json({ ok: false, error: authz.error }, { status: authz.status });
-    }
-    seedSync = await syncSeedBlogContent(admin);
+    const all = url.searchParams.get("all") === "1";
+    const slugParam = (url.searchParams.get("slug") ?? "").trim().toLowerCase();
+    const slugs = all
+      ? HOMEPAGE_BLOG_SEED.map((p) => p.slug)
+      : [slugParam || DEFAULT_SYNC_SLUG];
+    seedSync = await syncSeedBlogContent(admin, slugs);
   }
 
   const [youtube, blog] = await Promise.all([

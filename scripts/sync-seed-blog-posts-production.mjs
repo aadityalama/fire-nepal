@@ -18,14 +18,17 @@ loadDotEnvLocal();
 
 const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
 const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
-const onlySlug = (process.argv.find((a) => a.startsWith("--slug=")) ?? "").slice("--slug=".length);
+const onlySlug =
+  (process.argv.find((a) => a.startsWith("--slug=")) ?? "").slice("--slug=".length) ||
+  "how-to-invest-your-abroad-salary-for-nepal-goals";
+const syncAll = process.argv.includes("--all");
 
 if (url.length < 20 || serviceKey.length < 20) {
   console.error(`
 FAIL: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
 
-Add them to .env.local, then re-run:
-  node scripts/sync-seed-blog-posts-production.mjs
+Configure them in Cursor Cloud Agent secrets (or .env.local), then re-run:
+  npm run db:sync:blog-seed
 `);
   process.exit(1);
 }
@@ -34,9 +37,9 @@ const admin = createClient(url, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const seeds = onlySlug
-  ? HOMEPAGE_BLOG_SEED.filter((p) => p.slug === onlySlug)
-  : HOMEPAGE_BLOG_SEED;
+const seeds = syncAll
+  ? HOMEPAGE_BLOG_SEED
+  : HOMEPAGE_BLOG_SEED.filter((p) => p.slug === onlySlug);
 
 if (!seeds.length) {
   console.error(`FAIL: no seed posts matched ${onlySlug || "(all)"}`);
