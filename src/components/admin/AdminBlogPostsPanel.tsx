@@ -51,6 +51,7 @@ export function AdminBlogPostsPanel() {
   const [posts, setPosts] = useState<BlogPostRow[]>([]);
   const [stats, setStats] = useState<BlogPostAdminStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<BlogPostStatus | "all">("all");
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -62,6 +63,7 @@ export function AdminBlogPostsPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams({ status: statusFilter });
       if (includeDeleted) params.set("include_deleted", "1");
@@ -75,13 +77,16 @@ export function AdminBlogPostsPanel() {
         error?: string;
       };
       if (!r.ok) {
-        toast.error(j.error ?? "Could not load blog posts");
+        const msg = j.error ?? "Could not load blog posts";
+        setLoadError(msg);
+        toast.error(msg);
         setPosts([]);
         return;
       }
       setPosts(j.posts ?? []);
       setStats(j.stats ?? null);
     } catch {
+      setLoadError("Network error");
       toast.error("Network error");
       setPosts([]);
     } finally {
@@ -275,6 +280,12 @@ export function AdminBlogPostsPanel() {
           Add post
         </button>
       </div>
+
+      {loadError ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs font-semibold text-amber-100">
+          {loadError}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-3 gap-2">
         {statCards.map((card) => (

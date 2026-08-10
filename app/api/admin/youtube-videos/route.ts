@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withContentSchemaHint } from "@/lib/admin/content-schema-hint";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import type { YoutubeVideoListFilters, YoutubeVideoStatus } from "@/lib/youtube-videos/types";
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ videos: rows, total, stats });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to load videos";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: withContentSchemaHint(msg) }, { status: 500 });
   }
 }
 
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   const { data, error } = await admin.from("youtube_videos").insert(insert).select("*").single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: withContentSchemaHint(error.message) }, { status: 500 });
   }
 
   return NextResponse.json({ video: data }, { status: 201 });
