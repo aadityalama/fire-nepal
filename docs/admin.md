@@ -2,7 +2,7 @@
 
 ## Route
 
-- **`/admin`** — Next.js App Router layout verifies Supabase session + membership in `public.admin_users`.
+- **`/admin`** — Next.js App Router layout verifies Supabase session + membership in `public.admin_users`. Includes **Blog Posts** management (Content accordion / Quick action `#blog-posts`) for homepage Latest Blog Posts — create/edit/delete, category, reading time, markdown content, optional cover image, publish/unpublish, and reorder. Migration: **`20260810130000_blog_posts.sql`** (`npm run db:apply:blog-posts`, `npm run db:verify:blog-posts`). Public routes: **`/blog`**, **`/blog/[slug]`**.
 - **`/admin/members`** — Membership directory (Phase 1) plus **Phase 2** filters (`?filter=expiring_soon`, `expiring_in_30`, `expired`, …) and **member detail** at **`/admin/members/[userId]`** (renew modal via `?renew=1`, admin notes).
 
 ## Prerequisites
