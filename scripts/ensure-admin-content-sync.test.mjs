@@ -16,7 +16,9 @@ describe("ensure-admin-content seed sync", () => {
     assert.match(src, /syncSeed/);
     assert.match(src, /HOMEPAGE_BLOG_SEED/);
     assert.match(src, /status !== "published"/);
-    assert.match(src, /CRON_SECRET/);
+    assert.match(src, /DEFAULT_SYNC_SLUG/);
+    assert.match(src, /how-to-invest-your-abroad-salary-for-nepal-goals/);
+    assert.doesNotMatch(src, /CRON_SECRET/);
   });
 
   it("abroad-salary seed is ready for production sync", () => {
