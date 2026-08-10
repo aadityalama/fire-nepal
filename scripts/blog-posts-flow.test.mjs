@@ -81,6 +81,25 @@ describe("homepage seed", () => {
       assert.ok(post.reading_time.includes("min"));
     }
   });
+
+  it("keeps the abroad-salary money guide upgraded and published-ready", () => {
+    const post = HOMEPAGE_BLOG_SEED.find(
+      (p) => p.slug === "how-to-invest-your-abroad-salary-for-nepal-goals",
+    );
+    assert.ok(post);
+    assert.equal(post.category, "Money guide");
+    assert.equal(post.slug, "how-to-invest-your-abroad-salary-for-nepal-goals");
+    assert.match(post.reading_time, /^\d+ min read$/);
+    assert.ok(Number(post.reading_time.match(/\d+/)[0]) >= 12);
+    assert.ok(post.excerpt.toLowerCase().includes("nepal"));
+    assert.ok(post.content.includes("Abroad-to-Nepal Wealth Framework"));
+    assert.ok(post.content.includes("Illustrative example only"));
+    assert.ok(post.content.includes("turn overseas income into lasting financial freedom"));
+    assert.ok(post.content.includes("/currency-converter"));
+    assert.ok(post.content.includes("/remittance-calculator"));
+    assert.ok(post.content.includes("/savings-tracker"));
+    assert.ok(post.content.includes("/fire-summary"));
+  });
 });
 
 describe("admin blog flow builders", () => {
