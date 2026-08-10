@@ -16,6 +16,8 @@
     "test:blog-posts": "npx tsx --test scripts/blog-posts-flow.test.mjs",
     "db:apply:blog-posts": "node scripts/apply-blog-posts-migration.mjs",
     "db:verify:blog-posts": "node scripts/verify-blog-posts-crud.mjs",
+    "db:apply:admin-content": "node scripts/apply-youtube-videos-migration.mjs && node scripts/apply-blog-posts-migration.mjs",
+    "db:verify:admin-content": "node scripts/verify-youtube-videos-crud.mjs && node scripts/verify-blog-posts-crud.mjs",
     "test:notification-nav": "npx tsx --test scripts/notification-nav.test.mjs",
     "test:reminders": "node --test scripts/reminders-pipeline.test.mjs",
     "test:reminder-email": "npx tsx --test scripts/reminder-email-lifecycle.test.mjs",
@@ -62,7 +64,6 @@
     "db:apply-verify:finance-sot": "node scripts/apply-all-finance-sot-migrations.mjs && node scripts/verify-finance-sot-cross-browser.mjs",
     "db:verify:cashflow": "node scripts/verify-cashflow-production.mjs",
     "db:apply-verify:cashflow": "node scripts/apply-cashflow-snapshots-migration.mjs && node scripts/verify-cashflow-production.mjs",
-    "test:nepse-hub-admin-overrides": "node --test scripts/nepse-hub-admin-overrides.test.mjs",
     "test:insurance-cloud-primary": "node --test scripts/insurance-cloud-primary-dedupe.test.mjs"
   },
   "dependencies": {
