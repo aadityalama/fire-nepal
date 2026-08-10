@@ -37,6 +37,7 @@ import { ProductMarketingNav } from "@/components/product/landing/ProductMarketi
 import { PremiumHeroSection } from "@/components/product/landing/PremiumHeroSection";
 import { CommunityReviewsSection } from "@/components/community-reviews/CommunityReviewsSection";
 import { LatestYoutubeVideosSection } from "@/components/youtube-videos/LatestYoutubeVideosSection";
+import { LatestBlogPostsSection } from "@/components/blog-posts/LatestBlogPostsSection";
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { FooterSocialFollow } from "@/components/FooterSocialFollow";
 import { HomeTopInfoBar } from "@/components/smart-nepal-info/HomeTopInfoBar";
@@ -78,12 +79,6 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
   ["Investment Planner", "Stocks, SIP, mutual fund planning", "#investments", Coins],
 ];
 
-const posts: Array<[string, string, string]> = [
-  ["How to invest your abroad salary for Nepal goals", "Money guide", "5 min read"],
-  ["FIRE mistakes Nepali workers make abroad", "Retirement", "7 min read"],
-  ["Multi-currency remittance: what to track before coming home", "Currency", "4 min read"],
-];
-
 const operatingSystemCards: Array<[string, string, string, LucideIcon]> = [
   ["Retirement Readiness", "82% ready for Nepal return", "FIRE score updates live", ShieldCheck],
   ["Goal Tracking", "Kathmandu corpus target", "रु 2.41Cr target mapped", BarChart3],
@@ -110,7 +105,7 @@ const footerSections = [
   {
     heading: "Learn",
     links: [
-      { label: "Blog", href: "#learn" },
+      { label: "Blog", href: "/blog" },
       { label: "YouTube Videos", href: "#learn" },
       { label: "FIRE Guide", href: "#learn" },
       { label: "🇳🇵 Nepal Economy", href: "/learn/nepal-economy" },
@@ -487,21 +482,11 @@ export default function HomePage() {
           <SectionCard>
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-xl font-black leading-snug text-emerald-950 sm:text-2xl">Latest Blog Posts</h2>
-              <a className="text-xs font-black text-emerald-700" href="#blog">View All</a>
+              <Link className="text-xs font-black text-emerald-700" href="/blog">
+                View All
+              </Link>
             </div>
-            <div className="space-y-4">
-              {posts.map(([title, tag, time], index) => (
-                <article key={title} className="flex gap-4 rounded-2xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur transition hover:-translate-y-1">
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-lg font-black text-emerald-700">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className="font-black text-emerald-950">{title}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">{tag} - {time}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <LatestBlogPostsSection />
           </SectionCard>
 
           <SectionCard>
