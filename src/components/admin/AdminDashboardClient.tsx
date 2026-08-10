@@ -10,6 +10,7 @@ import { RecentActivity } from "@/components/admin/RecentActivity";
 import { SystemHealth } from "@/components/admin/SystemHealth";
 import { ExportCenterPanel } from "@/components/admin/DashboardAnalyticsPanels";
 import { AdminYoutubeVideosPanel } from "@/components/admin/AdminYoutubeVideosPanel";
+import { AdminBlogPostsPanel } from "@/components/admin/AdminBlogPostsPanel";
 
 const MembershipAnalyticsPanel = dynamic(
   () => import("@/components/admin/DashboardAnalyticsPanels").then((m) => m.MembershipAnalyticsPanel),
@@ -64,6 +65,9 @@ export function AdminDashboardClient({ snapshot }: { snapshot: AdminSnapshot }) 
         <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-200/45">Content</h2>
         <DashboardAccordion title="YouTube Videos" id="youtube-videos" defaultOpen>
           <AdminYoutubeVideosPanel />
+        </DashboardAccordion>
+        <DashboardAccordion title="Blog Posts" id="blog-posts">
+          <AdminBlogPostsPanel />
         </DashboardAccordion>
       </section>
 

@@ -2,7 +2,7 @@
 
 ## Route
 
-- **`/admin`** — Next.js App Router layout verifies Supabase session + membership in `public.admin_users`. Includes **YouTube Videos** management (Content accordion / Quick action `#youtube-videos`) for homepage Latest YouTube Videos — add/edit/delete, duration, auto thumbnail from URL, publish/unpublish, and reorder. Migration: **`20260810120000_youtube_videos.sql`** (`npm run db:apply:youtube-videos`, `npm run db:verify:youtube-videos`).
+- **`/admin`** — Next.js App Router layout verifies Supabase session + membership in `public.admin_users`. Includes **Content** management: **YouTube Videos** (`#youtube-videos`) and **Blog Posts** (`#blog-posts`) for homepage Latest YouTube Videos / Latest Blog Posts — create/edit/delete, publish/unpublish, and reorder. Migrations: **`20260810120000_youtube_videos.sql`** (`npm run db:apply:youtube-videos`, `npm run db:verify:youtube-videos`) and **`20260810130000_blog_posts.sql`** (`npm run db:apply:blog-posts`, `npm run db:verify:blog-posts`). Public blog routes: **`/blog`**, **`/blog/[slug]`**.
 - **`/admin/members`** — Membership directory (Phase 1) plus **Phase 2** filters (`?filter=expiring_soon`, `expiring_in_30`, `expired`, …) and **member detail** at **`/admin/members/[userId]`** (renew modal via `?renew=1`, admin notes).
 
 ## Prerequisites

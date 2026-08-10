@@ -1958,6 +1958,58 @@ export type Database = {
         };
         Relationships: [];
       };
+      blog_posts: {
+        Row: {
+          id: string;
+          title: string;
+          slug: string;
+          category: string;
+          reading_time: string;
+          excerpt: string;
+          content: string;
+          cover_image_url: string | null;
+          display_order: number;
+          status: "draft" | "published";
+          created_at: string;
+          updated_at: string;
+          published_at: string | null;
+          updated_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          slug: string;
+          category?: string;
+          reading_time?: string;
+          excerpt?: string;
+          content?: string;
+          cover_image_url?: string | null;
+          display_order?: number;
+          status?: "draft" | "published";
+          created_at?: string;
+          updated_at?: string;
+          published_at?: string | null;
+          updated_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          title?: string;
+          slug?: string;
+          category?: string;
+          reading_time?: string;
+          excerpt?: string;
+          content?: string;
+          cover_image_url?: string | null;
+          display_order?: number;
+          status?: "draft" | "published";
+          updated_at?: string;
+          published_at?: string | null;
+          updated_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
