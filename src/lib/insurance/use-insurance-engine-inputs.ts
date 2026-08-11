@@ -31,9 +31,18 @@ function loadReturnPlannerState(): ReturnToNepalPlannerState {
   }
 }
 
+function resolveAge(): number | null {
+  const onboarding = loadProductOnboarding();
+  if (onboarding.age > 0) return onboarding.age;
+  const ssf = loadSsfPensionWorkspace();
+  if (ssf.projection.currentAge > 0) return ssf.projection.currentAge;
+  return null;
+}
+
 /**
  * Live inputs for the FIRE AI Insurance Engine.
  * Recalculates whenever income, expense, savings, portfolio, return plan, or insurance sync.
+ * Does not invent age or income — missing values stay 0/null for the engine.
  */
 export function useInsuranceEngineInputs(): {
   inputs: InsuranceEngineInputs;
@@ -80,18 +89,14 @@ export function useInsuranceEngineInputs(): {
       const ssf = loadSsfPensionWorkspace();
       const returnState = loadReturnPlannerState();
       const snapshot = computePlannerSnapshot(returnState);
-      const age =
-        onboarding.age > 0
-          ? onboarding.age
-          : ssf.projection.currentAge > 0
-            ? ssf.projection.currentAge
-            : 32;
+      const age = resolveAge();
 
       return {
         monthlyIncomeNpr: live.monthlyIncome > 0 ? live.monthlyIncome : onboarding.salaryMonthlyNpr,
         monthlyExpenseNpr: live.monthlyExpense,
         totalSavingsNpr: live.totalSavings,
         investableNpr: wealth.investableNpr,
+        liabilitiesNpr: summary.liabilitiesNpr,
         emergencyFundMonths: summary.emergencyFundCoverageMonths,
         fireGoalNpr: profile?.fireGoalAmount ?? 0,
         fireProgressPct: summary.fireProgressPct,
@@ -108,18 +113,27 @@ export function useInsuranceEngineInputs(): {
         monthlyExpenseNpr: 0,
         totalSavingsNpr: 0,
         investableNpr: 0,
-        emergencyFundMonths: 0,
+        liabilitiesNpr: 0,
+        emergencyFundMonths: null,
         fireGoalNpr: profile?.fireGoalAmount ?? 0,
-        fireProgressPct: summary.fireProgressPct ?? 0,
-        age: 32,
+        fireProgressPct: summary.fireProgressPct ?? null,
+        age: null,
         adults: 1,
         children: 0,
         ssfMonthlyContributionNpr: 0,
         yearsToReturn: null,
-        returnReadinessPct: 0,
+        returnReadinessPct: null,
       };
     }
-  }, [tick, uid, profile?.fireGoalAmount, summary.emergencyFundCoverageMonths, summary.fireProgressPct, summary.wealthTotals]);
+  }, [
+    tick,
+    uid,
+    profile?.fireGoalAmount,
+    summary.emergencyFundCoverageMonths,
+    summary.fireProgressPct,
+    summary.liabilitiesNpr,
+    summary.wealthTotals,
+  ]);
 
   return { inputs, tick, recalculate };
 }

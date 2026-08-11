@@ -63,15 +63,42 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
+const NOT_ENOUGH_INFO = "Not enough information";
 
-function MetricTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function MetricTile({
+  label,
+  value,
+  hint,
+  compactValue = false,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  compactValue?: boolean;
+}) {
   return (
     <div className={`${glassCard} min-h-[96px] p-3.5 sm:p-4`}>
       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/45">{label}</p>
-      <p className="mt-2 truncate text-base font-black tracking-[-0.04em] text-white sm:text-lg">{value}</p>
+      <p
+        className={`mt-2 font-black tracking-[-0.04em] text-white ${
+          compactValue
+            ? "text-[11px] leading-snug sm:text-xs"
+            : "truncate text-base sm:text-lg"
+        }`}
+      >
+        {value}
+      </p>
       {hint ? <p className="mt-1 text-[10px] font-bold text-emerald-100/40">{hint}</p> : null}
     </div>
   );
+}
+
+function metricDisplay(
+  availability: "ready" | "insufficient_data",
+  amountNpr: number,
+): { value: string; compact: boolean } {
+  if (availability !== "ready") return { value: NOT_ENOUGH_INFO, compact: true };
+  return { value: formatNprCompact(amountNpr), compact: false };
 }
 
 function withDerivedStatus(policies: InsurancePolicy[]): InsurancePolicy[] {
@@ -339,7 +366,7 @@ export function InsuranceWorkspaceDashboard() {
         incomeProtectionNeedNpr: 0,
         recommendedMonthlyPremiumNpr: 0,
         protectionScorePct: 0,
-        protectionBadge: "Needs attention" as const,
+        protectionBadge: "Incomplete data" as const,
         riskLevel: "moderate" as const,
         coverageGapNpr: 0,
         healthGapNpr: 0,
@@ -353,9 +380,28 @@ export function InsuranceWorkspaceDashboard() {
         suggestionTitle: "Policies ready",
         suggestionBody: "Open a policy card to manage premiums, documents, and renewals.",
         suggestionIncreaseLifeNpr: 0,
+        healthAvailability: "insufficient_data" as const,
+        lifeAvailability: "insufficient_data" as const,
+        criticalAvailability: "insufficient_data" as const,
+        incomeProtectionAvailability: "insufficient_data" as const,
+        premiumAvailability: "insufficient_data" as const,
+        scoreAvailability: "insufficient_data" as const,
+        gapAvailability: "insufficient_data" as const,
+        missingInputs: [],
+        howCalculated: "Calculation temporarily unavailable.",
+        calculationSteps: [],
+        methodologyDisclaimer:
+          "Educational estimate only — not financial, insurance, or investment advice.",
       };
     }
   }, [policies, inputs]);
+  const healthMetric = metricDisplay(recommendation.healthAvailability, recommendation.recommendedHealthCoverageNpr);
+  const lifeMetric = metricDisplay(recommendation.lifeAvailability, recommendation.recommendedLifeCoverageNpr);
+  const premiumMetric =
+    recommendation.premiumAvailability === "ready"
+      ? { value: formatRs(recommendation.recommendedMonthlyPremiumNpr), compact: false }
+      : { value: NOT_ENOUGH_INFO, compact: true };
+  const gapMetric = metricDisplay(recommendation.gapAvailability, recommendation.coverageGapNpr);
   const renewals = useMemo(() => {
     try {
       return upcomingRenewals(policies, 90);
@@ -603,11 +649,18 @@ export function InsuranceWorkspaceDashboard() {
                 </span>
               </div>
               <p className="mt-3 text-[2.4rem] font-black leading-none tracking-[-0.07em] text-white sm:text-[3rem]">
-                {recommendation.protectionScorePct}%
+                {recommendation.scoreAvailability === "ready"
+                  ? `${recommendation.protectionScorePct}%`
+                  : "—"}
               </p>
               <p className="mt-3 max-w-md text-sm font-semibold leading-relaxed text-emerald-50/85">
                 {recommendation.aiSummary}
               </p>
+              {recommendation.missingInputs.length > 0 ? (
+                <p className="mt-2 max-w-md text-xs font-semibold text-amber-100/70">
+                  Missing for a fuller estimate: {recommendation.missingInputs.join(", ")}.
+                </p>
+              ) : null}
               <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs font-black text-lime-100">
                 <ShieldCheck size={14} />
                 Risk · {recommendation.riskLevel}
@@ -615,7 +668,7 @@ export function InsuranceWorkspaceDashboard() {
             </div>
             <div className="mx-auto sm:mx-0">
               <SavingsRingProgress
-                pct={recommendation.protectionScorePct}
+                pct={recommendation.scoreAvailability === "ready" ? recommendation.protectionScorePct : 0}
                 label="Protection"
                 sublabel={recommendation.protectionBadge}
                 size={148}
@@ -629,24 +682,79 @@ export function InsuranceWorkspaceDashboard() {
         <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
           <MetricTile
             label="Health cover"
-            value={formatNprCompact(recommendation.recommendedHealthCoverageNpr)}
-            hint={`Have ${formatNprCompact(recommendation.currentHealthCoverageNpr)}`}
+            value={healthMetric.value}
+            compactValue={healthMetric.compact}
+            hint={
+              recommendation.healthAvailability === "ready"
+                ? `Have ${formatNprCompact(recommendation.currentHealthCoverageNpr)}`
+                : "Add income or expenses"
+            }
           />
           <MetricTile
             label="Life cover"
-            value={formatNprCompact(recommendation.recommendedLifeCoverageNpr)}
-            hint={`Have ${formatNprCompact(recommendation.currentLifeCoverageNpr)}`}
+            value={lifeMetric.value}
+            compactValue={lifeMetric.compact}
+            hint={
+              recommendation.lifeAvailability === "ready"
+                ? `Have ${formatNprCompact(recommendation.currentLifeCoverageNpr)}`
+                : "Add income and age"
+            }
           />
           <MetricTile
             label="Recommended monthly premium"
-            value={formatRs(recommendation.recommendedMonthlyPremiumNpr)}
-            hint={`Paying ${summarizePoliciesPremiumPaying(policies)}`}
+            value={premiumMetric.value}
+            compactValue={premiumMetric.compact}
+            hint={
+              recommendation.premiumAvailability === "ready"
+                ? `Paying ${summarizePoliciesPremiumPaying(policies)}`
+                : "Add monthly income"
+            }
           />
           <MetricTile
             label="Coverage gap"
-            value={formatNprCompact(recommendation.coverageGapNpr)}
-            hint={`Critical ${formatNprCompact(recommendation.recommendedCriticalIllnessNpr)}`}
+            value={gapMetric.value}
+            compactValue={gapMetric.compact}
+            hint={
+              recommendation.gapAvailability === "ready"
+                ? `Critical gap ${formatNprCompact(recommendation.criticalGapNpr)}`
+                : "Complete profile inputs"
+            }
           />
+        </section>
+
+        <section className={`${glassCard} p-4 sm:p-5`}>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/50">
+                  How this was calculated
+                </p>
+                <p className="mt-1 text-sm font-semibold text-emerald-100/55">
+                  Transparent educational methodology
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-black text-lime-200 group-open:hidden">Show</span>
+              <span className="hidden shrink-0 text-xs font-black text-lime-200 group-open:inline">Hide</span>
+            </summary>
+            <div className="mt-3 space-y-2.5 border-t border-white/10 pt-3">
+              <p className="text-sm font-semibold leading-relaxed text-emerald-50/80">
+                {recommendation.howCalculated}
+              </p>
+              <ul className="space-y-1.5">
+                {recommendation.calculationSteps.map((step) => (
+                  <li
+                    key={step}
+                    className="rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs font-semibold leading-relaxed text-emerald-50/75"
+                  >
+                    {step}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] font-semibold leading-relaxed text-emerald-100/45">
+                {recommendation.methodologyDisclaimer}
+              </p>
+            </div>
+          </details>
         </section>
 
         <section className={`${glassCard} p-4 sm:p-5`}>
@@ -772,9 +880,15 @@ export function InsuranceWorkspaceDashboard() {
               <p className="text-[11px] font-black uppercase tracking-[0.16em]">Income protection</p>
             </div>
             <p className="mt-2 text-xl font-black tracking-[-0.04em] text-white">
-              {formatNprCompact(recommendation.incomeProtectionNeedNpr)}
+              {recommendation.incomeProtectionAvailability === "ready"
+                ? formatNprCompact(recommendation.incomeProtectionNeedNpr)
+                : NOT_ENOUGH_INFO}
             </p>
-            <p className="mt-1 text-xs font-semibold text-emerald-100/45">24-month income buffer need</p>
+            <p className="mt-1 text-xs font-semibold text-emerald-100/45">
+              {recommendation.incomeProtectionAvailability === "ready"
+                ? "24-month income buffer need (70% of income)"
+                : "Add monthly income"}
+            </p>
           </div>
           <div className={`${glassCard} p-4`}>
             <div className="flex items-center gap-2 text-emerald-100/50">
@@ -782,10 +896,14 @@ export function InsuranceWorkspaceDashboard() {
               <p className="text-[11px] font-black uppercase tracking-[0.16em]">Critical illness</p>
             </div>
             <p className="mt-2 text-xl font-black tracking-[-0.04em] text-white">
-              {formatNprCompact(recommendation.recommendedCriticalIllnessNpr)}
+              {recommendation.criticalAvailability === "ready"
+                ? formatNprCompact(recommendation.recommendedCriticalIllnessNpr)
+                : NOT_ENOUGH_INFO}
             </p>
             <p className="mt-1 text-xs font-semibold text-emerald-100/45">
-              Have {formatNprCompact(recommendation.currentCriticalCoverageNpr)}
+              {recommendation.criticalAvailability === "ready"
+                ? `Have ${formatNprCompact(recommendation.currentCriticalCoverageNpr)} · Gap ${formatNprCompact(recommendation.criticalGapNpr)}`
+                : "Add monthly income"}
             </p>
           </div>
         </section>

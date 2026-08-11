@@ -151,7 +151,7 @@ export function computeReturnAiInsights(
   insights.push({
     id: "inflation",
     title: "If Nepal inflation increases…",
-    body: `At +3% higher inflation, future monthly need rises to ${formatNprShort(inflSnap.monthlyNepalLivingFutureNpr)} — readiness drops ~${Math.max(0, Math.round(readinessPct - aggregateReadinessPct(computeReturnReadinessScores(inflHigh, inflSnap, { monthlyIncomeNpr: 0, monthlyExpenseNpr: 0, totalSavingsNpr: 0, investableNpr, emergencyFundMonths: null, fireGoalNpr: 0, fireProgressPct: null, age: 32, adults: 1, children: 0, ssfMonthlyContributionNpr: 0, yearsToReturn: snapshot.yearsToReturn, returnReadinessPct: readinessPct }, investableNpr, liabilitiesNpr))))} pts.`,
+    body: `At +3% higher inflation, future monthly need rises to ${formatNprShort(inflSnap.monthlyNepalLivingFutureNpr)} — readiness drops ~${Math.max(0, Math.round(readinessPct - aggregateReadinessPct(computeReturnReadinessScores(inflHigh, inflSnap, { monthlyIncomeNpr: 0, monthlyExpenseNpr: 0, totalSavingsNpr: 0, investableNpr, liabilitiesNpr: 0, emergencyFundMonths: null, fireGoalNpr: 0, fireProgressPct: null, age: null, adults: 1, children: 0, ssfMonthlyContributionNpr: 0, yearsToReturn: snapshot.yearsToReturn, returnReadinessPct: readinessPct }, investableNpr, liabilitiesNpr))))} pts.`,
     tone: "neutral",
   });
 
