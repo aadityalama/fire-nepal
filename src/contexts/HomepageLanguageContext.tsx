@@ -36,6 +36,16 @@ function getCookieLanguage(): LanguageCode | null {
   return isLanguageCode(decodedLanguage) ? decodedLanguage : null;
 }
 
+function getBrowserLanguage(): LanguageCode | null {
+  if (typeof navigator === "undefined") return null;
+  const lang = (navigator.language || "").toLowerCase();
+  if (lang.startsWith("ne") || lang.startsWith("np")) return "np";
+  if (lang.startsWith("ko")) return "kr";
+  if (lang.startsWith("ja")) return "ja";
+  if (lang.startsWith("en")) return "en";
+  return null;
+}
+
 function getStoredLanguage(): LanguageCode {
   if (typeof window === "undefined") {
     return DEFAULT_LANGUAGE;
@@ -46,7 +56,7 @@ function getStoredLanguage(): LanguageCode {
     return storedLanguage;
   }
 
-  return getCookieLanguage() ?? DEFAULT_LANGUAGE;
+  return getCookieLanguage() ?? getBrowserLanguage() ?? DEFAULT_LANGUAGE;
 }
 
 function subscribeToLanguageChanges(onStoreChange: () => void) {
