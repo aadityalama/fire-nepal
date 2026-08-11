@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bot, Loader2, SendHorizontal, Sparkles } from "lucide-react";
+import { Bot, Loader2, Mic, MicOff, SendHorizontal, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,6 +24,19 @@ import {
   buildHomepageFireSnapshot,
   withLanguageDirective,
 } from "@/lib/homepage/homepage-fire-ai-local";
+import {
+  deriveVoiceUiState,
+  getSpeechRecognitionConstructor,
+  isSpeechRecognitionSupported,
+  isSpeechSynthesisSupported,
+  languageToSpeechRecognitionLocale,
+  languageToSpeechSynthesisLocales,
+  pickSynthesisVoice,
+  stripMarkdownForSpeech,
+  voiceStateLabel,
+  type FireAiSpeechRecognitionLike,
+  type FireAiVoiceUiState,
+} from "@/lib/homepage/homepage-fire-ai-voice";
 import type { LanguageCode } from "@/lib/i18n/homepage-translations";
 
 function HomepageAiMarkdown({ content }: { content: string }) {
@@ -97,9 +110,33 @@ export function HomepageFireAiAdvisor() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [recognitionSupported, setRecognitionSupported] = useState(false);
+  const [synthesisSupported, setSynthesisSupported] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const responseRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<FireAiSpeechRecognitionLike | null>(null);
+  const autoSpeakAfterReplyRef = useRef(false);
+  const speakRequestIdRef = useRef(0);
+
+  const voiceUiState: FireAiVoiceUiState = deriveVoiceUiState({
+    recognitionSupported,
+    isListening,
+    isProcessing: isGenerating,
+    isSpeaking,
+  });
+  const voiceStatusText = voiceStateLabel(voiceUiState, {
+    listening: copy.listening,
+    processing: copy.processing,
+    speaking: copy.speaking,
+  });
+
+  useEffect(() => {
+    setRecognitionSupported(isSpeechRecognitionSupported());
+    setSynthesisSupported(isSpeechSynthesisSupported());
+  }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -107,28 +144,98 @@ export function HomepageFireAiAdvisor() {
     }
   }, [messages, isGenerating]);
 
+  const stopSpeaking = useCallback(() => {
+    speakRequestIdRef.current += 1;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  }, []);
+
+  const speakText = useCallback(
+    (raw: string) => {
+      if (!isSpeechSynthesisSupported() || typeof window === "undefined") return;
+      const plain = stripMarkdownForSpeech(raw);
+      if (!plain) return;
+
+      stopSpeaking();
+      const requestId = speakRequestIdRef.current;
+      const utter = new SpeechSynthesisUtterance(plain);
+      const locales = languageToSpeechSynthesisLocales(language);
+      utter.lang = locales[0] ?? languageToSpeechRecognitionLocale(language);
+      const voice = pickSynthesisVoice(window.speechSynthesis.getVoices(), locales);
+      if (voice) utter.voice = voice as SpeechSynthesisVoice;
+
+      utter.onstart = () => {
+        if (speakRequestIdRef.current === requestId) setIsSpeaking(true);
+      };
+      utter.onend = () => {
+        if (speakRequestIdRef.current === requestId) setIsSpeaking(false);
+      };
+      utter.onerror = () => {
+        if (speakRequestIdRef.current === requestId) setIsSpeaking(false);
+      };
+      window.speechSynthesis.speak(utter);
+    },
+    [language, stopSpeaking],
+  );
+
+  const stopListening = useCallback(() => {
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    recognitionRef.current = null;
+    setIsListening(false);
+  }, []);
+
+  useEffect(() => {
+    // Stop in-flight voice when language changes so locale stays consistent.
+    stopListening();
+    stopSpeaking();
+  }, [language, stopListening, stopSpeaking]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        /* ignore */
+      }
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const applyLocalResponse = useCallback(
     (prompt: string) => {
       const userMsg = createOptimisticUserMessage(prompt);
       const assistantMsg = createStreamingAssistantMessage();
       const content = buildHomepageFireAiLocalResponse(prompt, summary, language);
-      setMessages([
-        userMsg,
-        { ...assistantMsg, content, status: "complete" },
-      ]);
+      setMessages([userMsg, { ...assistantMsg, content, status: "complete" }]);
       setIsGenerating(false);
+      if (autoSpeakAfterReplyRef.current) {
+        autoSpeakAfterReplyRef.current = false;
+        window.setTimeout(() => speakText(content), 120);
+      }
     },
-    [summary, language],
+    [summary, language, speakText],
   );
 
   const sendMessage = useCallback(
-    async (raw: string) => {
+    async (raw: string, opts?: { fromVoice?: boolean }) => {
       const trimmed = raw.trim();
-      if (!trimmed || isGenerating) return;
+      if (!trimmed || isGenerating || isListening) return;
 
       setError(null);
+      setVoiceHint(null);
       setInput("");
       setIsGenerating(true);
+      stopSpeaking();
+      if (opts?.fromVoice) autoSpeakAfterReplyRef.current = true;
+
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -141,10 +248,11 @@ export function HomepageFireAiAdvisor() {
 
       const userMsg = createOptimisticUserMessage(trimmed);
       const assistantMsg = createStreamingAssistantMessage();
-      const assistantLocalId = assistantMsg.id;
+      let assistantLocalId = assistantMsg.id;
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
       let activeConvId = conversationId;
+      let finalContent = "";
 
       try {
         await streamFireAiChat({
@@ -159,20 +267,20 @@ export function HomepageFireAiAdvisor() {
               setMessages((prev) =>
                 prev.map((m) => (m.id === assistantLocalId ? { ...m, id: event.messageId } : m)),
               );
+              assistantLocalId = event.messageId;
             } else if (event.type === "delta") {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantLocalId || m.status === "streaming"
-                    ? m.role === "assistant" && (m.id === assistantLocalId || m.status === "streaming")
-                      ? { ...m, content: m.content + event.content, status: "streaming" }
-                      : m
+                  m.id === assistantLocalId
+                    ? { ...m, content: m.content + event.content, status: "streaming" }
                     : m,
                 ),
               );
             } else if (event.type === "done") {
+              finalContent = event.content;
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.role === "assistant" && (m.id === assistantLocalId || m.status === "streaming")
+                  m.id === assistantLocalId
                     ? {
                         ...m,
                         id: event.assistantMessageId,
@@ -184,34 +292,30 @@ export function HomepageFireAiAdvisor() {
               );
             } else if (event.type === "error") {
               setError(event.message);
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantLocalId ? { ...m, status: "failed", content: "" } : m)),
+              );
             }
           },
         });
+        if (autoSpeakAfterReplyRef.current && finalContent) {
+          autoSpeakAfterReplyRef.current = false;
+          speakText(finalContent);
+        } else {
+          autoSpeakAfterReplyRef.current = false;
+        }
       } catch (e) {
         if (controller.signal.aborted) return;
-        if (e instanceof FireAiQuotaError) {
-          setError(copy.errorTitle);
-          // Fall back to local educational response so the user still gets value.
-          const content = buildHomepageFireAiLocalResponse(trimmed, summary, language);
-          setMessages((prev) => {
-            const withoutFailed = prev.filter((m) => m.status !== "streaming" && m.status !== "failed");
-            return [
-              ...withoutFailed.filter((m) => m.role === "user").slice(-1),
-              { ...createStreamingAssistantMessage(), content, status: "complete" },
-            ];
-          });
-          return;
-        }
-        // API unavailable — educational local fallback + soft error.
         setError(copy.errorTitle);
         const content = buildHomepageFireAiLocalResponse(trimmed, summary, language);
-        setMessages((prev) => {
-          const lastUser = [...prev].reverse().find((m) => m.role === "user");
-          return [
-            ...(lastUser ? [lastUser] : [createOptimisticUserMessage(trimmed)]),
-            { ...createStreamingAssistantMessage(), content, status: "complete" },
-          ];
-        });
+        setMessages([userMsg, { ...createStreamingAssistantMessage(), content, status: "complete" }]);
+        if (autoSpeakAfterReplyRef.current) {
+          autoSpeakAfterReplyRef.current = false;
+          speakText(content);
+        }
+        if (!(e instanceof FireAiQuotaError)) {
+          /* soft error already set */
+        }
       } finally {
         setIsGenerating(false);
         abortRef.current = null;
@@ -219,6 +323,7 @@ export function HomepageFireAiAdvisor() {
     },
     [
       isGenerating,
+      isListening,
       authLoading,
       user,
       conversationId,
@@ -226,8 +331,70 @@ export function HomepageFireAiAdvisor() {
       applyLocalResponse,
       copy.errorTitle,
       summary,
+      stopSpeaking,
+      speakText,
     ],
   );
+
+  const startListening = useCallback(() => {
+    const Ctor = getSpeechRecognitionConstructor();
+    if (!Ctor) {
+      setVoiceHint(copy.voiceUnsupported);
+      return;
+    }
+    if (isGenerating || isListening) return;
+
+    stopSpeaking();
+    setVoiceHint(null);
+    setError(null);
+
+    const recognition = new Ctor();
+    recognition.lang = languageToSpeechRecognitionLocale(language);
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim() ?? "";
+      setIsListening(false);
+      recognitionRef.current = null;
+      if (!transcript) return;
+      setInput(transcript);
+      void sendMessage(transcript, { fromVoice: true });
+    };
+    recognition.onerror = (event) => {
+      setIsListening(false);
+      recognitionRef.current = null;
+      const errName = (event as Event & { error?: string }).error;
+      if (errName === "not-allowed" || errName === "service-not-allowed") {
+        setVoiceHint(copy.voicePermissionDenied);
+      } else if (errName !== "aborted" && errName !== "no-speech") {
+        setVoiceHint(copy.voiceUnsupported);
+      }
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      recognitionRef.current = null;
+      setVoiceHint(copy.voiceUnsupported);
+    }
+  }, [
+    copy.voiceUnsupported,
+    copy.voicePermissionDenied,
+    isGenerating,
+    isListening,
+    language,
+    sendMessage,
+    stopSpeaking,
+  ]);
 
   const onAsk = (e: FormEvent) => {
     e.preventDefault();
@@ -235,7 +402,10 @@ export function HomepageFireAiAdvisor() {
   };
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
-  const showEmpty = messages.length === 0 && !isGenerating && !error;
+  const showEmpty = messages.length === 0 && !isGenerating && !error && !isListening;
+  const botStatus =
+    voiceStatusText ??
+    (isGenerating ? copy.statusThinking : copy.statusOnline);
 
   return (
     <section
@@ -298,7 +468,7 @@ export function HomepageFireAiAdvisor() {
                   key={item.id}
                   type="button"
                   onClick={() => void sendMessage(item.prompt)}
-                  disabled={isGenerating}
+                  disabled={isGenerating || isListening}
                   className="shrink-0 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-left text-xs font-bold text-emerald-50 transition hover:bg-white/15 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/40 disabled:opacity-60 sm:text-sm"
                 >
                   {item.label}
@@ -364,12 +534,30 @@ export function HomepageFireAiAdvisor() {
             </div>
             <div className="min-w-0">
               <p className="font-black">{copy.fireBot}</p>
-              <p className="text-xs font-bold text-emerald-700">
-                {isGenerating ? copy.statusThinking : copy.statusOnline}
+              <p className="text-xs font-bold text-emerald-700" aria-live="polite">
+                {botStatus}
               </p>
             </div>
             <Sparkles className="ml-auto h-4 w-4 shrink-0 text-emerald-600/70" aria-hidden />
           </div>
+
+          {voiceUiState !== "idle" ? (
+            <div
+              className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-emerald-800"
+              aria-live="polite"
+            >
+              {voiceUiState === "listening" ? <Mic size={12} aria-hidden /> : null}
+              {voiceUiState === "processing" ? <Loader2 size={12} className="animate-spin" aria-hidden /> : null}
+              {voiceUiState === "speaking" ? <Volume2 size={12} aria-hidden /> : null}
+              {voiceStatusText}
+            </div>
+          ) : null}
+
+          {voiceHint ? (
+            <p className="mt-3 text-xs font-semibold text-amber-800" role="status">
+              {voiceHint}
+            </p>
+          ) : null}
 
           <div ref={responseRef} className="mt-3.5 max-h-[min(52vh,28rem)] space-y-3 overflow-y-auto overscroll-contain pr-0.5">
             {showEmpty ? (
@@ -381,7 +569,7 @@ export function HomepageFireAiAdvisor() {
                       key={action.id}
                       type="button"
                       onClick={() => void sendMessage(action.prompt)}
-                      disabled={isGenerating}
+                      disabled={isGenerating || isListening}
                       className="min-h-[48px] rounded-xl border border-emerald-200/80 bg-white/90 px-3 py-2.5 text-left text-xs font-bold leading-snug text-emerald-900 transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 disabled:opacity-60"
                     >
                       {action.label}
@@ -458,16 +646,33 @@ export function HomepageFireAiAdvisor() {
 
             {lastAssistant && lastAssistant.status === "complete" && !isGenerating ? (
               <div>
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700/70">
-                  {copy.followUpsLabel}
-                </p>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700/70">
+                    {copy.followUpsLabel}
+                  </p>
+                  {synthesisSupported ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isSpeaking) stopSpeaking();
+                        else speakText(lastAssistant.content);
+                      }}
+                      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-black text-emerald-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200"
+                      aria-label={isSpeaking ? copy.stopSpeaking : copy.speak}
+                    >
+                      {isSpeaking ? <VolumeX size={13} aria-hidden /> : <Volume2 size={13} aria-hidden />}
+                      {isSpeaking ? copy.stopSpeaking : copy.speak}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {copy.followUps.map((item) => (
                     <button
                       key={item}
                       type="button"
                       onClick={() => void sendMessage(item)}
-                      className="shrink-0 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-bold text-emerald-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200"
+                      disabled={isListening || isGenerating}
+                      className="shrink-0 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-bold text-emerald-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 disabled:opacity-60"
                     >
                       {item}
                     </button>
@@ -477,24 +682,44 @@ export function HomepageFireAiAdvisor() {
             ) : null}
           </div>
 
-          <form onSubmit={onAsk} className="mt-3.5 flex gap-2">
+          <form onSubmit={onAsk} className="mt-3.5 flex flex-wrap gap-2 sm:flex-nowrap">
             <label className="sr-only" htmlFor="homepage-fire-ai-input">
               {copy.askPlaceholder}
             </label>
             <input
-              ref={inputRef}
               id="homepage-fire-ai-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="min-h-[48px] min-w-0 flex-1 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3 text-sm font-semibold text-emerald-950 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+              className="min-h-[48px] min-w-0 flex-1 basis-[min(100%,12rem)] rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3 text-sm font-semibold text-emerald-950 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
               placeholder={copy.askPlaceholder}
               autoComplete="off"
               enterKeyHint="send"
-              disabled={isGenerating}
+              disabled={isGenerating || isListening}
             />
+            {recognitionSupported ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isListening) stopListening();
+                  else startListening();
+                }}
+                disabled={isGenerating}
+                aria-pressed={isListening}
+                aria-label={isListening ? copy.stopListening : copy.talkToFireAi}
+                title={isListening ? copy.stopListening : copy.talkToFireAi}
+                className={`inline-flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center gap-1.5 rounded-2xl border px-3 text-sm font-black transition focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-[3rem] ${
+                  isListening
+                    ? "border-rose-300 bg-rose-50 text-rose-700"
+                    : "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
+                }`}
+              >
+                {isListening ? <MicOff className="h-5 w-5" aria-hidden /> : <Mic className="h-5 w-5" aria-hidden />}
+                <span className="hidden lg:inline">{isListening ? copy.stopListening : copy.talkToFireAi}</span>
+              </button>
+            ) : null}
             <button
               type="submit"
-              disabled={isGenerating || !input.trim()}
+              disabled={isGenerating || isListening || !input.trim()}
               aria-label={copy.ask}
               className="glow-button inline-flex min-h-[48px] min-w-[48px] shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-800 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-[5.5rem] sm:px-5 sm:text-base"
             >
@@ -508,6 +733,12 @@ export function HomepageFireAiAdvisor() {
               )}
             </button>
           </form>
+
+          {!recognitionSupported ? (
+            <p className="mt-2 text-[11px] font-semibold text-emerald-800/60" role="note">
+              {copy.voiceUnsupported}
+            </p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <Link
