@@ -34,6 +34,15 @@ export type HomepageFireAiCopy = {
   openFullChat: string;
   followUpsLabel: string;
   toolsLabel: string;
+  talkToFireAi: string;
+  stopListening: string;
+  speak: string;
+  stopSpeaking: string;
+  listening: string;
+  processing: string;
+  speaking: string;
+  voiceUnsupported: string;
+  voicePermissionDenied: string;
   startActions: Array<{ id: string; label: string; prompt: string }>;
   quickPrompts: HomepageFireAiQuickPrompt[];
   followUps: string[];
@@ -75,6 +84,15 @@ const english: HomepageFireAiCopy = {
   openFullChat: "Open full FIRE AI chat",
   followUpsLabel: "Suggested follow-ups",
   toolsLabel: "Useful tools",
+  talkToFireAi: "Talk to FIRE AI",
+  stopListening: "Stop listening",
+  speak: "Speak",
+  stopSpeaking: "Stop",
+  listening: "Listening…",
+  processing: "Processing…",
+  speaking: "Speaking…",
+  voiceUnsupported: "Voice isn’t supported in this browser — type your question instead.",
+  voicePermissionDenied: "Microphone access was blocked. You can still type your question.",
   startActions: [
     { id: "fire-number", label: "My FIRE number", prompt: "What is my FIRE number based on my current data?" },
     { id: "return-plan", label: "Nepal return plan", prompt: "Plan my return to Nepal" },
@@ -129,6 +147,15 @@ const nepali: HomepageFireAiCopy = {
   openFullChat: "पूर्ण FIRE AI च्याट खोल्नुहोस्",
   followUpsLabel: "सुझावित थप प्रश्नहरू",
   toolsLabel: "उपयोगी उपकरणहरू",
+  talkToFireAi: "FIRE AI सँग बोल्नुहोस्",
+  stopListening: "सुन्न रोक्नुहोस्",
+  speak: "आवाजमा सुनाउनुहोस्",
+  stopSpeaking: "रोक्नुहोस्",
+  listening: "सुन्दै…",
+  processing: "प्रशोधन गर्दै…",
+  speaking: "बोलिरहेको…",
+  voiceUnsupported: "यो ब्राउजरमा भ्वाइस उपलब्ध छैन — प्रश्न टाइप गर्नुहोस्।",
+  voicePermissionDenied: "माइक्रोफोन अनुमति रोकियो। तपाईं अझै प्रश्न टाइप गर्न सक्नुहुन्छ।",
   startActions: [
     { id: "fire-number", label: "मेरो FIRE अंक", prompt: "मेरो हालको तथ्यांकअनुसार FIRE number कति हो?" },
     { id: "return-plan", label: "नेपाल फिर्ती योजना", prompt: "नेपाल फर्कने योजना बनाइदिनुहोस्" },
@@ -189,6 +216,15 @@ const korean: HomepageFireAiCopy = {
   openFullChat: "전체 FIRE AI 채팅 열기",
   followUpsLabel: "추천 후속 질문",
   toolsLabel: "유용한 도구",
+  talkToFireAi: "FIRE AI와 대화",
+  stopListening: "듣기 중지",
+  speak: "읽어주기",
+  stopSpeaking: "중지",
+  listening: "듣는 중…",
+  processing: "처리 중…",
+  speaking: "말하는 중…",
+  voiceUnsupported: "이 브라우저에서는 음성을 지원하지 않습니다 — 질문을 입력하세요.",
+  voicePermissionDenied: "마이크 권한이 차단되었습니다. 여전히 텍스트로 질문할 수 있습니다.",
   startActions: [
     { id: "fire-number", label: "내 FIRE 숫자", prompt: "현재 데이터 기준 내 FIRE number는?" },
     { id: "return-plan", label: "네팔 귀국 계획", prompt: "네팔 귀국을 계획해 주세요" },

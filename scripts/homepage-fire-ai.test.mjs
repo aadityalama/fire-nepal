@@ -101,3 +101,129 @@ describe("rich data path does not hard-code marketing numbers", () => {
     assert.ok(text.includes("Quick answer"));
   });
 });
+
+describe("homepage FIRE AI free browser voice", () => {
+  it("maps language selector to SpeechRecognition / SpeechSynthesis locales", async () => {
+    const {
+      languageToSpeechRecognitionLocale,
+      languageToSpeechSynthesisLocales,
+    } = await import("../src/lib/homepage/homepage-fire-ai-voice.ts");
+    assert.equal(languageToSpeechRecognitionLocale("en"), "en-US");
+    assert.equal(languageToSpeechRecognitionLocale("np"), "ne-NP");
+    assert.equal(languageToSpeechRecognitionLocale("kr"), "ko-KR");
+    assert.deepEqual(languageToSpeechSynthesisLocales("np")[0], "ne-NP");
+    assert.deepEqual(languageToSpeechSynthesisLocales("kr")[0], "ko-KR");
+  });
+
+  it("detects recognition support and falls back when constructor missing", async () => {
+    const {
+      isSpeechRecognitionSupported,
+      getSpeechRecognitionConstructor,
+    } = await import("../src/lib/homepage/homepage-fire-ai-voice.ts");
+    assert.equal(isSpeechRecognitionSupported(undefined), false);
+    assert.equal(getSpeechRecognitionConstructor(undefined), null);
+    assert.equal(isSpeechRecognitionSupported({}), false);
+    class FakeRec {}
+    assert.equal(
+      isSpeechRecognitionSupported({ webkitSpeechRecognition: FakeRec }),
+      true,
+    );
+  });
+
+  it("derives Listening / Processing / Speaking UI states", async () => {
+    const { deriveVoiceUiState, voiceStateLabel } = await import(
+      "../src/lib/homepage/homepage-fire-ai-voice.ts"
+    );
+    assert.equal(
+      deriveVoiceUiState({
+        recognitionSupported: true,
+        isListening: true,
+        isProcessing: false,
+        isSpeaking: false,
+      }),
+      "listening",
+    );
+    assert.equal(
+      deriveVoiceUiState({
+        recognitionSupported: true,
+        isListening: false,
+        isProcessing: true,
+        isSpeaking: false,
+      }),
+      "processing",
+    );
+    assert.equal(
+      deriveVoiceUiState({
+        recognitionSupported: true,
+        isListening: false,
+        isProcessing: false,
+        isSpeaking: true,
+      }),
+      "speaking",
+    );
+    assert.equal(
+      deriveVoiceUiState({
+        recognitionSupported: false,
+        isListening: false,
+        isProcessing: false,
+        isSpeaking: false,
+      }),
+      "idle",
+    );
+    assert.equal(
+      voiceStateLabel("listening", {
+        listening: "Listening…",
+        processing: "Processing…",
+        speaking: "Speaking…",
+      }),
+      "Listening…",
+    );
+  });
+
+  it("strips markdown for SpeechSynthesis and picks preferred voices", async () => {
+    const { stripMarkdownForSpeech, pickSynthesisVoice } = await import(
+      "../src/lib/homepage/homepage-fire-ai-voice.ts"
+    );
+    const plain = stripMarkdownForSpeech("**Quick answer**\n\n- Save more\n\n[Cashflow](/cashflow)");
+    assert.ok(!plain.includes("**"));
+    assert.ok(!plain.includes("["));
+    assert.ok(plain.toLowerCase().includes("quick answer"));
+    assert.ok(plain.includes("Cashflow"));
+
+    const voice = pickSynthesisVoice(
+      [
+        { lang: "en-US", name: "English US" },
+        { lang: "ko-KR", name: "Korean" },
+        { lang: "ne-NP", name: "Nepali" },
+      ],
+      ["ne-NP", "ne", "en-US"],
+    );
+    assert.equal(voice?.lang, "ne-NP");
+  });
+
+  it("exposes Talk/Speak copy and keeps text-chat fallback messaging", () => {
+    const en = getHomepageFireAiCopy("en");
+    const np = getHomepageFireAiCopy("np");
+    const kr = getHomepageFireAiCopy("kr");
+    assert.match(en.talkToFireAi, /Talk to FIRE AI/i);
+    assert.ok(en.speak.length > 0);
+    assert.ok(en.listening.includes("Listening") || en.listening.includes("…"));
+    assert.ok(en.processing.length > 0);
+    assert.ok(en.speaking.length > 0);
+    assert.ok(en.voiceUnsupported.toLowerCase().includes("type"));
+    assert.ok(np.talkToFireAi.length > 0);
+    assert.ok(kr.talkToFireAi.length > 0);
+    assert.ok(en.ask.length > 0);
+    assert.ok(en.disclaimer.toLowerCase().includes("educational"));
+  });
+
+  it("existing chat local flow still returns structured educational replies", () => {
+    const text = buildHomepageFireAiLocalResponse(
+      "How much emergency fund do I need?",
+      emptySummary(),
+      "en",
+    );
+    assert.ok(text.includes("Quick answer"));
+    assert.ok(text.toLowerCase().includes("emergency"));
+  });
+});
