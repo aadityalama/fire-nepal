@@ -19,7 +19,10 @@ export type InsuranceProtectionBadge =
   | "Excellent"
   | "Strong"
   | "Needs attention"
-  | "Underprotected";
+  | "Underprotected"
+  | "Incomplete data";
+
+export type InsuranceMetricAvailability = "ready" | "insufficient_data";
 
 export type InsuranceDocumentKind =
   | "policy_pdf"
@@ -126,15 +129,22 @@ export type InsuranceWorkspaceState = {
   policies: InsurancePolicy[];
 };
 
+/**
+ * Live finance inputs for the educational insurance needs engine.
+ * Never invent missing values in the engine — pass null/0 and let availability flags decide.
+ */
 export type InsuranceEngineInputs = {
   monthlyIncomeNpr: number;
   monthlyExpenseNpr: number;
   totalSavingsNpr: number;
   investableNpr: number;
+  /** Outstanding debt / portfolio liabilities in NPR (0 if none tracked). */
+  liabilitiesNpr: number;
   emergencyFundMonths: number | null;
   fireGoalNpr: number;
   fireProgressPct: number | null;
-  age: number;
+  /** Null when age is not provided — engine must not invent a default age. */
+  age: number | null;
   adults: number;
   children: number;
   ssfMonthlyContributionNpr: number;
@@ -163,6 +173,19 @@ export type InsuranceRecommendation = {
   suggestionTitle: string;
   suggestionBody: string;
   suggestionIncreaseLifeNpr: number;
+  healthAvailability: InsuranceMetricAvailability;
+  lifeAvailability: InsuranceMetricAvailability;
+  criticalAvailability: InsuranceMetricAvailability;
+  incomeProtectionAvailability: InsuranceMetricAvailability;
+  premiumAvailability: InsuranceMetricAvailability;
+  scoreAvailability: InsuranceMetricAvailability;
+  gapAvailability: InsuranceMetricAvailability;
+  missingInputs: string[];
+  /** Concise user-facing explanation of the educational methodology used. */
+  howCalculated: string;
+  /** Short bullet steps for the “How this was calculated” UI. */
+  calculationSteps: string[];
+  methodologyDisclaimer: string;
 };
 
 export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
@@ -220,3 +243,6 @@ export const INSURANCE_TYPES: InsuranceType[] = [
   "property",
   "other",
 ];
+
+export const INSURANCE_METHODOLOGY_DISCLAIMER =
+  "Educational estimate only — not financial, insurance, or investment advice. Figures are derived from your FIRE Nepal inputs and do not guarantee coverage, premiums, or product suitability.";
