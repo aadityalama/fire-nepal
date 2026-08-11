@@ -41,6 +41,7 @@ import { LatestBlogPostsSection } from "@/components/blog-posts/LatestBlogPostsS
 import { FireHomeTrustSection } from "@/components/security/FireHomeTrustSection";
 import { FooterSocialFollow } from "@/components/FooterSocialFollow";
 import { HomeTopInfoBar } from "@/components/smart-nepal-info/HomeTopInfoBar";
+import { HomepageFireAiAdvisor } from "@/components/homepage/HomepageFireAiAdvisor";
 import { FIRE_NEPAL_THEME_COLOR, buildHomepageMetadata } from "@/lib/brand/site-seo";
 
 export const metadata = buildHomepageMetadata();
@@ -507,54 +508,7 @@ export default function HomePage() {
           </SectionCard>
         </div>
 
-        <section className="dark-glass-card relative mt-8 overflow-hidden rounded-[2rem] p-6 text-white md:p-8">
-          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-emerald-400/20 blur-3xl" />
-          <div className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-black text-emerald-100">
-                <Bot size={18} /> AI Financial Advisor
-              </div>
-              <h2 className="text-3xl font-black tracking-tight md:text-4xl">
-                Ask in Nepali, Korean, or English. Get a clear FIRE action plan.
-              </h2>
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-emerald-50/85 sm:text-[1.05rem]">
-                Personalized advice for retirement passive income, tax-saving tips, remittance timing,
-                emergency planning, and wealth building across borders and back home in Nepal.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                {["Retirement Passive", "Investment Advice", "Tax Saving Tips", "Emergency Planning", "Wealth Building"].map((item) => (
-                  <span key={item} className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-emerald-50">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="glass-card floating-widget-delayed rounded-[1.7rem] p-4 text-emerald-950">
-              <div className="flex items-center gap-3 border-b border-emerald-100 pb-4">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-emerald-700 to-lime-500 text-white shadow-lg shadow-emerald-950/20">
-                  <Bot />
-                </div>
-                <div>
-                  <p className="font-black">FIRE Bot</p>
-                  <p className="text-xs font-bold text-emerald-700">Online - portfolio aware</p>
-                </div>
-              </div>
-              <div className="my-4 rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4 text-sm leading-relaxed text-slate-700">
-                Based on your abroad income, increase monthly savings, keep 6 months in NPR cash, and split new
-                investments 60% mutual funds, 25% FD, 15% equities.
-              </div>
-              <div className="flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded-2xl border border-emerald-100 bg-white/80 px-4 py-3 text-sm outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-                  placeholder="Ask your AI advisor..."
-                />
-                <button className="glow-button rounded-2xl bg-emerald-700 px-5 py-3 text-base font-black text-white transition hover:-translate-y-1 hover:bg-emerald-800">
-                  Ask
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+        <HomepageFireAiAdvisor />
 
         <CommunityReviewsSection />
       </div>
