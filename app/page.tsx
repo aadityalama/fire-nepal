@@ -49,6 +49,9 @@ export const viewport: Viewport = {
   themeColor: FIRE_NEPAL_THEME_COLOR,
 };
 
+/** Public content fetches are cookie-free + timed out; ISR avoids a cold SSR stall on every hit. */
+export const revalidate = 60;
+
 const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],

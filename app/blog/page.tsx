@@ -16,6 +16,9 @@ export const viewport: Viewport = {
   themeColor: FIRE_NEPAL_THEME_COLOR,
 };
 
+/** Same public blog fetch path as homepage — keep ISR so DB timeouts cannot strand every request. */
+export const revalidate = 60;
+
 export default async function BlogIndexPage() {
   const posts = await fetchAllPublishedBlogPosts();
 
