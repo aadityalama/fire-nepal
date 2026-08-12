@@ -6,8 +6,18 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { loadModuleSnapshot, saveModuleSnapshot } from "@/services/module-snapshots-supabase";
 import type { Database } from "@/types/supabase-database";
 
+/** Private browser cache — user-specific; short TTL cuts Fluid Active CPU on remount storms. */
+const GET_CACHE_HEADERS = {
+  "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+  Vary: "Cookie, Authorization",
+} as const;
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+} as const;
+
 function bad(msg: string, status = 400) {
-  return NextResponse.json({ ok: false, error: msg }, { status });
+  return NextResponse.json({ ok: false, error: msg }, { status, headers: NO_STORE_HEADERS });
 }
 
 async function resolveAuthedClient(req: Request): Promise<{
@@ -45,7 +55,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ moduleKey: stri
     if (!user) return bad("Unauthorized", 401);
 
     const snapshot = await loadModuleSnapshot(client, user.id, moduleKey);
-    return NextResponse.json({ ok: true, snapshot });
+    return NextResponse.json({ ok: true, snapshot }, { headers: GET_CACHE_HEADERS });
   } catch (e) {
     return bad(e instanceof Error ? e.message : "Server error", 500);
   }

@@ -105,16 +105,26 @@ export function clearIntelRollupsLocalCache(): void {
   }
 }
 
+function rollupContentEqual(a: FinancialIntelMonthRollup, b: FinancialIntelMonthRollup): boolean {
+  if (a.month !== b.month) return false;
+  if (a.burnNpr !== b.burnNpr || a.incomeNpr !== b.incomeNpr) return false;
+  if (a.savingsRatePct !== b.savingsRatePct || a.fireYearsToFi !== b.fireYearsToFi) return false;
+  if (a.netWorthNpr !== b.netWorthNpr) return false;
+  for (const k of EXPENSE_KEYS) {
+    if (a.expenseByCategory[k] !== b.expenseByCategory[k]) return false;
+  }
+  return true;
+}
+
 /** Upserts the current calendar month; returns trimmed sorted series (pure — no I/O). */
 export function upsertCurrentMonthRollupRows(
   rows: FinancialIntelMonthRollup[],
   args: { cashflow: CashflowDashboardState; coach: FinancialCoachSnapshot },
 ): FinancialIntelMonthRollup[] {
   const month = currentIntelMonthKey();
-  const list = rows.filter((r) => r.month !== month);
   const burnNpr = monthlyBurn(args.cashflow);
   const incomeNpr = sumIncome(args.cashflow);
-  const row: FinancialIntelMonthRollup = {
+  const nextRow: FinancialIntelMonthRollup = {
     month,
     expenseByCategory: snapshotExpenses(args.cashflow),
     burnNpr,
@@ -124,7 +134,16 @@ export function upsertCurrentMonthRollupRows(
     netWorthNpr: Math.max(0, args.coach.netWorthNpr),
     updatedAt: new Date().toISOString(),
   };
-  list.push(row);
+
+  const existing = rows.find((r) => r.month === month);
+  // Same financial content → keep prior reference so cloud document state does not
+  // debounce-PUT /api/module-snapshots/financial_intel_rollups on every coach tick.
+  if (existing && rollupContentEqual(existing, nextRow)) {
+    return rows;
+  }
+
+  const list = rows.filter((r) => r.month !== month);
+  list.push(nextRow);
   const sorted = list.sort((a, b) => a.month.localeCompare(b.month));
   return sorted.slice(-MAX_MONTHS);
 }
