@@ -352,21 +352,59 @@ describe("Return Checklist — navigation hrefs", () => {
 });
 
 describe("Return Checklist — rendered card wiring", () => {
-  it("dashboard maps items to Link with href, test id, and chevron affordance", () => {
+  it("dashboard renders ReturnChecklistCard for every item", () => {
     const src = readFileSync(
       new URL("../src/components/return-to-nepal/ReturnToNepalPlannerDashboard.tsx", import.meta.url),
       "utf8",
     );
     assert.match(src, /id="return-checklist"/);
+    assert.match(src, /ReturnChecklistCard/);
+    assert.match(src, /checklist\.map\(\(item\) => \(\s*<ReturnChecklistCard/);
+    assert.match(src, /Tap a card to open/);
+    assert.doesNotMatch(src, /checklist\.map\(\(item\) => \(\s*<li key=\{item\.id\}>\s*<Link/);
+  });
+
+  it("ReturnChecklistCard is a real <a> covering the full card with visible chevron", () => {
+    const src = readFileSync(
+      new URL("../src/components/return-to-nepal/ReturnChecklistCard.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /<a\s/);
     assert.match(src, /href=\{item\.href\}/);
     assert.match(src, /data-testid=\{`return-checklist-\$\{item\.id\}`\}/);
-    assert.match(src, /cursor-pointer/);
+    assert.match(src, /data-href=\{item\.href\}/);
+    assert.match(src, /absolute inset-0/);
+    assert.match(src, /pointer-events-none/);
+    assert.match(src, /touch-manipulation/);
     assert.match(src, /ChevronRight/);
-    assert.match(src, /Tap a card to open/);
-    assert.doesNotMatch(
-      src,
-      /checklist\.map\(\(item\) => \(\s*<li key=\{item\.id\} className="flex items-center/,
-    );
+    assert.match(src, /window\.location\.assign\(item\.href\)/);
+    assert.match(src, /STATUS_LABELS/);
+    assert.match(src, /Missing/);
+    assert.match(src, /In Progress/);
+    assert.match(src, /Completed/);
+    // Chevron must not be low-contrast / hover-only
+    assert.doesNotMatch(src, /text-white\/35/);
+    assert.doesNotMatch(src, /group-hover:text-/);
+  });
+
+  it("every checklist item href matches the canonical route map exactly", () => {
+    const items = computeReturnChecklist(baseSources());
+    const expected = {
+      emergency: "/emergency-fund?from=return-checklist",
+      ssf: "/portfolio/pension/ssf?from=return-checklist",
+      investment: "/portfolio/investments?from=return-checklist",
+      passive: "/cashflow-dashboard?from=return-checklist",
+      health: "/insurance?focus=health&from=return-checklist",
+      life: "/insurance?focus=life&from=return-checklist",
+      house: "/return-to-nepal/house?from=return-checklist",
+      family: "/family?from=return-checklist",
+      business: "/savings-tracker?from=return-checklist",
+      debt: "/portfolio/liabilities?from=return-checklist",
+    };
+    assert.equal(items.length, 10);
+    for (const [id, href] of Object.entries(expected)) {
+      assert.equal(byId(items, id).href, href, `${id} href mismatch`);
+    }
   });
 
   it("exposes stable href map for all ten checklist ids", async () => {
@@ -383,6 +421,9 @@ describe("Return Checklist — rendered card wiring", () => {
       "passive",
       "ssf",
     ]);
+    assert.equal(RETURN_CHECKLIST_HREFS.emergency, "/emergency-fund?from=return-checklist");
+    assert.equal(RETURN_CHECKLIST_HREFS.health, "/insurance?focus=health&from=return-checklist");
+    assert.equal(RETURN_CHECKLIST_HREFS.life, "/insurance?focus=life&from=return-checklist");
   });
 });
 
