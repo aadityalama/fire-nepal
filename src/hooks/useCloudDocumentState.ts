@@ -23,9 +23,12 @@ export type UseCloudDocumentStateOptions<T> = {
 /**
  * Authenticated: Supabase is the only source of truth.
  * - Never hydrate from localStorage when signed in.
- * - Every load reads Supabase; every save persists to Supabase.
+ * - Shell paints immediately with defaults; cloud data replaces state asynchronously.
  * - localStorage is optional cache written only after successful cloud sync.
  * Guests: localStorage (or defaults) when helpers are provided.
+ *
+ * Callback identities (loadLocal/saveLocal/clearLocal) are read via refs so unstable
+ * inline lambdas from callers cannot re-trigger hydrate in a render loop.
  */
 export function useCloudDocumentState<T>({
   moduleKey,
@@ -49,16 +52,26 @@ export function useCloudDocumentState<T>({
   const authed = Boolean(userId && isSupabaseConfigured());
 
   const [state, setState] = useState<T>(() => getDefault());
+  /** True once the UI shell may paint (defaults / guest local). Does not wait on cloud. */
   const [hydrated, setHydrated] = useState(false);
   const [cloudReady, setCloudReady] = useState(!authed);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const [hydrateAttempt, setHydrateAttempt] = useState(0);
   const stateRef = useRef(state);
   const lastSavedRef = useRef<string>("");
+  const shellReadyRef = useRef(false);
+  const identityRef = useRef<string | null>(null);
+  const hydrateInFlightRef = useRef<string | null>(null);
   const getDefaultRef = useRef(getDefault);
   const sanitizeRef = useRef(sanitize);
+  const loadLocalRef = useRef(loadLocal);
+  const saveLocalRef = useRef(saveLocal);
+  const clearLocalRef = useRef(clearLocal);
   getDefaultRef.current = getDefault;
   sanitizeRef.current = sanitize;
+  loadLocalRef.current = loadLocal;
+  saveLocalRef.current = saveLocal;
+  clearLocalRef.current = clearLocal;
 
   const retryHydrate = useCallback(() => {
     setHydrateAttempt((n) => n + 1);
@@ -71,29 +84,48 @@ export function useCloudDocumentState<T>({
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    const requestKey = `${moduleKey}:${userId ?? "guest"}:${hydrateAttempt}`;
 
     async function hydrate() {
-      setHydrated(false);
-      setCloudReady(false);
+      // Deduplicate identical in-flight hydrates (Strict Mode / rapid remounts).
+      if (hydrateInFlightRef.current === requestKey) return;
+      hydrateInFlightRef.current = requestKey;
+
+      const identity = userId ?? "guest";
+      if (identityRef.current !== identity) {
+        // New auth identity: seed a fresh shell. Retries keep the existing shell.
+        shellReadyRef.current = false;
+        identityRef.current = identity;
+      }
 
       if (!userId || !isSupabaseConfigured()) {
-        const local = loadLocal ? sanitizeRef.current(loadLocal()) : getDefaultRef.current();
+        const local = loadLocalRef.current
+          ? sanitizeRef.current(loadLocalRef.current())
+          : getDefaultRef.current();
         if (!cancelled) {
           setState(local);
           lastSavedRef.current = JSON.stringify(local);
           setHydrateError(null);
           setCloudReady(true);
+          shellReadyRef.current = true;
           setHydrated(true);
         }
+        if (hydrateInFlightRef.current === requestKey) hydrateInFlightRef.current = null;
         return;
       }
 
-      // Authenticated: empty shell until Supabase responds — never paint browser-local data.
-      clearLocal?.();
+      // Authenticated: paint empty shell immediately — never wait on the network.
+      clearLocalRef.current?.();
       const empty = getDefaultRef.current();
       if (!cancelled) {
-        setState(empty);
+        if (!shellReadyRef.current) {
+          setState(empty);
+          lastSavedRef.current = JSON.stringify(empty);
+        }
         setHydrateError(null);
+        setCloudReady(false);
+        shellReadyRef.current = true;
+        setHydrated(true);
       }
 
       try {
@@ -103,7 +135,7 @@ export function useCloudDocumentState<T>({
         setState(next);
         lastSavedRef.current = JSON.stringify(next);
         // Optional cache AFTER successful cloud load.
-        saveLocal?.(next);
+        saveLocalRef.current?.(next);
         setHydrateError(null);
         setCloudReady(true);
       } catch (error) {
@@ -113,24 +145,32 @@ export function useCloudDocumentState<T>({
           console.error(`[cloud-document:${moduleKey}] hydrate failed`, error);
         }
         if (!cancelled) {
-          // Keep defaults for a new user, but surface the failure — do not pretend load succeeded.
-          const emptyOnFail = getDefaultRef.current();
-          setState(emptyOnFail);
-          lastSavedRef.current = JSON.stringify(emptyOnFail);
-          clearLocal?.();
+          // Keep shell defaults for a usable UI — surface failure + retry instead of infinite loading.
+          if (!shellReadyRef.current) {
+            const emptyOnFail = getDefaultRef.current();
+            setState(emptyOnFail);
+            lastSavedRef.current = JSON.stringify(emptyOnFail);
+          }
+          clearLocalRef.current?.();
           setHydrateError(message);
           setCloudReady(true);
+          shellReadyRef.current = true;
+          setHydrated(true);
         }
       } finally {
-        if (!cancelled) setHydrated(true);
+        if (hydrateInFlightRef.current === requestKey) hydrateInFlightRef.current = null;
       }
     }
 
     void hydrate();
     return () => {
       cancelled = true;
+      // Allow a remount (React Strict Mode) or retry to start a fresh hydrate.
+      if (hydrateInFlightRef.current === requestKey) {
+        hydrateInFlightRef.current = null;
+      }
     };
-  }, [authLoading, userId, moduleKey, loadLocal, saveLocal, clearLocal, hydrateAttempt]);
+  }, [authLoading, userId, moduleKey, hydrateAttempt]);
 
   const persistNow = useCallback(
     async (next?: T) => {
@@ -139,7 +179,7 @@ export function useCloudDocumentState<T>({
       stateRef.current = snapshot;
 
       if (!userId || !isSupabaseConfigured()) {
-        saveLocal?.(snapshot);
+        saveLocalRef.current?.(snapshot);
         lastSavedRef.current = JSON.stringify(snapshot);
         return snapshot;
       }
@@ -150,17 +190,17 @@ export function useCloudDocumentState<T>({
       setState(confirmed);
       stateRef.current = confirmed;
       lastSavedRef.current = JSON.stringify(confirmed);
-      saveLocal?.(confirmed);
+      saveLocalRef.current?.(confirmed);
       return confirmed;
     },
-    [moduleKey, userId, saveLocal],
+    [moduleKey, userId],
   );
 
   useEffect(() => {
     if (!hydrated || !cloudReady) return;
 
     if (!userId || !isSupabaseConfigured()) {
-      saveLocal?.(state);
+      saveLocalRef.current?.(state);
       return;
     }
 
@@ -179,7 +219,7 @@ export function useCloudDocumentState<T>({
           if (JSON.stringify(stateRef.current) !== snap) return;
           lastSavedRef.current = snap;
           // Cache only after successful cloud sync.
-          saveLocal?.(toSave);
+          saveLocalRef.current?.(toSave);
         } catch (error) {
           if (process.env.NODE_ENV !== "production") {
             console.error(`[cloud-document:${moduleKey}] background save failed`, error);
@@ -192,7 +232,7 @@ export function useCloudDocumentState<T>({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [state, hydrated, cloudReady, userId, moduleKey, saveLocal, saveDebounceMs]);
+  }, [state, hydrated, cloudReady, userId, moduleKey, saveDebounceMs]);
 
   return { state, setState, hydrated, cloudReady, hydrateError, retryHydrate, persistNow };
 }

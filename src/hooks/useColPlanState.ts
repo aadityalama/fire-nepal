@@ -11,10 +11,18 @@ import {
 } from "@/lib/nepal-col-storage";
 import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 
+function loadGuestColPlan(): ColPlanState {
+  return loadColPlanDocument(null).plan;
+}
+
 /**
  * Cost-of-living plan state.
  * Authenticated: Supabase `nepal_col` module snapshot is the only source of truth.
  * Guests: anonymous localStorage slot.
+ *
+ * loadLocal/saveLocal/clearLocal must stay referentially stable (or be ignored via refs
+ * inside useCloudDocumentState) — unstable lambdas used to re-trigger hydrate every render
+ * and blank Return-to-Nepal on mobile.
  */
 export function useColPlanState(): {
   plan: ColPlanState;
@@ -26,15 +34,21 @@ export function useColPlanState(): {
   const { user } = useProductAuth();
   const userId = user?.id;
 
+  const saveLocal = useCallback((next: ColPlanState) => {
+    saveColPlanDocument(next, userId ?? null);
+  }, [userId]);
+
+  const clearLocal = useCallback(() => {
+    if (userId) clearColPlanLocalCache(userId);
+  }, [userId]);
+
   const { state: plan, setState: setPlan, hydrated, persistNow } = useCloudDocumentState({
     moduleKey: "nepal_col",
     getDefault: defaultColPlan,
     sanitize: sanitizeColPlan,
-    loadLocal: () => loadColPlanDocument(null).plan,
-    saveLocal: (next) => {
-      saveColPlanDocument(next, userId ?? null);
-    },
-    clearLocal: userId ? () => clearColPlanLocalCache(userId) : undefined,
+    loadLocal: loadGuestColPlan,
+    saveLocal,
+    clearLocal: userId ? clearLocal : undefined,
   });
 
   const persistPlan = useCallback(

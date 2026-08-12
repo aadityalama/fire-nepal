@@ -15,7 +15,14 @@ export default function ReturnToNepalHousePage() {
   return (
     <DashboardAccessGuard>
       <ReturnToNepalProvider>
-        <Suspense fallback={<div className="min-h-screen bg-[#000805]" />}>
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-[#000805] px-4 pt-6 text-white" data-testid="house-plan-shell">
+              <h1 className="text-xl font-black tracking-tight">House in Nepal</h1>
+              <p className="mt-1 text-sm font-semibold text-emerald-100/50">Loading housing plan…</p>
+            </div>
+          }
+        >
           <ReturnToNepalHouseDecisionPage />
         </Suspense>
       </ReturnToNepalProvider>

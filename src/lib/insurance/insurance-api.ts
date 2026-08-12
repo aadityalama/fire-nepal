@@ -39,6 +39,8 @@ declare global {
   }
 }
 
+const INSURANCE_API_TIMEOUT_MS = 12_000;
+
 async function parseJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
@@ -48,12 +50,33 @@ function withCacheBust(url: string) {
   return `${url}${sep}_ts=${Date.now()}`;
 }
 
+async function fetchInsurance(input: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), INSURANCE_API_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (
+      (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      throw new Error("Timed out loading insurance data. Check your connection and retry.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchInsurancePolicies(): Promise<{
   policies: InsurancePolicy[];
   policyIds: string[];
   meta: InsuranceQueryMeta | null;
 }> {
-  const res = await fetch(withCacheBust("/api/insurance"), { credentials: "include", cache: "no-store" });
+  const res = await fetchInsurance(withCacheBust("/api/insurance"), {
+    credentials: "include",
+    cache: "no-store",
+  });
   const json = await parseJson<{
     ok: boolean;
     policies?: InsurancePolicy[];
