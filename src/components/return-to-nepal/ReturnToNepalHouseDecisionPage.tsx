@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Home, Ban, Hammer, RefreshCw } from "lucide-react";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useReturnToNepalPlanner } from "@/contexts/ReturnToNepalContext";
 import { BackToReturnChecklistBanner } from "@/components/return-to-nepal/BackToReturnChecklistBanner";
 import { RETURN_CHECKLIST_FROM } from "@/lib/return-to-nepal/return-checklist-routes";
 import {
+  canStartHousePlanSave,
   housePlanReturnHref,
   housePlanSelectionDirty,
   isSelectableHousePlanStatus,
-  mergeHousePlanStatus,
+  runHousePlanSave,
 } from "@/lib/return-to-nepal/house-plan-flow";
 import type { HousePlanStatus } from "@/lib/return-to-nepal/types";
 
@@ -52,7 +53,6 @@ function savedPlanLabel(status: HousePlanStatus): string {
 export function ReturnToNepalHouseDecisionPage() {
   const { state, live, hydrated, cloudReady, hydrateError, retryHydrate, persistNow } =
     useReturnToNepalPlanner();
-  const router = useRouter();
   const params = useSearchParams();
   const fromChecklist = params.get("from") === RETURN_CHECKLIST_FROM;
 
@@ -61,6 +61,7 @@ export function ReturnToNepalHouseDecisionPage() {
   const [initialized, setInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const savingLockRef = useRef(false);
 
   useEffect(() => {
     if (!hydrated || !cloudReady || initialized) return;
@@ -70,27 +71,43 @@ export function ReturnToNepalHouseDecisionPage() {
 
   const loading = !hydrated || !cloudReady;
   const dirty = housePlanSelectionDirty(savedStatus, pending);
-  const canSave = isSelectableHousePlanStatus(pending) && !saving && !hydrateError;
+  const canSave = canStartHousePlanSave({ pending, saving, hydrateError });
   const backHref = housePlanReturnHref(fromChecklist);
 
   const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!dirty) return;
+    if (!dirty || saving) {
+      if (saving) event.preventDefault();
+      return;
+    }
     const leave = window.confirm("You have unsaved changes. Leave without saving?");
     if (!leave) event.preventDefault();
   };
 
   const handleSave = async () => {
+    // Prevent duplicate taps while an in-flight save is awaiting.
+    if (savingLockRef.current) return;
+    if (!canStartHousePlanSave({ pending, saving, hydrateError })) return;
     if (!isSelectableHousePlanStatus(pending)) return;
+
+    savingLockRef.current = true;
     setSaveError(null);
     setSaving(true);
-    try {
-      await persistNow(mergeHousePlanStatus(state, pending));
-      router.push(backHref);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save your housing plan.");
-    } finally {
-      setSaving(false);
+
+    const result = await runHousePlanSave({
+      pending,
+      state,
+      persistNow,
+    });
+
+    if (result.ok) {
+      // Hard navigate so checklist remounts with the just-persisted housePlanStatus.
+      window.location.assign(housePlanReturnHref(fromChecklist));
+      return;
     }
+
+    savingLockRef.current = false;
+    setSaving(false);
+    setSaveError(result.error);
   };
 
   return (
@@ -134,9 +151,23 @@ export function ReturnToNepalHouseDecisionPage() {
         ) : null}
 
         {saveError ? (
-          <div className="mb-4 rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3" role="alert">
+          <div
+            className="mb-4 rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3"
+            role="alert"
+            data-testid="house-plan-save-error"
+          >
             <p className="text-sm font-black text-amber-100">Save failed</p>
             <p className="mt-1 text-xs font-semibold text-amber-100/85">{saveError}</p>
+            <button
+              type="button"
+              data-testid="house-plan-save-retry"
+              disabled={saving || !isSelectableHousePlanStatus(pending)}
+              onClick={() => void handleSave()}
+              className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-amber-300/30 bg-amber-500/15 px-3.5 py-2 text-xs font-black text-amber-50 disabled:opacity-50"
+            >
+              <RefreshCw size={14} aria-hidden />
+              Retry save
+            </button>
           </div>
         ) : null}
 

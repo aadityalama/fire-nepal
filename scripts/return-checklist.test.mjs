@@ -537,6 +537,7 @@ describe("House plan flow — pure helpers", () => {
     assert.equal(isSelectableHousePlanStatus("unknown"), false);
     assert.equal(isSelectableHousePlanStatus(null), false);
     assert.match(housePlanReturnHref(true), /\/return-to-nepal#return-checklist/);
+    assert.match(housePlanReturnHref(false), /\/return-to-nepal#return-checklist/);
   });
 
   it("detects dirty selection vs saved plan", async () => {
@@ -544,6 +545,18 @@ describe("House plan flow — pure helpers", () => {
     assert.equal(housePlanSelectionDirty("unknown", "already_own"), true);
     assert.equal(housePlanSelectionDirty("already_own", "already_own"), false);
     assert.equal(housePlanSelectionDirty("already_own", null), false);
+  });
+
+  it("gates Save & Continue until a selectable plan is pending and not saving", async () => {
+    const { canStartHousePlanSave } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    assert.equal(canStartHousePlanSave({ pending: null, saving: false, hydrateError: null }), false);
+    assert.equal(canStartHousePlanSave({ pending: "unknown", saving: false, hydrateError: null }), false);
+    assert.equal(canStartHousePlanSave({ pending: "already_own", saving: true, hydrateError: null }), false);
+    assert.equal(
+      canStartHousePlanSave({ pending: "already_own", saving: false, hydrateError: "Load failed" }),
+      false,
+    );
+    assert.equal(canStartHousePlanSave({ pending: "already_own", saving: false, hydrateError: null }), true);
   });
 });
 
@@ -604,18 +617,106 @@ describe("House plan flow — persist + checklist reflection", () => {
   });
 });
 
+describe("House plan flow — save success, failure, timeout, double-tap", () => {
+  it("awaits persistNow and returns saved state on success", async () => {
+    const { runHousePlanSave, mergeHousePlanStatus } = await import(
+      "../src/lib/return-to-nepal/house-plan-flow.ts"
+    );
+    const { DEFAULT_RETURN_PLANNER_STATE } = await import("../src/lib/return-to-nepal/default-planner-state.ts");
+    let calls = 0;
+    const result = await runHousePlanSave({
+      pending: "already_own",
+      state: DEFAULT_RETURN_PLANNER_STATE,
+      persistNow: async (next) => {
+        calls += 1;
+        assert.equal(next.housePlanStatus, "already_own");
+        return next;
+      },
+    });
+    assert.equal(calls, 1);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.state.housePlanStatus, "already_own");
+      assert.deepEqual(result.state, mergeHousePlanStatus(DEFAULT_RETURN_PLANNER_STATE, "already_own"));
+    }
+  });
+
+  it("stops loading path and returns real error on persist failure", async () => {
+    const { runHousePlanSave } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    const { DEFAULT_RETURN_PLANNER_STATE } = await import("../src/lib/return-to-nepal/default-planner-state.ts");
+    const result = await runHousePlanSave({
+      pending: "not_needed",
+      state: DEFAULT_RETURN_PLANNER_STATE,
+      persistNow: async () => {
+        throw new Error("Could not save return_to_nepal to Supabase.");
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /Could not save return_to_nepal/);
+    }
+  });
+
+  it("times out hung persist and clears the Saving path", async () => {
+    const { runHousePlanSave, HOUSE_PLAN_SAVE_TIMEOUT_MESSAGE } = await import(
+      "../src/lib/return-to-nepal/house-plan-flow.ts"
+    );
+    const { DEFAULT_RETURN_PLANNER_STATE } = await import("../src/lib/return-to-nepal/default-planner-state.ts");
+    const result = await runHousePlanSave({
+      pending: "plan_to_buy_build",
+      state: DEFAULT_RETURN_PLANNER_STATE,
+      timeoutMs: 40,
+      persistNow: () => new Promise(() => {}),
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error, HOUSE_PLAN_SAVE_TIMEOUT_MESSAGE);
+    }
+  });
+
+  it("withTimeout rejects after ms and clears timer", async () => {
+    const { withTimeout } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    await assert.rejects(
+      () => withTimeout(new Promise(() => {}), 30, "boom"),
+      /boom/,
+    );
+    const value = await withTimeout(Promise.resolve(7), 200, "boom");
+    assert.equal(value, 7);
+  });
+
+  it("double-tap guard: canStartHousePlanSave is false while saving", async () => {
+    const { canStartHousePlanSave } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    // First tap flips saving=true; second tap must be rejected by the gate.
+    assert.equal(canStartHousePlanSave({ pending: "already_own", saving: false, hydrateError: null }), true);
+    assert.equal(canStartHousePlanSave({ pending: "already_own", saving: true, hydrateError: null }), false);
+  });
+
+  it("preserves housePlanStatus after reload via sanitize round-trip", async () => {
+    const { sanitizeReturnPlannerState } = await import("../src/lib/return-to-nepal/sanitize-planner-state.ts");
+    const { mergeHousePlanStatus } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    const { DEFAULT_RETURN_PLANNER_STATE } = await import("../src/lib/return-to-nepal/default-planner-state.ts");
+    const saved = mergeHousePlanStatus(DEFAULT_RETURN_PLANNER_STATE, "already_own");
+    const reloaded = sanitizeReturnPlannerState(JSON.parse(JSON.stringify(saved)));
+    assert.equal(reloaded.housePlanStatus, "already_own");
+  });
+});
+
 describe("House plan flow — house decision page wiring", () => {
-  it("uses Save & Continue with persistNow and does not navigate on option tap", () => {
+  it("uses Save & Continue with timed persistNow and does not navigate on option tap", () => {
     const src = readFileSync(
       new URL("../src/components/return-to-nepal/ReturnToNepalHouseDecisionPage.tsx", import.meta.url),
       "utf8",
     );
     assert.match(src, /Save & Continue/);
     assert.match(src, /data-testid="house-plan-save-continue"/);
-    assert.match(src, /persistNow\(mergeHousePlanStatus/);
+    assert.match(src, /runHousePlanSave/);
+    assert.match(src, /savingLockRef/);
+    assert.match(src, /window\.location\.assign/);
     assert.match(src, /setPending\(option\.id\)/);
     assert.doesNotMatch(src, /onClick=\{\(\) => choose\(/);
     assert.match(src, /data-testid="house-plan-load-error"/);
+    assert.match(src, /data-testid="house-plan-save-error"/);
+    assert.match(src, /data-testid="house-plan-save-retry"/);
     assert.match(src, /Load failed/);
     assert.match(src, /retryHydrate/);
     assert.match(src, /aria-pressed=\{selected\}/);
@@ -630,11 +731,16 @@ describe("House plan flow — house decision page wiring", () => {
     assert.match(src, /retryHydrate/);
   });
 
-  it("cloud document state surfaces hydrate failures instead of hiding them", () => {
+  it("cloud document state surfaces hydrate failures and awaits PUT without hung re-fetch", () => {
     const src = readFileSync(new URL("../src/hooks/useCloudDocumentState.ts", import.meta.url), "utf8");
     assert.match(src, /hydrateError/);
     assert.match(src, /setHydrateError\(message\)/);
     assert.match(src, /retryHydrate/);
+    assert.match(src, /await saveModuleSnapshotToCloud\(moduleKey, snapshot\)/);
+    assert.doesNotMatch(
+      src,
+      /await saveModuleSnapshotToCloud\(moduleKey, snapshot\);\s*const remote = await fetchModuleSnapshot/,
+    );
   });
 });
 
