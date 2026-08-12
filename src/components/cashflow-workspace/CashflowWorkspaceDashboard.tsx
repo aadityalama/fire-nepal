@@ -25,6 +25,7 @@ import {
   parseIncomeForm,
   type IncomeFormState,
 } from "@/components/cashflow-workspace/CashflowIncomeFormSheet";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import {
   buildCashflowInsights,
   formatShortDate,
@@ -331,12 +332,15 @@ export function CashflowWorkspaceDashboard({
 
       <div className="relative mx-auto flex w-full max-w-lg flex-col gap-5 lg:max-w-6xl lg:gap-6">
         <header>
-          <Link
-            href="/finance"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl transition active:scale-95"
-          >
-            <ArrowLeft size={15} /> Finance
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/finance"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl transition active:scale-95"
+            >
+              <ArrowLeft size={15} /> Finance
+            </Link>
+            <BackToReturnChecklistLink />
+          </div>
           <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem]">Cashflow</h1>
           <p className="mt-1 text-sm font-semibold text-emerald-100/58">Income Center · powered by Income, Expense &amp; Savings</p>
         </header>

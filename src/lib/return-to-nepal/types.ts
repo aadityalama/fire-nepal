@@ -20,6 +20,14 @@ export type PlannerSectionId =
 
 export type ConstructionPhaseId = "land" | "foundation" | "structure" | "roof" | "interior" | "handover";
 
+/**
+ * Canonical House in Nepal decision — never infer "required" from missing data.
+ * `unknown` = user has not configured the preference yet.
+ */
+export type HousePlanDecision = "unknown" | "already_own" | "plan_to_buy_build" | "not_needed";
+
+export type HouseAcquireMode = "buy" | "build";
+
 export type SettlementChecklistId =
   | "schoolAdmissions"
   | "healthNepal"
@@ -66,6 +74,20 @@ export type ReturnToNepalPlannerState = {
   homeLoanYears: number;
   houseProgressPct: number;
   completedPhases: ConstructionPhaseId[];
+  /**
+   * Explicit user decision for House in Nepal.
+   * Defaults to `unknown` — do not treat as "must fund a house".
+   */
+  housePlanDecision: HousePlanDecision;
+  /** When planning to buy/build — optional acquire mode. */
+  houseAcquireMode: HouseAcquireMode | null;
+  /** Optional details when already owning (never block completion). */
+  houseOwnedValueNpr: number;
+  houseLocation: string;
+  houseFullyOwned: boolean | null;
+  houseNotes: string;
+  /** Optional target year when planning to buy/build. */
+  houseTargetYear: number;
   /** Passive income (monthly NPR at today’s terms — engine inflates for future display where noted) */
   pensionMonthlyNpr: number;
   dividendMonthlyNpr: number;

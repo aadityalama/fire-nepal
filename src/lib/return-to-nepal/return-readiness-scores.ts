@@ -61,9 +61,19 @@ export function computeReturnReadinessScores(
 
   const insurancePct = clampPct((healthOk ? 50 : 0) + (lifeOk ? 50 : 0));
 
-  const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
-  const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
-  const housePct = clampPct((houseFunded / houseTarget) * 100);
+  let housePct: number;
+  if (state.housePlanDecision === "already_own" || state.housePlanDecision === "not_needed") {
+    housePct = 100;
+  } else if (state.houseProgressPct > 0) {
+    housePct = clampPct(state.houseProgressPct);
+  } else if (snapshot.houseTotalBudgetNpr > 0) {
+    const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
+    const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
+    housePct = clampPct((houseFunded / houseTarget) * 100);
+  } else {
+    // unknown / not configured — do not invent a false 0%-of-1 funding gap score as progress
+    housePct = 0;
+  }
 
   const familyChecks = [
     state.schoolFeesMonthlyNpr > 0 || state.children === 0,

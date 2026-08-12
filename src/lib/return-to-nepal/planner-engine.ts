@@ -173,12 +173,18 @@ export function computePlannerSnapshot(state: ReturnToNepalPlannerState): Planne
         ? clamp(totalReturnFundNpr / (monthlyDeficitNpr * 12), 0, 55)
         : 0;
 
-  const houseTotal =
+  const houseTotalRaw =
     state.landBudgetNpr +
     state.constructionBudgetNpr +
     state.interiorBudgetNpr +
     state.furnitureBudgetNpr;
-  const houseLoanEmi = monthlyLoanEmi(state.homeLoanPrincipalNpr, state.homeLoanAprPct, state.homeLoanYears);
+  /** Already-own / not-needed must not create a house funding gap. */
+  const houseFundingSkipped =
+    state.housePlanDecision === "already_own" || state.housePlanDecision === "not_needed";
+  const houseTotal = houseFundingSkipped ? 0 : houseTotalRaw;
+  const houseLoanEmi = houseFundingSkipped
+    ? 0
+    : monthlyLoanEmi(state.homeLoanPrincipalNpr, state.homeLoanAprPct, state.homeLoanYears);
 
   const targetSavingsGapNpr = Math.max(0, houseTotal + state.relocationOneTimeNpr - totalReturnFundNpr);
 
@@ -191,7 +197,9 @@ export function computePlannerSnapshot(state: ReturnToNepalPlannerState): Planne
   const returnGoalProgressPct = clamp(
     houseTotal + state.relocationOneTimeNpr > 0
       ? (totalReturnFundNpr / (houseTotal + state.relocationOneTimeNpr)) * 100
-      : (totalReturnFundNpr / (monthlyNepalLivingNpr * 240)) * 100,
+      : houseFundingSkipped
+        ? (totalReturnFundNpr / Math.max(monthlyNepalLivingNpr * 240, 1)) * 100
+        : (totalReturnFundNpr / (monthlyNepalLivingNpr * 240)) * 100,
     0,
     100,
   );
