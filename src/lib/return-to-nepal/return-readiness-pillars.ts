@@ -1,6 +1,6 @@
 import { computeInsuranceRecommendation, hasAdequateHealthInsurance, hasAdequateLifeInsurance } from "@/lib/insurance/insurance-engine";
 import { loadInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
-import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
+import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
 import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { ReturnReadinessPillarId, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 import { loadSsfPensionWorkspace } from "@/lib/ssf-pension/storage";
@@ -95,11 +95,12 @@ export function computeReturnReadinessPillars(
 export function syncInsuranceSettlementFlags(
   checklist: ReturnToNepalPlannerState["settlementChecklist"],
   insuranceInputs: InsuranceEngineInputs,
+  policies?: InsurancePolicy[],
 ): ReturnToNepalPlannerState["settlementChecklist"] {
-  const policies = loadInsuranceWorkspaceState().policies;
-  const recommendation = computeInsuranceRecommendation(policies, insuranceInputs);
-  const healthOk = hasAdequateHealthInsurance(policies, recommendation.recommendedHealthCoverageNpr);
-  const lifeOk = hasAdequateLifeInsurance(policies, recommendation.recommendedLifeCoverageNpr);
+  const resolvedPolicies = policies ?? loadInsuranceWorkspaceState().policies;
+  const recommendation = computeInsuranceRecommendation(resolvedPolicies, insuranceInputs);
+  const healthOk = hasAdequateHealthInsurance(resolvedPolicies, recommendation.recommendedHealthCoverageNpr);
+  const lifeOk = hasAdequateLifeInsurance(resolvedPolicies, recommendation.recommendedLifeCoverageNpr);
 
   let next = [...checklist];
   const setFlag = (id: "healthInsurance" | "lifeInsurance", on: boolean) => {

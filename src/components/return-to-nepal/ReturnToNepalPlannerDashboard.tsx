@@ -30,6 +30,7 @@ import {
   recommendedReturnMonthYear,
 } from "@/lib/return-to-nepal/return-ai-engine";
 import { computeReturnChecklist, type ChecklistStatus } from "@/lib/return-to-nepal/return-checklist";
+import { buildReturnChecklistSources } from "@/lib/return-to-nepal/build-return-checklist-sources";
 import { computeReturnRoadmap } from "@/lib/return-to-nepal/return-roadmap";
 import {
   aggregateReadinessPct,
@@ -37,9 +38,11 @@ import {
   type ReturnReadinessScore,
 } from "@/lib/return-to-nepal/return-readiness-scores";
 import { syncInsuranceSettlementFlags } from "@/lib/return-to-nepal/return-readiness-pillars";
+import { useInsurancePoliciesLive } from "@/lib/return-to-nepal/use-insurance-policies-live";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { fetchSavingsWorkspace } from "@/lib/savings/savings-api";
 import { loadSavingsWorkspaceState, sanitizeSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import type { SavingsGoal } from "@/lib/savings/savings-types";
@@ -131,13 +134,18 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 export function ReturnToNepalPlannerDashboard() {
   const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
   const { user } = useProductAuth();
+  const { profile } = useCurrentUserProfile();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
+  const { policies: insurancePolicies } = useInsurancePoliciesLive();
   const { summary, portfolio } = useUnifiedFireSummary();
   const wealth = summary.wealthTotals;
   const [mounted, setMounted] = useState(false);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,17 +167,24 @@ export function ReturnToNepalPlannerDashboard() {
   }, [user?.id, snapshot.estimatedReturnYear]);
 
   useEffect(() => {
-    const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs);
+    if ((portfolio.liabilities?.length ?? 0) > 0 || wealth.liabilitiesNpr > 0) {
+      if (!state.debtReviewed) patch({ debtReviewed: true });
+    }
+  }, [portfolio.liabilities, wealth.liabilitiesNpr, state.debtReviewed, patch]);
+
+  useEffect(() => {
+    const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies);
     const same =
       synced.length === state.settlementChecklist.length && synced.every((id) => state.settlementChecklist.includes(id));
     if (!same) patch({ settlementChecklist: synced });
-  }, [insuranceInputs, insuranceTick, patch, state.settlementChecklist]);
+  }, [insuranceInputs, insuranceTick, insurancePolicies, patch, state.settlementChecklist]);
 
   useEffect(() => {
-    const onInsurance = () => patch({ settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs) });
+    const onInsurance = () =>
+      patch({ settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies) });
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
     return () => window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
-  }, [insuranceInputs, patch, state.settlementChecklist]);
+  }, [insuranceInputs, insurancePolicies, patch, state.settlementChecklist]);
 
   const nwMomPct = useMemo(
     () => netWorthMonthOverMonthPercent(portfolio.netWorthHistory ?? []),
@@ -178,21 +193,46 @@ export function ReturnToNepalPlannerDashboard() {
 
   const investmentTotalNpr = wealth.totalInvestmentNpr;
 
+  const checklistSources = useMemo(
+    () =>
+      buildReturnChecklistSources({
+        effectiveState,
+        live,
+        insurancePolicies,
+        insuranceInputs,
+        liabilitiesNpr: wealth.liabilitiesNpr,
+        fireGoalNpr: profile?.fireGoalAmount ?? null,
+      }),
+    [effectiveState, live, insurancePolicies, insuranceInputs, wealth.liabilitiesNpr, profile?.fireGoalAmount],
+  );
+
   const readinessScores = useMemo(
-    () => computeReturnReadinessScores(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
+    () =>
+      computeReturnReadinessScores(
+        effectiveState,
+        snapshot,
+        insuranceInputs,
+        investmentTotalNpr,
+        wealth.liabilitiesNpr,
+        checklistSources,
+        insurancePolicies,
+      ),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr, checklistSources, insurancePolicies],
   );
 
   const readinessPct = useMemo(() => aggregateReadinessPct(readinessScores), [readinessScores]);
 
-  const checklist = useMemo(
-    () => computeReturnChecklist(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
-  );
+  const checklist = useMemo(() => computeReturnChecklist(checklistSources), [checklistSources]);
+
+  const emergencyRunwayMonths = useMemo(() => {
+    if (live.emergencyCashReserveNpr == null) return null;
+    const burn = live.monthlyExpenseNpr > 0 ? live.monthlyExpenseNpr : Math.max(1, live.nepalColMonthlyNpr);
+    return burn > 0 ? live.emergencyCashReserveNpr / burn : 0;
+  }, [live.emergencyCashReserveNpr, live.monthlyExpenseNpr, live.nepalColMonthlyNpr]);
 
   const roadmap = useMemo(() => {
-    return computeReturnRoadmap(savingsGoals, snapshot, snapshot.estimatedReturnYear);
-  }, [savingsGoals, snapshot]);
+    return computeReturnRoadmap(savingsGoals.length > 0 ? savingsGoals : live.savingsGoals, snapshot, snapshot.estimatedReturnYear);
+  }, [savingsGoals, live.savingsGoals, snapshot]);
 
   const scenarios = useMemo(
     () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
@@ -211,7 +251,9 @@ export function ReturnToNepalPlannerDashboard() {
   );
   const recommendedDate = recommendedReturnMonthYear(snapshot.estimatedReturnYear);
   const cityLabel = effectiveState.city.charAt(0).toUpperCase() + effectiveState.city.slice(1);
-  const householdLabel = `Family of ${effectiveState.adults + effectiveState.children}`;
+  const householdLabel = live.householdConfigured
+    ? `Family of ${effectiveState.adults + effectiveState.children}`
+    : "Set household in COL";
 
   const riskColors = {
     high: "text-rose-400 bg-rose-500/15 ring-rose-400/25",
@@ -289,7 +331,7 @@ export function ReturnToNepalPlannerDashboard() {
           <KpiCard
             label="Monthly Passive Income"
             value={formatNprInteger(live.passiveMonthlyNpr)}
-            hint="Investments + FD + dividends"
+            hint="Modeled · investments + FD + dividends"
             hintPositive
           />
           <KpiCard
@@ -299,9 +341,18 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <KpiCard
             label="Emergency Fund"
-            value={`${snapshot.emergencyReserveMonths.toFixed(1)} Mo`}
-            hint={snapshot.emergencyReserveMonths >= effectiveState.emergencyMonthsTarget ? "On track" : "Build runway"}
-            hintPositive={snapshot.emergencyReserveMonths >= effectiveState.emergencyMonthsTarget}
+            value={emergencyRunwayMonths == null ? "—" : `${emergencyRunwayMonths.toFixed(1)} Mo`}
+            hint={
+              emergencyRunwayMonths == null
+                ? "Set reserve in Emergency Fund"
+                : emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
+                  ? "On track"
+                  : "Build runway"
+            }
+            hintPositive={
+              emergencyRunwayMonths != null &&
+              emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
+            }
           />
           <KpiCard
             label="FIRE Progress"

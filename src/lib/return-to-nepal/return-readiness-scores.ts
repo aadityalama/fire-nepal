@@ -1,9 +1,17 @@
-import { computeInsuranceRecommendation, hasAdequateHealthInsurance, hasAdequateLifeInsurance } from "@/lib/insurance/insurance-engine";
-import { loadInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
-import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
+import {
+  computeInsuranceRecommendation,
+  hasAdequateHealthInsurance,
+  hasAdequateLifeInsurance,
+} from "@/lib/insurance/insurance-engine";
+import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
 import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
+import {
+  RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR,
+  RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS,
+  RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR,
+  type ReturnChecklistSources,
+} from "@/lib/return-to-nepal/return-checklist";
 import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
-import { loadSsfPensionWorkspace } from "@/lib/ssf-pension/storage";
 
 export type ReturnReadinessScoreId =
   | "savingsEmergency"
@@ -34,52 +42,118 @@ function statusFromPct(pct: number): ReturnReadinessScore["status"] {
   return "missing";
 }
 
+/** Prefer checklist sources when provided; otherwise fall back to legacy snapshot fields. */
 export function computeReturnReadinessScores(
   state: ReturnToNepalPlannerState,
   snapshot: PlannerSnapshot,
   insuranceInputs: InsuranceEngineInputs,
   investableNpr: number,
   liabilitiesNpr: number,
+  checklistSources?: ReturnChecklistSources,
+  insurancePolicies?: InsurancePolicy[],
 ): ReturnReadinessScore[] {
-  const policies = loadInsuranceWorkspaceState().policies;
+  const policies = insurancePolicies ?? checklistSources?.insurancePolicies ?? [];
   const recommendation = computeInsuranceRecommendation(policies, insuranceInputs);
   const healthOk = hasAdequateHealthInsurance(policies, recommendation.recommendedHealthCoverageNpr);
   const lifeOk = hasAdequateLifeInsurance(policies, recommendation.recommendedLifeCoverageNpr);
-  const ssf = loadSsfPensionWorkspace();
 
-  const emergencyTarget = Math.max(1, state.emergencyMonthsTarget);
-  const savingsEmergencyPct = clampPct((snapshot.emergencyReserveMonths / emergencyTarget) * 100);
+  const emergencyTarget =
+    checklistSources?.emergencyMonthsTarget && checklistSources.emergencyMonthsTarget > 0
+      ? checklistSources.emergencyMonthsTarget
+      : state.emergencyMonthsTarget > 0
+        ? state.emergencyMonthsTarget
+        : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
 
-  const investmentTarget = 2_000_000;
-  const investmentPct = clampPct((investableNpr / investmentTarget) * 100);
+  let savingsEmergencyPct = 0;
+  if (checklistSources) {
+    const configured =
+      checklistSources.emergencyCashReserveNpr != null &&
+      Number.isFinite(checklistSources.emergencyCashReserveNpr);
+    if (configured) {
+      const burn = Math.max(1, checklistSources.emergencyMonthlyBurnNpr);
+      const runway = Math.max(0, checklistSources.emergencyCashReserveNpr!) / burn;
+      savingsEmergencyPct = clampPct((runway / emergencyTarget) * 100);
+    }
+  } else {
+    savingsEmergencyPct = clampPct((snapshot.emergencyReserveMonths / emergencyTarget) * 100);
+  }
 
-  const passiveTarget = Math.max(snapshot.monthlyNepalLivingNpr * 0.8, 30_000);
-  const passivePct = clampPct((snapshot.passiveMonthlyNpr / passiveTarget) * 100);
+  const investmentTarget =
+    checklistSources?.investmentGoalTargetNpr && checklistSources.investmentGoalTargetNpr > 0
+      ? checklistSources.investmentGoalTargetNpr
+      : RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR;
+  const investmentAmount = checklistSources?.totalInvestmentNpr ?? investableNpr;
+  const investmentPct = clampPct((investmentAmount / investmentTarget) * 100);
 
-  const ssfTarget = Math.max(state.monthlySalaryKrw * state.nprPerKrw * 0.1, 5_000);
-  const ssfPct = clampPct((ssf.projection.monthlySsfContributionNpr / ssfTarget) * 100);
+  const passiveMonthly = checklistSources?.modeledPassiveMonthlyNpr ?? snapshot.passiveMonthlyNpr;
+  const passiveTarget = Math.max(
+    checklistSources?.passiveTargetMonthlyNpr ?? snapshot.monthlyNepalLivingNpr * 0.8,
+    30_000,
+  );
+  const passivePct = clampPct((passiveMonthly / passiveTarget) * 100);
+
+  const ssfContribution = checklistSources?.monthlySsfContributionNpr ?? 0;
+  const ssfTarget = checklistSources?.ssfContributionTargetNpr ?? Math.max(state.monthlySalaryKrw * state.nprPerKrw * 0.1, 5_000);
+  const ssfPct = clampPct((ssfContribution / Math.max(1, ssfTarget)) * 100);
 
   const insurancePct = clampPct((healthOk ? 50 : 0) + (lifeOk ? 50 : 0));
 
-  const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
-  const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
-  const housePct = clampPct((houseFunded / houseTarget) * 100);
+  const housePct = checklistSources
+    ? checklistSources.houseGoalConfigured
+      ? clampPct(checklistSources.houseProgressPct)
+      : 0
+    : (() => {
+        const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
+        const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
+        return clampPct((houseFunded / houseTarget) * 100);
+      })();
 
-  const familyChecks = [
-    state.schoolFeesMonthlyNpr > 0 || state.children === 0,
-    state.healthcareMonthlyNpr > 0,
-    state.settlementChecklist.length >= 3,
-    snapshot.familyRelocationScore >= 50,
-  ];
+  const familyChecks = checklistSources
+    ? [
+        checklistSources.householdConfigured,
+        checklistSources.familyCostSignalsConfigured &&
+          (checklistSources.schoolFeesMonthlyNpr > 0 || checklistSources.children === 0),
+        checklistSources.familyCostSignalsConfigured && checklistSources.healthcareMonthlyNpr > 0,
+        checklistSources.settlementChecklistLength >= 2,
+      ]
+    : [
+        state.schoolFeesMonthlyNpr > 0 || state.children === 0,
+        state.healthcareMonthlyNpr > 0,
+        state.settlementChecklist.length >= 3,
+        snapshot.familyRelocationScore >= 50,
+      ];
   const familyPct = clampPct((familyChecks.filter(Boolean).length / familyChecks.length) * 100);
 
-  const businessTarget = 1_000_000;
-  const businessPct = clampPct((state.businessCapitalNpr / businessTarget) * 100);
+  const businessTarget =
+    checklistSources?.businessCapitalTargetNpr && checklistSources.businessCapitalTargetNpr > 0
+      ? checklistSources.businessCapitalTargetNpr
+      : RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
+  const businessAmount = checklistSources?.businessCapitalNpr ?? state.businessCapitalNpr;
+  const businessPct = checklistSources
+    ? checklistSources.businessGoalConfigured
+      ? clampPct((businessAmount / businessTarget) * 100)
+      : 0
+    : clampPct((businessAmount / businessTarget) * 100);
 
-  const debtRatio = snapshot.totalReturnFundNpr > 0 ? liabilitiesNpr / (snapshot.totalReturnFundNpr + liabilitiesNpr) : liabilitiesNpr > 0 ? 1 : 0;
-  const debtFreePct = clampPct((1 - debtRatio) * 100);
+  let debtFreePct = 0;
+  if (checklistSources) {
+    if (!checklistSources.liabilitiesConfigured) debtFreePct = 0;
+    else if (liabilitiesNpr <= 0) debtFreePct = 100;
+    else {
+      const denom = Math.max(investmentAmount + liabilitiesNpr, 1);
+      debtFreePct = clampPct((1 - liabilitiesNpr / denom) * 100);
+    }
+  } else {
+    const debtRatio =
+      snapshot.totalReturnFundNpr > 0
+        ? liabilitiesNpr / (snapshot.totalReturnFundNpr + liabilitiesNpr)
+        : liabilitiesNpr > 0
+          ? 1
+          : 0;
+    debtFreePct = clampPct((1 - debtRatio) * 100);
+  }
 
-  const scores: ReturnReadinessScore[] = [
+  return [
     { id: "savingsEmergency", label: "Savings & Emergency", pct: savingsEmergencyPct, status: statusFromPct(savingsEmergencyPct) },
     { id: "investment", label: "Investment Portfolio", pct: investmentPct, status: statusFromPct(investmentPct) },
     { id: "passiveIncome", label: "Passive Income", pct: passivePct, status: statusFromPct(passivePct) },
@@ -90,8 +164,6 @@ export function computeReturnReadinessScores(
     { id: "businessCapital", label: "Business Capital", pct: businessPct, status: statusFromPct(businessPct) },
     { id: "debtFree", label: "Debt Free", pct: debtFreePct, status: statusFromPct(debtFreePct) },
   ];
-
-  return scores;
 }
 
 export function aggregateReadinessPct(scores: ReturnReadinessScore[]): number {

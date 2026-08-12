@@ -11,5 +11,6 @@ export function sanitizeReturnPlannerState(raw: unknown): ReturnToNepalPlannerSt
     settlementChecklist: Array.isArray(parsed.settlementChecklist)
       ? parsed.settlementChecklist
       : DEFAULT_RETURN_PLANNER_STATE.settlementChecklist,
+    debtReviewed: Boolean(parsed.debtReviewed),
   };
 }

@@ -48,4 +48,5 @@ export const DEFAULT_RETURN_PLANNER_STATE: ReturnToNepalPlannerState = {
   propertyDocsPct: 0,
   migrationChecklistPct: 0,
   settlementChecklist: [],
+  debtReviewed: false,
 };

@@ -93,6 +93,11 @@ export type ReturnToNepalPlannerState = {
   migrationChecklistPct: number;
   /** Family settlement checklist — completed item ids */
   settlementChecklist: SettlementChecklistId[];
+  /**
+   * Set true once the user has liability rows in Portfolio (or carried debt).
+   * Distinguishes "not reviewed" from "confirmed debt-free".
+   */
+  debtReviewed: boolean;
 };
 
 export const NEPAL_CITY_LABELS: Record<NepalCityId, string> = {
