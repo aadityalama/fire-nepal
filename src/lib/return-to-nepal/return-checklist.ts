@@ -94,7 +94,7 @@ function houseChecklistFields(sources: ReturnChecklistSources): Pick<
 > {
   const { housePlanStatus, houseGoalConfigured, houseProgressPct } = sources;
   if (housePlanStatus === "already_own") {
-    return { status: "completed", detail: "Already own a home in Nepal", badgeLabel: "Completed" };
+    return { status: "completed", detail: "Already own a house", badgeLabel: "Completed" };
   }
   if (housePlanStatus === "not_needed") {
     return { status: "completed", detail: "House purchase not needed", badgeLabel: "Not Needed" };

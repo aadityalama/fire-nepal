@@ -18,7 +18,12 @@ type Ctx = {
   effectiveState: ReturnToNepalPlannerState;
   snapshot: PlannerSnapshot;
   live: ReturnPlannerLiveBundle;
+  hydrated: boolean;
+  cloudReady: boolean;
+  hydrateError: string | null;
+  retryHydrate: () => void;
   patch: (partial: Partial<ReturnToNepalPlannerState>) => void;
+  persistNow: (next?: ReturnToNepalPlannerState) => Promise<ReturnToNepalPlannerState>;
   reset: () => void;
   togglePhase: (id: ConstructionPhaseId) => void;
   toggleSettlement: (id: SettlementChecklistId) => void;
@@ -53,7 +58,7 @@ function clearGuestReturnPlannerCache(): void {
 }
 
 export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
-  const { state, setState, hydrated, persistNow } = useCloudDocumentState({
+  const { state, setState, hydrated, cloudReady, hydrateError, retryHydrate, persistNow } = useCloudDocumentState({
     moduleKey: "return_to_nepal",
     getDefault: () => DEFAULT_RETURN_PLANNER_STATE,
     sanitize: sanitizeReturnPlannerState,
@@ -115,13 +120,33 @@ export function ReturnToNepalProvider({ children }: { children: ReactNode }) {
       effectiveState,
       snapshot,
       live,
+      hydrated,
+      cloudReady,
+      hydrateError,
+      retryHydrate,
       patch,
+      persistNow,
       reset,
       togglePhase,
       toggleSettlement,
       resync,
     }),
-    [state, effectiveState, snapshot, live, patch, reset, togglePhase, toggleSettlement, resync],
+    [
+      state,
+      effectiveState,
+      snapshot,
+      live,
+      hydrated,
+      cloudReady,
+      hydrateError,
+      retryHydrate,
+      patch,
+      persistNow,
+      reset,
+      togglePhase,
+      toggleSettlement,
+      resync,
+    ],
   );
 
   return <ReturnToNepalContext.Provider value={value}>{children}</ReturnToNepalContext.Provider>;

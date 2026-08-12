@@ -40,6 +40,8 @@ export function useCloudDocumentState<T>({
   setState: Dispatch<SetStateAction<T>>;
   hydrated: boolean;
   cloudReady: boolean;
+  hydrateError: string | null;
+  retryHydrate: () => void;
   persistNow: (next?: T) => Promise<T>;
 } {
   const { user, loading: authLoading } = useProductAuth();
@@ -49,12 +51,18 @@ export function useCloudDocumentState<T>({
   const [state, setState] = useState<T>(() => getDefault());
   const [hydrated, setHydrated] = useState(false);
   const [cloudReady, setCloudReady] = useState(!authed);
+  const [hydrateError, setHydrateError] = useState<string | null>(null);
+  const [hydrateAttempt, setHydrateAttempt] = useState(0);
   const stateRef = useRef(state);
   const lastSavedRef = useRef<string>("");
   const getDefaultRef = useRef(getDefault);
   const sanitizeRef = useRef(sanitize);
   getDefaultRef.current = getDefault;
   sanitizeRef.current = sanitize;
+
+  const retryHydrate = useCallback(() => {
+    setHydrateAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -73,6 +81,7 @@ export function useCloudDocumentState<T>({
         if (!cancelled) {
           setState(local);
           lastSavedRef.current = JSON.stringify(local);
+          setHydrateError(null);
           setCloudReady(true);
           setHydrated(true);
         }
@@ -84,6 +93,7 @@ export function useCloudDocumentState<T>({
       const empty = getDefaultRef.current();
       if (!cancelled) {
         setState(empty);
+        setHydrateError(null);
       }
 
       try {
@@ -94,16 +104,21 @@ export function useCloudDocumentState<T>({
         lastSavedRef.current = JSON.stringify(next);
         // Optional cache AFTER successful cloud load.
         saveLocal?.(next);
+        setHydrateError(null);
         setCloudReady(true);
       } catch (error) {
+        const message =
+          error instanceof Error ? error.message : `Could not load ${moduleKey} from cloud.`;
         if (process.env.NODE_ENV !== "production") {
           console.error(`[cloud-document:${moduleKey}] hydrate failed`, error);
         }
         if (!cancelled) {
+          // Keep defaults for a new user, but surface the failure — do not pretend load succeeded.
           const emptyOnFail = getDefaultRef.current();
           setState(emptyOnFail);
           lastSavedRef.current = JSON.stringify(emptyOnFail);
           clearLocal?.();
+          setHydrateError(message);
           setCloudReady(true);
         }
       } finally {
@@ -115,7 +130,7 @@ export function useCloudDocumentState<T>({
     return () => {
       cancelled = true;
     };
-  }, [authLoading, userId, moduleKey, loadLocal, saveLocal, clearLocal]);
+  }, [authLoading, userId, moduleKey, loadLocal, saveLocal, clearLocal, hydrateAttempt]);
 
   const persistNow = useCallback(
     async (next?: T) => {
@@ -179,5 +194,5 @@ export function useCloudDocumentState<T>({
     };
   }, [state, hydrated, cloudReady, userId, moduleKey, saveLocal, saveDebounceMs]);
 
-  return { state, setState, hydrated, cloudReady, persistNow };
+  return { state, setState, hydrated, cloudReady, hydrateError, retryHydrate, persistNow };
 }
