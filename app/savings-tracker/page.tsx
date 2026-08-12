@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { SavingsTrackerDashboard } from "@/components/savings-tracker/SavingsTrackerDashboard";
 import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function SavingsTrackerPage() {
   return (
     <DashboardAccessGuard>
-      <SavingsTrackerDashboard />
+      <Suspense fallback={<div className="min-h-[100dvh] bg-[#020806]" />}>
+        <SavingsTrackerDashboard />
+      </Suspense>
     </DashboardAccessGuard>
   );
 }

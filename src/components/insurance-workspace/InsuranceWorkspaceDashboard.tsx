@@ -12,13 +12,16 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { appToast } from "@/lib/toast";
 import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
 import { InsurancePolicyCard } from "@/components/insurance-workspace/InsurancePolicyCard";
 import { InsurancePolicyDetailsSheet } from "@/components/insurance-workspace/InsurancePolicyDetailsSheet";
 import { InsurancePolicySheet } from "@/components/insurance-workspace/InsurancePolicySheet";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import type { InsuranceType } from "@/lib/insurance/insurance-types";
 import {
   createInsurancePolicy,
   deleteInsurancePolicy,
@@ -136,8 +139,15 @@ function createLocalPolicy(
   );
 }
 
+function resolveInsuranceTypeParam(value: string | null): InsuranceType | null {
+  if (value === "health" || value === "life") return value;
+  return null;
+}
+
 export function InsuranceWorkspaceDashboard() {
   const { user } = useProductAuth();
+  const searchParams = useSearchParams();
+  const deepLinkType = resolveInsuranceTypeParam(searchParams.get("type"));
   const { inputs, recalculate } = useInsuranceEngineInputs();
   const [state, setState] = useState<InsuranceWorkspaceState>(() => ({ version: 1, policies: [] }));
   const [hydrated, setHydrated] = useState(false);
@@ -147,6 +157,8 @@ export function InsuranceWorkspaceDashboard() {
   const [detailsPolicy, setDetailsPolicy] = useState<InsurancePolicy | null>(null);
   const [saving, setSaving] = useState(false);
   const [todayKey, setTodayKey] = useState(() => new Date().toDateString());
+  const [defaultType, setDefaultType] = useState<InsuranceType>(deepLinkType ?? "health");
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -325,9 +337,23 @@ export function InsuranceWorkspaceDashboard() {
   const policies = useMemo(() => withDerivedStatus(state.policies), [state.policies]);
   const sortedPolicies = useMemo(
     () => sortPoliciesByPremiumDue(policies),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sort when calendar day changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sortPoliciesByPremiumDue is pure; todayKey refreshes due dates
     [policies, todayKey],
   );
+
+  useEffect(() => {
+    if (!hydrated || deepLinkHandled || !deepLinkType) return;
+    // Deep-link open after async hydrate (Return Checklist → Insurance type=health|life).
+    const existing = policies.find((policy) => policy.type === deepLinkType) ?? null;
+    const frame = window.requestAnimationFrame(() => {
+      setDefaultType(deepLinkType);
+      setEditingPolicy(existing);
+      setSheetOpen(true);
+      setDeepLinkHandled(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hydrated, deepLinkHandled, deepLinkType, policies]);
+
   const recommendation = useMemo(() => {
     try {
       return computeInsuranceRecommendation(policies, inputs);
@@ -566,6 +592,9 @@ export function InsuranceWorkspaceDashboard() {
             >
               <ArrowLeft size={15} /> Finance
             </Link>
+            <div className="mt-2">
+              <BackToReturnChecklistLink />
+            </div>
             <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem] lg:text-5xl">
               Insurance
             </h1>
@@ -822,6 +851,7 @@ export function InsuranceWorkspaceDashboard() {
       <InsurancePolicySheet
         open={sheetOpen}
         editingPolicy={editingPolicy}
+        defaultType={defaultType}
         onClose={() => {
           setSheetOpen(false);
           setEditingPolicy(null);

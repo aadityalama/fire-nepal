@@ -24,6 +24,8 @@ type SavingsGoalSheetProps = {
   onClose: () => void;
   onSave: (input: SavingsGoalFormInput, editingId?: string) => Promise<void>;
   saving: boolean;
+  /** Prefill template when creating (e.g. house / business from Return Checklist). */
+  initialTemplateId?: string | null;
 };
 
 type SheetStep = "templates" | "form";
@@ -79,7 +81,14 @@ function buildFormFromGoal(goal: SavingsGoal): SavingsGoalFormInput {
   };
 }
 
-export function SavingsGoalSheet({ open, editingGoal, onClose, onSave, saving }: SavingsGoalSheetProps) {
+export function SavingsGoalSheet({
+  open,
+  editingGoal,
+  onClose,
+  onSave,
+  saving,
+  initialTemplateId = null,
+}: SavingsGoalSheetProps) {
   const [step, setStep] = useState<SheetStep>("templates");
   const [form, setForm] = useState<SavingsGoalFormInput>(() => buildFormFromTemplate(SAVINGS_GOAL_TEMPLATES[0]));
 
@@ -90,9 +99,30 @@ export function SavingsGoalSheet({ open, editingGoal, onClose, onSave, saving }:
       setStep("form");
       return;
     }
+    if (initialTemplateId) {
+      const template =
+        SAVINGS_GOAL_TEMPLATES.find((item) => item.id === initialTemplateId) ??
+        (initialTemplateId === "business"
+          ? {
+              ...CUSTOM_GOAL_TEMPLATE,
+              id: "custom",
+              icon: "💼",
+              name: "Business Capital",
+              category: "Business",
+              suggestedTargetNpr: 1_000_000,
+              suggestedMonthlyNpr: 25_000,
+              suggestedMonths: 40,
+            }
+          : null);
+      if (template) {
+        setForm(buildFormFromTemplate(template));
+        setStep("form");
+        return;
+      }
+    }
     setStep("templates");
     setForm(buildFormFromTemplate(SAVINGS_GOAL_TEMPLATES[0]));
-  }, [open, editingGoal]);
+  }, [open, editingGoal, initialTemplateId]);
 
   const previewGoal: SavingsGoal = useMemo(
     () => ({

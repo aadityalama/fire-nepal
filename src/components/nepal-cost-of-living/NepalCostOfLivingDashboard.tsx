@@ -33,6 +33,7 @@ import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import {
   Cell,
   Line,
@@ -996,6 +997,9 @@ export function NepalCostOfLivingDashboard() {
           <main data-col-report-main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
             <div className="flex shrink-0 flex-col gap-3 min-[1000px]:flex-row min-[1000px]:items-start min-[1000px]:justify-between min-[1000px]:gap-4">
               <div className="min-w-0 min-[1000px]:min-w-[230px]">
+                <div className="mb-2">
+                  <BackToReturnChecklistLink />
+                </div>
                 <h1 className="text-[28px] font-black leading-none tracking-[-0.04em] text-white min-[1000px]:whitespace-nowrap">
                   Nepal Cost of Living
                 </h1>

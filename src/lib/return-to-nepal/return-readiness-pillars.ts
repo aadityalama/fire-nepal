@@ -30,7 +30,10 @@ export function computeReturnReadinessPillars(
     snapshot.emergencyStatusLabel === "solid" || snapshot.emergencyStatusLabel === "elite";
   const investmentOk = investableNpr >= 500_000;
   const passiveOk = snapshot.passiveMonthlyNpr >= 25_000;
-  const houseOk = snapshot.houseTotalBudgetNpr > 0 && state.houseProgressPct >= 20;
+  const houseOk =
+    state.housePlanDecision === "already_own" ||
+    state.housePlanDecision === "not_needed" ||
+    (snapshot.houseTotalBudgetNpr > 0 && state.houseProgressPct >= 20);
   const businessOk = state.businessCapitalNpr >= 500_000;
 
   return [
@@ -77,7 +80,12 @@ export function computeReturnReadinessPillars(
       id: "houseFund",
       label: "House Fund",
       done: houseOk,
-      detail: `${state.houseProgressPct.toFixed(0)}% build progress`,
+      detail:
+        state.housePlanDecision === "already_own"
+          ? "Already own a house"
+          : state.housePlanDecision === "not_needed"
+            ? "No house needed"
+            : `${state.houseProgressPct.toFixed(0)}% build progress`,
     },
     {
       id: "businessCapital",

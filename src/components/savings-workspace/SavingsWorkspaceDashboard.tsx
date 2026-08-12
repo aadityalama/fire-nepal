@@ -15,11 +15,13 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { EmeraldGlassVaultIllustration } from "@/components/savings-workspace/EmeraldGlassVaultIllustration";
 import { SavingsGoalCard } from "@/components/savings-workspace/SavingsGoalCard";
 import { SavingsGoalSheet } from "@/components/savings-workspace/SavingsGoalSheet";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { fetchSavingsWorkspace, saveSavingsWorkspaceToCloud } from "@/lib/savings/savings-api";
 import {
@@ -73,11 +75,15 @@ function SummaryCard({
 
 export function SavingsWorkspaceDashboard() {
   const { user } = useProductAuth();
+  const searchParams = useSearchParams();
+  const focus = searchParams.get("focus");
   const [state, setState] = useState<SavingsWorkspaceState>(() => emptySavingsWorkspaceState());
   const [hydrated, setHydrated] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [saving, setSaving] = useState(false);
+  const [initialTemplateId, setInitialTemplateId] = useState<string | null>(null);
+  const [focusHandled, setFocusHandled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +141,40 @@ export function SavingsWorkspaceDashboard() {
     () => [...state.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)).slice(0, 8),
     [state.transactions],
   );
+
+  useEffect(() => {
+    if (!hydrated || focusHandled || !focus) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (focus === "house") {
+        const existing =
+          goals.find(
+            (goal) =>
+              goal.templateId === "house" ||
+              /house|land|property/i.test(goal.name) ||
+              /house|land|property/i.test(goal.category),
+          ) ?? null;
+        setEditingGoal(existing);
+        setInitialTemplateId(existing ? null : "house");
+        setSheetOpen(true);
+        setFocusHandled(true);
+        return;
+      }
+      if (focus === "business") {
+        const existing =
+          goals.find(
+            (goal) =>
+              /business|startup/i.test(goal.name) ||
+              /business|startup/i.test(goal.category) ||
+              goal.templateId === "investment",
+          ) ?? null;
+        setEditingGoal(existing);
+        setInitialTemplateId(existing ? null : "business");
+        setSheetOpen(true);
+        setFocusHandled(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hydrated, focusHandled, focus, goals]);
 
   const persistState = useCallback(
     async (next: SavingsWorkspaceState) => {
@@ -287,6 +327,9 @@ export function SavingsWorkspaceDashboard() {
             >
               <ArrowLeft size={15} /> Finance
             </Link>
+            <div className="mt-2">
+              <BackToReturnChecklistLink />
+            </div>
             <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem] lg:text-5xl">Saving Goals</h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">Premium savings goals built for FIRE Nepal.</p>
           </div>
@@ -446,9 +489,11 @@ export function SavingsWorkspaceDashboard() {
       <SavingsGoalSheet
         open={sheetOpen}
         editingGoal={editingGoal}
+        initialTemplateId={initialTemplateId}
         onClose={() => {
           setSheetOpen(false);
           setEditingGoal(null);
+          setInitialTemplateId(null);
         }}
         onSave={handleSaveGoal}
         saving={saving}

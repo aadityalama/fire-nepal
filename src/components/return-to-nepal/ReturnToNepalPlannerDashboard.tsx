@@ -48,7 +48,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 const PAGE_BG = "#000805";
 const GLASS = "rounded-[1.35rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.5rem]";
 
-function StatusBadge({ status }: { status: ChecklistStatus }) {
+function StatusBadge({ status, notNeeded }: { status: ChecklistStatus; notNeeded?: boolean }) {
   const styles: Record<ChecklistStatus, string> = {
     completed: "bg-emerald-500/20 text-emerald-300 ring-emerald-400/30",
     on_track: "bg-teal-500/15 text-teal-200 ring-teal-400/25",
@@ -63,9 +63,36 @@ function StatusBadge({ status }: { status: ChecklistStatus }) {
   };
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${styles[status]}`}>
-      {labels[status]}
+      {notNeeded ? "Not Needed" : labels[status]}
     </span>
   );
+}
+
+function ChecklistIcon({ id }: { id: string }) {
+  const props = { size: 18, className: "text-emerald-300" };
+  switch (id) {
+    case "emergency":
+      return <Shield {...props} />;
+    case "ssf":
+      return <Wallet {...props} />;
+    case "investment":
+      return <TrendingUp {...props} />;
+    case "passive":
+      return <LineChart {...props} />;
+    case "health":
+    case "life":
+      return <Shield {...props} />;
+    case "house":
+      return <Home {...props} />;
+    case "family":
+      return <GraduationCap {...props} />;
+    case "business":
+      return <Flag {...props} />;
+    case "debt":
+      return <Scale {...props} />;
+    default:
+      return <Check {...props} />;
+  }
 }
 
 function KpiCard({
@@ -186,8 +213,16 @@ export function ReturnToNepalPlannerDashboard() {
   const readinessPct = useMemo(() => aggregateReadinessPct(readinessScores), [readinessScores]);
 
   const checklist = useMemo(
-    () => computeReturnChecklist(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
+    () =>
+      computeReturnChecklist(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr, {
+        hasHouseSavingsGoal: savingsGoals.some(
+          (goal) =>
+            goal.templateId === "house" ||
+            ((/house|land|property/i.test(goal.name) || /house|land|property/i.test(goal.category)) &&
+              goal.templateId !== "nepal-return"),
+        ),
+      }),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr, savingsGoals],
   );
 
   const roadmap = useMemo(() => {
@@ -402,16 +437,30 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
           </div>
 
-          <div className={`${GLASS} p-5 sm:p-6`}>
+          <div id="return-checklist" className={`${GLASS} scroll-mt-24 p-5 sm:p-6`}>
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-100/45">Return Checklist</h2>
+            <p className="mt-1 text-xs font-semibold text-emerald-100/40">Tap any item to set up or edit — no menu hunting.</p>
             <ul className="mt-4 space-y-3">
               {checklist.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-white">{item.label}</p>
-                    <p className="text-[11px] font-semibold text-white/40">{item.detail}</p>
-                  </div>
-                  <StatusBadge status={item.status} />
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    className="flex min-h-[76px] items-center gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-3 transition hover:border-emerald-400/25 hover:bg-black/35 active:scale-[0.99]"
+                  >
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-400/12 ring-1 ring-emerald-400/20">
+                      <ChecklistIcon id={item.id} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-sm font-bold text-white">{item.label}</p>
+                        <StatusBadge status={item.status} notNeeded={item.statusHint === "Not needed"} />
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] font-semibold text-white/45">{item.subtitle}</p>
+                      <p className="truncate text-[11px] font-bold text-emerald-100/70">{item.progressLabel}</p>
+                      <p className="mt-1 text-[11px] font-semibold text-white/35">{item.statusHint}</p>
+                    </div>
+                    <span className="shrink-0 text-xs font-black text-emerald-300">{item.ctaLabel}</span>
+                  </Link>
                 </li>
               ))}
             </ul>

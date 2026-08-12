@@ -127,22 +127,43 @@ export function buildEffectiveReturnPlannerState(
     annualSalaryGrowthPct: ssf.projection.annualSalaryGrowthPct,
   });
 
-  const emergencyGoal = findGoal(savingsGoals, [/emergency/i]);
-  const houseGoal = findGoal(savingsGoals, [/house|land|property|nepal return/i]);
   const educationGoal = findGoal(savingsGoals, [/education|child|school/i]);
   const businessGoal = findGoal(savingsGoals, [/business|investment|startup/i]);
   const returnGoal = findGoal(savingsGoals, [/nepal return|return fund/i]);
 
-  const houseTargetNpr = houseGoal?.targetAmountNpr ?? 0;
-  const houseSavedNpr = houseGoal?.savedAmountNpr ?? 0;
-  const houseProgressPct =
-    houseTargetNpr > 0 ? clamp((houseSavedNpr / houseTargetNpr) * 100, 0, 100) : stored.houseProgressPct;
+  const houseFundingSkipped =
+    stored.housePlanDecision === "already_own" || stored.housePlanDecision === "not_needed";
+
+  const houseGoal = findGoal(savingsGoals, [/house|land|property/i]);
+  const houseTargetNpr = houseFundingSkipped ? 0 : (houseGoal?.targetAmountNpr ?? 0);
+  const houseSavedNpr = houseFundingSkipped ? 0 : (houseGoal?.savedAmountNpr ?? 0);
+  const houseProgressPct = houseFundingSkipped
+    ? 100
+    : houseTargetNpr > 0
+      ? clamp((houseSavedNpr / houseTargetNpr) * 100, 0, 100)
+      : stored.houseProgressPct;
 
   const realEstateNepalNpr = wealth.realEstateNpr;
-  const landBudgetNpr = houseTargetNpr > 0 ? Math.round(houseTargetNpr * 0.35) : Math.round(realEstateNepalNpr * 0.4);
-  const constructionBudgetNpr = houseTargetNpr > 0 ? Math.round(houseTargetNpr * 0.45) : Math.round(realEstateNepalNpr * 0.45);
-  const interiorBudgetNpr = houseTargetNpr > 0 ? Math.round(houseTargetNpr * 0.12) : Math.round(realEstateNepalNpr * 0.1);
-  const furnitureBudgetNpr = houseTargetNpr > 0 ? Math.round(houseTargetNpr * 0.08) : Math.round(realEstateNepalNpr * 0.05);
+  const landBudgetNpr = houseFundingSkipped
+    ? 0
+    : houseTargetNpr > 0
+      ? Math.round(houseTargetNpr * 0.35)
+      : Math.round(realEstateNepalNpr * 0.4);
+  const constructionBudgetNpr = houseFundingSkipped
+    ? 0
+    : houseTargetNpr > 0
+      ? Math.round(houseTargetNpr * 0.45)
+      : Math.round(realEstateNepalNpr * 0.45);
+  const interiorBudgetNpr = houseFundingSkipped
+    ? 0
+    : houseTargetNpr > 0
+      ? Math.round(houseTargetNpr * 0.12)
+      : Math.round(realEstateNepalNpr * 0.1);
+  const furnitureBudgetNpr = houseFundingSkipped
+    ? 0
+    : houseTargetNpr > 0
+      ? Math.round(houseTargetNpr * 0.08)
+      : Math.round(realEstateNepalNpr * 0.05);
 
   const liabilitiesNpr = wealth.liabilitiesNpr;
   const homeLoanPrincipalNpr = liabilitiesNpr > 0 ? liabilitiesNpr : stored.homeLoanPrincipalNpr;

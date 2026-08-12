@@ -7,6 +7,7 @@ import { isPensionOverviewPath, PENSION_BASE, PENSION_TAB_LINKS } from "@/lib/pe
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 
 const WEALTH_STRIP = [
   { href: "/portfolio", label: "Net worth", icon: Home },
@@ -33,16 +34,19 @@ export function PensionChrome({
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/portfolio"
-          className={`inline-flex min-h-[44px] w-fit items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black shadow-sm backdrop-blur-md transition duration-300 active:scale-[0.98] sm:text-sm ${
-            light
-              ? "border-emerald-200/90 bg-white/95 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50/90"
-              : "border-emerald-400/18 bg-white/[0.06] text-emerald-50/95 hover:border-teal-300/35 hover:bg-white/10"
-          }`}
-        >
-          <ArrowLeft size={15} /> Wealth dashboard
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/portfolio"
+            className={`inline-flex min-h-[44px] w-fit items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black shadow-sm backdrop-blur-md transition duration-300 active:scale-[0.98] sm:text-sm ${
+              light
+                ? "border-emerald-200/90 bg-white/95 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50/90"
+                : "border-emerald-400/18 bg-white/[0.06] text-emerald-50/95 hover:border-teal-300/35 hover:bg-white/10"
+            }`}
+          >
+            <ArrowLeft size={15} /> Wealth dashboard
+          </Link>
+          <BackToReturnChecklistLink variant={light ? "light" : "dark"} />
+        </div>
         <div
           className={`flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-[11px] ${
             light ? "text-emerald-800/75" : "text-emerald-200/65"

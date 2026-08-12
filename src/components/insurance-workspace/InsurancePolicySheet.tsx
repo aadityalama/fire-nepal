@@ -39,13 +39,15 @@ type InsurancePolicySheetProps = {
   onClose: () => void;
   onSave: (input: InsurancePolicyFormInput, editingId?: string) => Promise<void>;
   saving: boolean;
+  /** Prefill type when creating a new policy (e.g. deep-link from Return Checklist). */
+  defaultType?: InsuranceType;
 };
 
 const FREQUENCIES = Object.keys(PAYMENT_FREQUENCY_LABELS) as InsurancePaymentFrequency[];
 
-function emptyForm(): InsurancePolicyFormInput {
+function emptyForm(defaultType: InsuranceType = "health"): InsurancePolicyFormInput {
   return {
-    type: "health",
+    type: defaultType,
     provider: "",
     coverageAmountNpr: 0,
     premiumNpr: 0,
@@ -126,8 +128,15 @@ function downloadDataUrl(dataUrl: string, fileName: string) {
   anchor.remove();
 }
 
-export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, saving }: InsurancePolicySheetProps) {
-  const [form, setForm] = useState<InsurancePolicyFormInput>(emptyForm);
+export function InsurancePolicySheet({
+  open,
+  editingPolicy,
+  onClose,
+  onSave,
+  saving,
+  defaultType = "health",
+}: InsurancePolicySheetProps) {
+  const [form, setForm] = useState<InsurancePolicyFormInput>(() => emptyForm(defaultType));
   const [familyText, setFamilyText] = useState("");
   const [uploadKind, setUploadKind] = useState<InsuranceDocumentKind>("policy_pdf");
 
@@ -141,14 +150,14 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
         if (process.env.NODE_ENV !== "production") {
           console.error("[insurance-policy-sheet] failed to hydrate edit form", error);
         }
-        setForm(emptyForm());
+        setForm(emptyForm(defaultType));
         setFamilyText("");
       }
       return;
     }
-    setForm(emptyForm());
+    setForm(emptyForm(defaultType));
     setFamilyText("");
-  }, [open, editingPolicy]);
+  }, [open, editingPolicy, defaultType]);
 
   const premiumPreview = buildPremiumDisplay(form.premiumNpr || 0, form.paymentFrequency || "yearly");
   const trackerPreview = useMemo(() => {

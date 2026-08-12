@@ -7,6 +7,7 @@ import { type ReactNode, useCallback } from "react";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { PortfolioAddAssetFab } from "@/components/portfolio/premium/PortfolioAddAssetFab";
 import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShell";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { formatMoney } from "@/lib/expense-utils";
@@ -126,6 +127,9 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
         </>
       }
     >
+      <div className="mb-3">
+        <BackToReturnChecklistLink variant={light ? "light" : "dark"} />
+      </div>
       {hideTotalsStrip ? null : <PortfolioTotalsStrip />}
       {children}
       {hideGlobalAddFab ? null : <PortfolioAddAssetFab />}

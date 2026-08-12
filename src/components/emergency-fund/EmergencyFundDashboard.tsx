@@ -32,6 +32,7 @@ import {
   YAxis,
 } from "recharts";
 import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
+import { BackToReturnChecklistLink } from "@/components/return-to-nepal/BackToReturnChecklistLink";
 import {
   buildEmergencyFundSafetyAnalysis,
   formatEmergencyMonths,
@@ -262,13 +263,16 @@ export function EmergencyFundDashboard() {
     <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <section className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/"
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
-          >
-            <ArrowLeft size={16} />
-            Back to Homepage
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/"
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+            >
+              <ArrowLeft size={16} />
+              Back to Homepage
+            </Link>
+            <BackToReturnChecklistLink variant="light" />
+          </div>
           <button
             type="button"
             onClick={handlePdf}
