@@ -144,14 +144,11 @@ export function useCloudDocumentState<T>({
         return snapshot;
       }
 
+      // Await the PUT only — a follow-up GET confirmation can hang and leave UIs stuck on "Saving…".
       await saveModuleSnapshotToCloud(moduleKey, snapshot);
-      const remote = await fetchModuleSnapshot<unknown>(moduleKey);
-      const confirmed = remote == null ? snapshot : sanitizeRef.current(remote);
-      setState(confirmed);
-      stateRef.current = confirmed;
-      lastSavedRef.current = JSON.stringify(confirmed);
-      saveLocal?.(confirmed);
-      return confirmed;
+      lastSavedRef.current = JSON.stringify(snapshot);
+      saveLocal?.(snapshot);
+      return snapshot;
     },
     [moduleKey, userId, saveLocal],
   );
