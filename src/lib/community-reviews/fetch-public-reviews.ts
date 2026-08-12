@@ -1,13 +1,18 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createPublicSupabaseClient, withServerTimeout } from "@/lib/supabase/server";
 import { HOMEPAGE_DEMO_REVIEWS } from "@/lib/community-reviews/demo-reviews-seed";
 import type { CommunityReviewPublic } from "@/lib/community-reviews/types";
+import type { Database } from "@/types/supabase-database";
 
 const PUBLIC_COLUMNS =
   "id, full_name, country, city, avatar_url, rating, review_title, review_text, verified, created_at";
+
+/** Keep homepage SSR snappy when PostgREST/DB is saturated (DatabaseTimeout). */
+const PUBLIC_FETCH_TIMEOUT_MS = 2_500;
 
 function fallbackReviews(): CommunityReviewPublic[] {
   const now = new Date().toISOString();
@@ -25,6 +30,24 @@ function fallbackReviews(): CommunityReviewPublic[] {
   }));
 }
 
+async function queryApprovedReviews(
+  client: SupabaseClient<Database>,
+): Promise<CommunityReviewPublic[] | null> {
+  const { data, error } = await withServerTimeout(
+    client
+      .from("community_reviews")
+      .select(PUBLIC_COLUMNS)
+      .eq("status", "approved")
+      .is("deleted_at", null)
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: false }),
+    PUBLIC_FETCH_TIMEOUT_MS,
+    "community_reviews",
+  );
+  if (error || !data?.length) return null;
+  return data as CommunityReviewPublic[];
+}
+
 /** Server-side: approved community reviews for the homepage (anon-safe via RLS). */
 export async function fetchApprovedCommunityReviews(): Promise<CommunityReviewPublic[]> {
   if (!isSupabaseConfigured()) {
@@ -32,31 +55,15 @@ export async function fetchApprovedCommunityReviews(): Promise<CommunityReviewPu
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase
-      .from("community_reviews")
-      .select(PUBLIC_COLUMNS)
-      .eq("status", "approved")
-      .is("deleted_at", null)
-      .order("display_order", { ascending: true })
-      .order("created_at", { ascending: false });
+    const rows = await queryApprovedReviews(createPublicSupabaseClient());
+    if (rows?.length) return rows;
 
-    if (error || !data?.length) {
-      const admin = createSupabaseServiceRoleClient();
-      if (admin) {
-        const seeded = await admin
-          .from("community_reviews")
-          .select(PUBLIC_COLUMNS)
-          .eq("status", "approved")
-          .is("deleted_at", null)
-          .order("display_order", { ascending: true })
-          .order("created_at", { ascending: false });
-        if (seeded.data?.length) return seeded.data as CommunityReviewPublic[];
-      }
-      return fallbackReviews();
+    const admin = createSupabaseServiceRoleClient();
+    if (admin) {
+      const seeded = await queryApprovedReviews(admin);
+      if (seeded?.length) return seeded;
     }
-
-    return data as CommunityReviewPublic[];
+    return fallbackReviews();
   } catch {
     return fallbackReviews();
   }

@@ -18,6 +18,8 @@ export const viewport: Viewport = {
   themeColor: FIRE_NEPAL_THEME_COLOR,
 };
 
+export const revalidate = 60;
+
 export async function generateStaticParams() {
   try {
     const posts = await fetchAllPublishedBlogPosts();
