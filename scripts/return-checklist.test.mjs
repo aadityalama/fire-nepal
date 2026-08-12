@@ -521,3 +521,166 @@ describe("Return Checklist — Debt Free", () => {
     assert.equal(debt.detail, "No liabilities");
   });
 });
+
+describe("House plan flow — pure helpers", () => {
+  it("merges selectable statuses into planner state", async () => {
+    const { mergeHousePlanStatus, isSelectableHousePlanStatus, housePlanReturnHref } = await import(
+      "../src/lib/return-to-nepal/house-plan-flow.ts"
+    );
+    const { DEFAULT_RETURN_PLANNER_STATE } = await import("../src/lib/return-to-nepal/default-planner-state.ts");
+
+    for (const status of ["plan_to_buy_build", "already_own", "not_needed"]) {
+      assert.ok(isSelectableHousePlanStatus(status));
+      const merged = mergeHousePlanStatus(DEFAULT_RETURN_PLANNER_STATE, status);
+      assert.equal(merged.housePlanStatus, status);
+    }
+    assert.equal(isSelectableHousePlanStatus("unknown"), false);
+    assert.equal(isSelectableHousePlanStatus(null), false);
+    assert.match(housePlanReturnHref(true), /\/return-to-nepal#return-checklist/);
+  });
+
+  it("detects dirty selection vs saved plan", async () => {
+    const { housePlanSelectionDirty } = await import("../src/lib/return-to-nepal/house-plan-flow.ts");
+    assert.equal(housePlanSelectionDirty("unknown", "already_own"), true);
+    assert.equal(housePlanSelectionDirty("already_own", "already_own"), false);
+    assert.equal(housePlanSelectionDirty("already_own", null), false);
+  });
+});
+
+describe("House plan flow — persist + checklist reflection", () => {
+  it("reflects each saved state on the Return Checklist", () => {
+    const buy = byId(
+      computeReturnChecklist(
+        baseSources({
+          housePlanStatus: "plan_to_buy_build",
+          houseGoalConfigured: true,
+          houseProgressPct: 40,
+        }),
+      ),
+      "house",
+    );
+    assert.equal(buy.status, "in_progress");
+    assert.equal(buy.detail, "40% funded");
+
+    const own = byId(
+      computeReturnChecklist(baseSources({ housePlanStatus: "already_own", houseProgressPct: 0 })),
+      "house",
+    );
+    assert.equal(own.status, "completed");
+    assert.equal(own.detail, "Already own a house");
+    assert.equal(own.badgeLabel, "Completed");
+    assert.doesNotMatch(own.detail, /Missing|0% funded/i);
+
+    const skip = byId(
+      computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
+      "house",
+    );
+    assert.equal(skip.status, "completed");
+    assert.equal(skip.badgeLabel, "Not Needed");
+    assert.doesNotMatch(skip.detail, /0% funded/i);
+  });
+
+  it("unknown state prompts user to choose a plan", () => {
+    const house = byId(
+      computeReturnChecklist(
+        baseSources({
+          housePlanStatus: "unknown",
+          houseGoalConfigured: true,
+          houseProgressPct: 80,
+        }),
+      ),
+      "house",
+    );
+    assert.equal(house.status, "missing");
+    assert.match(house.detail, /Choose your house plan/i);
+  });
+
+  it("sanitize preserves housePlanStatus round-trip", async () => {
+    const { sanitizeReturnPlannerState } = await import("../src/lib/return-to-nepal/sanitize-planner-state.ts");
+    for (const status of ["plan_to_buy_build", "already_own", "not_needed", "unknown"]) {
+      const next = sanitizeReturnPlannerState({ housePlanStatus: status });
+      assert.equal(next.housePlanStatus, status);
+    }
+  });
+});
+
+describe("House plan flow — house decision page wiring", () => {
+  it("uses Save & Continue with persistNow and does not navigate on option tap", () => {
+    const src = readFileSync(
+      new URL("../src/components/return-to-nepal/ReturnToNepalHouseDecisionPage.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /Save & Continue/);
+    assert.match(src, /data-testid="house-plan-save-continue"/);
+    assert.match(src, /persistNow\(mergeHousePlanStatus/);
+    assert.match(src, /setPending\(option\.id\)/);
+    assert.doesNotMatch(src, /onClick=\{\(\) => choose\(/);
+    assert.match(src, /data-testid="house-plan-load-error"/);
+    assert.match(src, /Load failed/);
+    assert.match(src, /retryHydrate/);
+    assert.match(src, /aria-pressed=\{selected\}/);
+    assert.match(src, /fixed inset-x-0 bottom-0/);
+  });
+
+  it("ReturnToNepalContext exposes hydrate + persist for canonical storage", () => {
+    const src = readFileSync(new URL("../src/contexts/ReturnToNepalContext.tsx", import.meta.url), "utf8");
+    assert.match(src, /moduleKey: "return_to_nepal"/);
+    assert.match(src, /hydrateError/);
+    assert.match(src, /persistNow/);
+    assert.match(src, /retryHydrate/);
+  });
+
+  it("cloud document state surfaces hydrate failures instead of hiding them", () => {
+    const src = readFileSync(new URL("../src/hooks/useCloudDocumentState.ts", import.meta.url), "utf8");
+    assert.match(src, /hydrateError/);
+    assert.match(src, /setHydrateError\(message\)/);
+    assert.match(src, /retryHydrate/);
+  });
+});
+
+describe("House plan flow — mobile selection fixture", () => {
+  it("full-card tap selects option without navigating (Playwright)", async () => {
+    const { chromium, devices } = await import("playwright");
+    const { writeFileSync, mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    const dir = mkdtempSync(join(tmpdir(), "house-plan-"));
+    const htmlPath = join(dir, "index.html");
+    writeFileSync(
+      htmlPath,
+      `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;font-family:system-ui;background:#000805;color:#fff}
+.card{display:block;width:100%;text-align:left;border:1px solid rgba(255,255,255,.1);background:#111;border-radius:16px;padding:16px;margin:12px 0}
+.card[aria-pressed=true]{border-color:#34d399;background:rgba(16,185,129,.15)}
+#save{position:fixed;left:16px;right:16px;bottom:16px;min-height:52px;border:0;border-radius:16px;background:#10b981;font-weight:800}
+#save:disabled{opacity:.35}
+#log{padding:12px;color:#6ee7b7;min-height:24px}
+</style></head><body>
+<div id="log">Tap a card</div>
+<button class="card" data-testid="house-plan-already_own" aria-pressed="false">I already own a house</button>
+<button class="card" data-testid="house-plan-not_needed" aria-pressed="false">Not needed</button>
+<button id="save" data-testid="house-plan-save-continue" disabled>Save & Continue</button>
+<script>
+let pending=null; const log=document.getElementById('log'); const save=document.getElementById('save');
+document.querySelectorAll('.card').forEach(btn=>btn.addEventListener('click',()=>{
+  pending=btn.dataset.testid.replace('house-plan-','');
+  document.querySelectorAll('.card').forEach(b=>b.setAttribute('aria-pressed', b===btn?'true':'false'));
+  save.disabled=false; log.textContent='selected:'+pending;
+}));
+save.addEventListener('click',()=>{ if(pending) log.textContent='saved:'+pending; });
+</script></body></html>`,
+    );
+
+    const browser = await chromium.launch({ headless: true, channel: "chrome" });
+    const page = await browser.newContext({ ...devices["iPhone 12"] }).then((c) => c.newPage());
+    await page.goto(`file://${htmlPath}`);
+    await page.locator('[data-testid="house-plan-already_own"]').click({ position: { x: 20, y: 20 } });
+    assert.equal(await page.locator('[data-testid="house-plan-already_own"]').getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator("#save").isEnabled(), true);
+    await page.locator("#save").click();
+    assert.match(await page.locator("#log").innerText(), /saved:already_own/);
+    await browser.close();
+  });
+});
