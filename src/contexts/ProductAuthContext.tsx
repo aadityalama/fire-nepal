@@ -192,7 +192,7 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
       const sb = getSupabaseBrowserClient();
       void (async () => {
         try {
-          const { data, error } = await sb.auth.getSession();
+          const { data, error } = await withAuthTimeout(sb.auth.getSession());
           if (cancelled) return;
           if (error) throw error;
           const u = data.session?.user ? mapSupabaseUser(data.session.user) : null;
@@ -232,7 +232,11 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     void (async () => {
-      await refreshSession();
+      try {
+        await withAuthTimeout(refreshSession());
+      } catch {
+        /* timeout / network — treat as signed out */
+      }
       if (!cancelled) setLoading(false);
     })();
     return () => {
