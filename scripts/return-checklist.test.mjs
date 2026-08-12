@@ -657,6 +657,42 @@ describe("House plan flow — house decision page wiring", () => {
     assert.match(src, /Timed out loading/);
   });
 
+  it("module snapshot API dedupes in-flight loads and caches with TTL", () => {
+    const src = readFileSync(new URL("../src/lib/module-snapshots/api.ts", import.meta.url), "utf8");
+    assert.match(src, /MODULE_SNAPSHOT_CLIENT_CACHE_TTL_MS/);
+    assert.match(src, /inflightLoads/);
+    assert.match(src, /invalidateModuleSnapshotCache/);
+    assert.match(src, /writeCache\(moduleKey, state\)/);
+    assert.doesNotMatch(src, /cache:\s*"no-store"/);
+  });
+
+  it("module snapshot GET route sends private Cache-Control revalidation headers", () => {
+    const src = readFileSync(
+      new URL("../app/api/module-snapshots/[moduleKey]/route.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /private, max-age=30, stale-while-revalidate=60/);
+    assert.match(src, /GET_CACHE_HEADERS/);
+  });
+
+  it("persistNow does not re-GET module snapshot after a successful PUT", () => {
+    const src = readFileSync(new URL("../src/hooks/useCloudDocumentState.ts", import.meta.url), "utf8");
+    assert.match(src, /await saveModuleSnapshotToCloud\(moduleKey, snapshot\)/);
+    assert.doesNotMatch(
+      src,
+      /await saveModuleSnapshotToCloud\(moduleKey, snapshot\);\s*const remote = await fetchModuleSnapshot/s,
+    );
+  });
+
+  it("financial intel rollup upsert skips no-op updates that only change updatedAt", () => {
+    const src = readFileSync(
+      new URL("../src/components/financial-intelligence/monthly-rollup-storage.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /rollupContentEqual/);
+    assert.match(src, /return rows/);
+  });
+
   it("Return planner shell renders immediately with hydrate error retry", () => {
     const src = readFileSync(
       new URL("../src/components/return-to-nepal/ReturnToNepalPlannerDashboard.tsx", import.meta.url),

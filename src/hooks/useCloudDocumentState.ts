@@ -129,7 +129,10 @@ export function useCloudDocumentState<T>({
       }
 
       try {
-        const remote = await fetchModuleSnapshot<unknown>(moduleKey);
+        // hydrateAttempt > 0 is an explicit retry — bypass client TTL cache.
+        const remote = await fetchModuleSnapshot<unknown>(moduleKey, {
+          force: hydrateAttempt > 0,
+        });
         if (cancelled) return;
         const next = remote == null ? getDefaultRef.current() : sanitizeRef.current(remote);
         setState(next);
@@ -184,14 +187,11 @@ export function useCloudDocumentState<T>({
         return snapshot;
       }
 
+      // Trust the PUT — avoid a follow-up GET that doubled /api/module-snapshots traffic.
       await saveModuleSnapshotToCloud(moduleKey, snapshot);
-      const remote = await fetchModuleSnapshot<unknown>(moduleKey);
-      const confirmed = remote == null ? snapshot : sanitizeRef.current(remote);
-      setState(confirmed);
-      stateRef.current = confirmed;
-      lastSavedRef.current = JSON.stringify(confirmed);
-      saveLocalRef.current?.(confirmed);
-      return confirmed;
+      lastSavedRef.current = JSON.stringify(snapshot);
+      saveLocalRef.current?.(snapshot);
+      return snapshot;
     },
     [moduleKey, userId],
   );
