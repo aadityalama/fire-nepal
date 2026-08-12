@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Home,
   LineChart,
+  RefreshCw,
   Scale,
   Shield,
   Sparkles,
@@ -113,20 +114,15 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 }
 
 export function ReturnToNepalPlannerDashboard() {
-  const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
+  const { effectiveState, snapshot, live, patch, state, cloudReady, hydrateError, retryHydrate } =
+    useReturnToNepalPlanner();
   const { user } = useProductAuth();
   const { profile } = useCurrentUserProfile();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
   const { policies: insurancePolicies } = useInsurancePoliciesLive();
   const { summary, portfolio } = useUnifiedFireSummary();
   const wealth = summary.wealthTotals;
-  const [mounted, setMounted] = useState(false);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setMounted(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,25 +143,32 @@ export function ReturnToNepalPlannerDashboard() {
     };
   }, [user?.id, snapshot.estimatedReturnYear]);
 
+  // Wait for cloud hydrate before writing derived flags — avoids save storms / overwriting cloud with defaults.
   useEffect(() => {
+    if (!cloudReady || hydrateError) return;
     if ((portfolio.liabilities?.length ?? 0) > 0 || wealth.liabilitiesNpr > 0) {
       if (!state.debtReviewed) patch({ debtReviewed: true });
     }
-  }, [portfolio.liabilities, wealth.liabilitiesNpr, state.debtReviewed, patch]);
+  }, [cloudReady, hydrateError, portfolio.liabilities, wealth.liabilitiesNpr, state.debtReviewed, patch]);
 
   useEffect(() => {
+    if (!cloudReady || hydrateError) return;
     const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies);
     const same =
       synced.length === state.settlementChecklist.length && synced.every((id) => state.settlementChecklist.includes(id));
     if (!same) patch({ settlementChecklist: synced });
-  }, [insuranceInputs, insuranceTick, insurancePolicies, patch, state.settlementChecklist]);
+  }, [cloudReady, hydrateError, insuranceInputs, insuranceTick, insurancePolicies, patch, state.settlementChecklist]);
 
   useEffect(() => {
-    const onInsurance = () =>
-      patch({ settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies) });
+    const onInsurance = () => {
+      if (!cloudReady || hydrateError) return;
+      patch({
+        settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies),
+      });
+    };
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
     return () => window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
-  }, [insuranceInputs, insurancePolicies, patch, state.settlementChecklist]);
+  }, [cloudReady, hydrateError, insuranceInputs, insurancePolicies, patch, state.settlementChecklist]);
 
   const nwMomPct = useMemo(
     () => netWorthMonthOverMonthPercent(portfolio.netWorthHistory ?? []),
@@ -243,13 +246,32 @@ export function ReturnToNepalPlannerDashboard() {
     very_safe: "text-teal-200 bg-teal-500/15 ring-teal-400/25",
   } as const;
 
-  if (!mounted) {
-    return <div className="min-h-screen" style={{ background: PAGE_BG }} />;
-  }
-
   return (
-    <div className="min-h-screen pb-28 text-white" style={{ background: PAGE_BG }}>
+    <div
+      className="min-h-screen pb-28 text-white"
+      style={{ background: PAGE_BG }}
+      data-testid="return-to-nepal-shell"
+    >
       <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
+        {hydrateError ? (
+          <div
+            className="mb-4 rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3"
+            role="alert"
+            data-testid="return-to-nepal-load-error"
+          >
+            <p className="text-sm font-black text-rose-100">Could not load your Return plan</p>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-rose-100/80">{hydrateError}</p>
+            <button
+              type="button"
+              onClick={retryHydrate}
+              className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-rose-300/30 bg-rose-500/15 px-3.5 py-2 text-xs font-black text-rose-50"
+            >
+              <RefreshCw size={14} aria-hidden />
+              Retry
+            </button>
+          </div>
+        ) : null}
+
         {/* Header */}
         <header className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">

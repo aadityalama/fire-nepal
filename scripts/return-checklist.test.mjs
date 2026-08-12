@@ -636,6 +636,48 @@ describe("House plan flow — house decision page wiring", () => {
     assert.match(src, /setHydrateError\(message\)/);
     assert.match(src, /retryHydrate/);
   });
+
+  it("cloud document state paints shell immediately and ignores unstable local callback identity", () => {
+    const src = readFileSync(new URL("../src/hooks/useCloudDocumentState.ts", import.meta.url), "utf8");
+    // Callbacks are read from refs — not listed in hydrate effect deps.
+    assert.match(src, /loadLocalRef\.current/);
+    assert.match(src, /saveLocalRef\.current/);
+    assert.match(src, /clearLocalRef\.current/);
+    assert.match(src, /\[authLoading, userId, moduleKey, hydrateAttempt\]/);
+    assert.doesNotMatch(src, /loadLocal, saveLocal, clearLocal, hydrateAttempt/);
+    // Authenticated path marks hydrated before awaiting the network.
+    assert.match(src, /setHydrated\(true\)/);
+    assert.match(src, /paint empty shell immediately|Shell paints immediately|shellReadyRef/i);
+  });
+
+  it("module snapshot API enforces request timeouts", () => {
+    const src = readFileSync(new URL("../src/lib/module-snapshots/api.ts", import.meta.url), "utf8");
+    assert.match(src, /MODULE_SNAPSHOT_TIMEOUT_MS/);
+    assert.match(src, /AbortController/);
+    assert.match(src, /Timed out loading/);
+  });
+
+  it("Return planner shell renders immediately with hydrate error retry", () => {
+    const src = readFileSync(
+      new URL("../src/components/return-to-nepal/ReturnToNepalPlannerDashboard.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /data-testid="return-to-nepal-shell"/);
+    assert.match(src, /data-testid="return-to-nepal-load-error"/);
+    assert.match(src, /retryHydrate/);
+    assert.doesNotMatch(src, /if \(!mounted\)/);
+  });
+
+  it("House plan page keeps shell interactive while cloud syncs", () => {
+    const src = readFileSync(
+      new URL("../src/components/return-to-nepal/ReturnToNepalHouseDecisionPage.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /data-testid="house-plan-shell"/);
+    assert.match(src, /Syncing…/);
+    assert.doesNotMatch(src, /disabled=\{loading \|\| Boolean\(hydrateError\) \|\| saving\}/);
+    assert.match(src, /userPickedRef/);
+  });
 });
 
 describe("House plan flow — mobile selection fixture", () => {

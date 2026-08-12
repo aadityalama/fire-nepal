@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Home, Ban, Hammer, RefreshCw } from "lucide-react";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useReturnToNepalPlanner } from "@/contexts/ReturnToNepalContext";
 import { BackToReturnChecklistBanner } from "@/components/return-to-nepal/BackToReturnChecklistBanner";
 import { RETURN_CHECKLIST_FROM } from "@/lib/return-to-nepal/return-checklist-routes";
@@ -61,16 +61,21 @@ export function ReturnToNepalHouseDecisionPage() {
   const [initialized, setInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const userPickedRef = useRef(false);
 
+  // Shell paints immediately (hydrated). Soft-sync pending from cloud when ready,
+  // without blanking the page or disabling options forever.
   useEffect(() => {
-    if (!hydrated || !cloudReady || initialized) return;
+    if (!hydrated) return;
+    if (userPickedRef.current) return;
+    if (!cloudReady && !hydrateError) return;
     setPending(isSelectableHousePlanStatus(savedStatus) ? savedStatus : null);
     setInitialized(true);
-  }, [hydrated, cloudReady, initialized, savedStatus]);
+  }, [hydrated, cloudReady, hydrateError, savedStatus]);
 
-  const loading = !hydrated || !cloudReady;
+  const syncing = hydrated && !cloudReady && !hydrateError;
   const dirty = housePlanSelectionDirty(savedStatus, pending);
-  const canSave = isSelectableHousePlanStatus(pending) && !saving && !hydrateError;
+  const canSave = isSelectableHousePlanStatus(pending) && !saving && !hydrateError && !syncing;
   const backHref = housePlanReturnHref(fromChecklist);
 
   const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -94,7 +99,7 @@ export function ReturnToNepalHouseDecisionPage() {
   };
 
   return (
-    <div className="min-h-screen pb-32 text-white" style={{ background: PAGE_BG }}>
+    <div className="min-h-screen pb-32 text-white" style={{ background: PAGE_BG }} data-testid="house-plan-shell">
       <div className="mx-auto max-w-lg px-4 pt-4 sm:px-6 sm:pt-6">
         <BackToReturnChecklistBanner />
         <header className="mb-6 flex items-start gap-3">
@@ -143,7 +148,7 @@ export function ReturnToNepalHouseDecisionPage() {
         <div className={`${GLASS} mb-4 p-4`}>
           <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-100/45">Saved plan</p>
           <p className="mt-2 text-sm font-bold text-white" data-testid="house-plan-saved-label">
-            {loading ? "Loading…" : savedPlanLabel(savedStatus)}
+            {syncing ? "Syncing…" : savedPlanLabel(savedStatus)}
           </p>
           {savedStatus === "plan_to_buy_build" ? (
             <p className="mt-1 text-xs font-semibold text-white/45">
@@ -166,9 +171,11 @@ export function ReturnToNepalHouseDecisionPage() {
                   type="button"
                   data-testid={`house-plan-${option.id}`}
                   aria-pressed={selected}
-                  disabled={loading || Boolean(hydrateError) || saving}
+                  disabled={Boolean(hydrateError) || saving}
                   onClick={() => {
+                    userPickedRef.current = true;
                     setPending(option.id);
+                    setInitialized(true);
                     setSaveError(null);
                   }}
                   className={`flex min-h-[64px] w-full cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -209,7 +216,7 @@ export function ReturnToNepalHouseDecisionPage() {
           >
             {saving ? "Saving…" : "Save & Continue"}
           </button>
-          {!isSelectableHousePlanStatus(pending) && !loading ? (
+          {!isSelectableHousePlanStatus(pending) && initialized && !syncing ? (
             <p className="mt-2 text-center text-[11px] font-semibold text-white/40">
               Select a housing plan to continue
             </p>

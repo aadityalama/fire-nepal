@@ -83,19 +83,17 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
 
   useEffect(() => {
     const bump = () => resync();
+    // Module sync events only — avoid focus/visibility storms on mobile browsers
+    // that re-fire when the address bar shows/hides and can loop cloud fetches.
     window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
     window.addEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, bump);
-    window.addEventListener("focus", bump);
-    document.addEventListener("visibilitychange", bump);
     return () => {
       window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, bump);
-      window.removeEventListener("focus", bump);
-      document.removeEventListener("visibilitychange", bump);
     };
   }, [resync]);
 

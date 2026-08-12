@@ -73,11 +73,10 @@ export function useInsurancePoliciesLive(): {
       }
       setPolicies(loadInsuranceWorkspaceState().policies);
     };
+    // Insurance module sync only — no focus listener (mobile focus storms).
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, onSync);
-    window.addEventListener("focus", onSync);
     return () => {
       window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onSync);
-      window.removeEventListener("focus", onSync);
     };
   }, [uid]);
 
