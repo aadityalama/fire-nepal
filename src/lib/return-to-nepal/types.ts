@@ -20,6 +20,9 @@ export type PlannerSectionId =
 
 export type ConstructionPhaseId = "land" | "foundation" | "structure" | "roof" | "interior" | "handover";
 
+/** User decision for Nepal housing readiness (Return Checklist). */
+export type HousePlanStatus = "unknown" | "plan_to_buy_build" | "already_own" | "not_needed";
+
 export type SettlementChecklistId =
   | "schoolAdmissions"
   | "healthNepal"
@@ -66,6 +69,12 @@ export type ReturnToNepalPlannerState = {
   homeLoanYears: number;
   houseProgressPct: number;
   completedPhases: ConstructionPhaseId[];
+  /**
+   * Housing intent for Return Checklist.
+   * unknown → choose plan; plan_to_buy_build → fund via savings goal;
+   * already_own / not_needed → completed without funding %.
+   */
+  housePlanStatus: HousePlanStatus;
   /** Passive income (monthly NPR at today’s terms — engine inflates for future display where noted) */
   pensionMonthlyNpr: number;
   dividendMonthlyNpr: number;

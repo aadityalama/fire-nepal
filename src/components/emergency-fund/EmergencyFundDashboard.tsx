@@ -45,6 +45,7 @@ import {
   type EmergencyRiskProfileKey,
 } from "@/lib/emergency-fund";
 import { downloadEmergencyFundSafetyReportPdf } from "@/lib/emergency-fund-report";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 
 function sanitizeDecimalInput(value: string) {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -312,6 +313,7 @@ export function EmergencyFundDashboard() {
   return (
     <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <section className="mx-auto max-w-7xl">
+        <BackToReturnChecklistBannerSlot light className="mb-3" />
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href="/"

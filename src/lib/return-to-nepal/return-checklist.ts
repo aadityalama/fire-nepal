@@ -5,7 +5,8 @@ import {
 } from "@/lib/insurance/insurance-engine";
 import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
 import { sumCoverageByType } from "@/lib/insurance/insurance-utils";
-import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
+import { returnChecklistHref } from "@/lib/return-to-nepal/return-checklist-routes";
+import type { HousePlanStatus, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
 export type ChecklistStatus = "completed" | "on_track" | "in_progress" | "missing";
 
@@ -14,6 +15,10 @@ export type ReturnChecklistItem = {
   label: string;
   status: ChecklistStatus;
   detail: string;
+  /** Real app route — whole card must navigate here. */
+  href: string;
+  /** Optional badge override (e.g. Not Needed). */
+  badgeLabel?: string;
 };
 
 /** Canonical inputs for Return Checklist — no localStorage reads inside the pure compute. */
@@ -48,6 +53,7 @@ export type ReturnChecklistSources = {
   houseProgressPct: number;
   /** Whether a house savings goal (or progress source) exists. */
   houseGoalConfigured: boolean;
+  housePlanStatus: HousePlanStatus;
   adults: number;
   children: number;
   /** True when COL/household was user-persisted or differs from factory defaults. */
@@ -82,6 +88,29 @@ function coverageProgressPct(current: number, recommended: number): number {
   return Math.min(100, (current / (recommended * 0.7)) * 100);
 }
 
+function houseChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  const { housePlanStatus, houseGoalConfigured, houseProgressPct } = sources;
+  if (housePlanStatus === "already_own") {
+    return { status: "completed", detail: "Already own a home in Nepal", badgeLabel: "Completed" };
+  }
+  if (housePlanStatus === "not_needed") {
+    return { status: "completed", detail: "House purchase not needed", badgeLabel: "Not Needed" };
+  }
+  if (housePlanStatus === "plan_to_buy_build") {
+    if (!houseGoalConfigured) {
+      return { status: "missing", detail: "Set house goal in Savings" };
+    }
+    return {
+      status: deriveChecklistStatus(houseProgressPct),
+      detail: `${houseProgressPct.toFixed(0)}% funded`,
+    };
+  }
+  return { status: "missing", detail: "Choose your house plan" };
+}
+
 /**
  * Pure Return Checklist compute — all I/O must be resolved into `sources` first.
  */
@@ -99,8 +128,6 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     passiveTargetMonthlyNpr,
     insurancePolicies,
     insuranceInputs,
-    houseProgressPct,
-    houseGoalConfigured,
     adults,
     children,
     householdConfigured,
@@ -143,7 +170,7 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
   const healthPct = healthOk ? 100 : coverageProgressPct(healthCoverage, recommendation.recommendedHealthCoverageNpr);
   const lifePct = lifeOk ? 100 : coverageProgressPct(lifeCoverage, recommendation.recommendedLifeCoverageNpr);
 
-  const housePct = houseGoalConfigured ? houseProgressPct : 0;
+  const house = houseChecklistFields(sources);
 
   const schoolOk =
     familyCostSignalsConfigured && (schoolFeesMonthlyNpr > 0 || (householdConfigured && children === 0));
@@ -165,7 +192,7 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     debtPct = Math.max(0, 100 - Math.min(100, (liabilitiesNpr / Math.max(totalInvestmentNpr + liabilitiesNpr, 1)) * 100));
   }
 
-  return [
+  const items: Omit<ReturnChecklistItem, "href">[] = [
     {
       id: "emergency",
       label: `Emergency Fund (${emergencyTarget} Months)`,
@@ -221,8 +248,9 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     {
       id: "house",
       label: "House in Nepal",
-      status: deriveChecklistStatus(housePct),
-      detail: houseGoalConfigured ? `${houseProgressPct.toFixed(0)}% funded` : "Set house goal in Savings",
+      status: house.status,
+      detail: house.detail,
+      badgeLabel: house.badgeLabel,
     },
     {
       id: "family",
@@ -253,4 +281,9 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
           : "No liabilities",
     },
   ];
+
+  return items.map((item) => ({
+    ...item,
+    href: returnChecklistHref(item.id),
+  }));
 }

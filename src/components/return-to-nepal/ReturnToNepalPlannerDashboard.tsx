@@ -51,7 +51,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 const PAGE_BG = "#000805";
 const GLASS = "rounded-[1.35rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.5rem]";
 
-function StatusBadge({ status }: { status: ChecklistStatus }) {
+function StatusBadge({ status, label }: { status: ChecklistStatus; label?: string }) {
   const styles: Record<ChecklistStatus, string> = {
     completed: "bg-emerald-500/20 text-emerald-300 ring-emerald-400/30",
     on_track: "bg-teal-500/15 text-teal-200 ring-teal-400/25",
@@ -66,7 +66,7 @@ function StatusBadge({ status }: { status: ChecklistStatus }) {
   };
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${styles[status]}`}>
-      {labels[status]}
+      {label ?? labels[status]}
     </span>
   );
 }
@@ -453,16 +453,29 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
           </div>
 
-          <div className={`${GLASS} p-5 sm:p-6`}>
+          <div id="return-checklist" className={`${GLASS} scroll-mt-24 p-5 sm:p-6`}>
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-100/45">Return Checklist</h2>
+            <p className="mt-1 text-[11px] font-semibold text-white/35">Tap a card to open &amp; edit</p>
             <ul className="mt-4 space-y-3">
               {checklist.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-white">{item.label}</p>
-                    <p className="text-[11px] font-semibold text-white/40">{item.detail}</p>
-                  </div>
-                  <StatusBadge status={item.status} />
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    data-testid={`return-checklist-${item.id}`}
+                    aria-label={`Open ${item.label} — ${item.badgeLabel ?? item.status}`}
+                    className="group flex min-h-[56px] w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5 text-left transition hover:border-emerald-400/35 hover:bg-emerald-500/[0.08] active:scale-[0.99] active:bg-emerald-500/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-white">{item.label}</p>
+                      <p className="truncate text-[11px] font-semibold text-white/40">{item.detail}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <StatusBadge status={item.status} label={item.badgeLabel} />
+                      <span className="grid h-8 w-8 place-items-center rounded-lg text-white/35 transition group-hover:text-emerald-300 group-active:text-emerald-200">
+                        <ChevronRight size={18} aria-hidden />
+                      </span>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>

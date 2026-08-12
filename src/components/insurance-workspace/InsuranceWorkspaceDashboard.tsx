@@ -61,6 +61,7 @@ import {
   upcomingRenewals,
 } from "@/lib/insurance/insurance-utils";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
 
@@ -558,6 +559,7 @@ export function InsuranceWorkspaceDashboard() {
       </div>
 
       <div className="relative mx-auto flex w-full max-w-lg flex-col gap-4 lg:max-w-6xl lg:gap-5">
+        <BackToReturnChecklistBannerSlot />
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <Link

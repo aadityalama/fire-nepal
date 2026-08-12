@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { EmeraldGlassVaultIllustration } from "@/components/savings-workspace/EmeraldGlassVaultIllustration";
 import { SavingsGoalCard } from "@/components/savings-workspace/SavingsGoalCard";
 import { SavingsGoalSheet } from "@/components/savings-workspace/SavingsGoalSheet";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { fetchSavingsWorkspace, saveSavingsWorkspaceToCloud } from "@/lib/savings/savings-api";
 import {
@@ -279,6 +280,7 @@ export function SavingsWorkspaceDashboard() {
       </div>
 
       <div className="relative mx-auto flex w-full max-w-lg flex-col gap-4 lg:max-w-6xl lg:gap-5">
+        <BackToReturnChecklistBannerSlot />
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <Link

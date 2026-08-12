@@ -56,6 +56,7 @@ export function buildReturnChecklistSources(args: {
     insuranceInputs,
     houseProgressPct: live.houseProgressPct,
     houseGoalConfigured: live.houseGoalConfigured,
+    housePlanStatus: effectiveState.housePlanStatus ?? "unknown",
     adults: effectiveState.adults,
     children: effectiveState.children,
     householdConfigured: live.householdConfigured,

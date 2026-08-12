@@ -27,6 +27,7 @@ export const DEFAULT_RETURN_PLANNER_STATE: ReturnToNepalPlannerState = {
   homeLoanYears: 0,
   houseProgressPct: 0,
   completedPhases: [],
+  housePlanStatus: "unknown",
   pensionMonthlyNpr: 0,
   dividendMonthlyNpr: 0,
   fdMonthlyNpr: 0,

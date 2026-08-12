@@ -10,6 +10,7 @@ import { FamilyBtnGhost, FamilyBtnPrimary } from "@/components/family-module/ui/
 import { FamilyFieldLabel, FamilyInput, FamilySelect, FamilyTextarea } from "@/components/family-module/ui/FamilyFormFields";
 import { FamilyOverlay } from "@/components/family-module/ui/FamilyOverlay";
 import { FamilyGlassCard, FamilySectionTitle, familyHeadingClass, familyMutedText } from "./FamilyUiPrimitives";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 
 function formatNpr(n: number): string {
   return new Intl.NumberFormat("en-NP", { maximumFractionDigits: 0 }).format(n);
@@ -42,6 +43,7 @@ export function FamilyHubDashboard() {
 
   return (
     <div className="mx-auto max-w-6xl">
+      <BackToReturnChecklistBannerSlot light={light} className="mb-3 px-4 pt-3 sm:px-0" />
       <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${light ? "text-emerald-700/80" : "text-emerald-400/70"}`}>

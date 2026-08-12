@@ -12,5 +12,12 @@ export function sanitizeReturnPlannerState(raw: unknown): ReturnToNepalPlannerSt
       ? parsed.settlementChecklist
       : DEFAULT_RETURN_PLANNER_STATE.settlementChecklist,
     debtReviewed: Boolean(parsed.debtReviewed),
+    housePlanStatus:
+      parsed.housePlanStatus === "plan_to_buy_build" ||
+      parsed.housePlanStatus === "already_own" ||
+      parsed.housePlanStatus === "not_needed" ||
+      parsed.housePlanStatus === "unknown"
+        ? parsed.housePlanStatus
+        : DEFAULT_RETURN_PLANNER_STATE.housePlanStatus,
   };
 }

@@ -4,6 +4,7 @@
  * Run: npx tsx --test scripts/return-checklist.test.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   computeReturnChecklist,
@@ -54,6 +55,7 @@ function baseSources(overrides = {}) {
     insuranceInputs: baseInsuranceInputs(),
     houseProgressPct: 0,
     houseGoalConfigured: false,
+    housePlanStatus: "unknown",
     adults: 2,
     children: 1,
     householdConfigured: false,
@@ -262,10 +264,27 @@ describe("Return Checklist — Insurance", () => {
 });
 
 describe("Return Checklist — House", () => {
-  it("uses the same progress % for detail and status", () => {
+  it("asks to choose a plan when housePlanStatus is unknown", () => {
     const house = byId(
       computeReturnChecklist(
         baseSources({
+          housePlanStatus: "unknown",
+          houseGoalConfigured: true,
+          houseProgressPct: 40,
+        }),
+      ),
+      "house",
+    );
+    assert.equal(house.status, "missing");
+    assert.match(house.detail, /Choose your house plan/i);
+    assert.match(house.href, /\/return-to-nepal\/house/);
+  });
+
+  it("uses the same progress % for detail and status when planning to buy/build", () => {
+    const house = byId(
+      computeReturnChecklist(
+        baseSources({
+          housePlanStatus: "plan_to_buy_build",
           houseGoalConfigured: true,
           houseProgressPct: 40,
         }),
@@ -276,10 +295,28 @@ describe("Return Checklist — House", () => {
     assert.equal(house.status, "in_progress");
   });
 
-  it("stays missing until a house goal exists", () => {
+  it("does not show MISSING/0% when already_own or not_needed", () => {
+    const own = byId(
+      computeReturnChecklist(baseSources({ housePlanStatus: "already_own", houseProgressPct: 0 })),
+      "house",
+    );
+    assert.equal(own.status, "completed");
+    assert.match(own.detail, /Already own/i);
+    assert.doesNotMatch(own.detail, /0% funded/);
+
+    const skip = byId(
+      computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
+      "house",
+    );
+    assert.equal(skip.status, "completed");
+    assert.equal(skip.badgeLabel, "Not Needed");
+  });
+
+  it("stays missing until a house goal exists when plan_to_buy_build", () => {
     const house = byId(
       computeReturnChecklist(
         baseSources({
+          housePlanStatus: "plan_to_buy_build",
           houseGoalConfigured: false,
           houseProgressPct: 80,
         }),
@@ -288,6 +325,64 @@ describe("Return Checklist — House", () => {
     );
     assert.equal(house.status, "missing");
     assert.match(house.detail, /Set house goal/i);
+  });
+});
+
+describe("Return Checklist — navigation hrefs", () => {
+  it("attaches real workspace hrefs to every card", () => {
+    const items = computeReturnChecklist(baseSources());
+    const expected = {
+      emergency: "/emergency-fund",
+      ssf: "/portfolio/pension/ssf",
+      investment: "/portfolio/investments",
+      passive: "/cashflow-dashboard",
+      health: "/insurance",
+      life: "/insurance",
+      house: "/return-to-nepal/house",
+      family: "/family",
+      business: "/savings-tracker",
+      debt: "/portfolio/liabilities",
+    };
+    for (const [id, path] of Object.entries(expected)) {
+      const item = byId(items, id);
+      assert.ok(item.href.includes(path), `${id} href ${item.href} should include ${path}`);
+      assert.ok(item.href.includes("from=return-checklist"), `${id} should include from=return-checklist`);
+    }
+  });
+});
+
+describe("Return Checklist — rendered card wiring", () => {
+  it("dashboard maps items to Link with href, test id, and chevron affordance", () => {
+    const src = readFileSync(
+      new URL("../src/components/return-to-nepal/ReturnToNepalPlannerDashboard.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /id="return-checklist"/);
+    assert.match(src, /href=\{item\.href\}/);
+    assert.match(src, /data-testid=\{`return-checklist-\$\{item\.id\}`\}/);
+    assert.match(src, /cursor-pointer/);
+    assert.match(src, /ChevronRight/);
+    assert.match(src, /Tap a card to open/);
+    assert.doesNotMatch(
+      src,
+      /checklist\.map\(\(item\) => \(\s*<li key=\{item\.id\} className="flex items-center/,
+    );
+  });
+
+  it("exposes stable href map for all ten checklist ids", async () => {
+    const { RETURN_CHECKLIST_HREFS } = await import("../src/lib/return-to-nepal/return-checklist-routes.ts");
+    assert.deepEqual(Object.keys(RETURN_CHECKLIST_HREFS).sort(), [
+      "business",
+      "debt",
+      "emergency",
+      "family",
+      "health",
+      "house",
+      "investment",
+      "life",
+      "passive",
+      "ssf",
+    ]);
   });
 });
 

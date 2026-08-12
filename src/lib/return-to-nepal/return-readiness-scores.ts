@@ -99,9 +99,13 @@ export function computeReturnReadinessScores(
   const insurancePct = clampPct((healthOk ? 50 : 0) + (lifeOk ? 50 : 0));
 
   const housePct = checklistSources
-    ? checklistSources.houseGoalConfigured
-      ? clampPct(checklistSources.houseProgressPct)
-      : 0
+    ? checklistSources.housePlanStatus === "already_own" || checklistSources.housePlanStatus === "not_needed"
+      ? 100
+      : checklistSources.housePlanStatus === "plan_to_buy_build"
+        ? checklistSources.houseGoalConfigured
+          ? clampPct(checklistSources.houseProgressPct)
+          : 0
+        : 0
     : (() => {
         const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
         const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
