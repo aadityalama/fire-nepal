@@ -34,6 +34,7 @@ import {
   sortIncomeEntriesByDateDesc,
   type CashflowWorkspaceInsight,
 } from "@/components/cashflow-workspace/cashflow-workspace-utils";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 import { formatNpr } from "@/components/expense-workspace/expense-workspace-utils";
 import {
   buildIncomeHistoryChartData,
@@ -330,6 +331,7 @@ export function CashflowWorkspaceDashboard({
       </div>
 
       <div className="relative mx-auto flex w-full max-w-lg flex-col gap-5 lg:max-w-6xl lg:gap-6">
+        <BackToReturnChecklistBannerSlot />
         <header>
           <Link
             href="/finance"

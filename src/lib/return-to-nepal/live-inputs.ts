@@ -5,9 +5,14 @@ import { passiveIncomeMonthlyNpr } from "@/components/portfolio/calculations";
 import type { SimpleMoneyLine, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { computeCashflowLiveMetrics } from "@/lib/cashflow/cashflow-live-metrics";
 import type { ColPlanState } from "@/lib/nepal-col-dashboard";
-import { computeColSnapshot } from "@/lib/nepal-col-dashboard";
+import { computeColSnapshot, defaultColPlan } from "@/lib/nepal-col-dashboard";
 import { nprToKrw } from "@/lib/exchange-rate";
 import type { ProductOnboardingState } from "@/lib/product-onboarding-storage";
+import {
+  findBusinessCapitalGoal,
+  findHouseSavingsGoal,
+  houseProgressPctFromGoal,
+} from "@/lib/return-to-nepal/checklist-goal-matchers";
 import { computeDashboardSummary } from "@/lib/savings/savings-utils";
 import type { SavingsGoal } from "@/lib/savings/savings-types";
 import { computePensionProjection } from "@/lib/ssf-pension/projection";
@@ -24,8 +29,22 @@ export type ReturnPlannerLiveBundle = {
   monthlyExpenseNpr: number;
   investableNpr: number;
   totalInvestmentNpr: number;
+  /** Modeled passive — same as Return KPI (4% investable/12 + dividends + FD). */
   passiveMonthlyNpr: number;
+  /** Recorded cash passive lines (pension + dividend + FD + rental + SWP). */
+  actualPassiveMonthlyNpr: number;
   nepalColMonthlyNpr: number;
+  monthlySsfContributionNpr: number;
+  ssf: SsfPensionWorkspaceState;
+  emergencyCashReserveNpr: number | null;
+  houseProgressPct: number;
+  houseGoalConfigured: boolean;
+  businessCapitalNpr: number;
+  businessGoalConfigured: boolean;
+  businessCapitalTargetNpr: number;
+  householdConfigured: boolean;
+  liabilityRowCount: number;
+  savingsGoals: SavingsGoal[];
   dataSources: string[];
 };
 
@@ -52,6 +71,15 @@ function sumLinesByCurrency(lines: SimpleMoneyLine[], currency: "NPR" | "KRW" | 
 
 function findGoal(goals: SavingsGoal[], patterns: RegExp[]): SavingsGoal | undefined {
   return goals.find((goal) => patterns.some((pattern) => pattern.test(goal.name) || pattern.test(goal.category)));
+}
+
+function isDefaultColHousehold(col: ColPlanState): boolean {
+  const defaults = defaultColPlan().family;
+  return (
+    col.family.adults === defaults.adults &&
+    col.family.children === defaults.children &&
+    col.family.parents === defaults.parents
+  );
 }
 
 function mapCity(colCityId: string): NepalCityId {
@@ -128,15 +156,14 @@ export function buildEffectiveReturnPlannerState(
   });
 
   const emergencyGoal = findGoal(savingsGoals, [/emergency/i]);
-  const houseGoal = findGoal(savingsGoals, [/house|land|property|nepal return/i]);
+  const houseGoal = findHouseSavingsGoal(savingsGoals);
   const educationGoal = findGoal(savingsGoals, [/education|child|school/i]);
-  const businessGoal = findGoal(savingsGoals, [/business|investment|startup/i]);
+  const businessGoal = findBusinessCapitalGoal(savingsGoals);
   const returnGoal = findGoal(savingsGoals, [/nepal return|return fund/i]);
 
   const houseTargetNpr = houseGoal?.targetAmountNpr ?? 0;
-  const houseSavedNpr = houseGoal?.savedAmountNpr ?? 0;
-  const houseProgressPct =
-    houseTargetNpr > 0 ? clamp((houseSavedNpr / houseTargetNpr) * 100, 0, 100) : stored.houseProgressPct;
+  const houseProgressPct = houseProgressPctFromGoal(houseGoal, stored.houseProgressPct);
+  const houseGoalConfigured = Boolean(houseGoal && houseGoal.targetAmountNpr > 0);
 
   const realEstateNepalNpr = wealth.realEstateNpr;
   const landBudgetNpr = houseTargetNpr > 0 ? Math.round(houseTargetNpr * 0.35) : Math.round(realEstateNepalNpr * 0.4);
@@ -146,6 +173,7 @@ export function buildEffectiveReturnPlannerState(
 
   const liabilitiesNpr = wealth.liabilitiesNpr;
   const homeLoanPrincipalNpr = liabilitiesNpr > 0 ? liabilitiesNpr : stored.homeLoanPrincipalNpr;
+  const liabilityRowCount = portfolio.liabilities?.length ?? 0;
 
   const emergencyMonthsTarget =
     stored.emergencyMonthsTarget > 0
@@ -163,6 +191,19 @@ export function buildEffectiveReturnPlannerState(
           ? new Date(savingsSummary.nearestTargetDate).getFullYear()
           : stored.targetReturnYear;
 
+  const householdConfigured =
+    !isDefaultColHousehold(colPlan) ||
+    Boolean(educationGoal) ||
+    (stored.settlementChecklist?.some((id) =>
+      id === "schoolAdmissions" || id === "healthNepal" || id === "spouseTransition",
+    ) ?? false);
+
+  const businessCapitalTargetNpr = businessGoal?.targetAmountNpr ?? 0;
+  const businessGoalConfigured = Boolean(businessGoal);
+  const businessCapitalNpr = businessGoal
+    ? Math.max(0, businessGoal.savedAmountNpr)
+    : 0;
+
   const dataSources: string[] = [];
   if (live.monthlyIncome > 0 || onboarding.salaryMonthlyNpr > 0) dataSources.push("Income");
   if (monthlyExpenseNpr > 0) dataSources.push("Expenses");
@@ -171,6 +212,13 @@ export function buildEffectiveReturnPlannerState(
   if (colSnap.total > 0) dataSources.push("Nepal Cost of Living");
   if (ssf.projection.monthlySsfContributionNpr > 0) dataSources.push("SSF Pension");
   if (summary.emergencyFundCoverageMonths !== null) dataSources.push("Emergency Fund");
+
+  const emergencyCashReserveNpr =
+    cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
+      ? Math.max(0, cashflow.emergencyCashReserve)
+      : emergencyGoal && emergencyGoal.savedAmountNpr > 0
+        ? emergencyGoal.savedAmountNpr
+        : null;
 
   const effectiveState: ReturnToNepalPlannerState = {
     ...stored,
@@ -201,13 +249,21 @@ export function buildEffectiveReturnPlannerState(
       colPlan.family.parents > 0 ? Math.round(colSnap.total * 0.08 * colPlan.family.parents) : stored.parentSupportMonthlyNpr,
     healthcareMonthlyNpr: colPlan.expenses.healthcare > 0 ? colPlan.expenses.healthcare : stored.healthcareMonthlyNpr,
     emergencyMonthsTarget,
-    businessCapitalNpr: businessGoal?.savedAmountNpr ?? businessGoal?.targetAmountNpr ?? stored.businessCapitalNpr,
+    businessCapitalNpr,
     relocationOneTimeNpr: returnGoal?.targetAmountNpr
       ? Math.round(returnGoal.targetAmountNpr * 0.15)
       : stored.relocationOneTimeNpr,
     salaryGrowthPct: stored.salaryGrowthPct > 0 ? stored.salaryGrowthPct : ssf.projection.annualSalaryGrowthPct || 4,
     plannedKoreaYearsRemaining: stored.plannedKoreaYearsRemaining > 0 ? stored.plannedKoreaYearsRemaining : clamp(targetReturnYear - new Date().getFullYear(), 1, 20),
+    debtReviewed: stored.debtReviewed || liabilityRowCount > 0 || liabilitiesNpr > 0,
   };
+
+  const actualPassiveMonthlyNpr =
+    effectiveState.pensionMonthlyNpr +
+    effectiveState.dividendMonthlyNpr +
+    effectiveState.fdMonthlyNpr +
+    effectiveState.rentalMonthlyNpr +
+    effectiveState.swpMonthlyNpr;
 
   return {
     effectiveState,
@@ -219,7 +275,19 @@ export function buildEffectiveReturnPlannerState(
     investableNpr: wealth.investableNpr,
     totalInvestmentNpr: wealth.totalInvestmentNpr,
     passiveMonthlyNpr,
+    actualPassiveMonthlyNpr,
     nepalColMonthlyNpr: colSnap.total > 0 ? colSnap.total : 0,
+    monthlySsfContributionNpr: ssf.projection.monthlySsfContributionNpr,
+    ssf,
+    emergencyCashReserveNpr,
+    houseProgressPct,
+    houseGoalConfigured,
+    businessCapitalNpr,
+    businessGoalConfigured,
+    businessCapitalTargetNpr,
+    householdConfigured,
+    liabilityRowCount,
+    savingsGoals,
     dataSources,
   };
 }

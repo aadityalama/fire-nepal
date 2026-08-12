@@ -10,6 +10,7 @@ import { WealthDashboardShell } from "@/components/portfolio/WealthDashboardShel
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { formatMoney } from "@/lib/expense-utils";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 
 function PortfolioTotalsStrip() {
   const { totals, hydrated } = useWealthPortfolio();
@@ -126,6 +127,9 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
         </>
       }
     >
+      <div className="mb-3 px-0 sm:px-0">
+        <BackToReturnChecklistBannerSlot />
+      </div>
       {hideTotalsStrip ? null : <PortfolioTotalsStrip />}
       {children}
       {hideGlobalAddFab ? null : <PortfolioAddAssetFab />}

@@ -30,6 +30,7 @@ import {
   recommendedReturnMonthYear,
 } from "@/lib/return-to-nepal/return-ai-engine";
 import { computeReturnChecklist, type ChecklistStatus } from "@/lib/return-to-nepal/return-checklist";
+import { buildReturnChecklistSources } from "@/lib/return-to-nepal/build-return-checklist-sources";
 import { computeReturnRoadmap } from "@/lib/return-to-nepal/return-roadmap";
 import {
   aggregateReadinessPct,
@@ -37,9 +38,11 @@ import {
   type ReturnReadinessScore,
 } from "@/lib/return-to-nepal/return-readiness-scores";
 import { syncInsuranceSettlementFlags } from "@/lib/return-to-nepal/return-readiness-pillars";
+import { useInsurancePoliciesLive } from "@/lib/return-to-nepal/use-insurance-policies-live";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { fetchSavingsWorkspace } from "@/lib/savings/savings-api";
 import { loadSavingsWorkspaceState, sanitizeSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import type { SavingsGoal } from "@/lib/savings/savings-types";
@@ -48,7 +51,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 const PAGE_BG = "#000805";
 const GLASS = "rounded-[1.35rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.5rem]";
 
-function StatusBadge({ status }: { status: ChecklistStatus }) {
+function StatusBadge({ status, label }: { status: ChecklistStatus; label?: string }) {
   const styles: Record<ChecklistStatus, string> = {
     completed: "bg-emerald-500/20 text-emerald-300 ring-emerald-400/30",
     on_track: "bg-teal-500/15 text-teal-200 ring-teal-400/25",
@@ -63,7 +66,7 @@ function StatusBadge({ status }: { status: ChecklistStatus }) {
   };
   return (
     <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${styles[status]}`}>
-      {labels[status]}
+      {label ?? labels[status]}
     </span>
   );
 }
@@ -131,13 +134,18 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 export function ReturnToNepalPlannerDashboard() {
   const { effectiveState, snapshot, live, patch, state } = useReturnToNepalPlanner();
   const { user } = useProductAuth();
+  const { profile } = useCurrentUserProfile();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
+  const { policies: insurancePolicies } = useInsurancePoliciesLive();
   const { summary, portfolio } = useUnifiedFireSummary();
   const wealth = summary.wealthTotals;
   const [mounted, setMounted] = useState(false);
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,17 +167,24 @@ export function ReturnToNepalPlannerDashboard() {
   }, [user?.id, snapshot.estimatedReturnYear]);
 
   useEffect(() => {
-    const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs);
+    if ((portfolio.liabilities?.length ?? 0) > 0 || wealth.liabilitiesNpr > 0) {
+      if (!state.debtReviewed) patch({ debtReviewed: true });
+    }
+  }, [portfolio.liabilities, wealth.liabilitiesNpr, state.debtReviewed, patch]);
+
+  useEffect(() => {
+    const synced = syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies);
     const same =
       synced.length === state.settlementChecklist.length && synced.every((id) => state.settlementChecklist.includes(id));
     if (!same) patch({ settlementChecklist: synced });
-  }, [insuranceInputs, insuranceTick, patch, state.settlementChecklist]);
+  }, [insuranceInputs, insuranceTick, insurancePolicies, patch, state.settlementChecklist]);
 
   useEffect(() => {
-    const onInsurance = () => patch({ settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs) });
+    const onInsurance = () =>
+      patch({ settlementChecklist: syncInsuranceSettlementFlags(state.settlementChecklist, insuranceInputs, insurancePolicies) });
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
     return () => window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, onInsurance);
-  }, [insuranceInputs, patch, state.settlementChecklist]);
+  }, [insuranceInputs, insurancePolicies, patch, state.settlementChecklist]);
 
   const nwMomPct = useMemo(
     () => netWorthMonthOverMonthPercent(portfolio.netWorthHistory ?? []),
@@ -178,21 +193,46 @@ export function ReturnToNepalPlannerDashboard() {
 
   const investmentTotalNpr = wealth.totalInvestmentNpr;
 
+  const checklistSources = useMemo(
+    () =>
+      buildReturnChecklistSources({
+        effectiveState,
+        live,
+        insurancePolicies,
+        insuranceInputs,
+        liabilitiesNpr: wealth.liabilitiesNpr,
+        fireGoalNpr: profile?.fireGoalAmount ?? null,
+      }),
+    [effectiveState, live, insurancePolicies, insuranceInputs, wealth.liabilitiesNpr, profile?.fireGoalAmount],
+  );
+
   const readinessScores = useMemo(
-    () => computeReturnReadinessScores(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
+    () =>
+      computeReturnReadinessScores(
+        effectiveState,
+        snapshot,
+        insuranceInputs,
+        investmentTotalNpr,
+        wealth.liabilitiesNpr,
+        checklistSources,
+        insurancePolicies,
+      ),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr, checklistSources, insurancePolicies],
   );
 
   const readinessPct = useMemo(() => aggregateReadinessPct(readinessScores), [readinessScores]);
 
-  const checklist = useMemo(
-    () => computeReturnChecklist(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
-  );
+  const checklist = useMemo(() => computeReturnChecklist(checklistSources), [checklistSources]);
+
+  const emergencyRunwayMonths = useMemo(() => {
+    if (live.emergencyCashReserveNpr == null) return null;
+    const burn = live.monthlyExpenseNpr > 0 ? live.monthlyExpenseNpr : Math.max(1, live.nepalColMonthlyNpr);
+    return burn > 0 ? live.emergencyCashReserveNpr / burn : 0;
+  }, [live.emergencyCashReserveNpr, live.monthlyExpenseNpr, live.nepalColMonthlyNpr]);
 
   const roadmap = useMemo(() => {
-    return computeReturnRoadmap(savingsGoals, snapshot, snapshot.estimatedReturnYear);
-  }, [savingsGoals, snapshot]);
+    return computeReturnRoadmap(savingsGoals.length > 0 ? savingsGoals : live.savingsGoals, snapshot, snapshot.estimatedReturnYear);
+  }, [savingsGoals, live.savingsGoals, snapshot]);
 
   const scenarios = useMemo(
     () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
@@ -211,7 +251,9 @@ export function ReturnToNepalPlannerDashboard() {
   );
   const recommendedDate = recommendedReturnMonthYear(snapshot.estimatedReturnYear);
   const cityLabel = effectiveState.city.charAt(0).toUpperCase() + effectiveState.city.slice(1);
-  const householdLabel = `Family of ${effectiveState.adults + effectiveState.children}`;
+  const householdLabel = live.householdConfigured
+    ? `Family of ${effectiveState.adults + effectiveState.children}`
+    : "Set household in COL";
 
   const riskColors = {
     high: "text-rose-400 bg-rose-500/15 ring-rose-400/25",
@@ -289,7 +331,7 @@ export function ReturnToNepalPlannerDashboard() {
           <KpiCard
             label="Monthly Passive Income"
             value={formatNprInteger(live.passiveMonthlyNpr)}
-            hint="Investments + FD + dividends"
+            hint="Modeled · investments + FD + dividends"
             hintPositive
           />
           <KpiCard
@@ -299,9 +341,18 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <KpiCard
             label="Emergency Fund"
-            value={`${snapshot.emergencyReserveMonths.toFixed(1)} Mo`}
-            hint={snapshot.emergencyReserveMonths >= effectiveState.emergencyMonthsTarget ? "On track" : "Build runway"}
-            hintPositive={snapshot.emergencyReserveMonths >= effectiveState.emergencyMonthsTarget}
+            value={emergencyRunwayMonths == null ? "—" : `${emergencyRunwayMonths.toFixed(1)} Mo`}
+            hint={
+              emergencyRunwayMonths == null
+                ? "Set reserve in Emergency Fund"
+                : emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
+                  ? "On track"
+                  : "Build runway"
+            }
+            hintPositive={
+              emergencyRunwayMonths != null &&
+              emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
+            }
           />
           <KpiCard
             label="FIRE Progress"
@@ -402,16 +453,29 @@ export function ReturnToNepalPlannerDashboard() {
             </div>
           </div>
 
-          <div className={`${GLASS} p-5 sm:p-6`}>
+          <div id="return-checklist" className={`${GLASS} scroll-mt-24 p-5 sm:p-6`}>
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-100/45">Return Checklist</h2>
+            <p className="mt-1 text-[11px] font-semibold text-white/35">Tap a card to open &amp; edit</p>
             <ul className="mt-4 space-y-3">
               {checklist.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-white">{item.label}</p>
-                    <p className="text-[11px] font-semibold text-white/40">{item.detail}</p>
-                  </div>
-                  <StatusBadge status={item.status} />
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    data-testid={`return-checklist-${item.id}`}
+                    aria-label={`Open ${item.label} — ${item.badgeLabel ?? item.status}`}
+                    className="group flex min-h-[56px] w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5 text-left transition hover:border-emerald-400/35 hover:bg-emerald-500/[0.08] active:scale-[0.99] active:bg-emerald-500/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-white">{item.label}</p>
+                      <p className="truncate text-[11px] font-semibold text-white/40">{item.detail}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <StatusBadge status={item.status} label={item.badgeLabel} />
+                      <span className="grid h-8 w-8 place-items-center rounded-lg text-white/35 transition group-hover:text-emerald-300 group-active:text-emerald-200">
+                        <ChevronRight size={18} aria-hidden />
+                      </span>
+                    </div>
+                  </Link>
                 </li>
               ))}
             </ul>

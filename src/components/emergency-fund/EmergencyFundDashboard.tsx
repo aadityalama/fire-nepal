@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -31,7 +31,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { monthlyBurn } from "@/components/cashflow/cashflow-metrics";
+import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
+import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
+import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import {
   buildEmergencyFundSafetyAnalysis,
   formatEmergencyMonths,
@@ -40,6 +45,7 @@ import {
   type EmergencyRiskProfileKey,
 } from "@/lib/emergency-fund";
 import { downloadEmergencyFundSafetyReportPdf } from "@/lib/emergency-fund-report";
+import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 
 function sanitizeDecimalInput(value: string) {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -200,14 +206,60 @@ function ResultCard({
 }
 
 export function EmergencyFundDashboard() {
+  const { user } = useProductAuth();
+  const uid = user?.id;
   const [monthlyExpenseRaw, setMonthlyExpenseRaw] = useState("100000");
-  const [currentFundRaw, setCurrentFundRaw] = useState("420000");
+  const [currentFundRaw, setCurrentFundRaw] = useState("0");
   const [monthlySaveRaw, setMonthlySaveRaw] = useState("45000");
   const [inflationRaw, setInflationRaw] = useState("5.8");
   const [dependentsRaw, setDependentsRaw] = useState("1");
   const [stableJob, setStableJob] = useState(true);
   const [returnToNepal, setReturnToNepal] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const cashflow = loadCashflowState(uid);
+    const burn = monthlyBurn(cashflow);
+    const nextFund =
+      cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
+        ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
+        : null;
+    const nextExpense = burn > 0 ? String(Math.round(burn)) : null;
+    const frame = window.requestAnimationFrame(() => {
+      if (nextFund != null) setCurrentFundRaw(nextFund);
+      if (nextExpense != null) setMonthlyExpenseRaw(nextExpense);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [uid]);
+
+  const persistEmergencyReserve = useCallback(
+    (fundNpr: number) => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => {
+        void patchCashflowState(uid, (cf) => ({
+          ...cf,
+          emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
+        })).catch((error) => {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[emergency-fund] cashflow persist failed", error);
+          }
+        });
+      }, 450);
+    },
+    [uid],
+  );
+
+  useEffect(() => {
+    const onExternal = () => {
+      const cashflow = loadCashflowState(uid);
+      if (cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)) {
+        setCurrentFundRaw(String(Math.round(Math.max(0, cashflow.emergencyCashReserve))));
+      }
+    };
+    window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+    return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+  }, [uid]);
 
   const riskLevel = useMemo(
     () => resolveRiskLevel(stableJob, parseNumber(dependentsRaw), returnToNepal),
@@ -261,6 +313,7 @@ export function EmergencyFundDashboard() {
   return (
     <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <section className="mx-auto max-w-7xl">
+        <BackToReturnChecklistBannerSlot light className="mb-3" />
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href="/"
@@ -385,7 +438,11 @@ export function EmergencyFundDashboard() {
                 nepaliLabel="हालको आपतकालीन कोष"
                 value={currentFundRaw}
                 prefix="रु"
-                onChange={(next) => setCurrentFundRaw(sanitizeIntegerInput(next))}
+                onChange={(next) => {
+                  const cleaned = sanitizeIntegerInput(next);
+                  setCurrentFundRaw(cleaned);
+                  persistEmergencyReserve(parseNumber(cleaned));
+                }}
                 inputMode="numeric"
               />
               <InputField
