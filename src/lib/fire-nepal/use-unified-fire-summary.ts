@@ -15,6 +15,8 @@ import {
   portfolioStorageKey,
 } from "@/components/portfolio/storage";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { readMonthlyExpenseFromModule } from "@/lib/cashflow/cashflow-live-metrics";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
@@ -45,11 +47,17 @@ export function useUnifiedFireSummary(): {
   const uid = user?.id;
   const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => defaultWealthState());
   const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => defaultCashflowState());
+  const [autoExpenseTotal, setAutoExpenseTotal] = useState(0);
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
 
+  const refreshExpenseBurn = useCallback(() => {
+    setAutoExpenseTotal(readMonthlyExpenseFromModule());
+  }, []);
+
   const resync = useCallback(() => {
+    refreshExpenseBurn();
     if (!uid || !isSupabaseConfigured()) {
       setPortfolio(loadWealthPortfolioState(uid));
       setCashflow(loadCashflowState(uid));
@@ -82,7 +90,7 @@ export function useUnifiedFireSummary(): {
         setCashflow(defaultCashflowState());
       }
     })();
-  }, [uid]);
+  }, [refreshExpenseBurn, uid]);
 
   useEffect(() => {
     if (loading) return;
@@ -111,9 +119,11 @@ export function useUnifiedFireSummary(): {
     const onExternal = () => resync();
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     return () => {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+      window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     };
   }, [resync]);
 
@@ -132,8 +142,11 @@ export function useUnifiedFireSummary(): {
   }, []);
 
   const summary = useMemo(
-    () => computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr),
-    [portfolio, cashflow, krwPerNpr, usdPerNpr],
+    () =>
+      computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr, {
+        autoExpenseTotal,
+      }),
+    [portfolio, cashflow, krwPerNpr, usdPerNpr, autoExpenseTotal],
   );
 
   return { summary, portfolio, cashflow, ratesLoading, resync };

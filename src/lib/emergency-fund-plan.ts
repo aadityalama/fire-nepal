@@ -2,7 +2,8 @@
  * Finance Emergency Fund plan — single source of truth for amounts & targets.
  *
  * Balance SoT: `CashflowDashboardState.emergencyCashReserve`
- * Essential expenses SoT: cashflow `monthlyBurn` (override → categories)
+ * Essential expenses SoT: cashflow `monthlyBurn`
+ *   (override → Expense-module auto total → cashflow categories)
  * Default target: 6 × monthly essential expenses (no risk buffer)
  *
  * Used by Emergency Fund workspace and FIRE Progress so both stay aligned.
@@ -120,5 +121,20 @@ export function computeEmergencyFundPlan(
     monthlySurplus,
     recommendedMonthlyContribution,
     estimatedMonthsRemaining,
+  };
+}
+
+/**
+ * Persist helper — writes current emergency fund into cashflow SoT.
+ * Pure patch for tests and UI save actions.
+ */
+export function withEmergencyCashReserve(
+  cashflow: CashflowDashboardState,
+  amountNpr: number,
+): CashflowDashboardState {
+  const next = Math.max(0, Math.round(Number.isFinite(amountNpr) ? amountNpr : 0));
+  return {
+    ...cashflow,
+    emergencyCashReserve: next,
   };
 }

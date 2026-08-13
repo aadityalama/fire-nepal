@@ -36,10 +36,13 @@ import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
+import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { readMonthlyExpenseFromModule } from "@/lib/cashflow/cashflow-live-metrics";
 import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import {
   computeEmergencyFundPlan,
   DEFAULT_EMERGENCY_FUND_MONTHS,
+  withEmergencyCashReserve,
 } from "@/lib/emergency-fund-plan";
 import {
   buildEmergencyFundSafetyAnalysis,
@@ -225,44 +228,55 @@ export function EmergencyFundDashboard() {
   const [returnToNepal, setReturnToNepal] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [recommendedMonths, setRecommendedMonths] = useState(DEFAULT_EMERGENCY_FUND_MONTHS);
-  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const seededContributionRef = useRef(false);
 
   const bumpSync = useCallback(() => {
     setSyncTick((tick) => tick + 1);
   }, []);
 
+  const resolveAutoExpenseTotal = useCallback(() => readMonthlyExpenseFromModule(), []);
+
   const applyCashflowToEditors = useCallback(() => {
     const cashflow = loadCashflowState(uid);
-    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths });
-    const burn = monthlyBurn(cashflow);
+    const autoExpenseTotal = resolveAutoExpenseTotal();
+    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths, autoExpenseTotal });
+    const burn = monthlyBurn(cashflow, autoExpenseTotal);
     const nextFund =
       cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
         ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
         : "0";
     setCurrentFundRaw(nextFund);
     setMonthlyExpenseRaw(burn > 0 ? String(Math.round(burn)) : "");
+    setSaveStatus("idle");
+    setSaveError(null);
     if (!seededContributionRef.current && nextPlan.recommendedMonthlyContribution > 0) {
       setMonthlySaveRaw(String(nextPlan.recommendedMonthlyContribution));
       seededContributionRef.current = true;
     }
-  }, [recommendedMonths, uid]);
+  }, [recommendedMonths, resolveAutoExpenseTotal, uid]);
 
   const plan = useMemo(() => {
     void syncTick;
-    return computeEmergencyFundPlan(loadCashflowState(uid), { recommendedMonths });
-  }, [recommendedMonths, syncTick, uid]);
+    return computeEmergencyFundPlan(loadCashflowState(uid), {
+      recommendedMonths,
+      autoExpenseTotal: resolveAutoExpenseTotal(),
+    });
+  }, [recommendedMonths, resolveAutoExpenseTotal, syncTick, uid]);
 
   useEffect(() => {
     if (authLoading) return;
 
     let cancelled = false;
     const cashflow = loadCashflowState(uid);
-    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths });
+    const autoExpenseTotal = resolveAutoExpenseTotal();
+    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths, autoExpenseTotal });
     const hasLocalSignal =
       initial.monthlyEssentialExpenses > 0 ||
       initial.monthlyIncome > 0 ||
       initial.currentAmount > 0 ||
+      autoExpenseTotal > 0 ||
       !uid;
 
     const finishHydrate = () => {
@@ -291,28 +305,27 @@ export function EmergencyFundDashboard() {
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
       window.clearTimeout(timer);
     };
-  }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, uid]);
+  }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, resolveAutoExpenseTotal, uid]);
 
-  const persistEmergencyReserve = useCallback(
-    (fundNpr: number) => {
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      persistTimer.current = setTimeout(() => {
-        void patchCashflowState(uid, (cf) => ({
-          ...cf,
-          emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
-        }))
-          .then(() => {
-            bumpSync();
-          })
-          .catch((error) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.warn("[emergency-fund] cashflow persist failed", error);
-            }
-          });
-      }, 450);
-    },
-    [bumpSync, uid],
-  );
+  const saveEmergencyFund = useCallback(async () => {
+    const fundNpr = parseNumber(currentFundRaw);
+    setSaveStatus("saving");
+    setSaveError(null);
+    try {
+      await patchCashflowState(uid, (cf) => withEmergencyCashReserve(cf, fundNpr));
+      bumpSync();
+      setSaveStatus("saved");
+      window.setTimeout(() => {
+        setSaveStatus((status) => (status === "saved" ? "idle" : status));
+      }, 2200);
+    } catch (error) {
+      setSaveStatus("error");
+      setSaveError(error instanceof Error ? error.message : "Could not save emergency fund.");
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[emergency-fund] cashflow persist failed", error);
+      }
+    }
+  }, [bumpSync, currentFundRaw, uid]);
 
   useEffect(() => {
     const onExternal = () => {
@@ -321,9 +334,11 @@ export function EmergencyFundDashboard() {
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     return () => {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+      window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     };
   }, [applyCashflowToEditors, bumpSync]);
 
@@ -435,8 +450,8 @@ export function EmergencyFundDashboard() {
               <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/25 bg-white/10 p-5 sm:p-6">
                 <h2 className="text-xl font-black tracking-tight">Complete your cashflow first</h2>
                 <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-emerald-50/80">
-                  We need your monthly essential expenses from Income / Expense / Cashflow before we can
-                  recommend a 6‑month emergency fund target. Add those numbers to avoid incorrect estimates.
+                  We could not find monthly essential expenses in your Income / Expense / Cashflow data yet.
+                  Add those numbers so we can recommend a 6‑month emergency fund target.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Link
@@ -570,7 +585,7 @@ export function EmergencyFundDashboard() {
                 Current Emergency Fund
               </h2>
               <p className="text-sm font-bold text-slate-500">
-                Saved to Cashflow reserve — FIRE Progress reads the same value.
+                Enter how much you can keep now, then save. FIRE Progress reads the same Cashflow reserve.
               </p>
             </div>
             <Link href="/fire-summary" className="text-xs font-black uppercase tracking-wide text-emerald-700 hover:underline">
@@ -578,17 +593,36 @@ export function EmergencyFundDashboard() {
             </Link>
           </div>
           <InputField
-            label="Amount you can keep as Emergency Fund"
+            label="Current emergency fund amount"
             nepaliLabel="हालको आपतकालीन कोष"
             value={currentFundRaw}
             prefix="रु"
             onChange={(next) => {
-              const cleaned = sanitizeIntegerInput(next);
-              setCurrentFundRaw(cleaned);
-              persistEmergencyReserve(parseNumber(cleaned));
+              setCurrentFundRaw(sanitizeIntegerInput(next));
+              setSaveStatus("idle");
+              setSaveError(null);
             }}
             inputMode="numeric"
           />
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                void saveEmergencyFund();
+              }}
+              disabled={saveStatus === "saving"}
+              className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saveStatus === "saving" ? "Saving…" : "Save Emergency Fund"}
+            </button>
+            <p className="text-xs font-bold text-slate-500" aria-live="polite">
+              {saveStatus === "saved"
+                ? "Saved to Cashflow · FIRE Progress updated"
+                : saveStatus === "error"
+                  ? saveError ?? "Save failed. Try again."
+                  : "Updates emergencyCashReserve in Cashflow"}
+            </p>
+          </div>
         </section>
 
         {!showSetup ? (
