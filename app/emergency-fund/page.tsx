@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { EmergencyFundDashboard } from "@/components/emergency-fund/EmergencyFundDashboard";
 import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
@@ -10,5 +11,9 @@ export const metadata: Metadata = {
 };
 
 export default function EmergencyFundPage() {
-  return <EmergencyFundDashboard />;
+  return (
+    <DashboardAccessGuard>
+      <EmergencyFundDashboard />
+    </DashboardAccessGuard>
+  );
 }

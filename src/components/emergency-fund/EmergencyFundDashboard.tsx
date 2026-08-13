@@ -38,6 +38,10 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import {
+  computeEmergencyFundPlan,
+  DEFAULT_EMERGENCY_FUND_MONTHS,
+} from "@/lib/emergency-fund-plan";
+import {
   buildEmergencyFundSafetyAnalysis,
   formatEmergencyMonths,
   formatEmergencyNpr,
@@ -45,7 +49,9 @@ import {
   type EmergencyRiskProfileKey,
 } from "@/lib/emergency-fund";
 import { downloadEmergencyFundSafetyReportPdf } from "@/lib/emergency-fund-report";
+import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
+import { formatMoney } from "@/lib/expense-utils";
 
 function sanitizeDecimalInput(value: string) {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -206,32 +212,86 @@ function ResultCard({
 }
 
 export function EmergencyFundDashboard() {
-  const { user } = useProductAuth();
+  const { user, loading: authLoading } = useProductAuth();
   const uid = user?.id;
-  const [monthlyExpenseRaw, setMonthlyExpenseRaw] = useState("100000");
+  const [hydrated, setHydrated] = useState(false);
+  const [syncTick, setSyncTick] = useState(0);
+  const [monthlyExpenseRaw, setMonthlyExpenseRaw] = useState("");
   const [currentFundRaw, setCurrentFundRaw] = useState("0");
-  const [monthlySaveRaw, setMonthlySaveRaw] = useState("45000");
+  const [monthlySaveRaw, setMonthlySaveRaw] = useState("0");
   const [inflationRaw, setInflationRaw] = useState("5.8");
-  const [dependentsRaw, setDependentsRaw] = useState("1");
+  const [dependentsRaw, setDependentsRaw] = useState("0");
   const [stableJob, setStableJob] = useState(true);
   const [returnToNepal, setReturnToNepal] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [recommendedMonths, setRecommendedMonths] = useState(DEFAULT_EMERGENCY_FUND_MONTHS);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seededContributionRef = useRef(false);
 
-  useEffect(() => {
+  const bumpSync = useCallback(() => {
+    setSyncTick((tick) => tick + 1);
+  }, []);
+
+  const applyCashflowToEditors = useCallback(() => {
     const cashflow = loadCashflowState(uid);
+    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths });
     const burn = monthlyBurn(cashflow);
     const nextFund =
       cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
         ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
-        : null;
-    const nextExpense = burn > 0 ? String(Math.round(burn)) : null;
-    const frame = window.requestAnimationFrame(() => {
-      if (nextFund != null) setCurrentFundRaw(nextFund);
-      if (nextExpense != null) setMonthlyExpenseRaw(nextExpense);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [uid]);
+        : "0";
+    setCurrentFundRaw(nextFund);
+    setMonthlyExpenseRaw(burn > 0 ? String(Math.round(burn)) : "");
+    if (!seededContributionRef.current && nextPlan.recommendedMonthlyContribution > 0) {
+      setMonthlySaveRaw(String(nextPlan.recommendedMonthlyContribution));
+      seededContributionRef.current = true;
+    }
+  }, [recommendedMonths, uid]);
+
+  const plan = useMemo(() => {
+    void syncTick;
+    return computeEmergencyFundPlan(loadCashflowState(uid), { recommendedMonths });
+  }, [recommendedMonths, syncTick, uid]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+    const cashflow = loadCashflowState(uid);
+    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths });
+    const hasLocalSignal =
+      initial.monthlyEssentialExpenses > 0 ||
+      initial.monthlyIncome > 0 ||
+      initial.currentAmount > 0 ||
+      !uid;
+
+    const finishHydrate = () => {
+      if (cancelled) return;
+      applyCashflowToEditors();
+      bumpSync();
+      setHydrated(true);
+    };
+
+    if (hasLocalSignal) {
+      const frame = window.requestAnimationFrame(finishHydrate);
+      return () => {
+        cancelled = true;
+        window.cancelAnimationFrame(frame);
+      };
+    }
+
+    const onReady = () => {
+      if (cancelled) return;
+      finishHydrate();
+    };
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
+    const timer = window.setTimeout(onReady, 1200);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
+      window.clearTimeout(timer);
+    };
+  }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, uid]);
 
   const persistEmergencyReserve = useCallback(
     (fundNpr: number) => {
@@ -240,26 +300,32 @@ export function EmergencyFundDashboard() {
         void patchCashflowState(uid, (cf) => ({
           ...cf,
           emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
-        })).catch((error) => {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[emergency-fund] cashflow persist failed", error);
-          }
-        });
+        }))
+          .then(() => {
+            bumpSync();
+          })
+          .catch((error) => {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[emergency-fund] cashflow persist failed", error);
+            }
+          });
       }, 450);
     },
-    [uid],
+    [bumpSync, uid],
   );
 
   useEffect(() => {
     const onExternal = () => {
-      const cashflow = loadCashflowState(uid);
-      if (cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)) {
-        setCurrentFundRaw(String(Math.round(Math.max(0, cashflow.emergencyCashReserve))));
-      }
+      applyCashflowToEditors();
+      bumpSync();
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-    return () => window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-  }, [uid]);
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    return () => {
+      window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    };
+  }, [applyCashflowToEditors, bumpSync]);
 
   const riskLevel = useMemo(
     () => resolveRiskLevel(stableJob, parseNumber(dependentsRaw), returnToNepal),
@@ -310,399 +376,504 @@ export function EmergencyFundDashboard() {
     }
   };
 
+  const financePlan = plan;
+  const showSetup = hydrated && !financePlan.hasSufficientData;
+
+  if (authLoading || !hydrated) {
+    return (
+      <main className="premium-shell min-h-screen bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
+        <div className="mx-auto flex max-w-7xl items-center justify-center py-24">
+          <p className="text-sm font-bold text-emerald-800/80">Loading emergency fund…</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <section className="mx-auto max-w-7xl">
         <BackToReturnChecklistBannerSlot light className="mb-3" />
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
-            href="/"
+            href="/finance"
             className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
           >
             <ArrowLeft size={16} />
-            Back to Homepage
+            Back to Finance
           </Link>
-          <button
-            type="button"
-            onClick={handlePdf}
-            disabled={pdfBusy}
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:opacity-60"
-          >
-            <FileDown size={16} />
-            {pdfBusy ? "Preparing…" : "PDF Export"}
-          </button>
+          {!showSetup ? (
+            <button
+              type="button"
+              onClick={handlePdf}
+              disabled={pdfBusy}
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:opacity-60"
+            >
+              <FileDown size={16} />
+              {pdfBusy ? "Preparing…" : "PDF Export"}
+            </button>
+          ) : null}
         </div>
 
-        {/* Premium hero */}
+        {/* Finance Emergency Fund — shared SoT with FIRE Progress */}
         <section className="dark-glass-card relative overflow-hidden rounded-[2rem] p-5 text-white sm:p-7 lg:p-9">
           <div className="absolute -left-24 top-8 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl" />
           <div className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-lime-300/10 blur-3xl" />
-          <motion.div
-            aria-hidden
-            animate={{ y: [0, -12, 0], opacity: [0.35, 0.65, 0.35] }}
-            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute right-12 top-12 h-28 w-28 rounded-full bg-emerald-300/20 blur-2xl"
-          />
-          <div className="relative grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-            <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
-              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
-                <Sparkles size={14} />
-                FIRE Nepal Safety Calculator
-              </p>
-              <h1 className="mt-4 text-4xl font-black leading-[0.95] tracking-[-0.05em] sm:text-5xl lg:text-6xl">
-                🛡️ Emergency Fund Calculator
-              </h1>
-              <p className="font-nepali mt-3 text-xl font-semibold leading-snug text-emerald-50/75 sm:text-2xl">
-                आपतकालीन कोष सुरक्षा योजना
-              </p>
-              <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
-                A premium standalone safety calculator for Nepalis abroad — measure runway, funding gap, stress
-                coverage, and get Nepali AI guidance without the OS workspace chrome.
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Readiness</p>
-                  <p className="mt-2 text-3xl font-black">{Math.round(analytics.readiness)}%</p>
-                </div>
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Coverage</p>
-                  <p className="mt-2 text-3xl font-black">{formatEmergencyMonths(analytics.runwayMonths)}</p>
-                </div>
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Safety</p>
-                  <p className="mt-2 text-2xl font-black">{safety.label}</p>
+          <div className="relative">
+            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
+              <Sparkles size={14} />
+              Finance · Emergency Fund
+            </p>
+            <h1 className="mt-4 text-4xl font-black leading-[0.95] tracking-[-0.05em] sm:text-5xl">
+              Emergency Fund
+            </h1>
+            <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
+              Target sized from your Cashflow essential expenses. The same reserve updates FIRE Progress
+              automatically.
+            </p>
+
+            {showSetup ? (
+              <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/25 bg-white/10 p-5 sm:p-6">
+                <h2 className="text-xl font-black tracking-tight">Complete your cashflow first</h2>
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-emerald-50/80">
+                  We need your monthly essential expenses from Income / Expense / Cashflow before we can
+                  recommend a 6‑month emergency fund target. Add those numbers to avoid incorrect estimates.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Link
+                    href="/cashflow-dashboard"
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-black text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+                  >
+                    Open Cashflow
+                  </Link>
+                  <Link
+                    href="/expense-dashboard?finance=personal"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-black text-white transition hover:bg-white/15"
+                  >
+                    Add Expenses
+                  </Link>
                 </div>
               </div>
-            </motion.div>
+            ) : (
+              <>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Monthly essential expenses
+                    </p>
+                    <p className="mt-2 text-2xl font-black sm:text-3xl">
+                      {formatMoney(financePlan.monthlyEssentialExpenses, "NPR")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Recommended months
+                    </p>
+                    <div className="mt-2 flex items-end gap-2">
+                      <p className="text-2xl font-black sm:text-3xl">{financePlan.recommendedMonths}</p>
+                      <label className="mb-1 text-xs font-bold text-emerald-100/80">
+                        <span className="sr-only">Adjust recommended months</span>
+                        <select
+                          className="rounded-lg border border-white/20 bg-emerald-950/40 px-2 py-1 text-xs font-black text-white outline-none"
+                          value={recommendedMonths}
+                          onChange={(event) => setRecommendedMonths(Number(event.target.value))}
+                        >
+                          {[3, 4, 5, 6, 8, 9, 12].map((months) => (
+                            <option key={months} value={months}>
+                              {months} mo
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Recommended target
+                    </p>
+                    <p className="mt-2 text-2xl font-black sm:text-3xl">
+                      {formatMoney(financePlan.recommendedTarget, "NPR")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Current emergency fund
+                    </p>
+                    <p className="mt-2 text-2xl font-black sm:text-3xl">
+                      {formatMoney(financePlan.currentAmount, "NPR")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Remaining</p>
+                    <p className="mt-2 text-2xl font-black sm:text-3xl">
+                      {formatMoney(financePlan.remainingAmount, "NPR")}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Funding progress</p>
+                    <p className="mt-2 text-2xl font-black sm:text-3xl">
+                      {financePlan.progressPct == null ? "—" : `${Math.round(financePlan.progressPct)}%`}
+                    </p>
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/15">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-lime-300 to-yellow-300"
+                        style={{ width: `${financePlan.progressPct ?? 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.55, delay: 0.1 }}
-              className="rounded-[1.75rem] border border-white/15 bg-white/10 p-4 shadow-2xl backdrop-blur-xl sm:p-5"
-            >
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black uppercase tracking-[0.16em] text-emerald-100">Target fund</p>
-                  <p className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">
-                    {formatEmergencyNpr(analytics.recommendedFund)}
+                <div className="mt-5 grid gap-3 rounded-[1.5rem] border border-white/15 bg-white/10 p-4 sm:grid-cols-2 sm:p-5">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Recommended monthly contribution
+                    </p>
+                    <p className="mt-2 text-xl font-black">
+                      {financePlan.recommendedMonthlyContribution > 0
+                        ? formatMoney(financePlan.recommendedMonthlyContribution, "NPR")
+                        : financePlan.remainingAmount <= 0
+                          ? "Target funded"
+                          : "No surplus yet"}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-50/70">
+                      Based on Cashflow surplus (income − expenses)
+                      {financePlan.monthlySurplus !== 0
+                        ? ` · surplus ${formatMoney(financePlan.monthlySurplus, "NPR")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
+                      Estimated months remaining
+                    </p>
+                    <p className="mt-2 text-xl font-black">
+                      {financePlan.estimatedMonthsRemaining == null
+                        ? "—"
+                        : financePlan.estimatedMonthsRemaining === 0
+                          ? "Ready"
+                          : `${financePlan.estimatedMonthsRemaining} mo`}
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-emerald-50/70">
+                      At the recommended contribution pace
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* Current reserve editor — always available so FIRE Progress can sync */}
+        <section className="glass-card soft-gradient-border mt-6 rounded-[2rem] p-4 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">
+                Current Emergency Fund
+              </h2>
+              <p className="text-sm font-bold text-slate-500">
+                Saved to Cashflow reserve — FIRE Progress reads the same value.
+              </p>
+            </div>
+            <Link href="/fire-summary" className="text-xs font-black uppercase tracking-wide text-emerald-700 hover:underline">
+              View in FIRE Progress →
+            </Link>
+          </div>
+          <InputField
+            label="Amount you can keep as Emergency Fund"
+            nepaliLabel="हालको आपतकालीन कोष"
+            value={currentFundRaw}
+            prefix="रु"
+            onChange={(next) => {
+              const cleaned = sanitizeIntegerInput(next);
+              setCurrentFundRaw(cleaned);
+              persistEmergencyReserve(parseNumber(cleaned));
+            }}
+            inputMode="numeric"
+          />
+        </section>
+
+        {!showSetup ? (
+          <>
+            {/* Inputs + results */}
+            <section className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
+                <div className="mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight text-emerald-950">Safety scenario</h2>
+                    <p className="font-nepali text-sm font-bold text-slate-500">आफ्नो सुरक्षा विवरण हाल्नुहोस्</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Live</span>
+                </div>
+                <div className="grid gap-4">
+                  <InputField
+                    label="Monthly Essential Expenses"
+                    nepaliLabel="मासिक आवश्यक खर्च"
+                    value={monthlyExpenseRaw}
+                    prefix="रु"
+                    onChange={(next) => setMonthlyExpenseRaw(sanitizeIntegerInput(next))}
+                    inputMode="numeric"
+                  />
+                  <InputField
+                    label="Monthly Contribution"
+                    nepaliLabel="मासिक बचत योगदान"
+                    value={monthlySaveRaw}
+                    prefix="रु"
+                    onChange={(next) => setMonthlySaveRaw(sanitizeIntegerInput(next))}
+                    inputMode="numeric"
+                  />
+                  <InputField
+                    label="Inflation"
+                    nepaliLabel="मुद्रास्फीति"
+                    value={inflationRaw}
+                    suffix="%"
+                    onChange={(next) => setInflationRaw(sanitizeDecimalInput(next))}
+                  />
+                  <InputField
+                    label="Dependents"
+                    nepaliLabel="आश्रित परिवार सदस्य"
+                    value={dependentsRaw}
+                    onChange={(next) => setDependentsRaw(sanitizeIntegerInput(next))}
+                    inputMode="numeric"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ToggleChip
+                      active={stableJob}
+                      onClick={() => setStableJob((v) => !v)}
+                      label={stableJob ? "Stable Job: On" : "Stable Job: Off"}
+                      nepaliLabel="स्थिर जागिर"
+                      icon={ShieldCheck}
+                    />
+                    <ToggleChip
+                      active={returnToNepal}
+                      onClick={() => setReturnToNepal((v) => !v)}
+                      label={returnToNepal ? "Return to Nepal: On" : "Return to Nepal: Off"}
+                      nepaliLabel="नेपाल फर्कने योजना"
+                      icon={Users}
+                    />
+                  </div>
+                  <p className="rounded-2xl bg-emerald-50/80 px-4 py-3 text-xs font-bold leading-relaxed text-emerald-800">
+                    Scenario profile → <span className="font-black capitalize">{riskLevel}</span> (
+                    {analytics.recommendedMonths} mo + buffer). Finance target above stays at{" "}
+                    {financePlan.recommendedMonths} × essential expenses for FIRE Progress parity.
                   </p>
                 </div>
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-emerald-800 shadow-lg">
-                  <ShieldCheck size={25} />
-                </div>
               </div>
-              <div className="rounded-2xl bg-emerald-950/35 p-4">
-                <div className="mb-3 flex items-center justify-between text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                  <span>Funding progress</span>
-                  <span>{Math.round(analytics.readiness)}%</span>
-                </div>
-                <div className="h-3 overflow-hidden rounded-full bg-white/15">
-                  <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-lime-300 to-yellow-300"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${analytics.readiness}%` }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                  />
-                </div>
-                <p className="mt-3 text-sm font-bold leading-relaxed text-emerald-50/80">
-                  Gap {formatEmergencyNpr(analytics.gap)} · Profile uses {analytics.recommendedMonths} months + buffer
-                  ({riskLevel}).
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </section>
 
-        {/* Inputs + results */}
-        <section className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-black tracking-tight text-emerald-950">Safety Inputs</h2>
-                <p className="font-nepali text-sm font-bold text-slate-500">आफ्नो सुरक्षा विवरण हाल्नुहोस्</p>
-              </div>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Live</span>
-            </div>
-            <div className="grid gap-4">
-              <InputField
-                label="Monthly Essential Expenses"
-                nepaliLabel="मासिक आवश्यक खर्च"
-                value={monthlyExpenseRaw}
-                prefix="रु"
-                onChange={(next) => setMonthlyExpenseRaw(sanitizeIntegerInput(next))}
-                inputMode="numeric"
-              />
-              <InputField
-                label="Current Emergency Fund"
-                nepaliLabel="हालको आपतकालीन कोष"
-                value={currentFundRaw}
-                prefix="रु"
-                onChange={(next) => {
-                  const cleaned = sanitizeIntegerInput(next);
-                  setCurrentFundRaw(cleaned);
-                  persistEmergencyReserve(parseNumber(cleaned));
-                }}
-                inputMode="numeric"
-              />
-              <InputField
-                label="Monthly Contribution"
-                nepaliLabel="मासिक बचत योगदान"
-                value={monthlySaveRaw}
-                prefix="रु"
-                onChange={(next) => setMonthlySaveRaw(sanitizeIntegerInput(next))}
-                inputMode="numeric"
-              />
-              <InputField
-                label="Inflation"
-                nepaliLabel="मुद्रास्फीति"
-                value={inflationRaw}
-                suffix="%"
-                onChange={(next) => setInflationRaw(sanitizeDecimalInput(next))}
-              />
-              <InputField
-                label="Dependents"
-                nepaliLabel="आश्रित परिवार सदस्य"
-                value={dependentsRaw}
-                onChange={(next) => setDependentsRaw(sanitizeIntegerInput(next))}
-                inputMode="numeric"
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ToggleChip
-                  active={stableJob}
-                  onClick={() => setStableJob((v) => !v)}
-                  label={stableJob ? "Stable Job: On" : "Stable Job: Off"}
-                  nepaliLabel="स्थिर जागिर"
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ResultCard
+                  label="Readiness Score"
+                  nepaliLabel="तयारी स्कोर"
+                  value={`${Math.round(analytics.readiness)}%`}
+                  hint="Funded vs scenario target"
+                  icon={Gauge}
+                />
+                <ResultCard
+                  label="Current Coverage"
+                  nepaliLabel="हालको कभरेज"
+                  value={formatEmergencyMonths(analytics.runwayMonths)}
+                  hint={`Stress runway ${formatEmergencyMonths(analytics.stressRunway)}`}
+                  icon={CalendarClock}
+                  tone="lime"
+                />
+                <ResultCard
+                  label="Scenario Fund"
+                  nepaliLabel="सिफारिस कोष"
+                  value={formatEmergencyNpr(analytics.recommendedFund)}
+                  hint={`${analytics.recommendedMonths} months + buffer`}
+                  icon={Target}
+                />
+                <ResultCard
+                  label="Funding Gap"
+                  nepaliLabel="कमी रकम"
+                  value={formatEmergencyNpr(analytics.gap)}
+                  hint={analytics.gap === 0 ? "Fully funded" : "Still to save"}
+                  icon={PiggyBank}
+                  tone="gold"
+                />
+                <ResultCard
+                  label="Time to Goal"
+                  nepaliLabel="लक्ष्य पुग्ने समय"
+                  value={
+                    analytics.gap === 0
+                      ? "Ready"
+                      : analytics.monthsToTarget > 0
+                        ? `${analytics.monthsToTarget} mo`
+                        : "—"
+                  }
+                  hint="At current monthly contribution"
+                  icon={WalletCards}
+                  tone="dark"
+                />
+                <ResultCard
+                  label="Safety Level"
+                  nepaliLabel="सुरक्षा स्तर"
+                  value={safety.label}
+                  hint="Based on readiness score"
                   icon={ShieldCheck}
-                />
-                <ToggleChip
-                  active={returnToNepal}
-                  onClick={() => setReturnToNepal((v) => !v)}
-                  label={returnToNepal ? "Return to Nepal: On" : "Return to Nepal: Off"}
-                  nepaliLabel="नेपाल फर्कने योजना"
-                  icon={Users}
+                  tone={safety.tone}
                 />
               </div>
-              <p className="rounded-2xl bg-emerald-50/80 px-4 py-3 text-xs font-bold leading-relaxed text-emerald-800">
-                Profile → <span className="font-black capitalize">{riskLevel}</span> ({analytics.recommendedMonths} mo
-                target). Stable job + no dependents → stable; dependents or unstable job → moderate; Nepal return →
-                high.
-              </p>
-            </div>
-          </div>
+            </section>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ResultCard
-              label="Readiness Score"
-              nepaliLabel="तयारी स्कोर"
-              value={`${Math.round(analytics.readiness)}%`}
-              hint="Funded vs recommended target"
-              icon={Gauge}
-            />
-            <ResultCard
-              label="Current Coverage"
-              nepaliLabel="हालको कभरेज"
-              value={formatEmergencyMonths(analytics.runwayMonths)}
-              hint={`Stress runway ${formatEmergencyMonths(analytics.stressRunway)}`}
-              icon={CalendarClock}
-              tone="lime"
-            />
-            <ResultCard
-              label="Recommended Fund"
-              nepaliLabel="सिफारिस कोष"
-              value={formatEmergencyNpr(analytics.recommendedFund)}
-              hint={`${analytics.recommendedMonths} months + buffer`}
-              icon={Target}
-            />
-            <ResultCard
-              label="Funding Gap"
-              nepaliLabel="कमी रकम"
-              value={formatEmergencyNpr(analytics.gap)}
-              hint={analytics.gap === 0 ? "Fully funded" : "Still to save"}
-              icon={PiggyBank}
-              tone="gold"
-            />
-            <ResultCard
-              label="Time to Goal"
-              nepaliLabel="लक्ष्य पुग्ने समय"
-              value={
-                analytics.gap === 0
-                  ? "Ready"
-                  : analytics.monthsToTarget > 0
-                    ? `${analytics.monthsToTarget} mo`
-                    : "—"
-              }
-              hint="At current monthly contribution"
-              icon={WalletCards}
-              tone="dark"
-            />
-            <ResultCard
-              label="Safety Level"
-              nepaliLabel="सुरक्षा स्तर"
-              value={safety.label}
-              hint="Based on readiness score"
-              icon={ShieldCheck}
-              tone={safety.tone}
-            />
-          </div>
-        </section>
-
-        {/* Charts */}
-        <section className="mt-6 grid gap-5 xl:grid-cols-3">
-          <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-2">
-            <div className="mb-4">
-              <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">📈 Fund Growth</h2>
-              <p className="font-nepali text-sm font-bold text-slate-500">आपतकालीन कोष वृद्धि मार्ग</p>
-            </div>
-            <div className="h-[22rem]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={analytics.projection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="efStandaloneFund" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="#007a3d" stopOpacity={0.34} />
-                      <stop offset="95%" stopColor="#007a3d" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
-                    tickFormatter={(value: number) => compactNumber(value)}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(255,255,255,0.94)",
-                      border: "1px solid rgba(0,122,61,0.16)",
-                      borderRadius: "18px",
-                    }}
-                    formatter={(value: number | string, name: string) => [
-                      formatEmergencyNpr(Number(value)),
-                      name === "fund" ? "Fund" : "Target",
-                    ]}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="fund"
-                    name="Fund"
-                    stroke="#007a3d"
-                    strokeWidth={3}
-                    fill="url(#efStandaloneFund)"
-                    animationDuration={900}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="target"
-                    name="Target"
-                    stroke="#84cc16"
-                    strokeWidth={2}
-                    strokeDasharray="6 5"
-                    dot={false}
-                    animationDuration={900}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
-            <div className="mb-4">
-              <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">📊 Coverage Progress</h2>
-              <p className="font-nepali text-sm font-bold text-slate-500">कभरेज प्रगति</p>
-            </div>
-            <div className="h-[22rem]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={coverageChart}>
-                  <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                  <Tooltip
-                    contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
-                    formatter={(value: number | string) => formatEmergencyMonths(Number(value))}
-                  />
-                  <Bar dataKey="months" fill="#059669" radius={[14, 14, 0, 0]} animationDuration={850} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-3">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">📉 Inflation Impact</h2>
-                <p className="font-nepali text-sm font-bold text-slate-500">मुद्रास्फीति प्रभाव</p>
+            {/* Charts */}
+            <section className="mt-6 grid gap-5 xl:grid-cols-3">
+              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-2">
+                <div className="mb-4">
+                  <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Fund Growth</h2>
+                  <p className="font-nepali text-sm font-bold text-slate-500">आपतकालीन कोष वृद्धि मार्ग</p>
+                </div>
+                <div className="h-[22rem]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={analytics.projection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="efStandaloneFund" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="5%" stopColor="#007a3d" stopOpacity={0.34} />
+                          <stop offset="95%" stopColor="#007a3d" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
+                        tickFormatter={(value: number) => compactNumber(value)}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "rgba(255,255,255,0.94)",
+                          border: "1px solid rgba(0,122,61,0.16)",
+                          borderRadius: "18px",
+                        }}
+                        formatter={(value: number | string, name: string) => [
+                          formatEmergencyNpr(Number(value)),
+                          name === "fund" ? "Fund" : "Target",
+                        ]}
+                      />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="fund"
+                        name="Fund"
+                        stroke="#007a3d"
+                        strokeWidth={3}
+                        fill="url(#efStandaloneFund)"
+                        animationDuration={900}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="target"
+                        name="Target"
+                        stroke="#84cc16"
+                        strokeWidth={2}
+                        strokeDasharray="6 5"
+                        dot={false}
+                        animationDuration={900}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <Flame className="text-amber-600" size={22} />
-            </div>
-            <div className="h-[20rem]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={inflationChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="efStandaloneReal" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="#d97706" stopOpacity={0.28} />
-                      <stop offset="95%" stopColor="#d97706" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                  <XAxis dataKey="year" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
-                    tickFormatter={(value: number) => compactNumber(value)}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
-                    formatter={(value: number | string, name: string) => [
-                      formatEmergencyNpr(Number(value)),
-                      name === "real" ? "Real purchasing power" : "Nominal",
-                    ]}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="nominal"
-                    name="Nominal"
-                    stroke="#059669"
-                    strokeWidth={2.5}
-                    fillOpacity={0}
-                    animationDuration={900}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="real"
-                    name="Real purchasing power"
-                    stroke="#d97706"
-                    strokeWidth={2.5}
-                    fill="url(#efStandaloneReal)"
-                    animationDuration={900}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </section>
 
-        {/* Existing AI module — unchanged */}
-        <div className="mt-8">
-          <EmergencyFundAiSafetyAnalysis result={analytics} />
-        </div>
+              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
+                <div className="mb-4">
+                  <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Coverage Progress</h2>
+                  <p className="font-nepali text-sm font-bold text-slate-500">कभरेज प्रगति</p>
+                </div>
+                <div className="h-[22rem]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={coverageChart}>
+                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
+                      <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
+                      <Tooltip
+                        contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
+                        formatter={(value: number | string) => formatEmergencyMonths(Number(value))}
+                      />
+                      <Bar dataKey="months" fill="#059669" radius={[14, 14, 0, 0]} animationDuration={850} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-3">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Inflation Impact</h2>
+                    <p className="font-nepali text-sm font-bold text-slate-500">मुद्रास्फीति प्रभाव</p>
+                  </div>
+                  <Flame className="text-amber-600" size={22} />
+                </div>
+                <div className="h-[20rem]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={inflationChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="efStandaloneReal" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="5%" stopColor="#d97706" stopOpacity={0.28} />
+                          <stop offset="95%" stopColor="#d97706" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
+                      <XAxis dataKey="year" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
+                        tickFormatter={(value: number) => compactNumber(value)}
+                      />
+                      <Tooltip
+                        contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
+                        formatter={(value: number | string, name: string) => [
+                          formatEmergencyNpr(Number(value)),
+                          name === "real" ? "Real purchasing power" : "Nominal",
+                        ]}
+                      />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="nominal"
+                        name="Nominal"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        fillOpacity={0}
+                        animationDuration={900}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="real"
+                        name="Real purchasing power"
+                        stroke="#d97706"
+                        strokeWidth={2.5}
+                        fill="url(#efStandaloneReal)"
+                        animationDuration={900}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </section>
+
+            <div className="mt-8">
+              <EmergencyFundAiSafetyAnalysis result={analytics} />
+            </div>
+          </>
+        ) : null}
       </section>
 
-      {/* Mobile sticky summary */}
-      <div className="fixed inset-x-3 bottom-3 z-30 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-[0_18px_60px_rgba(0,63,47,0.18)] backdrop-blur-xl sm:hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Coverage</p>
-            <p className="text-lg font-black text-emerald-950">{formatEmergencyMonths(analytics.runwayMonths)}</p>
-          </div>
-          <div className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">
-            {Math.round(analytics.readiness)}%
+      {!showSetup ? (
+        <div className="fixed inset-x-3 bottom-3 z-30 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-[0_18px_60px_rgba(0,63,47,0.18)] backdrop-blur-xl sm:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Progress</p>
+              <p className="text-lg font-black text-emerald-950">
+                {financePlan.progressPct == null ? "—" : `${Math.round(financePlan.progressPct)}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">
+              {formatMoney(financePlan.remainingAmount, "NPR")} left
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </main>
   );
 }

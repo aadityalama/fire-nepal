@@ -76,7 +76,7 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
       {
         href: "/finance",
         title: "Finance",
-        body: "Cashflow, expenses, budget & savings",
+        body: "Cashflow, emergency fund, expenses & savings",
         icon: Banknote,
         accent: "from-emerald-600/30 to-cyan-400/10",
         plan: "free",
@@ -87,6 +87,14 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         body: "Income, burn, savings rate & runway",
         icon: Wallet,
         accent: "from-emerald-600/30 to-cyan-400/10",
+        plan: "free",
+      },
+      {
+        href: "/emergency-fund",
+        title: "Emergency Fund",
+        body: "6‑month safety target & funding progress",
+        icon: ShieldCheck,
+        accent: "from-sky-500/15 to-emerald-500/10",
         plan: "free",
       },
       {
@@ -367,14 +375,6 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         body: "Korea NPS, severance & retirement checks",
         icon: Building2,
         accent: "from-indigo-500/15 to-emerald-500/10",
-        plan: "elite",
-      },
-      {
-        href: "/emergency-fund",
-        title: "Emergency",
-        body: "Safety fund progress tracker",
-        icon: ShieldCheck,
-        accent: "from-sky-500/15 to-emerald-500/10",
         plan: "elite",
       },
       {

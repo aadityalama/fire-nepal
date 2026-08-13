@@ -2,11 +2,14 @@ import type { CashflowDashboardState } from "@/components/cashflow/types";
 import { computeWealthTotals, type WealthTotals } from "@/components/portfolio/calculations";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import {
-  coverageMonths,
   monthlyBurn,
   savingsRatePct as cashflowSavingsRatePct,
   sumIncome,
 } from "@/components/cashflow/cashflow-metrics";
+import {
+  computeEmergencyFundPlan,
+  DEFAULT_EMERGENCY_FUND_MONTHS,
+} from "@/lib/emergency-fund-plan";
 
 /** Single snapshot of cross-module FIRE Nepal KPIs (pure derived state). */
 export type UnifiedFireSummary = {
@@ -25,6 +28,14 @@ export type UnifiedFireSummary = {
   emergencyFundCoverageMonths: number | null;
   /** Progress toward 6 months of expenses in liquid emergency reserve (0–100). */
   emergencyFundSixMoProgressPct: number | null;
+  /** Current emergency cash reserve (cashflow SoT — same as Emergency Fund). */
+  emergencyFundCurrentAmount: number;
+  /** 6× monthly burn target (same formula as Emergency Fund workspace). */
+  emergencyFundTargetAmount: number;
+  /** max(0, target − current). */
+  emergencyFundRemainingAmount: number;
+  /** Whether cashflow burn is available to size the emergency target. */
+  emergencyFundHasSufficientData: boolean;
   /** Progress toward classic 25× annual spend rule on net worth (0–100, clamped). */
   fireProgressPct: number | null;
   annualExpensesFromCashflowNpr: number;
@@ -47,7 +58,10 @@ export function computeUnifiedFireSummary(
   const monthlyIncome = sumIncome(cashflow);
   const monthlyExpenses = monthlyBurn(cashflow);
   const savingsRatePct = cashflowSavingsRatePct(cashflow);
-  const emergencyFundCoverageMonths = coverageMonths(cashflow);
+  const emergencyPlan = computeEmergencyFundPlan(cashflow, {
+    recommendedMonths: DEFAULT_EMERGENCY_FUND_MONTHS,
+  });
+  const emergencyFundCoverageMonths = emergencyPlan.coverageMonths;
 
   const annualExpensesFromCashflowNpr = monthlyExpenses * 12;
   const fireNumber25xAnnualSpendNpr = 25 * annualExpensesFromCashflowNpr;
@@ -57,8 +71,7 @@ export function computeUnifiedFireSummary(
       ? clampPct((wealthTotals.netWorthNpr / fireNumber25xAnnualSpendNpr) * 100)
       : null;
 
-  const emergencyFundSixMoProgressPct =
-    emergencyFundCoverageMonths === null ? null : clampPct((emergencyFundCoverageMonths / 6) * 100);
+  const emergencyFundSixMoProgressPct = emergencyPlan.progressPct;
 
   return {
     wealthTotals,
@@ -73,6 +86,10 @@ export function computeUnifiedFireSummary(
     savingsRatePct,
     emergencyFundCoverageMonths,
     emergencyFundSixMoProgressPct,
+    emergencyFundCurrentAmount: emergencyPlan.currentAmount,
+    emergencyFundTargetAmount: emergencyPlan.recommendedTarget,
+    emergencyFundRemainingAmount: emergencyPlan.remainingAmount,
+    emergencyFundHasSufficientData: emergencyPlan.hasSufficientData,
     fireProgressPct,
     annualExpensesFromCashflowNpr,
     fireNumber25xAnnualSpendNpr,
