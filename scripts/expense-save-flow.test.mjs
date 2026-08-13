@@ -76,22 +76,21 @@ describe("Add Expense sticky dual Save UX", () => {
     assert.match(workspaceSrc, /data-testid="expense-save-bottom"/);
     assert.match(workspaceSrc, /data-testid="expense-save-sticky-footer"/);
     assert.match(workspaceSrc, /const handleSave = \(\) =>/);
-    assert.match(workspaceSrc, /onClick=\{handleSave\}/);
-    // Both CTAs invoke handleSave (shared), not divergent inline handlers.
-    const topIdx = workspaceSrc.indexOf('data-testid="expense-save-top"');
-    const bottomIdx = workspaceSrc.indexOf('data-testid="expense-save-bottom"');
-    assert.ok(topIdx > 0 && bottomIdx > topIdx);
-    const between = workspaceSrc.slice(topIdx, bottomIdx + 80);
-    assert.match(between, /onClick=\{handleSave\}/);
-    assert.match(workspaceSrc.slice(bottomIdx - 120, bottomIdx + 80), /onClick=\{handleSave\}/);
+    assert.match(workspaceSrc, /id="expense-add-form"/);
+    assert.match(workspaceSrc, /event\.preventDefault\(\);\s*handleSave\(\);/);
+    // Top Save calls handleSave; bottom Save submits the same form (same handler).
+    assert.match(workspaceSrc, /onClick=\{handleSave\}[\s\S]{0,200}data-testid="expense-save-top"/);
+    assert.match(workspaceSrc, /type="submit"[\s\S]{0,160}form="expense-add-form"[\s\S]{0,160}data-testid="expense-save-bottom"/);
   });
 
   it("disables Save until required fields are valid and while saving", () => {
     assert.match(workspaceSrc, /const canSave = validated\.ok && !saving/);
-    assert.match(workspaceSrc, /disabled=\{!canSave\}/);
+    assert.match(workspaceSrc, /aria-disabled=\{!canSave\}/);
+    assert.match(workspaceSrc, /disabled=\{saving\}/);
     assert.match(workspaceSrc, /Saving\.\.\./);
     assert.match(workspaceSrc, /data-testid="expense-save-error"/);
     assert.match(workspaceSrc, /role="alert"/);
+    assert.match(workspaceSrc, /expense-save-hint/);
   });
 
   it("pins Save above the keyboard with a sticky footer and 100dvh sheet", () => {

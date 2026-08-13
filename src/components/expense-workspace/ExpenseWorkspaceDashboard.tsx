@@ -1063,9 +1063,12 @@ function ExpenseAddSheet({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!canSave}
+            disabled={saving}
+            aria-disabled={!canSave}
             data-testid="expense-save-top"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950 disabled:opacity-50"
+            className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950 disabled:opacity-50 ${
+              canSave ? "" : "opacity-50"
+            }`}
           >
             <Save size={15} />
             {saving ? "Saving..." : "Save"}
@@ -1073,14 +1076,22 @@ function ExpenseAddSheet({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-4 [-webkit-overflow-scrolling:touch]">
-          <div className="space-y-5">
+          <form
+            id="expense-add-form"
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleSave();
+            }}
+          >
             <Field label="Expense Name">
               <input
                 value={form.title}
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                className="min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
+                className="relative z-10 min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
                 placeholder="Internet Bill"
                 data-testid="expense-name-input"
+                name="expense-name"
                 autoComplete="off"
               />
             </Field>
@@ -1090,15 +1101,17 @@ function ExpenseAddSheet({
               heading="Category"
             />
             <Field label="Amount (NPR only)">
-              <div className="flex min-h-[58px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
-                <span className="mr-2 text-lg font-black text-lime-200">NPR</span>
+              <div className="relative z-10 flex min-h-[58px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
+                <span className="pointer-events-none mr-2 text-lg font-black text-lime-200">NPR</span>
                 <input
                   value={form.amount}
                   onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
                   inputMode="decimal"
-                  className="min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none"
+                  name="expense-amount"
+                  className="relative z-10 min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none placeholder:text-white/35"
                   placeholder="1,200"
                   data-testid="expense-amount-input"
+                  autoComplete="off"
                 />
               </div>
             </Field>
@@ -1107,8 +1120,9 @@ function ExpenseAddSheet({
                 type="date"
                 value={form.expenseDate}
                 onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
-                className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+                className="relative z-10 min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
                 data-testid="expense-date-input"
+                name="expense-date"
               />
             </Field>
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
@@ -1148,9 +1162,10 @@ function ExpenseAddSheet({
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
                 className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white outline-none"
                 placeholder="Optional notes"
+                name="expense-notes"
               />
             </Field>
-          </div>
+          </form>
         </div>
 
         <div
@@ -1165,13 +1180,20 @@ function ExpenseAddSheet({
             >
               {saveError}
             </p>
+          ) : !validated.ok ? (
+            <p className="mb-2 text-center text-xs font-semibold text-emerald-100/55" data-testid="expense-save-hint">
+              Fill name, category, amount, and date to enable Save.
+            </p>
           ) : null}
           <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave}
+            type="submit"
+            form="expense-add-form"
+            disabled={saving}
+            aria-disabled={!canSave}
             data-testid="expense-save-bottom"
-            className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50"
+            className={`flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 ${
+              canSave ? "" : "opacity-50"
+            }`}
           >
             <Save size={18} />
             {saving ? "Saving..." : "Save Expense"}
