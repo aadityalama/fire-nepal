@@ -40,7 +40,6 @@ import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import {
   computeEmergencyFundPlan,
   DEFAULT_EMERGENCY_FUND_MONTHS,
-  type EmergencyFundPlan,
 } from "@/lib/emergency-fund-plan";
 import {
   buildEmergencyFundSafetyAnalysis,
@@ -216,7 +215,7 @@ export function EmergencyFundDashboard() {
   const { user, loading: authLoading } = useProductAuth();
   const uid = user?.id;
   const [hydrated, setHydrated] = useState(false);
-  const [plan, setPlan] = useState<EmergencyFundPlan | null>(null);
+  const [syncTick, setSyncTick] = useState(0);
   const [monthlyExpenseRaw, setMonthlyExpenseRaw] = useState("");
   const [currentFundRaw, setCurrentFundRaw] = useState("0");
   const [monthlySaveRaw, setMonthlySaveRaw] = useState("0");
@@ -229,35 +228,35 @@ export function EmergencyFundDashboard() {
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seededContributionRef = useRef(false);
 
-  const refreshFromCashflow = useCallback(() => {
+  const bumpSync = useCallback(() => {
+    setSyncTick((tick) => tick + 1);
+  }, []);
+
+  const applyCashflowToEditors = useCallback(() => {
     const cashflow = loadCashflowState(uid);
     const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths });
-    setPlan(nextPlan);
-
     const burn = monthlyBurn(cashflow);
     const nextFund =
       cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
         ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
         : "0";
     setCurrentFundRaw(nextFund);
-
-    if (burn > 0) {
-      setMonthlyExpenseRaw(String(Math.round(burn)));
-    } else {
-      setMonthlyExpenseRaw("");
-    }
-
+    setMonthlyExpenseRaw(burn > 0 ? String(Math.round(burn)) : "");
     if (!seededContributionRef.current && nextPlan.recommendedMonthlyContribution > 0) {
       setMonthlySaveRaw(String(nextPlan.recommendedMonthlyContribution));
       seededContributionRef.current = true;
     }
   }, [recommendedMonths, uid]);
 
+  const plan = useMemo(() => {
+    void syncTick;
+    return computeEmergencyFundPlan(loadCashflowState(uid), { recommendedMonths });
+  }, [recommendedMonths, syncTick, uid]);
+
   useEffect(() => {
     if (authLoading) return;
 
-    // Guests: local cache is ready immediately.
-    // Authenticated: prefer already-hydrated finance cache; wait for cloud-ready event if empty burn+income.
+    let cancelled = false;
     const cashflow = loadCashflowState(uid);
     const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths });
     const hasLocalSignal =
@@ -266,29 +265,33 @@ export function EmergencyFundDashboard() {
       initial.currentAmount > 0 ||
       !uid;
 
-    if (hasLocalSignal) {
-      refreshFromCashflow();
+    const finishHydrate = () => {
+      if (cancelled) return;
+      applyCashflowToEditors();
+      bumpSync();
       setHydrated(true);
-      return;
+    };
+
+    if (hasLocalSignal) {
+      const frame = window.requestAnimationFrame(finishHydrate);
+      return () => {
+        cancelled = true;
+        window.cancelAnimationFrame(frame);
+      };
     }
 
     const onReady = () => {
-      refreshFromCashflow();
-      setHydrated(true);
+      if (cancelled) return;
+      finishHydrate();
     };
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
-    // Soft fallback so we never spin forever if hydrate already finished.
     const timer = window.setTimeout(onReady, 1200);
     return () => {
+      cancelled = true;
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
       window.clearTimeout(timer);
     };
-  }, [authLoading, refreshFromCashflow, recommendedMonths, uid]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    refreshFromCashflow();
-  }, [hydrated, recommendedMonths, refreshFromCashflow]);
+  }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, uid]);
 
   const persistEmergencyReserve = useCallback(
     (fundNpr: number) => {
@@ -299,7 +302,7 @@ export function EmergencyFundDashboard() {
           emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
         }))
           .then(() => {
-            refreshFromCashflow();
+            bumpSync();
           })
           .catch((error) => {
             if (process.env.NODE_ENV !== "production") {
@@ -308,12 +311,13 @@ export function EmergencyFundDashboard() {
           });
       }, 450);
     },
-    [refreshFromCashflow, uid],
+    [bumpSync, uid],
   );
 
   useEffect(() => {
     const onExternal = () => {
-      refreshFromCashflow();
+      applyCashflowToEditors();
+      bumpSync();
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
@@ -321,7 +325,7 @@ export function EmergencyFundDashboard() {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
     };
-  }, [refreshFromCashflow]);
+  }, [applyCashflowToEditors, bumpSync]);
 
   const riskLevel = useMemo(
     () => resolveRiskLevel(stableJob, parseNumber(dependentsRaw), returnToNepal),
@@ -373,9 +377,9 @@ export function EmergencyFundDashboard() {
   };
 
   const financePlan = plan;
-  const showSetup = hydrated && financePlan != null && !financePlan.hasSufficientData;
+  const showSetup = hydrated && !financePlan.hasSufficientData;
 
-  if (authLoading || !hydrated || financePlan == null) {
+  if (authLoading || !hydrated) {
     return (
       <main className="premium-shell min-h-screen bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
         <div className="mx-auto flex max-w-7xl items-center justify-center py-24">
