@@ -6,11 +6,24 @@ import {
 } from "@/components/cashflow/cashflow-storage";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+
+function patchLocalCashflowState(
+  userId: string | null | undefined,
+  patcher: (state: CashflowDashboardState) => CashflowDashboardState,
+): CashflowDashboardState {
+  const next = sanitizeCashflowState(patcher(loadCashflowState(userId)));
+  saveCashflowState(next, userId);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(CASHFLOW_EXTERNAL_SYNC_EVENT));
+  }
+  return next;
+}
 
 /**
  * Apply a cashflow mutation.
- * Authenticated: load → patch → PUT Supabase → cache local only after success.
- * Guest: localStorage only.
+ * Authenticated + Supabase: load → patch → PUT cloud → cache local only after success.
+ * Guest / legacy (no Supabase): localStorage only (user-scoped when signed in).
  */
 export async function patchCashflowState(
   userId: string | null | undefined,
@@ -18,11 +31,8 @@ export async function patchCashflowState(
 ): Promise<CashflowDashboardState> {
   if (typeof window === "undefined") return defaultCashflowState();
 
-  if (!userId) {
-    const next = sanitizeCashflowState(patcher(loadCashflowState(null)));
-    saveCashflowState(next, null);
-    window.dispatchEvent(new Event(CASHFLOW_EXTERNAL_SYNC_EVENT));
-    return next;
+  if (!userId || !isSupabaseConfigured()) {
+    return patchLocalCashflowState(userId, patcher);
   }
 
   const loadRes = await fetch("/api/cashflow", { credentials: "include", cache: "no-store" });
