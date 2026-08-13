@@ -2,7 +2,7 @@
  * Finance Emergency Fund plan — single source of truth for amounts & targets.
  *
  * Balance SoT: `CashflowDashboardState.emergencyCashReserve`
- * Essential expenses SoT: cashflow `monthlyBurn` (override → categories)
+ * Essential expenses SoT: cashflow `monthlyBurn` (override → Expense module → categories)
  * Default target: 6 × monthly essential expenses (no risk buffer)
  *
  * Used by Emergency Fund workspace and FIRE Progress so both stay aligned.

@@ -17,6 +17,8 @@ import {
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
+import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { readMonthlyExpenseFromModule } from "@/lib/cashflow/cashflow-live-metrics";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
@@ -48,6 +50,7 @@ export function useUnifiedFireSummary(): {
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
+  const [expenseSyncTick, setExpenseSyncTick] = useState(0);
 
   const resync = useCallback(() => {
     if (!uid || !isSupabaseConfigured()) {
@@ -109,11 +112,14 @@ export function useUnifiedFireSummary(): {
 
   useEffect(() => {
     const onExternal = () => resync();
+    const onExpense = () => setExpenseSyncTick((tick) => tick + 1);
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, onExpense);
     return () => {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+      window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, onExpense);
     };
   }, [resync]);
 
@@ -131,10 +137,16 @@ export function useUnifiedFireSummary(): {
     };
   }, []);
 
-  const summary = useMemo(
-    () => computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr),
-    [portfolio, cashflow, krwPerNpr, usdPerNpr],
-  );
+  const summary = useMemo(() => {
+    void expenseSyncTick;
+    return computeUnifiedFireSummary(
+      portfolio,
+      cashflow,
+      krwPerNpr,
+      usdPerNpr,
+      readMonthlyExpenseFromModule(),
+    );
+  }, [portfolio, cashflow, krwPerNpr, usdPerNpr, expenseSyncTick]);
 
   return { summary, portfolio, cashflow, ratesLoading, resync };
 }

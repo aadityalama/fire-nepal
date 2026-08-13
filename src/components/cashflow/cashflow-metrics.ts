@@ -75,11 +75,13 @@ export function sumExpenseCategories(state: CashflowDashboardState): number {
   return keys.reduce((acc, k) => acc + finiteNonNeg(state.expenses[k]), 0);
 }
 
-/** Monthly outflows used for savings rate, runway, and investable cashflow. */
+/** Monthly outflows used for savings rate, runway, and investable cashflow.
+ * Precedence: explicit override → Expense-module auto total → cashflow categories.
+ */
 export function monthlyBurn(state: CashflowDashboardState, autoExpenseTotal?: number): number {
-  if (typeof autoExpenseTotal === "number" && autoExpenseTotal > 0) return autoExpenseTotal;
   const o = finiteNonNeg(state.monthlyExpensesOverride);
   if (o > 0) return o;
+  if (typeof autoExpenseTotal === "number" && autoExpenseTotal > 0) return autoExpenseTotal;
   return sumExpenseCategories(state);
 }
 
