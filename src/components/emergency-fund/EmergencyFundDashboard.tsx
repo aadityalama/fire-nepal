@@ -36,6 +36,8 @@ import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
+import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
+import { readMonthlyExpenseFromModule } from "@/lib/cashflow/cashflow-live-metrics";
 import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import {
   computeEmergencyFundPlan,
@@ -234,8 +236,9 @@ export function EmergencyFundDashboard() {
 
   const applyCashflowToEditors = useCallback(() => {
     const cashflow = loadCashflowState(uid);
-    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths });
-    const burn = monthlyBurn(cashflow);
+    const autoExpenseTotal = readMonthlyExpenseFromModule();
+    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths, autoExpenseTotal });
+    const burn = monthlyBurn(cashflow, autoExpenseTotal);
     const nextFund =
       cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
         ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
@@ -250,7 +253,10 @@ export function EmergencyFundDashboard() {
 
   const plan = useMemo(() => {
     void syncTick;
-    return computeEmergencyFundPlan(loadCashflowState(uid), { recommendedMonths });
+    return computeEmergencyFundPlan(loadCashflowState(uid), {
+      recommendedMonths,
+      autoExpenseTotal: readMonthlyExpenseFromModule(),
+    });
   }, [recommendedMonths, syncTick, uid]);
 
   useEffect(() => {
@@ -258,7 +264,8 @@ export function EmergencyFundDashboard() {
 
     let cancelled = false;
     const cashflow = loadCashflowState(uid);
-    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths });
+    const autoExpenseTotal = readMonthlyExpenseFromModule();
+    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths, autoExpenseTotal });
     const hasLocalSignal =
       initial.monthlyEssentialExpenses > 0 ||
       initial.monthlyIncome > 0 ||
@@ -321,9 +328,11 @@ export function EmergencyFundDashboard() {
     };
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     return () => {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+      window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, onExternal);
     };
   }, [applyCashflowToEditors, bumpSync]);
 

@@ -9,6 +9,7 @@ import {
   Mail,
   Pencil,
   Plus,
+  Save,
   Search,
   Sparkles,
   Trash2,
@@ -17,7 +18,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import {
@@ -43,6 +44,7 @@ import {
 import { fetchBudgetRecords } from "@/lib/budget/budget-api";
 import { monthlyComparisonData } from "@/lib/expense-analytics";
 import { DEFAULT_FINANCE_CATEGORY_ID, getFinanceCategoryLabel, normalizeFinanceCategory } from "@/lib/finance/categories";
+import { validateExpenseFormFields } from "@/lib/expense-workspace/expense-form-validation";
 import {
   loadExpenseWorkspaceUiState,
   saveExpenseWorkspaceUiState,
@@ -168,6 +170,8 @@ export function ExpenseWorkspaceDashboard({
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<WorkspaceForm>(() => emptyForm(todayIso));
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(todayIso);
   const [chartsReady, setChartsReady] = useState(false);
@@ -295,8 +299,56 @@ export function ExpenseWorkspaceDashboard({
 
   function openAdd() {
     setForm(emptyForm(todayIso));
+    setSaveError(null);
+    setSavingExpense(false);
     setAddOpen(true);
   }
+
+  const submitAddExpense = useCallback(async () => {
+    if (savingExpense) return;
+    const validated = validateExpenseFormFields({
+      title: form.title,
+      amount: form.amount,
+      category: form.category,
+      date: form.expenseDate || todayIso,
+    });
+    if (!validated.ok) {
+      setSaveError(validated.error);
+      return;
+    }
+
+    const expenseDate = validated.date;
+    const repeat = form.repeat ?? "Never";
+    const reminderEnabled = repeat !== "Never";
+    setSavingExpense(true);
+    setSaveError(null);
+    try {
+      await Promise.resolve(
+        onSubmitWorkspaceExpense({
+          title: validated.title,
+          amountNpr: validated.amountNpr,
+          category: normalizeFinanceCategory(validated.category),
+          expenseDate,
+          dueDate: expenseDate,
+          account: DEFAULT_WORKSPACE_ACCOUNT,
+          paymentMethod: DEFAULT_PAYMENT_METHOD,
+          repeat,
+          notes: form.notes,
+          reminderEnabled,
+          reminderTiming: DEFAULT_REMINDER_TIMING,
+          reminderTime: DEFAULT_REMINDER_TIME,
+          reminderEmail: false,
+        }),
+      );
+      setAddOpen(false);
+      setForm(emptyForm(todayIso));
+      setSaveError(null);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save expense.");
+    } finally {
+      setSavingExpense(false);
+    }
+  }, [form, onSubmitWorkspaceExpense, savingExpense, todayIso]);
 
   const overviewCards = [
     { emoji: "💸", label: "Total Spent", value: formatNpr(monthTotal) },
@@ -750,39 +802,18 @@ export function ExpenseWorkspaceDashboard({
         {addOpen ? (
           <ExpenseAddSheet
             form={form}
-            setForm={setForm}
-            onClose={() => setAddOpen(false)}
-            onSave={() => {
-              const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
-              if (!form.title.trim() || !amountNpr) return;
-              const expenseDate = form.expenseDate || todayIso;
-              const repeat = form.repeat ?? "Never";
-              const reminderEnabled = repeat !== "Never";
-              void Promise.resolve(
-                onSubmitWorkspaceExpense({
-                  title: form.title.trim(),
-                  amountNpr,
-                  category: normalizeFinanceCategory(form.category),
-                  expenseDate,
-                  dueDate: expenseDate,
-                  account: DEFAULT_WORKSPACE_ACCOUNT,
-                  paymentMethod: DEFAULT_PAYMENT_METHOD,
-                  repeat,
-                  notes: form.notes,
-                  reminderEnabled,
-                  reminderTiming: DEFAULT_REMINDER_TIMING,
-                  reminderTime: DEFAULT_REMINDER_TIME,
-                  reminderEmail: false,
-                }),
-              )
-                .then(() => {
-                  setAddOpen(false);
-                  setForm(emptyForm(todayIso));
-                })
-                .catch(() => {
-                  /* Parent shows the Supabase error toast. */
-                });
+            setForm={(next) => {
+              setSaveError(null);
+              setForm(next);
             }}
+            saving={savingExpense}
+            saveError={saveError}
+            onClose={() => {
+              if (savingExpense) return;
+              setAddOpen(false);
+              setSaveError(null);
+            }}
+            onSave={submitAddExpense}
           />
         ) : null}
       </AnimatePresence>
@@ -986,30 +1017,62 @@ function ExpenseAddSheet({
   setForm,
   onClose,
   onSave,
+  saving = false,
+  saveError = null,
 }: {
   form: WorkspaceForm;
   setForm: Dispatch<SetStateAction<WorkspaceForm>>;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
+  saving?: boolean;
+  saveError?: string | null;
 }) {
+  const validated = validateExpenseFormFields({
+    title: form.title,
+    amount: form.amount,
+    category: form.category,
+    date: form.expenseDate,
+  });
+  const canSave = validated.ok && !saving;
+
+  const handleSave = () => {
+    if (saving) return;
+    void Promise.resolve(onSave());
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 28 }}
-        className="mx-auto flex h-full max-w-lg flex-col overflow-hidden bg-[#04140f]"
+        className="mx-auto flex h-[100dvh] max-w-lg flex-col overflow-hidden bg-[#04140f]"
+        data-testid="expense-add-sheet"
       >
-        <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
-          <button type="button" onClick={onClose} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06]">
+        <header className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06] disabled:opacity-50"
+            aria-label="Close"
+          >
             <X size={20} />
           </button>
           <h2 className="text-lg font-black">Add Expense</h2>
-          <button type="button" onClick={onSave} className="rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950">
-            Save
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            data-testid="expense-save-top"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950 disabled:opacity-50"
+          >
+            <Save size={15} />
+            {saving ? "Saving..." : "Save"}
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-4 [-webkit-overflow-scrolling:touch]">
           <div className="space-y-5">
             <Field label="Expense Name">
               <input
@@ -1017,6 +1080,8 @@ function ExpenseAddSheet({
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
                 className="min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
                 placeholder="Internet Bill"
+                data-testid="expense-name-input"
+                autoComplete="off"
               />
             </Field>
             <FinanceCategoryPicker
@@ -1030,9 +1095,10 @@ function ExpenseAddSheet({
                 <input
                   value={form.amount}
                   onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
-                  inputMode="numeric"
+                  inputMode="decimal"
                   className="min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none"
                   placeholder="1,200"
+                  data-testid="expense-amount-input"
                 />
               </div>
             </Field>
@@ -1042,6 +1108,7 @@ function ExpenseAddSheet({
                 value={form.expenseDate}
                 onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
                 className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+                data-testid="expense-date-input"
               />
             </Field>
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
@@ -1084,6 +1151,31 @@ function ExpenseAddSheet({
               />
             </Field>
           </div>
+        </div>
+
+        <div
+          className="shrink-0 border-t border-white/10 bg-[#04140f] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+          data-testid="expense-save-sticky-footer"
+        >
+          {saveError ? (
+            <p
+              role="alert"
+              data-testid="expense-save-error"
+              className="mb-2 rounded-xl border border-red-300/30 bg-red-500/15 px-3 py-2 text-sm font-semibold text-red-100"
+            >
+              {saveError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            data-testid="expense-save-bottom"
+            className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50"
+          >
+            <Save size={18} />
+            {saving ? "Saving..." : "Save Expense"}
+          </button>
         </div>
       </motion.div>
     </motion.div>

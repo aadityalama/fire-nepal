@@ -47,19 +47,22 @@ const clampPct = (n: number) => Math.max(0, Math.min(100, n));
 /**
  * Unified FIRE Nepal summary: composes portfolio `computeWealthTotals` with cashflow
  * income / burn / emergency fields. No I/O — safe for tests and SSR imports.
+ * Pass `autoExpenseTotal` (Expense-module monthly sum) so Emergency Fund KPIs stay aligned.
  */
 export function computeUnifiedFireSummary(
   portfolio: WealthPortfolioStateV2,
   cashflow: CashflowDashboardState,
   krwPerNpr: number,
   usdPerNpr: number,
+  autoExpenseTotal?: number,
 ): UnifiedFireSummary {
   const wealthTotals = computeWealthTotals(portfolio, krwPerNpr, usdPerNpr);
   const monthlyIncome = sumIncome(cashflow);
-  const monthlyExpenses = monthlyBurn(cashflow);
-  const savingsRatePct = cashflowSavingsRatePct(cashflow);
+  const monthlyExpenses = monthlyBurn(cashflow, autoExpenseTotal);
+  const savingsRatePct = cashflowSavingsRatePct(cashflow, autoExpenseTotal);
   const emergencyPlan = computeEmergencyFundPlan(cashflow, {
     recommendedMonths: DEFAULT_EMERGENCY_FUND_MONTHS,
+    autoExpenseTotal,
   });
   const emergencyFundCoverageMonths = emergencyPlan.coverageMonths;
 

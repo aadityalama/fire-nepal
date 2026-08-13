@@ -68,6 +68,7 @@ import { SettlementShareModal } from "@/components/SettlementShareModal";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { syncExpenseReminderToCloud } from "@/lib/expense-workspace/expense-reminder-sync";
+import { validateExpenseFormFields } from "@/lib/expense-workspace/expense-form-validation";
 import {
   formatExpenseAmountForInput,
   krwToNpr,
@@ -842,6 +843,8 @@ export function ExpenseDashboard({
   const [shareGeneratedAt, setShareGeneratedAt] = useState<Date | null>(null);
   const [groupProfile, setGroupProfile] = useState<GroupProfile>(emptyGroupProfile);
   const [groupProfileSaving, setGroupProfileSaving] = useState(false);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [expenseSaveError, setExpenseSaveError] = useState<string | null>(null);
   const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
@@ -1610,6 +1613,8 @@ export function ExpenseDashboard({
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
+    setExpenseSaveError(null);
+    setSavingExpense(false);
     const entryCur = personalMode ? "NPR" : expenseEntryCurrency(currency);
     prevFormEntryCurrency.current = entryCur;
     setAmountInputCurrency(entryCur);
@@ -1645,6 +1650,8 @@ export function ExpenseDashboard({
     });
     setReceiptPreview(expense.receiptImage);
     setReceiptOcrText("");
+    setExpenseSaveError(null);
+    setSavingExpense(false);
     setIsModalOpen(true);
   }
 
@@ -1653,6 +1660,8 @@ export function ExpenseDashboard({
     setEditingExpenseId(null);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
+    setExpenseSaveError(null);
+    setSavingExpense(false);
     setForm(emptyExpenseForm(members[0], members, personalMode));
   }
 
@@ -1739,19 +1748,43 @@ export function ExpenseDashboard({
   );
 
   async function saveExpense() {
+    if (savingExpense) return;
+
     const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
-    if (!form.title.trim() || amount === null || !form.payerId) return;
+    const validated = validateExpenseFormFields({
+      title: form.title,
+      amount: amount != null ? String(amount) : form.amount,
+      category: form.category,
+      date: form.date,
+    });
+    if (!validated.ok || amount === null) {
+      const message =
+        validated.error ??
+        (!form.payerId ? "Choose who paid." : "Enter a valid amount greater than 0.");
+      setExpenseSaveError(message);
+      toast.error(message);
+      return;
+    }
+    if (!form.payerId) {
+      setExpenseSaveError("Choose who paid.");
+      toast.error("Choose who paid.");
+      return;
+    }
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
-    if (splitAmong.length === 0) return;
+    if (splitAmong.length === 0) {
+      setExpenseSaveError("Select at least one member to split with.");
+      toast.error("Select at least one member to split with.");
+      return;
+    }
     const splitPercentages = resolveSplitPercentages(form.splitEqually, splitAmong, form.splitPercentStr);
     const nextExpense: Expense = {
       id: editingExpenseId ?? Date.now(),
-      title: form.title.trim(),
+      title: validated.title,
       amount,
       payerId: form.payerId,
-      category: normalizeExpenseCategory(form.category),
+      category: normalizeExpenseCategory(validated.category),
       splitEqually: form.splitEqually,
-      date: form.date,
+      date: validated.date,
       notes: form.notes.trim() || undefined,
       receiptImage: receiptPreview,
       splitAmong: splitAmong.length === members.length ? undefined : splitAmong,
@@ -1760,6 +1793,8 @@ export function ExpenseDashboard({
     };
 
     const monthKey = expenseMonthKey(nextExpense.date);
+    setSavingExpense(true);
+    setExpenseSaveError(null);
 
     try {
       if (personalMode) {
@@ -1786,7 +1821,10 @@ export function ExpenseDashboard({
         await persistGroupExpense(nextExpense);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save expense.");
+      const message = error instanceof Error ? error.message : "Could not save expense.";
+      setExpenseSaveError(message);
+      toast.error(message);
+      setSavingExpense(false);
       return;
     }
 
@@ -1826,6 +1864,7 @@ export function ExpenseDashboard({
       setSelectedMonthKey(monthKey);
     }
 
+    setSavingExpense(false);
     closeExpenseModal();
   }
 
@@ -2325,7 +2364,9 @@ export function ExpenseDashboard({
         {isModalOpen ? (
           <ExpenseBottomSheet
             open={isModalOpen}
-            onClose={closeExpenseModal}
+            onClose={() => {
+              if (!savingExpense) closeExpenseModal();
+            }}
             title={editingExpenseId ? "Edit Expense" : "Add Expense"}
             subtitle="NPR-only personal expense entry"
           >
@@ -2335,14 +2376,20 @@ export function ExpenseDashboard({
                   <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Expense Name</span>
                   <input
                     value={form.title}
-                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    onChange={(event) => {
+                      setExpenseSaveError(null);
+                      setForm((current) => ({ ...current, title: event.target.value }));
+                    }}
                     className="min-h-[48px] w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
                     placeholder="Internet Bill"
                   />
                 </label>
                 <FinanceCategoryPicker
                   value={form.category}
-                  onChange={(category) => setForm((current) => ({ ...current, category }))}
+                  onChange={(category) => {
+                    setExpenseSaveError(null);
+                    setForm((current) => ({ ...current, category }));
+                  }}
                 />
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Amount (NPR)</span>
@@ -2350,7 +2397,10 @@ export function ExpenseDashboard({
                     <span className="mr-2 font-black text-emerald-700">NPR</span>
                     <input
                       value={form.amount}
-                      onChange={(event) => setForm((current) => ({ ...current, amount: sanitizeDecimalTyping(event.target.value) }))}
+                      onChange={(event) => {
+                        setExpenseSaveError(null);
+                        setForm((current) => ({ ...current, amount: sanitizeDecimalTyping(event.target.value) }));
+                      }}
                       inputMode="decimal"
                       className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none"
                     />
@@ -2361,7 +2411,10 @@ export function ExpenseDashboard({
                   <input
                     type="date"
                     value={form.date}
-                    onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                    onChange={(event) => {
+                      setExpenseSaveError(null);
+                      setForm((current) => ({ ...current, date: event.target.value }));
+                    }}
                     className="min-h-[48px] w-full max-w-full rounded-2xl border border-emerald-100 px-3 text-sm font-bold outline-none"
                   />
                 </label>
@@ -2375,12 +2428,38 @@ export function ExpenseDashboard({
                   />
                 </label>
               </div>
-              <div className="mt-4 flex gap-2">
-                <button type="button" onClick={closeExpenseModal} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
+              {expenseSaveError ? (
+                <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                  {expenseSaveError}
+                </p>
+              ) : null}
+              <div className="sticky bottom-0 mt-4 flex gap-2 bg-white pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!savingExpense) closeExpenseModal();
+                  }}
+                  disabled={savingExpense}
+                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 disabled:opacity-50"
+                >
                   Cancel
                 </button>
-                <button type="button" onClick={saveExpense} className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white">
-                  {editingExpenseId ? "Update" : "Save"}
+                <button
+                  type="button"
+                  onClick={() => void saveExpense()}
+                  disabled={
+                    savingExpense ||
+                    !validateExpenseFormFields({
+                      title: form.title,
+                      amount: form.amount,
+                      category: form.category,
+                      date: form.date,
+                    }).ok
+                  }
+                  data-testid="expense-modal-save"
+                  className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white disabled:opacity-50"
+                >
+                  {savingExpense ? "Saving..." : editingExpenseId ? "Update" : "Save"}
                 </button>
               </div>
             </div>
@@ -2877,7 +2956,9 @@ export function ExpenseDashboard({
 
       <ExpenseBottomSheet
         open={isModalOpen}
-        onClose={closeExpenseModal}
+        onClose={() => {
+          if (!savingExpense) closeExpenseModal();
+        }}
         title={editingExpenseId ? "Edit expense" : "Add expense"}
         subtitle={editingExpenseId ? "Edit expense details" : "Quick entry · uses dashboard currency"}
       >
@@ -3188,20 +3269,40 @@ export function ExpenseDashboard({
               ) : null}
           </div>
 
-          <div className="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+          {expenseSaveError ? (
+            <p role="alert" className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+              {expenseSaveError}
+            </p>
+          ) : null}
+
+          <div className="sticky bottom-0 mt-3 flex gap-2 border-t border-slate-100 bg-white pt-3 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
             <button
               type="button"
-              onClick={closeExpenseModal}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600"
+              onClick={() => {
+                if (!savingExpense) closeExpenseModal();
+              }}
+              disabled={savingExpense}
+              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={saveExpense}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white"
+              onClick={() => void saveExpense()}
+              disabled={
+                savingExpense ||
+                !validateExpenseFormFields({
+                  title: form.title,
+                  amount: form.amount,
+                  category: form.category,
+                  date: form.date,
+                }).ok ||
+                !form.payerId
+              }
+              data-testid="expense-group-modal-save"
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white disabled:opacity-50"
             >
-              {editingExpenseId ? "Update" : "Save"}
+              {savingExpense ? "Saving..." : editingExpenseId ? "Update" : "Save"}
             </button>
           </div>
         </div>

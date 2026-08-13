@@ -103,6 +103,34 @@ describe("computeEmergencyFundPlan", () => {
     assert.equal(plan.monthlyEssentialExpenses, 45_000);
     assert.equal(plan.recommendedTarget, 270_000);
   });
+
+  it("uses Expense-module autoExpenseTotal when override is absent", () => {
+    const plan = computeEmergencyFundPlan(
+      cashflowWith({
+        expenses: { rent: 10_000 },
+        emergencyCashReserve: 0,
+        income: { salary: 100_000 },
+      }),
+      { autoExpenseTotal: 45_000 },
+    );
+
+    assert.equal(plan.monthlyEssentialExpenses, 45_000);
+    assert.equal(plan.recommendedTarget, 270_000);
+  });
+
+  it("prefers override over Expense-module autoExpenseTotal", () => {
+    const plan = computeEmergencyFundPlan(
+      cashflowWith({
+        expenses: { rent: 10_000 },
+        monthlyExpensesOverride: 80_000,
+        emergencyCashReserve: 0,
+      }),
+      { autoExpenseTotal: 45_000 },
+    );
+
+    assert.equal(plan.monthlyEssentialExpenses, 80_000);
+    assert.equal(plan.recommendedTarget, 480_000);
+  });
 });
 
 describe("FIRE Progress emergency fund SoT", () => {
