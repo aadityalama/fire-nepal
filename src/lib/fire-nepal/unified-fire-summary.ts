@@ -44,6 +44,11 @@ export type UnifiedFireSummary = {
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
 
+export type ComputeUnifiedFireSummaryOptions = {
+  /** Expense-module monthly total (same auto burn used by Emergency Fund / Cashflow live). */
+  autoExpenseTotal?: number;
+};
+
 /**
  * Unified FIRE Nepal summary: composes portfolio `computeWealthTotals` with cashflow
  * income / burn / emergency fields. No I/O — safe for tests and SSR imports.
@@ -53,13 +58,15 @@ export function computeUnifiedFireSummary(
   cashflow: CashflowDashboardState,
   krwPerNpr: number,
   usdPerNpr: number,
+  options: ComputeUnifiedFireSummaryOptions = {},
 ): UnifiedFireSummary {
   const wealthTotals = computeWealthTotals(portfolio, krwPerNpr, usdPerNpr);
   const monthlyIncome = sumIncome(cashflow);
-  const monthlyExpenses = monthlyBurn(cashflow);
-  const savingsRatePct = cashflowSavingsRatePct(cashflow);
+  const monthlyExpenses = monthlyBurn(cashflow, options.autoExpenseTotal);
+  const savingsRatePct = cashflowSavingsRatePct(cashflow, options.autoExpenseTotal);
   const emergencyPlan = computeEmergencyFundPlan(cashflow, {
     recommendedMonths: DEFAULT_EMERGENCY_FUND_MONTHS,
+    autoExpenseTotal: options.autoExpenseTotal,
   });
   const emergencyFundCoverageMonths = emergencyPlan.coverageMonths;
 
