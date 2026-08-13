@@ -67,12 +67,25 @@ export function UnifiedFireDashboard() {
         accent: "lime" as const,
       },
       {
-        label: "Emergency coverage",
-        value: summary.emergencyFundCoverageMonths === null ? "—" : `${summary.emergencyFundCoverageMonths.toFixed(1)} mo`,
-        hint:
+        label: "Emergency fund",
+        value: summary.emergencyFundHasSufficientData
+          ? formatMoney(summary.emergencyFundCurrentAmount, "NPR")
+          : "—",
+        hint: summary.emergencyFundHasSufficientData
+          ? `Target ${formatMoney(summary.emergencyFundTargetAmount, "NPR")}`
+          : "Add expenses in Cashflow",
+        accent: "amber" as const,
+      },
+      {
+        label: "Emergency progress",
+        value:
           summary.emergencyFundSixMoProgressPct === null
-            ? "Reserve ÷ monthly burn"
-            : `${summary.emergencyFundSixMoProgressPct.toFixed(0)}% of 6‑mo buffer`,
+            ? "—"
+            : `${summary.emergencyFundSixMoProgressPct.toFixed(0)}%`,
+        hint:
+          summary.emergencyFundCoverageMonths === null
+            ? "6‑mo essential buffer"
+            : `${summary.emergencyFundCoverageMonths.toFixed(1)} mo · ${formatMoney(summary.emergencyFundRemainingAmount, "NPR")} left`,
         accent: "amber" as const,
       },
       {
@@ -185,12 +198,26 @@ export function UnifiedFireDashboard() {
             <div className="wealth-row-card rounded-2xl border border-emerald-400/12 p-3 sm:p-4">
               <div className="flex items-center gap-2">
                 <ShieldHalf size={16} className="text-teal-300" />
-                <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/55">Emergency math</p>
+                <p className="text-[10px] font-black uppercase tracking-wide text-emerald-200/55">Emergency Fund</p>
               </div>
-              <p className="mt-2 text-sm font-bold leading-relaxed text-emerald-100/90">
-                Coverage uses cashflow reserve ÷ monthly burn. FIRE progress compares portfolio net worth to the 25×
-                target above (classic rule-of-thumb, not tax or withdrawal optimized).
-              </p>
+              {summary.emergencyFundHasSufficientData ? (
+                <>
+                  <p className="mt-2 text-xl font-black tabular-nums text-emerald-50 sm:text-2xl">
+                    {formatMoney(summary.emergencyFundCurrentAmount, "NPR")}
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold leading-relaxed text-emerald-200/50">
+                    Target {formatMoney(summary.emergencyFundTargetAmount, "NPR")} (6× burn) ·{" "}
+                    {summary.emergencyFundSixMoProgressPct?.toFixed(0) ?? 0}% funded ·{" "}
+                    {formatMoney(summary.emergencyFundRemainingAmount, "NPR")} remaining. Same reserve as Finance →
+                    Emergency Fund.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm font-bold leading-relaxed text-emerald-100/90">
+                  Complete Cashflow income &amp; expenses to size a 6‑month emergency target. Updates sync
+                  automatically with the Emergency Fund workspace.
+                </p>
+              )}
             </div>
           </div>
       </div>
