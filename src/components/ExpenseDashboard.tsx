@@ -2222,7 +2222,11 @@ export function ExpenseDashboard({
           { upsertLocalId: true },
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save expense.");
+        toast.error(
+          error instanceof Error && error.message.trim()
+            ? `Save failed — please try again (${error.message.trim()})`
+            : "Save failed — please try again",
+        );
         throw error;
       }
       setExpenses((current) => [nextExpense, ...current]);
@@ -2298,7 +2302,7 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(payerId, profiles)} added ${nextExpense.title}`,
       });
-      toast.success("Expense saved");
+      toast.success("Saved");
     },
     [members, profiles, saveWorkspaceMeta, recordTransaction, user?.email],
   );
