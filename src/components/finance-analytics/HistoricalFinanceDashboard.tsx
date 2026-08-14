@@ -228,7 +228,20 @@ export function HistoricalFinanceDashboard() {
   }, [dataset, range.monthKeys, now]);
 
   const yoy = useMemo(() => yearOverYearComparison(years), [years]);
-  const chartMonths = preset === "yearly" ? months : months;
+  const chartMonths = useMemo(() => {
+    if (preset !== "yearly") return months;
+    // Yearly filter: chart yearly totals (not ~100 monthly bars).
+    return years.map((y) => ({
+      key: `${y.key}-01`,
+      label: y.label,
+      shortLabel: y.label,
+      income: y.income,
+      expense: y.expense,
+      netCashflow: y.netCashflow,
+      savings: y.savings,
+      hasData: y.hasData,
+    }));
+  }, [preset, months, years]);
   const emptyMonthsNote = summary.monthsInRange > summary.monthsWithData && summary.monthsWithData > 0;
 
   const yearOptions = useMemo(() => {
