@@ -133,6 +133,7 @@ import {
 } from "@/services/expense-transactions-supabase";
 import {
   deleteGroupMemberCascade,
+  dedupeGroupExpenseRows,
   findSoftDeletedLocalMemberIds,
   groupExpenseRowToExpense,
   groupMemberRowToProfile,
@@ -160,6 +161,7 @@ import {
 } from "@/lib/expense-workspace-ui";
 import {
   currentMonthKey,
+  dedupeExpensesById,
   expenseAttributedShares,
   expenseEntryCurrency,
   expenseMonthKey,
@@ -845,9 +847,14 @@ export function ExpenseDashboard({
   const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   const [actionsSheetOpen, setActionsSheetOpen] = useState(false);
   const [speedDialOpen, setSpeedDialOpen] = useState(false);
+  const [savingExpense, setSavingExpense] = useState(false);
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
+  /** Stable local id for the open Add form — retries/double-taps upsert the same row. */
+  const draftExpenseIdRef = useRef<number | null>(null);
+  /** Sync lock so rapid Save taps cannot start a second persist before React re-renders. */
+  const savingExpenseLockRef = useRef(false);
 
   useEffect(() => {
     const nextTab = tabForExpenseView(initialView);
@@ -1058,7 +1065,9 @@ export function ExpenseDashboard({
         } while (cursor && !cancelled);
         if (cancelled) return;
 
-        const remoteExpenseRows = all.map(groupExpenseRowToExpense);
+        const remoteExpenseRows = dedupeExpensesById(
+          dedupeGroupExpenseRows(all).map(groupExpenseRowToExpense),
+        );
         console.info("[group-expenses] fetch ok", {
           userId: user.id,
           expenseCount: remoteExpenseRows.length,
@@ -1267,10 +1276,12 @@ export function ExpenseDashboard({
     [expenses, personalMode],
   );
   const monthExpenses = useMemo(
-    () =>
-      personalMode
+    () => {
+      const filtered = personalMode
         ? filterExpensesByMonth(expenses, selectedMonthKey)
-        : filterGroupExpensesByMonth(expenses, selectedMonthKey),
+        : filterGroupExpensesByMonth(expenses, selectedMonthKey);
+      return dedupeExpensesById(filtered);
+    },
     [expenses, selectedMonthKey, personalMode],
   );
 
@@ -1608,6 +1619,9 @@ export function ExpenseDashboard({
       setForm(emptyExpenseForm(members[0], members, personalMode));
     }
     setEditingExpenseId(null);
+    draftExpenseIdRef.current = Date.now();
+    savingExpenseLockRef.current = false;
+    setSavingExpense(false);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
     const entryCur = personalMode ? "NPR" : expenseEntryCurrency(currency);
@@ -1618,6 +1632,9 @@ export function ExpenseDashboard({
 
   function openEditExpenseModal(expense: Expense) {
     setEditingExpenseId(expense.id);
+    draftExpenseIdRef.current = expense.id;
+    savingExpenseLockRef.current = false;
+    setSavingExpense(false);
     const entryCur = expense.amountCurrency ?? "NPR";
     prevFormEntryCurrency.current = entryCur;
     setAmountInputCurrency(entryCur);
@@ -1651,6 +1668,9 @@ export function ExpenseDashboard({
   function closeExpenseModal() {
     setIsModalOpen(false);
     setEditingExpenseId(null);
+    draftExpenseIdRef.current = null;
+    savingExpenseLockRef.current = false;
+    setSavingExpense(false);
     setReceiptPreview(undefined);
     setReceiptOcrText("");
     setForm(emptyExpenseForm(members[0], members, personalMode));
@@ -1739,13 +1759,23 @@ export function ExpenseDashboard({
   );
 
   async function saveExpense() {
+    if (savingExpenseLockRef.current || savingExpense) return;
+
     const amount = parseExpenseAmountInput(form.amount, formEntryCurrency, krwPerNpr);
     if (!form.title.trim() || amount === null || !form.payerId) return;
     const splitAmong = resolveSplitAmong(form.splitAmong, members);
     if (splitAmong.length === 0) return;
     const splitPercentages = resolveSplitPercentages(form.splitEqually, splitAmong, form.splitPercentStr);
+
+    // One draft id for this modal session — repeated Save upserts the same local_expense_id.
+    const expenseId =
+      editingExpenseId ?? draftExpenseIdRef.current ?? Date.now();
+    if (!editingExpenseId) {
+      draftExpenseIdRef.current = expenseId;
+    }
+
     const nextExpense: Expense = {
-      id: editingExpenseId ?? Date.now(),
+      id: expenseId,
       title: form.title.trim(),
       amount,
       payerId: form.payerId,
@@ -1760,6 +1790,8 @@ export function ExpenseDashboard({
     };
 
     const monthKey = expenseMonthKey(nextExpense.date);
+    savingExpenseLockRef.current = true;
+    setSavingExpense(true);
 
     try {
       if (personalMode) {
@@ -1787,6 +1819,8 @@ export function ExpenseDashboard({
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save expense.");
+      savingExpenseLockRef.current = false;
+      setSavingExpense(false);
       return;
     }
 
@@ -1809,7 +1843,10 @@ export function ExpenseDashboard({
       });
       toast.success("Expense updated");
     } else {
-      setExpenses((current) => [nextExpense, ...current]);
+      setExpenses((current) => {
+        const withoutDup = current.filter((expense) => expense.id !== nextExpense.id);
+        return [nextExpense, ...withoutDup];
+      });
       appendActivity({
         type: "expense_added",
         monthKey,
@@ -2379,8 +2416,13 @@ export function ExpenseDashboard({
                 <button type="button" onClick={closeExpenseModal} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
                   Cancel
                 </button>
-                <button type="button" onClick={saveExpense} className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white">
-                  {editingExpenseId ? "Update" : "Save"}
+                <button
+                  type="button"
+                  onClick={() => void saveExpense()}
+                  disabled={savingExpense}
+                  className="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {savingExpense ? "Saving…" : editingExpenseId ? "Update" : "Save"}
                 </button>
               </div>
             </div>
@@ -3198,10 +3240,11 @@ export function ExpenseDashboard({
             </button>
             <button
               type="button"
-              onClick={saveExpense}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white"
+              onClick={() => void saveExpense()}
+              disabled={savingExpense}
+              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {editingExpenseId ? "Update" : "Save"}
+              {savingExpense ? "Saving…" : editingExpenseId ? "Update" : "Save"}
             </button>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import type { Currency, Expense } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
-import { currencyMeta, expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
+import { currencyMeta, dedupeExpensesById, expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
 import { formatGroupMonthLabel, listGroupMonthKeys } from "@/lib/group-expenses/storage";
 import {
   GROUP_EXPENSE_CATEGORY_IDS,
@@ -15,9 +15,10 @@ export function normalizeGroupExpenseCategory(category: string): GroupExpenseCat
 }
 
 export function groupCategoryTotalsForMonth(expenses: Expense[]) {
+  const unique = dedupeExpensesById(expenses);
   return GROUP_EXPENSE_CATEGORY_IDS.map((category) => ({
     category,
-    total: expenses
+    total: unique
       .filter((expense) => normalizeGroupCategory(expense.category) === category)
       .reduce((sum, expense) => sum + expense.amount, 0),
   }));
@@ -29,14 +30,15 @@ export function groupMonthlyComparisonData(
   limit = 6,
   krwPerNpr = FALLBACK_KRW_PER_NPR,
 ) {
+  const unique = dedupeExpensesById(expenses);
   const rates = {
     ...currencyMeta,
     KRW: { symbol: "₩", rate: krwPerNpr },
   };
-  const monthKeys = listGroupMonthKeys(expenses).slice(0, limit).reverse();
+  const monthKeys = listGroupMonthKeys(unique).slice(0, limit).reverse();
   const labels = monthKeys.map((key) => formatGroupMonthLabel(key).split(" ")[0]);
   const data = monthKeys.map((key) => {
-    const monthTotal = expenses
+    const monthTotal = unique
       .filter((expense) => expenseMonthKey(expense.date) === key)
       .reduce((sum, expense) => sum + expense.amount, 0);
     return monthTotal * rates[currency].rate;
@@ -73,7 +75,9 @@ export function buildGroupMonthlyStatement(
   expenses: Expense[],
   members: string[],
 ): GroupMonthlyStatement {
-  const monthExpenses = expenses.filter((expense) => expenseMonthKey(expense.date) === monthKey);
+  const monthExpenses = dedupeExpensesById(
+    expenses.filter((expense) => expenseMonthKey(expense.date) === monthKey),
+  );
   const { balances, equalSplitAmount, memberExpectedShare, paidByMember, totalExpense, transfers } = getSettlement(
     members,
     monthExpenses,

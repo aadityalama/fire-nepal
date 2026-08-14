@@ -42,6 +42,40 @@ function formatGroupExpenseError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string; message?: string };
+  if (e.code === "23505") return true;
+  const message = (e.message ?? "").toLowerCase();
+  return message.includes("duplicate key") || message.includes("unique constraint");
+}
+
+/** Stable numeric id when local_expense_id is missing — never use Date.now() (re-hydrate would mint new ids). */
+export function stableLocalExpenseIdFromRowId(rowId: string): number {
+  let hash = 0;
+  for (let i = 0; i < rowId.length; i += 1) {
+    hash = (Math.imul(31, hash) + rowId.charCodeAt(i)) | 0;
+  }
+  const positive = Math.abs(hash);
+  return positive > 0 ? positive : 1;
+}
+
+/** Deduplicate list/page merges by cloud row id, then by local_expense_id. Does not drop distinct expenses. */
+export function dedupeGroupExpenseRows(rows: GroupExpenseRow[]): GroupExpenseRow[] {
+  const byCloudId = new Map<string, GroupExpenseRow>();
+  const byLocalId = new Map<number, GroupExpenseRow>();
+  const out: GroupExpenseRow[] = [];
+
+  for (const row of rows) {
+    if (row.id && byCloudId.has(row.id)) continue;
+    if (row.local_expense_id != null && byLocalId.has(row.local_expense_id)) continue;
+    if (row.id) byCloudId.set(row.id, row);
+    if (row.local_expense_id != null) byLocalId.set(row.local_expense_id, row);
+    out.push(row);
+  }
+  return out;
+}
+
 function rowToGroupExpense(row: Database["public"]["Tables"]["group_expenses"]["Row"]): GroupExpenseRow {
   return {
     ...row,
@@ -105,6 +139,20 @@ export async function upsertGroupExpenseByLocalId(
     updated_at: new Date().toISOString(),
   };
 
+  const updateExistingById = async (rowId: string): Promise<GroupExpenseRow | null> => {
+    const { data, error } = await client
+      .from("group_expenses")
+      .update(updatePayload)
+      .eq("id", rowId)
+      .select(GROUP_EXPENSE_COLUMNS)
+      .single();
+    if (error || !data) {
+      console.warn("[group-expenses] update failed", error);
+      return null;
+    }
+    return rowToGroupExpense(data);
+  };
+
   const { data: existing } = await client
     .from("group_expenses")
     .select("id")
@@ -114,17 +162,7 @@ export async function upsertGroupExpenseByLocalId(
     .maybeSingle();
 
   if (existing) {
-    const { data, error } = await client
-      .from("group_expenses")
-      .update(updatePayload)
-      .eq("id", existing.id)
-      .select(GROUP_EXPENSE_COLUMNS)
-      .single();
-    if (error || !data) {
-      console.warn("[group-expenses] update failed", error);
-      return null;
-    }
-    return rowToGroupExpense(data);
+    return updateExistingById(existing.id);
   }
 
   const { data, error } = await client
@@ -133,11 +171,31 @@ export async function upsertGroupExpenseByLocalId(
     .select(GROUP_EXPENSE_COLUMNS)
     .single();
 
-  if (error || !data) {
-    console.warn("[group-expenses] insert failed", error);
-    return null;
+  if (!error && data) {
+    return rowToGroupExpense(data);
   }
-  return rowToGroupExpense(data);
+
+  // Concurrent Save with the same local_expense_id: unique index wins — update that row (idempotent).
+  if (isUniqueConstraintError(error)) {
+    const { data: raced } = await client
+      .from("group_expenses")
+      .select("id")
+      .eq("workspace_id", workspace.id)
+      .eq("local_expense_id", input.localExpenseId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (raced) {
+      console.info("[group-expenses] upsert recovered from unique race", {
+        workspaceId: workspace.id,
+        localExpenseId: input.localExpenseId,
+        rowId: raced.id,
+      });
+      return updateExistingById(raced.id);
+    }
+  }
+
+  console.warn("[group-expenses] insert failed", error);
+  return null;
 }
 
 export async function softDeleteGroupExpenseByLocalId(
@@ -204,7 +262,7 @@ export async function listGroupExpenses(
 
   const hasMore = data.length > limit;
   const slice = hasMore ? data.slice(0, limit) : data;
-  const rows = slice.map(rowToGroupExpense);
+  const rows = dedupeGroupExpenseRows(slice.map(rowToGroupExpense));
   const nextCursor = hasMore ? slice[slice.length - 1]?.created_at ?? null : null;
   console.info("[group-expenses] list ok", {
     workspaceId: workspace.id,
@@ -678,7 +736,7 @@ export async function syncGroupMembers(
 
 export function groupExpenseRowToExpense(row: GroupExpenseRow): Expense {
   return {
-    id: row.local_expense_id ?? Date.now(),
+    id: row.local_expense_id ?? stableLocalExpenseIdFromRowId(row.id),
     title: row.title,
     amount: row.amount,
     payerId: row.payer_member_id,

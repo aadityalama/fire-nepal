@@ -13,6 +13,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   GroupExpenseHistoryError,
+  dedupeGroupExpenseRows,
   groupExpensePayerName,
   groupExpenseRowToExpense,
   listGroupExpenses,
@@ -65,7 +66,10 @@ export function GroupActivityPanel({
         const result = await listGroupExpenses(client, userId, {
           cursor: reset ? null : cursorRef.current,
         });
-        setRows((current) => (reset ? result.rows : [...current, ...result.rows]));
+        setRows((current) => {
+          const merged = reset ? result.rows : [...current, ...result.rows];
+          return dedupeGroupExpenseRows(merged);
+        });
         cursorRef.current = result.nextCursor;
         setHasMore(Boolean(result.nextCursor));
         setLoadError(null);
