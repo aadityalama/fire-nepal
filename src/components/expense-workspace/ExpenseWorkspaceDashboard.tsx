@@ -6,9 +6,11 @@ import {
   CalendarDays,
   Copy,
   FileText,
+  Loader2,
   Mail,
   Pencil,
   Plus,
+  Save,
   Search,
   Sparkles,
   Trash2,
@@ -17,9 +19,22 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
+import { createPortal } from "react-dom";
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
+import { validateExpenseFormFields } from "@/lib/expense-workspace/expense-form-validation";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { runSaveAction, SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 import {
   buildCommandCenterInsights,
   buildNotifications,
@@ -168,6 +183,11 @@ export function ExpenseWorkspaceDashboard({
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<WorkspaceForm>(() => emptyForm(todayIso));
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSucceeded, setSaveSucceeded] = useState(false);
+  /** Sync lock so rapid double-taps cannot start a second save before React re-renders. */
+  const savingLockRef = useRef(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(todayIso);
   const [chartsReady, setChartsReady] = useState(false);
@@ -295,8 +315,73 @@ export function ExpenseWorkspaceDashboard({
 
   function openAdd() {
     setForm(emptyForm(todayIso));
+    setSaveError(null);
+    setSaveSucceeded(false);
+    setSavingExpense(false);
+    savingLockRef.current = false;
     setAddOpen(true);
   }
+
+  const submitAddExpense = useCallback(async () => {
+    if (savingLockRef.current || savingExpense) return;
+
+    const validated = validateExpenseFormFields({
+      title: form.title,
+      amount: form.amount,
+      category: form.category,
+      date: form.expenseDate || todayIso,
+    });
+    if (!validated.ok) {
+      setSaveError(validated.error);
+      setSaveSucceeded(false);
+      return;
+    }
+
+    const expenseDate = validated.date;
+    const repeat = form.repeat ?? "Never";
+    const reminderEnabled = repeat !== "Never";
+    savingLockRef.current = true;
+    setSaveError(null);
+    setSaveSucceeded(false);
+
+    // Parent submitWorkspaceExpense already toasts Saved / Save failed after persistence.
+    // Mark success inside `action` so the button never flashes back to "Save" before close.
+    const ok = await runSaveAction({
+      setSaving: setSavingExpense,
+      silentSuccess: true,
+      silentFailure: true,
+      action: async () => {
+        await Promise.resolve(
+          onSubmitWorkspaceExpense({
+            title: validated.title,
+            amountNpr: validated.amountNpr,
+            category: normalizeFinanceCategory(validated.category),
+            expenseDate,
+            dueDate: expenseDate,
+            account: DEFAULT_WORKSPACE_ACCOUNT,
+            paymentMethod: DEFAULT_PAYMENT_METHOD,
+            repeat,
+            notes: form.notes,
+            reminderEnabled,
+            reminderTiming: DEFAULT_REMINDER_TIMING,
+            reminderTime: DEFAULT_REMINDER_TIME,
+            reminderEmail: false,
+          }),
+        );
+        setSaveSucceeded(true);
+        setAddOpen(false);
+        setForm(emptyForm(todayIso));
+        setSaveError(null);
+      },
+    });
+
+    savingLockRef.current = false;
+    if (!ok) {
+      // Keep entered values. Cloud/JWT failures must never look like success.
+      setSaveSucceeded(false);
+      setSaveError(SAVE_FEEDBACK.failed);
+    }
+  }, [form, onSubmitWorkspaceExpense, savingExpense, todayIso]);
 
   const overviewCards = [
     { emoji: "💸", label: "Total Spent", value: formatNpr(monthTotal) },
@@ -751,38 +836,16 @@ export function ExpenseWorkspaceDashboard({
           <ExpenseAddSheet
             form={form}
             setForm={setForm}
-            onClose={() => setAddOpen(false)}
-            onSave={() => {
-              const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
-              if (!form.title.trim() || !amountNpr) return;
-              const expenseDate = form.expenseDate || todayIso;
-              const repeat = form.repeat ?? "Never";
-              const reminderEnabled = repeat !== "Never";
-              void Promise.resolve(
-                onSubmitWorkspaceExpense({
-                  title: form.title.trim(),
-                  amountNpr,
-                  category: normalizeFinanceCategory(form.category),
-                  expenseDate,
-                  dueDate: expenseDate,
-                  account: DEFAULT_WORKSPACE_ACCOUNT,
-                  paymentMethod: DEFAULT_PAYMENT_METHOD,
-                  repeat,
-                  notes: form.notes,
-                  reminderEnabled,
-                  reminderTiming: DEFAULT_REMINDER_TIMING,
-                  reminderTime: DEFAULT_REMINDER_TIME,
-                  reminderEmail: false,
-                }),
-              )
-                .then(() => {
-                  setAddOpen(false);
-                  setForm(emptyForm(todayIso));
-                })
-                .catch(() => {
-                  /* Parent shows the Supabase error toast. */
-                });
+            saving={savingExpense}
+            saveError={saveError}
+            saveSucceeded={saveSucceeded}
+            onClose={() => {
+              if (savingExpense) return;
+              setSaveError(null);
+              setSaveSucceeded(false);
+              setAddOpen(false);
             }}
+            onSave={submitAddExpense}
           />
         ) : null}
       </AnimatePresence>
@@ -986,37 +1049,122 @@ function ExpenseAddSheet({
   setForm,
   onClose,
   onSave,
+  saving = false,
+  saveError = null,
+  saveSucceeded = false,
 }: {
   form: WorkspaceForm;
   setForm: Dispatch<SetStateAction<WorkspaceForm>>;
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
+  saving?: boolean;
+  saveError?: string | null;
+  saveSucceeded?: boolean;
 }) {
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const validated = validateExpenseFormFields({
+    title: form.title,
+    amount: form.amount,
+    category: form.category,
+    date: form.expenseDate,
+  });
+  const canSave = validated.ok && !saving;
+
+  const handleSave = () => {
+    if (saving) return;
+    void Promise.resolve(onSave());
+  };
+
+  const saveLabel = saving
+    ? SAVE_FEEDBACK.saving
+    : saveSucceeded
+      ? SAVE_FEEDBACK.saved
+      : "Save";
+
+  const bottomSaveLabel = saving
+    ? SAVE_FEEDBACK.saving
+    : saveSucceeded
+      ? SAVE_FEEDBACK.saved
+      : "Save Expense";
+
+  const sheet = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]/85 backdrop-blur-xl`}
+      data-fn-layer="sheet"
+      data-fn-sheet="expense-add"
+      data-testid="expense-add-sheet-root"
+    >
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 28 }}
-        className="mx-auto flex h-full max-w-lg flex-col overflow-hidden bg-[#04140f]"
+        className="relative z-10 mx-auto flex h-[100dvh] max-w-lg flex-col overflow-hidden bg-[#04140f] pointer-events-auto"
+        data-testid="expense-add-sheet"
       >
-        <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
-          <button type="button" onClick={onClose} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06]">
+        <header className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="relative z-10 grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06] touch-manipulation disabled:opacity-50"
+            aria-label="Close"
+          >
             <X size={20} />
           </button>
           <h2 className="text-lg font-black">Add Expense</h2>
-          <button type="button" onClick={onSave} className="rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950">
-            Save
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            aria-disabled={!canSave}
+            aria-busy={saving}
+            data-testid="expense-save-top"
+            data-fn-save="expense-add"
+            className={`relative z-10 inline-flex min-h-[44px] touch-manipulation items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950 disabled:opacity-50 ${
+              canSave ? "" : "opacity-50"
+            }`}
+          >
+            {saving ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Save size={15} aria-hidden />}
+            {saveLabel}
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
-          <div className="space-y-5">
+
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-4 [-webkit-overflow-scrolling:touch]">
+          <form
+            id="expense-add-form"
+            className="space-y-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleSave();
+            }}
+          >
             <Field label="Expense Name">
               <input
                 value={form.title}
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-                className="min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
+                className="relative z-10 min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
                 placeholder="Internet Bill"
+                data-testid="expense-name-input"
+                name="expense-name"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </Field>
             <FinanceCategoryPicker
@@ -1025,14 +1173,17 @@ function ExpenseAddSheet({
               heading="Category"
             />
             <Field label="Amount (NPR only)">
-              <div className="flex min-h-[58px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
-                <span className="mr-2 text-lg font-black text-lime-200">NPR</span>
+              <div className="relative z-10 flex min-h-[58px] items-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4">
+                <span className="pointer-events-none mr-2 text-lg font-black text-lime-200">NPR</span>
                 <input
                   value={form.amount}
                   onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
-                  inputMode="numeric"
-                  className="min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none"
+                  inputMode="decimal"
+                  name="expense-amount"
+                  className="relative z-10 min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none placeholder:text-white/35"
                   placeholder="1,200"
+                  data-testid="expense-amount-input"
+                  autoComplete="off"
                 />
               </div>
             </Field>
@@ -1041,7 +1192,10 @@ function ExpenseAddSheet({
                 type="date"
                 value={form.expenseDate}
                 onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
-                className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+                className="relative z-10 min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
+                data-testid="expense-date-input"
+                name="expense-date"
+                autoComplete="off"
               />
             </Field>
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.055] p-4">
@@ -1081,13 +1235,53 @@ function ExpenseAddSheet({
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
                 className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white outline-none"
                 placeholder="Optional notes"
+                name="expense-notes"
+                autoComplete="off"
               />
             </Field>
-          </div>
+          </form>
+        </div>
+
+        <div
+          className="relative z-20 shrink-0 border-t border-white/10 bg-[#04140f] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+          data-testid="expense-save-sticky-footer"
+        >
+          {saveError ? (
+            <p
+              role="alert"
+              data-testid="expense-save-error"
+              className="mb-2 rounded-xl border border-red-300/30 bg-red-500/15 px-3 py-2 text-sm font-semibold text-red-100"
+            >
+              {saveError}
+            </p>
+          ) : !validated.ok ? (
+            <p className="mb-2 text-center text-xs font-semibold text-emerald-100/55" data-testid="expense-save-hint">
+              Fill name, category, amount, and date to enable Save.
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            form="expense-add-form"
+            disabled={saving}
+            aria-disabled={!canSave}
+            aria-busy={saving}
+            data-testid="expense-save-bottom"
+            data-fn-save="expense-add-bottom"
+            className={`relative z-10 flex min-h-[56px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 ${
+              canSave ? "" : "opacity-50"
+            }`}
+          >
+            {saving ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Save size={18} aria-hidden />}
+            {bottomSaveLabel}
+          </button>
         </div>
       </motion.div>
     </motion.div>
   );
+
+  // Portal to body so ProductAppShell overflow / stacking never traps the sheet under the nav.
+  if (!portalReady) return null;
+  return createPortal(sheet, document.body);
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
