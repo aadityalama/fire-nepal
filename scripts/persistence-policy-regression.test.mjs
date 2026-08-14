@@ -155,3 +155,17 @@ test("Insurance authenticated path has no offline Will sync when cloud is ready 
   assert.match(source, /useState<InsuranceWorkspaceState>\(\(\) => \(\{ version: 1, policies: \[\] \}\)\)/);
   assert.match(source, /Authenticated: never paint browser-local policies/);
 });
+
+test("Historical finance analytics uses cloud SoT and preserves cache on error", () => {
+  const hook = read("src/hooks/useHistoricalFinanceData.ts");
+  const dashboard = read("src/components/finance-analytics/HistoricalFinanceDashboard.tsx");
+  const analytics = read("src/lib/finance/historical-analytics.ts");
+  assert.match(hook, /listAllExpenseTransactionsForExport/);
+  assert.match(hook, /\/api\/cashflow/);
+  assert.match(hook, /cacheRef\.current/);
+  assert.match(hook, /Unable to load financial history\. Please try again\./);
+  assert.doesNotMatch(hook, /localStorage\.(setItem|removeItem|clear)/);
+  assert.doesNotMatch(dashboard, /saveCashflowToSupabase|savePersonalExpenseState|PUT \/api\/cashflow/);
+  assert.match(dashboard, /No financial records found for this period\./);
+  assert.match(analytics, /Never fabricates values/);
+});
