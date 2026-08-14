@@ -1,6 +1,6 @@
 import type { Currency, Expense } from "@/lib/expense-utils";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
-import { currencyMeta, expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
+import { currencyMeta, dedupeExpensesById, expenseMonthKey, formatMoney, getSettlement } from "@/lib/expense-utils";
 import { formatMonthLabel, listMonthKeys } from "@/lib/expense-storage";
 import {
   FINANCE_CATEGORY_IDS,
@@ -17,9 +17,10 @@ export function normalizeCategory(category: string): ExpenseCategory {
 }
 
 export function categoryTotalsForMonth(expenses: Expense[]) {
+  const unique = dedupeExpensesById(expenses);
   return EXPENSE_CATEGORIES.map((category) => ({
     category,
-    total: expenses
+    total: unique
       .filter((expense) => normalizeCategory(expense.category) === category)
       .reduce((sum, expense) => sum + expense.amount, 0),
   }));
@@ -77,7 +78,9 @@ export function buildMonthlyStatement(
   expenses: Expense[],
   members: string[],
 ): MonthlyStatement {
-  const monthExpenses = expenses.filter((expense) => expenseMonthKey(expense.date) === monthKey);
+  const monthExpenses = dedupeExpensesById(
+    expenses.filter((expense) => expenseMonthKey(expense.date) === monthKey),
+  );
   const { balances, equalSplitAmount, memberExpectedShare, paidByMember, totalExpense, transfers } = getSettlement(
     members,
     monthExpenses,

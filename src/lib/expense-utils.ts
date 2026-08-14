@@ -107,10 +107,27 @@ export function expenseAttributedShares(expense: Expense, groupMembers: string[]
   return out;
 }
 
-export function getSettlement(members: string[], expenses: Expense[]) {
-  const totalExpense = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const memberExpectedShare = Object.fromEntries(members.map((m) => [m, 0])) as Record<string, number>;
+/**
+ * One logical expense id must contribute once to Paid / settlement / PDF totals.
+ * Distinct ids (genuine separate saves) are preserved. Does not delete DB rows.
+ */
+export function dedupeExpensesById(expenses: Expense[]): Expense[] {
+  const seen = new Set<number>();
+  const out: Expense[] = [];
   for (const expense of expenses) {
+    if (seen.has(expense.id)) continue;
+    seen.add(expense.id);
+    out.push(expense);
+  }
+  return out;
+}
+
+export function getSettlement(members: string[], expenses: Expense[]) {
+  // Same underlying dataset as Expense Ledger — never double-count a repeated id.
+  const uniqueExpenses = dedupeExpensesById(expenses);
+  const totalExpense = uniqueExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const memberExpectedShare = Object.fromEntries(members.map((m) => [m, 0])) as Record<string, number>;
+  for (const expense of uniqueExpenses) {
     const shares = expenseAttributedShares(expense, members);
     for (const m of members) {
       memberExpectedShare[m] += shares[m] ?? 0;
@@ -120,7 +137,7 @@ export function getSettlement(members: string[], expenses: Expense[]) {
   const paidByMember = Object.fromEntries(
     members.map((member) => [
       member,
-      expenses
+      uniqueExpenses
         .filter((expense) => expense.payerId === member)
         .reduce((sum, expense) => sum + expense.amount, 0),
     ]),
