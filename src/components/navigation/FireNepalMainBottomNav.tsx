@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { FIRE_BIZ_I18N } from "@/lib/fire-biz/i18n";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
 
 const MAIN_NAV = [
   { href: "/hub", labelKey: "home" as const, icon: Home, match: (p: string) => p === "/hub" || p === "/account" },
@@ -180,7 +181,8 @@ export function FireNepalMainBottomNav({ locale = "en" }: FireNepalMainBottomNav
 
   return (
     <nav
-      className="fn-main-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center px-5 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden"
+      className={`fn-main-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 ${FN_Z_CLASS.bottomNav} flex justify-center px-5 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden`}
+      data-fn-layer="bottom-nav"
       aria-label="Main navigation"
     >
       <div
