@@ -48,9 +48,12 @@ import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Bar, Pie } from "react-chartjs-2";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { DELETE_FEEDBACK, runDeleteAction } from "@/lib/ux/delete-feedback";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
 import { formatExpenseRepeatReminder } from "@/components/expense-workspace/expense-workspace-utils";
@@ -260,7 +263,12 @@ function ExpenseBottomSheet({
   className?: string;
   showHandle?: boolean;
 }) {
-  return (
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  const sheet = (
     <AnimatePresence>
       {open ? (
         <>
@@ -271,7 +279,8 @@ function ExpenseBottomSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[70] bg-black/35"
+            className={`pointer-events-auto fixed inset-0 ${FN_Z_CLASS.elevated} bg-black/35`}
+            data-fn-layer="sheet"
             aria-label="Close"
             onClick={onClose}
           />
@@ -284,7 +293,8 @@ function ExpenseBottomSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 340 }}
-            className={`fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.35rem] bg-white shadow-[0_-12px_40px_rgba(0,0,0,0.14)] ${className}`}
+            className={`pointer-events-auto fixed inset-x-0 bottom-0 z-[71] mx-auto flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.35rem] bg-white shadow-[0_-12px_40px_rgba(0,0,0,0.14)] ${className}`}
+            data-fn-layer="sheet"
             style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
           >
             {showHandle ? (
@@ -318,6 +328,9 @@ function ExpenseBottomSheet({
       ) : null}
     </AnimatePresence>
   );
+
+  if (!portalReady) return null;
+  return createPortal(sheet, document.body);
 }
 
 function getCurrencyMeta(krwPerNpr: number) {
@@ -828,6 +841,7 @@ export function ExpenseDashboard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [deletingExpenseBusy, setDeletingExpenseBusy] = useState(false);
   const [form, setForm] = useState<ExpenseForm>(() => emptyExpenseForm());
   const [amountInputCurrency, setAmountInputCurrency] = useState<"NPR" | "KRW">("NPR");
   const [exchangeRate, setExchangeRate] = useState<ExchangeRateSnapshot>(fallbackExchangeRate);
@@ -848,6 +862,7 @@ export function ExpenseDashboard({
   const skipNextSave = useRef(true);
   const prevTransferCount = useRef(0);
   const prevFormEntryCurrency = useRef<"NPR" | "KRW">("NPR");
+  const deletingExpenseLockRef = useRef(false);
 
   useEffect(() => {
     const nextTab = tabForExpenseView(initialView);
@@ -1830,45 +1845,55 @@ export function ExpenseDashboard({
   }
 
   async function confirmDeleteExpense() {
-    if (!expenseToDelete) return;
+    if (!expenseToDelete || deletingExpenseLockRef.current || deletingExpenseBusy) return;
+    deletingExpenseLockRef.current = true;
     const deleted = expenseToDelete;
     try {
-      if (personalMode) {
-        await recordTransaction({
-          transactionType: "adjustment",
-          description: `Deleted: ${deleted.title}`,
-          category: normalizeExpenseCategory(deleted.category),
-          amount: deleted.amount,
-          currency: deleted.amountCurrency ?? "NPR",
-          memberId: deleted.payerId,
-          memberName: memberDisplayName(deleted.payerId, profiles),
-          transactionDate: deleted.date,
-          metadata: { localExpenseId: deleted.id, source: "expense_delete" },
-        });
-        if (user?.id && isSupabaseConfigured()) {
-          await softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
-        }
-      } else {
-        if (!user?.id) throw new Error("Please sign in to delete group/roommate expenses.");
-        if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group/roommate expenses.");
-        const ok = await softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
-        if (!ok) throw new Error("Could not delete group/roommate expense from Supabase.");
+      const ok = await runDeleteAction({
+        setDeleting: setDeletingExpenseBusy,
+        silentFailure: true,
+        action: async () => {
+          if (personalMode) {
+            await recordTransaction({
+              transactionType: "adjustment",
+              description: `Deleted: ${deleted.title}`,
+              category: normalizeExpenseCategory(deleted.category),
+              amount: deleted.amount,
+              currency: deleted.amountCurrency ?? "NPR",
+              memberId: deleted.payerId,
+              memberName: memberDisplayName(deleted.payerId, profiles),
+              transactionDate: deleted.date,
+              metadata: { localExpenseId: deleted.id, source: "expense_delete" },
+            });
+            if (user?.id && isSupabaseConfigured()) {
+              await softDeleteExpenseTransactionByLocalId(getSupabaseBrowserClient(), user.id, deleted.id, actorName);
+            }
+          } else {
+            if (!user?.id) throw new Error("Please sign in to delete group/roommate expenses.");
+            if (!isSupabaseConfigured()) throw new Error("Supabase is not configured for group/roommate expenses.");
+            const okDelete = await softDeleteGroupExpenseByLocalId(getSupabaseBrowserClient(), user.id, deleted.id);
+            if (!okDelete) throw new Error("Could not delete group/roommate expense from Supabase.");
+          }
+        },
+      });
+      if (!ok) {
+        toast.error(DELETE_FEEDBACK.failed);
+        return;
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete expense.");
-      return;
+      setExpenses((current) => current.filter((expense) => expense.id !== deleted.id));
+      appendActivity({
+        type: "expense_deleted",
+        monthKey: expenseMonthKey(deleted.date),
+        memberId: deleted.payerId,
+        title: deleted.title,
+        category: normalizeExpenseCategory(deleted.category),
+        message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
+      });
+      setExpenseToDelete(null);
+      toast.success("Expense deleted");
+    } finally {
+      deletingExpenseLockRef.current = false;
     }
-    setExpenses((current) => current.filter((expense) => expense.id !== expenseToDelete.id));
-    appendActivity({
-      type: "expense_deleted",
-      monthKey: expenseMonthKey(deleted.date),
-      memberId: deleted.payerId,
-      title: deleted.title,
-      category: normalizeExpenseCategory(deleted.category),
-      message: `${memberDisplayName(deleted.payerId, profiles)} removed ${deleted.title}`,
-    });
-    setExpenseToDelete(null);
-    toast.success("Expense deleted");
   }
 
   const settlementMarkedComplete = useMemo(
@@ -2388,7 +2413,10 @@ export function ExpenseDashboard({
         ) : null}
         <ExpenseBottomSheet
           open={expenseToDelete !== null}
-          onClose={() => setExpenseToDelete(null)}
+          onClose={() => {
+            if (deletingExpenseBusy) return;
+            setExpenseToDelete(null);
+          }}
           title="Delete expense?"
         >
           <div className="px-4 pb-2">
@@ -2396,11 +2424,28 @@ export function ExpenseDashboard({
               Remove <span className="font-bold text-emerald-900">{expenseToDelete?.title}</span> and recalculate balances.
             </p>
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setExpenseToDelete(null)} className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600">
+              <button
+                type="button"
+                onClick={() => {
+                  if (deletingExpenseBusy) return;
+                  setExpenseToDelete(null);
+                }}
+                disabled={deletingExpenseBusy}
+                className="pointer-events-auto relative z-10 min-h-[48px] flex-1 touch-manipulation rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+              >
                 Cancel
               </button>
-              <button type="button" onClick={confirmDeleteExpense} className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white">
-                Delete
+              <button
+                type="button"
+                onClick={() => void confirmDeleteExpense()}
+                disabled={deletingExpenseBusy}
+                aria-busy={deletingExpenseBusy}
+                data-testid="expense-delete-confirm"
+                data-fn-delete="expense-confirm"
+                className="pointer-events-auto relative z-10 inline-flex min-h-[48px] flex-1 touch-manipulation items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-black text-white disabled:opacity-60"
+              >
+                {deletingExpenseBusy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
+                {deletingExpenseBusy ? DELETE_FEEDBACK.deleting : "Delete"}
               </button>
             </div>
           </div>
@@ -3209,7 +3254,10 @@ export function ExpenseDashboard({
 
       <ExpenseBottomSheet
         open={expenseToDelete !== null}
-        onClose={() => setExpenseToDelete(null)}
+        onClose={() => {
+          if (deletingExpenseBusy) return;
+          setExpenseToDelete(null);
+        }}
         title="Delete expense?"
       >
         <div className="px-4 pb-2">
@@ -3220,17 +3268,26 @@ export function ExpenseDashboard({
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              onClick={() => setExpenseToDelete(null)}
-              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600"
+              onClick={() => {
+                if (deletingExpenseBusy) return;
+                setExpenseToDelete(null);
+              }}
+              disabled={deletingExpenseBusy}
+              className="pointer-events-auto relative z-10 min-h-[48px] flex-1 touch-manipulation rounded-xl border border-slate-200 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={confirmDeleteExpense}
-              className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-black text-white"
+              onClick={() => void confirmDeleteExpense()}
+              disabled={deletingExpenseBusy}
+              aria-busy={deletingExpenseBusy}
+              data-testid="expense-delete-confirm"
+              data-fn-delete="expense-confirm"
+              className="pointer-events-auto relative z-10 inline-flex min-h-[48px] flex-1 touch-manipulation items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-black text-white disabled:opacity-60"
             >
-              Delete
+              {deletingExpenseBusy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
+              {deletingExpenseBusy ? DELETE_FEEDBACK.deleting : "Delete"}
             </button>
           </div>
         </div>

@@ -18,6 +18,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createPortal } from "react-dom";
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
 import {
@@ -851,9 +852,20 @@ function ExpenseDetailSheet({
     meta?.repeat === "Never" || !meta?.repeat
       ? "None"
       : meta.repeat;
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[210] bg-[#020806]/85 backdrop-blur-xl">
+  const sheet = (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="pointer-events-auto fixed inset-0 z-[210] bg-[#020806]/85 backdrop-blur-xl"
+      data-fn-layer="sheet"
+      data-fn-sheet="expense-detail"
+    >
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
@@ -962,7 +974,7 @@ function ExpenseDetailSheet({
             </div>
           </section>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="relative z-10 mt-4 grid grid-cols-2 gap-2 pb-[env(safe-area-inset-bottom,0px)]">
             {!meta?.paidAt ? (
               <button type="button" onClick={onMarkPaid} className="col-span-2 min-h-[52px] rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-sm font-black text-emerald-950">
                 Mark Paid
@@ -971,7 +983,13 @@ function ExpenseDetailSheet({
             <button type="button" onClick={onDuplicate} className="min-h-[48px] rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-black text-emerald-50">
               <Copy size={15} className="mr-1 inline" /> Duplicate
             </button>
-            <button type="button" onClick={onDelete} className="min-h-[48px] rounded-2xl border border-red-300/20 bg-red-500/10 text-sm font-black text-red-100">
+            <button
+              type="button"
+              onClick={onDelete}
+              data-testid="expense-delete-detail"
+              data-fn-delete="expense-detail"
+              className="pointer-events-auto relative z-10 min-h-[48px] touch-manipulation rounded-2xl border border-red-300/20 bg-red-500/10 text-sm font-black text-red-100"
+            >
               <Trash2 size={15} className="mr-1 inline" /> Delete
             </button>
           </div>
@@ -979,6 +997,9 @@ function ExpenseDetailSheet({
       </motion.div>
     </motion.div>
   );
+
+  if (!portalReady) return null;
+  return createPortal(sheet, document.body);
 }
 
 function ExpenseAddSheet({

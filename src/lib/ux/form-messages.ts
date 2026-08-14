@@ -13,7 +13,8 @@ export const FORM_MESSAGES = {
   paymentProofRequired: "Upload a payment screenshot or receipt (JPG, PNG, or WebP).",
   sessionChecking: "Checking your session…",
   saving: "Saving…",
-  deleting: "Deleting…",
+  deleting: "Deleting...",
+  deleteFailed: "Delete failed",
   loading: "Loading…",
 } as const;
 
