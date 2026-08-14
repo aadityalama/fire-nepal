@@ -36,6 +36,7 @@ import {
 } from "@/components/cashflow-workspace/cashflow-workspace-utils";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 import { formatNpr } from "@/components/expense-workspace/expense-workspace-utils";
+import { runSaveAction } from "@/lib/ux/save-feedback";
 import {
   buildIncomeHistoryChartData,
   hasIncomeChartData,
@@ -291,21 +292,20 @@ export function CashflowWorkspaceDashboard({
       toast.error("Enter a valid income name and amount.");
       return;
     }
-    setSaving(true);
-    try {
-      if (editingId) {
-        await onUpdateIncome(editingId, parsed);
-        toast.success("Income updated.");
-      } else {
-        await onAddIncome(parsed);
-        toast.success("Income saved.");
-      }
+    const ok = await runSaveAction({
+      setSaving,
+      toastId: "cashflow-income-save",
+      action: async () => {
+        if (editingId) {
+          await onUpdateIncome(editingId, parsed);
+        } else {
+          await onAddIncome(parsed);
+        }
+      },
+    });
+    if (ok) {
       setFormOpen(false);
       setEditingId(null);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save income.");
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -514,7 +514,7 @@ export function CashflowWorkspaceDashboard({
         type="button"
         onClick={openAddForm}
         aria-label="Add Income"
-        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] right-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-[0_18px_50px_-12px_rgba(16,185,129,0.75)] transition active:scale-95 sm:right-6"
+        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[45] grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-emerald-300 to-lime-300 text-emerald-950 shadow-[0_18px_50px_-12px_rgba(16,185,129,0.75)] transition active:scale-95 sm:right-6"
       >
         <Plus size={26} strokeWidth={2.5} />
       </button>

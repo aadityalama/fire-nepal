@@ -32,6 +32,8 @@ import {
   formatRs,
   todayIso,
 } from "@/lib/insurance/insurance-utils";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 type InsurancePolicySheetProps = {
   open: boolean;
@@ -268,7 +270,9 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 bg-[#020806]"
+          className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]`}
+          data-fn-layer="sheet"
+          data-fn-sheet="insurance-policy"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -291,12 +295,14 @@ export function InsurancePolicySheet({ open, editingPolicy, onClose, onSave, sav
               </div>
               <button
                 type="button"
+                data-fn-save="insurance-policy"
                 onClick={() => void handleSave()}
                 disabled={saving || !form.provider?.trim() || (form.coverageAmountNpr || 0) <= 0}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 disabled:opacity-50"
+                aria-busy={saving}
+                className="relative z-10 inline-flex min-h-[44px] touch-manipulation items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 disabled:opacity-50"
               >
                 <Save size={16} />
-                Save
+                {saving ? SAVE_FEEDBACK.saving : "Save"}
               </button>
             </header>
 

@@ -51,6 +51,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Bar, Pie } from "react-chartjs-2";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 import { ExpenseAiInsightsPanel } from "@/components/ExpenseAiInsightsPanel";
 import { ExpenseWorkspaceDashboard } from "@/components/expense-workspace/ExpenseWorkspaceDashboard";
 import { formatExpenseRepeatReminder } from "@/components/expense-workspace/expense-workspace-utils";
@@ -927,7 +928,7 @@ export function ExpenseDashboard({
     }
 
     if (personalMode) {
-      const stored = loadPersonalExpenseState();
+      const stored = loadPersonalExpenseState(user?.id);
       if (stored) {
         setExpenses(stored.expenses);
         setMembers(stored.members);
@@ -1212,7 +1213,7 @@ export function ExpenseDashboard({
         activities: activities as TimelineActivity[],
         exchangeRate,
         displayCurrency: currency,
-      });
+      }, user?.id);
     } else {
       saveGroupExpenseState({
         version: 1,
@@ -2222,7 +2223,7 @@ export function ExpenseDashboard({
           { upsertLocalId: true },
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save expense.");
+        toast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed);
         throw error;
       }
       setExpenses((current) => [nextExpense, ...current]);
@@ -2298,7 +2299,7 @@ export function ExpenseDashboard({
         category: normalizeExpenseCategory(nextExpense.category),
         message: `${memberDisplayName(payerId, profiles)} added ${nextExpense.title}`,
       });
-      toast.success("Expense saved");
+      toast.success(SAVE_FEEDBACK.saved);
     },
     [members, profiles, saveWorkspaceMeta, recordTransaction, user?.email],
   );

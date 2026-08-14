@@ -5,6 +5,10 @@ import type { Database, Json } from "@/types/supabase-database";
 
 type Client = SupabaseClient<Database>;
 
+/**
+ * Source of truth: `finance_savings_workspace`.
+ * `fire_goals` marker fallback is used only when that table is missing — never dual-write.
+ */
 /** Marker row in public.fire_goals used when finance_savings_workspace is unavailable. */
 export const SAVINGS_FIRE_GOALS_MARKER = "__fire_nepal_savings_workspace_v1__";
 export const SAVINGS_FIRE_GOALS_TITLE = "Savings workspace";

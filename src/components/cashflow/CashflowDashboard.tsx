@@ -1,5 +1,7 @@
 "use client";
 
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { CashflowWorkspaceDashboard } from "@/components/cashflow-workspace/CashflowWorkspaceDashboard";
 import { useCashflowPersistedState } from "@/components/cashflow/hooks/useCashflowPersistedState";

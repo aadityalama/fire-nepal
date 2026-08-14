@@ -1,8 +1,13 @@
 import type { SavingsGoal, SavingsReminderTiming, SavingsTransaction, SavingsWorkspaceState } from "@/lib/savings/savings-types";
 import { SAVINGS_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import { DEFAULT_REMINDER_TIMINGS, defaultTargetDate } from "@/lib/savings/savings-utils";
+import { readJsonWithLegacyMigration, scopedStorageKey, writeJsonScoped } from "@/lib/ux/scoped-storage";
 
 export const SAVINGS_WORKSPACE_STORAGE_KEY = "fire-nepal-savings-workspace-v1";
+
+export function savingsWorkspaceStorageKey(userId?: string | null) {
+  return scopedStorageKey(SAVINGS_WORKSPACE_STORAGE_KEY, userId);
+}
 
 const DEFAULT_STATE: SavingsWorkspaceState = {
   version: 1,
@@ -98,15 +103,16 @@ function sanitizeTransaction(input: unknown, index: number): SavingsTransaction 
   };
 }
 
-export function loadSavingsWorkspaceState(): SavingsWorkspaceState {
+export function loadSavingsWorkspaceState(userId?: string | null): SavingsWorkspaceState {
   if (typeof window === "undefined") return DEFAULT_STATE;
-  try {
-    const raw = window.localStorage.getItem(SAVINGS_WORKSPACE_STORAGE_KEY);
-    if (!raw) return DEFAULT_STATE;
-    return sanitizeSavingsWorkspaceState(JSON.parse(raw));
-  } catch {
-    return DEFAULT_STATE;
-  }
+  const parsed = readJsonWithLegacyMigration(SAVINGS_WORKSPACE_STORAGE_KEY, userId, (raw) => {
+    try {
+      return sanitizeSavingsWorkspaceState(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  });
+  return parsed ?? DEFAULT_STATE;
 }
 
 export function sanitizeSavingsWorkspaceState(input: unknown): SavingsWorkspaceState {
@@ -129,23 +135,20 @@ export function sanitizeSavingsWorkspaceState(input: unknown): SavingsWorkspaceS
   };
 }
 
-export function saveSavingsWorkspaceState(state: SavingsWorkspaceState) {
+export function saveSavingsWorkspaceState(state: SavingsWorkspaceState, userId?: string | null) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    SAVINGS_WORKSPACE_STORAGE_KEY,
-    JSON.stringify({
-      ...state,
-      goals: sortGoals(state.goals),
-    }),
-  );
+  writeJsonScoped(SAVINGS_WORKSPACE_STORAGE_KEY, userId, {
+    ...state,
+    goals: sortGoals(state.goals),
+  });
   window.dispatchEvent(new Event(SAVINGS_MODULE_SYNC_EVENT));
 }
 
 /** Clears browser-local savings cache. Authenticated users must not treat this as source of truth. */
-export function clearSavingsWorkspaceLocalCache() {
+export function clearSavingsWorkspaceLocalCache(userId?: string | null) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(SAVINGS_WORKSPACE_STORAGE_KEY);
+    window.localStorage.removeItem(savingsWorkspaceStorageKey(userId));
   } catch {
     /* ignore quota / private mode */
   }

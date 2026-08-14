@@ -41,10 +41,10 @@ export const appToast = {
     sonnerToast.dismiss(id);
   },
   /** Prefer for cloud sync / auto-save so repeats replace instead of stacking. */
-  saveSuccess(message = "Saved.", id = "fn-save-success") {
+  saveSuccess(message = "Saved", id = "fn-save-success") {
     return sonnerToast.success(message, withDefaults("success", { id }));
   },
-  saveError(message = "Could not save. Please try again.", id = "fn-save-error") {
+  saveError(message = "Save failed — please try again", id = "fn-save-error") {
     return sonnerToast.error(message, withDefaults("error", { id }));
   },
   networkError(message = "Network error. Check your connection and try again.", id = "fn-network-error") {

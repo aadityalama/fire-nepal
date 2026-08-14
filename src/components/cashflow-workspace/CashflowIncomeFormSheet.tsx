@@ -11,6 +11,8 @@ import {
   type CashflowIncomeTypeId,
   type IncomeFrequency,
 } from "@/lib/cashflow/income-types";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 export type IncomeFormState = {
   name: string;
@@ -95,7 +97,9 @@ export function CashflowIncomeFormSheet({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl"
+          className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]/85 backdrop-blur-xl`}
+          data-fn-layer="sheet"
+          data-fn-sheet="cashflow-income"
         >
           <motion.div
             initial={{ opacity: 0, y: 28 }}
@@ -198,12 +202,14 @@ export function CashflowIncomeFormSheet({
             <div className="border-t border-white/10 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
               <button
                 type="button"
+                data-fn-save="cashflow-income"
                 onClick={() => void onSave()}
                 disabled={saving}
-                className="flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/25 active:scale-[0.99]"
+                aria-busy={saving}
+                className="relative z-10 flex min-h-[56px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 shadow-lg shadow-emerald-500/25 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save size={18} />
-                {saving ? "Saving..." : "Save"}
+                {saving ? SAVE_FEEDBACK.saving : "Save"}
               </button>
             </div>
           </motion.div>

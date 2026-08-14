@@ -10,6 +10,11 @@ export type CashflowSnapshotRow = {
   updatedAt: string;
 };
 
+/**
+ * Source of truth: `cashflow_snapshots` (one row per user).
+ * `fire_goals` marker rows are a temporary fallback ONLY when the dedicated table is missing.
+ * Never write to both stores for the same save — pick one path per request.
+ */
 /** Marker row in public.fire_goals used when cashflow_snapshots is unavailable. */
 export const CASHFLOW_FIRE_GOALS_MARKER = "__fire_nepal_cashflow_snapshots_v1__";
 export const CASHFLOW_FIRE_GOALS_TITLE = "Cashflow workspace";

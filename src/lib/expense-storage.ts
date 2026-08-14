@@ -6,8 +6,13 @@ import {
   migrateExpenseToMemberIds,
   migrateLegacyMembersToIds,
 } from "@/lib/expense-members";
+import { readJsonWithLegacyMigration, scopedStorageKey, writeJsonScoped } from "@/lib/ux/scoped-storage";
 
 export const STORAGE_KEY = "fire-nepal-expense-dashboard-v2";
+
+export function expenseDashboardStorageKey(userId?: string | null) {
+  return scopedStorageKey(STORAGE_KEY, userId);
+}
 
 export type TimelineActivityType =
   | "expense_added"
@@ -121,26 +126,31 @@ function migrateNameBasedStateToV3(state: NameBasedPersistedState): DashboardPer
   };
 }
 
-export function loadDashboardState(): DashboardPersistedState | null {
+export function loadDashboardState(userId?: string | null): DashboardPersistedState | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as NameBasedPersistedState;
-      if (parsed.version === 3 && Array.isArray(parsed.expenses)) return parsed as DashboardPersistedState;
-      if ((parsed.version === 2 || parsed.version === 3) && Array.isArray(parsed.expenses)) {
-        const migrated = migrateNameBasedStateToV3(parsed);
-        saveDashboardState(migrated);
-        return migrated;
+    const fromScoped = readJsonWithLegacyMigration(STORAGE_KEY, userId, (raw) => {
+      try {
+        const parsed = JSON.parse(raw) as NameBasedPersistedState;
+        if (parsed.version === 3 && Array.isArray(parsed.expenses)) return parsed as DashboardPersistedState;
+        if ((parsed.version === 2 || parsed.version === 3) && Array.isArray(parsed.expenses)) {
+          const migrated = migrateNameBasedStateToV3(parsed);
+          saveDashboardState(migrated, userId);
+          return migrated;
+        }
+        return null;
+      } catch {
+        return null;
       }
-    }
+    });
+    if (fromScoped) return fromScoped;
 
     const legacy = window.localStorage.getItem(LEGACY_KEY);
     if (legacy) {
       const migrated = migrateLegacyState(legacy);
       if (migrated) {
-        saveDashboardState(migrated);
+        saveDashboardState(migrated, userId);
         return migrated;
       }
     }
@@ -151,10 +161,10 @@ export function loadDashboardState(): DashboardPersistedState | null {
   }
 }
 
-export function saveDashboardState(state: DashboardPersistedState) {
+export function saveDashboardState(state: DashboardPersistedState, userId?: string | null) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    writeJsonScoped(STORAGE_KEY, userId, state);
     window.dispatchEvent(new Event(EXPENSE_MODULE_SYNC_EVENT));
   } catch {
     console.warn("FIRE Nepal: storage quota reached. Consider removing old receipts.");

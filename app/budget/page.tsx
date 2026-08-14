@@ -40,6 +40,8 @@ import {
 } from "@/lib/budget/types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 import {
   DEFAULT_FINANCE_CATEGORY_ID,
   getFinanceCategoryEmoji,
@@ -595,7 +597,7 @@ function BudgetFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#020806]/85 p-0 text-white backdrop-blur-xl sm:p-5">
+    <div className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]/85 p-0 text-white backdrop-blur-xl sm:p-5`} data-fn-layer="sheet" data-fn-sheet="budget-form">
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
@@ -617,7 +619,7 @@ function BudgetFormModal({
             disabled={saving || !parsedAmount}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Save size={16} /> {saving ? (isEdit ? "Updating..." : "Saving...") : isEdit ? "Update Budget" : "Save"}
+            <Save size={16} /> {saving ? SAVE_FEEDBACK.saving : isEdit ? "Update Budget" : "Save"}
           </button>
         </header>
 
@@ -797,10 +799,10 @@ export default function BudgetWorkspacePage() {
           sortBudgetRecords(prev.map((item) => (item.id === optimisticId ? saved : item))),
         );
         await reloadBudgets();
-        toast.success("Budget saved successfully");
+        toast.success(SAVE_FEEDBACK.saved);
       } catch (error) {
         setBudgets((prev) => prev.filter((item) => item.id !== optimisticId));
-        toast.error(error instanceof Error ? error.message : "Could not save budget.");
+        toast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed);
         throw error;
       } finally {
         setSavingBudget(false);
@@ -836,11 +838,11 @@ export default function BudgetWorkspacePage() {
       try {
         await updateBudgetRecord(editingBudget.id, input);
         await reloadBudgets();
-        toast.success("Budget updated successfully");
+        toast.success(SAVE_FEEDBACK.saved);
         setEditingBudget(null);
       } catch (error) {
         await reloadBudgets();
-        toast.error(error instanceof Error ? error.message : "Could not update budget.");
+        toast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed);
         throw error;
       } finally {
         setSavingBudget(false);
@@ -984,11 +986,11 @@ export default function BudgetWorkspacePage() {
           }),
         );
         await reloadBudgets();
-        toast.success("Budget allocation saved");
+        toast.success(SAVE_FEEDBACK.saved);
         setAllocationOpen(false);
       } catch (error) {
         await reloadBudgets();
-        toast.error(error instanceof Error ? error.message : "Could not save allocation.");
+        toast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed);
         throw error;
       } finally {
         setSavingAllocation(false);

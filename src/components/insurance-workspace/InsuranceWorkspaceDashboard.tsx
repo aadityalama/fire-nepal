@@ -62,6 +62,7 @@ import {
 } from "@/lib/insurance/insurance-utils";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
 
@@ -153,7 +154,7 @@ export function InsuranceWorkspaceDashboard() {
     let cancelled = false;
 
     async function hydrate() {
-      const local = loadInsuranceWorkspaceState();
+      const local = loadInsuranceWorkspaceState(user?.id);
       const localCountBefore = local.policies.length;
       const browser = typeof navigator !== "undefined" ? navigator.userAgent : "unknown";
 
@@ -312,7 +313,7 @@ export function InsuranceWorkspaceDashboard() {
     if (!hydrated) return;
     // While logged-in hydrate is in flight, do not persist pre-cloud local as durable cache.
     if (user?.id && isSupabaseConfigured() && !cloudReady) return;
-    cacheInsurancePoliciesLocally(state.policies);
+    cacheInsurancePoliciesLocally(state.policies, user?.id);
   }, [state, hydrated, cloudReady, user?.id]);
 
   useEffect(() => {
@@ -416,16 +417,16 @@ export function InsuranceWorkspaceDashboard() {
   const persistLocalState = useCallback((next: InsuranceWorkspaceState) => {
     const normalized = { version: 1 as const, policies: withDerivedStatus(next.policies) };
     setState(normalized);
-    saveInsuranceWorkspaceState(normalized);
-  }, []);
+    saveInsuranceWorkspaceState(normalized, user?.id);
+  }, [user?.id]);
 
   const reloadPoliciesFromCloud = useCallback(async () => {
     const remote = await fetchInsurancePolicies();
     const next = { version: 1 as const, policies: withDerivedStatus(remote.policies) };
     setState(next);
-    replaceInsuranceCacheWithCloud(next.policies);
+    replaceInsuranceCacheWithCloud(next.policies, user?.id);
     return next;
-  }, []);
+  }, [user?.id]);
 
   const handleSavePolicy = useCallback(
     async (input: InsurancePolicyFormInput, editingId?: string) => {
@@ -452,16 +453,16 @@ export function InsuranceWorkspaceDashboard() {
                 ? state.policies.map((policy) => (policy.id === editingId ? normalized : policy))
                 : [...state.policies.filter((policy) => policy.id !== normalized.id), normalized];
               setState({ version: 1, policies: withDerivedStatus(nextPolicies) });
-              cacheInsurancePoliciesLocally(nextPolicies);
+              cacheInsurancePoliciesLocally(nextPolicies, user?.id);
             }
 
-            appToast.success(editingId ? "Policy updated." : "Policy saved.", { id: "insurance-save" });
+            appToast.success(SAVE_FEEDBACK.saved, { id: "insurance-save" });
             setSheetOpen(false);
             setEditingPolicy(null);
             recalculate();
             return;
           } catch (error) {
-            const message = error instanceof Error ? error.message : "Could not save policy. Please try again.";
+            const message = error instanceof Error ? error.message : SAVE_FEEDBACK.failed;
             if (process.env.NODE_ENV !== "production") {
               console.error("[insurance-workspace] cloud save failed", error);
             }
@@ -477,19 +478,19 @@ export function InsuranceWorkspaceDashboard() {
             version: 1,
             policies: state.policies.map((policy) => (policy.id === editingId ? nextPolicy : policy)),
           });
-          appToast.success("Policy updated.", { id: "insurance-save" });
+          appToast.success(SAVE_FEEDBACK.saved, { id: "insurance-save" });
         } else {
           persistLocalState({
             version: 1,
             policies: [...state.policies, createLocalPolicy(input, state.policies.length)],
           });
-          appToast.success("Policy saved.", { id: "insurance-save" });
+          appToast.success(SAVE_FEEDBACK.saved, { id: "insurance-save" });
         }
         setSheetOpen(false);
         setEditingPolicy(null);
         recalculate();
       } catch (error) {
-        appToast.error(error instanceof Error ? error.message : "Could not save policy. Please try again.", {
+        appToast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed, {
           id: "insurance-save-error",
         });
         // Keep the form open — never rethrow (avoids blanking the page).

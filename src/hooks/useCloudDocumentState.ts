@@ -5,6 +5,8 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { fetchModuleSnapshot, saveModuleSnapshotToCloud } from "@/lib/module-snapshots/api";
 import type { ModuleSnapshotKey } from "@/lib/module-snapshots/keys";
+import { appToast } from "@/lib/toast";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 export type UseCloudDocumentStateOptions<T> = {
   moduleKey: ModuleSnapshotKey;
@@ -148,13 +150,19 @@ export function useCloudDocumentState<T>({
           console.error(`[cloud-document:${moduleKey}] hydrate failed`, error);
         }
         if (!cancelled) {
-          // Keep shell defaults for a usable UI — surface failure + retry instead of infinite loading.
+          // Temporary cloud/network failure must NOT clear valid in-memory / cached state.
+          const retained = loadLocalRef.current
+            ? sanitizeRef.current(loadLocalRef.current())
+            : stateRef.current;
+          const hasRetained =
+            retained != null && JSON.stringify(retained) !== JSON.stringify(getDefaultRef.current());
           if (!shellReadyRef.current) {
-            const emptyOnFail = getDefaultRef.current();
-            setState(emptyOnFail);
-            lastSavedRef.current = JSON.stringify(emptyOnFail);
+            setState(hasRetained ? retained : getDefaultRef.current());
+            lastSavedRef.current = JSON.stringify(hasRetained ? retained : getDefaultRef.current());
+          } else if (hasRetained) {
+            setState(retained);
+            lastSavedRef.current = JSON.stringify(retained);
           }
-          clearLocalRef.current?.();
           setHydrateError(message);
           setCloudReady(true);
           shellReadyRef.current = true;
@@ -224,6 +232,10 @@ export function useCloudDocumentState<T>({
           if (process.env.NODE_ENV !== "production") {
             console.error(`[cloud-document:${moduleKey}] background save failed`, error);
           }
+          appToast.saveError(
+            error instanceof Error && error.message ? error.message : SAVE_FEEDBACK.failed,
+            `cloud-doc-${moduleKey}-save`,
+          );
         }
       })();
     }, saveDebounceMs);

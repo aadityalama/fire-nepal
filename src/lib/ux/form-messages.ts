@@ -12,7 +12,9 @@ export const FORM_MESSAGES = {
   paymentMethodRequired: "Choose a payment method to continue.",
   paymentProofRequired: "Upload a payment screenshot or receipt (JPG, PNG, or WebP).",
   sessionChecking: "Checking your session…",
-  saving: "Saving…",
+  saving: "Saving...",
+  saved: "Saved",
+  saveFailed: "Save failed — please try again",
   deleting: "Deleting…",
   loading: "Loading…",
 } as const;

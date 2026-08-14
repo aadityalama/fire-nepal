@@ -20,6 +20,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { ExpenseWorkspaceCalendar } from "@/components/expense-workspace/ExpenseWorkspaceCalendar";
 import { FinanceCategoryPicker } from "@/components/finance/FinanceCategoryPicker";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 import {
   buildCommandCenterInsights,
   buildNotifications,
@@ -752,36 +754,32 @@ export function ExpenseWorkspaceDashboard({
             form={form}
             setForm={setForm}
             onClose={() => setAddOpen(false)}
-            onSave={() => {
+            onSubmit={async () => {
               const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
-              if (!form.title.trim() || !amountNpr) return;
               const expenseDate = form.expenseDate || todayIso;
+              if (!form.title.trim()) throw new Error("Enter an expense name.");
+              if (!form.category?.trim()) throw new Error("Choose a category.");
+              if (!amountNpr) throw new Error("Enter a valid amount greater than zero.");
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(expenseDate)) throw new Error("Enter a valid expense date.");
               const repeat = form.repeat ?? "Never";
               const reminderEnabled = repeat !== "Never";
-              void Promise.resolve(
-                onSubmitWorkspaceExpense({
-                  title: form.title.trim(),
-                  amountNpr,
-                  category: normalizeFinanceCategory(form.category),
-                  expenseDate,
-                  dueDate: expenseDate,
-                  account: DEFAULT_WORKSPACE_ACCOUNT,
-                  paymentMethod: DEFAULT_PAYMENT_METHOD,
-                  repeat,
-                  notes: form.notes,
-                  reminderEnabled,
-                  reminderTiming: DEFAULT_REMINDER_TIMING,
-                  reminderTime: DEFAULT_REMINDER_TIME,
-                  reminderEmail: false,
-                }),
-              )
-                .then(() => {
-                  setAddOpen(false);
-                  setForm(emptyForm(todayIso));
-                })
-                .catch(() => {
-                  /* Parent shows the Supabase error toast. */
-                });
+              await onSubmitWorkspaceExpense({
+                title: form.title.trim(),
+                amountNpr,
+                category: normalizeFinanceCategory(form.category),
+                expenseDate,
+                dueDate: expenseDate,
+                account: DEFAULT_WORKSPACE_ACCOUNT,
+                paymentMethod: DEFAULT_PAYMENT_METHOD,
+                repeat,
+                notes: form.notes,
+                reminderEnabled,
+                reminderTiming: DEFAULT_REMINDER_TIMING,
+                reminderTime: DEFAULT_REMINDER_TIME,
+                reminderEmail: false,
+              });
+              setAddOpen(false);
+              setForm(emptyForm(todayIso));
             }}
           />
         ) : null}
@@ -985,15 +983,43 @@ function ExpenseAddSheet({
   form,
   setForm,
   onClose,
-  onSave,
+  onSubmit,
 }: {
   form: WorkspaceForm;
   setForm: Dispatch<SetStateAction<WorkspaceForm>>;
   onClose: () => void;
-  onSave: () => void;
+  onSubmit: () => Promise<void>;
 }) {
+  const [saving, setSaving] = useState(false);
+  const amountNpr = Number(form.amount.replace(/[^\d.]/g, "")) || 0;
+  const canSave =
+    !saving &&
+    Boolean(form.title.trim()) &&
+    Boolean(form.category?.trim()) &&
+    amountNpr > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(form.expenseDate || "");
+
+  async function handleSave() {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      await onSubmit();
+    } catch {
+      /* Parent surfaces Save failed toast; keep form values. */
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-[#020806]/85 backdrop-blur-xl">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]/85 backdrop-blur-xl`}
+      data-fn-layer="sheet"
+      data-fn-sheet="expense-add"
+    >
       <motion.div
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1001,12 +1027,19 @@ function ExpenseAddSheet({
         className="mx-auto flex h-full max-w-lg flex-col overflow-hidden bg-[#04140f]"
       >
         <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
-          <button type="button" onClick={onClose} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06]">
+          <button type="button" onClick={onClose} disabled={saving} className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full bg-white/[0.06]">
             <X size={20} />
           </button>
           <h2 className="text-lg font-black">Add Expense</h2>
-          <button type="button" onClick={onSave} className="rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950">
-            Save
+          <button
+            type="button"
+            data-fn-save="expense-add"
+            onClick={() => void handleSave()}
+            disabled={!canSave}
+            aria-busy={saving}
+            className="relative z-10 min-h-[44px] touch-manipulation rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 py-2 text-sm font-black text-emerald-950 disabled:opacity-60"
+          >
+            {saving ? SAVE_FEEDBACK.saving : "Save"}
           </button>
         </header>
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
@@ -1015,6 +1048,10 @@ function ExpenseAddSheet({
               <input
                 value={form.title}
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                name="fn-expense-title"
                 className="min-h-[52px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none"
                 placeholder="Internet Bill"
               />
@@ -1031,6 +1068,8 @@ function ExpenseAddSheet({
                   value={form.amount}
                   onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
                   inputMode="numeric"
+                  autoComplete="off"
+                  name="fn-expense-amount"
                   className="min-w-0 flex-1 bg-transparent text-2xl font-black text-white outline-none"
                   placeholder="1,200"
                 />
@@ -1041,6 +1080,8 @@ function ExpenseAddSheet({
                 type="date"
                 value={form.expenseDate}
                 onChange={(event) => setForm((current) => ({ ...current, expenseDate: event.target.value }))}
+                autoComplete="off"
+                name="fn-expense-date"
                 className="min-h-[48px] w-full max-w-full rounded-2xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none [color-scheme:dark]"
               />
             </Field>
@@ -1079,6 +1120,8 @@ function ExpenseAddSheet({
               <textarea
                 value={form.notes}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                autoComplete="off"
+                name="fn-expense-notes"
                 className="min-h-[96px] w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white outline-none"
                 placeholder="Optional notes"
               />
