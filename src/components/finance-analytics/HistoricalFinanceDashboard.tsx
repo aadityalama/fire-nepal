@@ -84,9 +84,9 @@ function PeriodDetailSheet({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button type="button" className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Close detail" onClick={onClose} />
-      <div className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#071512] shadow-2xl sm:rounded-[1.75rem]">
+      <div className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-white/10 bg-[#071512] pb-[env(safe-area-inset-bottom,0px)] shadow-2xl sm:rounded-[1.75rem]">
         <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-100/45">Period detail</p>
@@ -95,7 +95,7 @@ function PeriodDetailSheet({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-emerald-50"
+            className="inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-emerald-50"
             aria-label="Close"
           >
             <X size={18} />
@@ -279,14 +279,14 @@ export function HistoricalFinanceDashboard() {
           <div className="flex items-center justify-between gap-3">
             <Link
               href="/finance"
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl transition active:scale-95"
+              className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 backdrop-blur-xl transition active:scale-95"
             >
               <ArrowLeft size={15} /> Finance
             </Link>
             <button
               type="button"
               onClick={() => reload()}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 transition active:scale-95"
+              className="inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-black text-emerald-50 transition active:scale-95"
               aria-label="Refresh history"
             >
               <RefreshCw size={14} /> Refresh
@@ -296,7 +296,7 @@ export function HistoricalFinanceDashboard() {
           <p className="mt-1 text-sm font-semibold text-emerald-100/58">Income, expenses &amp; cashflow over time</p>
         </header>
 
-        {/* Sticky period selector — above bottom nav, touch-friendly */}
+        {/* Sticky period selector — top of viewport; bottom nav must not cover these controls */}
         <div className="sticky top-0 z-40 -mx-4 border-b border-white/5 bg-[#020806]/92 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
           <div
             className="flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -312,7 +312,7 @@ export function HistoricalFinanceDashboard() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setPreset(item.id)}
-                  className={`relative z-10 shrink-0 rounded-full px-4 py-2.5 text-xs font-black transition active:scale-95 ${
+                  className={`relative z-10 min-h-[44px] shrink-0 touch-manipulation rounded-full px-4 py-2.5 text-xs font-black transition active:scale-95 ${
                     active
                       ? "bg-emerald-400 text-emerald-950 shadow-[0_8px_24px_-10px_rgba(52,211,153,0.8)]"
                       : "border border-white/10 bg-white/[0.06] text-emerald-50"
@@ -332,7 +332,7 @@ export function HistoricalFinanceDashboard() {
                   key={item.id}
                   type="button"
                   onClick={() => setPreset(item.id)}
-                  className={`relative z-10 shrink-0 rounded-full px-3 py-2 text-[11px] font-black transition active:scale-95 ${
+                  className={`relative z-10 min-h-[40px] shrink-0 touch-manipulation rounded-full px-3 py-2 text-[11px] font-black transition active:scale-95 ${
                     active
                       ? "bg-lime-300/90 text-emerald-950"
                       : "border border-white/8 bg-black/25 text-emerald-100/70"
@@ -494,7 +494,7 @@ export function HistoricalFinanceDashboard() {
                       <button
                         type="button"
                         onClick={() => openYearDetail(y.key, y.label)}
-                        className={`${glassCard("flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition active:scale-[0.99]")} ${
+                        className={`${glassCard("flex w-full touch-manipulation items-center justify-between gap-3 px-4 py-3.5 text-left transition active:scale-[0.99]")} ${
                           y.hasData ? "" : "opacity-60"
                         }`}
                       >
@@ -524,7 +524,7 @@ export function HistoricalFinanceDashboard() {
                       <button
                         type="button"
                         onClick={() => openMonthDetail(m)}
-                        className={`${glassCard("flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition active:scale-[0.99]")} ${
+                        className={`${glassCard("flex w-full touch-manipulation items-center justify-between gap-3 px-4 py-3.5 text-left transition active:scale-[0.99]")} ${
                           m.hasData ? "" : "opacity-60"
                         }`}
                       >

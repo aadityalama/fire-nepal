@@ -311,3 +311,42 @@ test("empty period summary reports no data without inventing values", () => {
   assert.equal(summary.highestIncomeMonth, null);
   assert.equal(summary.highestExpenseMonth, null);
 });
+
+test("sparse history keeps empty months at zero without fabricating values", () => {
+  const state = makeCashflow([
+    {
+      id: "i1",
+      name: "Salary",
+      amount: 50000,
+      incomeType: "salary",
+      frequency: "once",
+      date: "2026-06-01",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    },
+  ]);
+  const rows = [makeExpenseRow({ amount: 10000, transaction_date: "2026-06-15", category: "Food" })];
+  // Simulate Last 1Y window (12 months) with only 1 month of real records
+  const keys = listMonthKeysInclusive("2025-09", "2026-08");
+  assert.equal(keys.length, 12);
+  const series = buildMonthlySeries(state, rows, keys, NOW);
+  assert.equal(series.length, 12);
+  assert.equal(series.filter((m) => m.hasData).length, 1);
+  assert.equal(
+    series.filter((m) => !m.hasData).every((m) => m.income === 0 && m.expense === 0 && m.netCashflow === 0),
+    true,
+  );
+  const summary = buildHistoricalSummary(series);
+  assert.equal(summary.monthsWithData, 1);
+  assert.equal(summary.totalIncome, 50000);
+  assert.equal(summary.totalExpenses, 10000);
+});
+
+test("hook source scopes expense history to authenticated userId", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const hook = readFileSync(join(root, "src/hooks/useHistoricalFinanceData.ts"), "utf8");
+  assert.match(hook, /listAllExpenseTransactionsForExport\(client, userId/);
+  assert.match(hook, /Never reuse another account's cached history/);
+});

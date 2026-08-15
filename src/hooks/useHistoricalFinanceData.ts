@@ -34,7 +34,8 @@ export function useHistoricalFinanceData(userId: string | null | undefined) {
   const load = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!userId) {
-        setState({ status: "error", message: "Sign in to view financial history.", data: cacheRef.current });
+        cacheRef.current = null;
+        setState({ status: "error", message: "Sign in to view financial history.", data: null });
         return;
       }
       if (inFlightRef.current) return;
@@ -72,6 +73,7 @@ export function useHistoricalFinanceData(userId: string | null | undefined) {
           ? sanitizeCashflowState(cashflowJson.snapshot.state)
           : defaultCashflowState();
 
+        // Workspace-scoped list — ensureAuthenticatedWorkspace enforces auth.uid === userId.
         const { rows } = await listAllExpenseTransactionsForExport(client, userId, defaultTransactionFilters());
 
         const next: HistoricalFinanceDataset = {
@@ -100,9 +102,17 @@ export function useHistoricalFinanceData(userId: string | null | undefined) {
     [userId],
   );
 
+  // Never reuse another account's cached history after logout/login or account switch.
   useEffect(() => {
-    void load();
-  }, [load]);
+    cacheRef.current = null;
+    inFlightRef.current = false;
+    setState({ status: userId ? "loading" : "idle" });
+    if (userId) {
+      void load();
+    } else {
+      setState({ status: "error", message: "Sign in to view financial history.", data: null });
+    }
+  }, [userId, load]);
 
   useEffect(() => {
     if (!userId) return;

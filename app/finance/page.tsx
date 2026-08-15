@@ -20,7 +20,7 @@ export default function FinanceWorkspacePage() {
       <EcosystemWorkspacePanel
         title="Finance"
         eyebrow="Finance workspace"
-        description="Cashflow, emergency fund, expenses, budget, saving goals, and insurance in one focused FIRE Nepal workspace."
+        description="Cashflow, history & analytics, emergency fund, expenses, budget, saving goals, and insurance in one focused FIRE Nepal workspace."
         items={FINANCE_ITEMS}
       />
     </DashboardAccessGuard>

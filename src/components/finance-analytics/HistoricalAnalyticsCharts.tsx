@@ -179,7 +179,16 @@ export function NetCashflowTrendChart({ data }: { data: HistoricalMonthPoint[] }
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis dataKey="label" tick={{ fill: "rgba(167,243,208,0.55)", fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
             <YAxis tick={{ fill: "rgba(167,243,208,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatNpr(value), "Net"]} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(value: number, name: string, item) => {
+                if (name === "Surplus" || name === "Deficit" || name === "positive" || name === "negative") {
+                  const net = Number(item?.payload?.net ?? value);
+                  return [formatNpr(net), "Net cashflow"];
+                }
+                return [formatNpr(value), "Net"];
+              }}
+            />
             <Bar dataKey="positive" stackId="net" fill="#34d399" radius={[6, 6, 0, 0]} maxBarSize={20} name="Surplus" />
             <Bar dataKey="negative" stackId="net" fill="#fb7185" radius={[0, 0, 6, 6]} maxBarSize={20} name="Deficit" />
           </BarChart>

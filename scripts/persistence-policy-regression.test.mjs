@@ -163,9 +163,11 @@ test("Historical finance analytics uses cloud SoT and preserves cache on error",
   assert.match(hook, /listAllExpenseTransactionsForExport/);
   assert.match(hook, /\/api\/cashflow/);
   assert.match(hook, /cacheRef\.current/);
+  assert.match(hook, /Never reuse another account's cached history/);
   assert.match(hook, /Unable to load financial history\. Please try again\./);
   assert.doesNotMatch(hook, /localStorage\.(setItem|removeItem|clear)/);
   assert.doesNotMatch(dashboard, /saveCashflowToSupabase|savePersonalExpenseState|PUT \/api\/cashflow/);
   assert.match(dashboard, /No financial records found for this period\./);
+  assert.match(dashboard, /z-\[80\]/);
   assert.match(analytics, /Never fabricates values/);
 });
