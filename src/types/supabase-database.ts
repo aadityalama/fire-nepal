@@ -743,6 +743,44 @@ export type Database = {
         };
         Relationships: [];
       };
+      membership_approval_emails: {
+        Row: {
+          id: string;
+          membership_request_id: string;
+          user_id: string;
+          email: string;
+          sent_at: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject: string | null;
+          provider_message: string | null;
+          resend_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          membership_request_id: string;
+          user_id: string;
+          email: string;
+          sent_at?: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          membership_request_id?: string;
+          user_id?: string;
+          email?: string;
+          sent_at?: string;
+          delivery_status?: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       membership_reminder_queue: {
         Row: {
           id: string;
