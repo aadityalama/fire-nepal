@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { BadgeCheck, Loader2, Search, UserRound } from "lucide-react";
+import { BadgeCheck, Check, Loader2, Search, UserRound } from "lucide-react";
 import { LendingAvatar } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { isP2PSearchQueryReady, normalizeP2PSearchQuery } from "@/lib/fire-lending/p2p-member-profile";
 import type { P2PMemberSearchHit, P2PMemberSearchResponse } from "@/lib/fire-lending/p2p-member-types";
+import { shouldAutoSelectSearchHit } from "@/lib/fire-lending/wizard-borrower-selection";
 
 const DEBOUNCE_MS = 320;
 
@@ -20,6 +21,8 @@ type FireLendingMemberSearchProps = {
   label?: string;
   placeholder?: string;
   autoFocus?: boolean;
+  /** When true (default), exact single-match results commit selection automatically. */
+  autoSelectExactMatch?: boolean;
 };
 
 export function FireLendingMemberSearch({
@@ -31,6 +34,7 @@ export function FireLendingMemberSearch({
   label = "Borrower / lender search",
   placeholder = "Search FIRE Nepal ID or member name...",
   autoFocus,
+  autoSelectExactMatch = true,
 }: FireLendingMemberSearchProps) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -41,6 +45,7 @@ export function FireLendingMemberSearch({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const requestSeq = useRef(0);
+  const lastAutoSelectedId = useRef<string>("");
 
   useEffect(() => {
     const q = normalizeP2PSearchQuery(value);
@@ -50,6 +55,7 @@ export function FireLendingMemberSearch({
       setLoading(false);
       setError(null);
       setMatchState("empty_query");
+      lastAutoSelectedId.current = "";
       return;
     }
 
@@ -112,6 +118,7 @@ export function FireLendingMemberSearch({
       })
     : [];
   const hits = [...remoteHits, ...localFiltered];
+  const hitsKey = hits.map((h) => h.fireNepalId.toUpperCase()).join("|");
   const effectiveState =
     !qReady
       ? "empty_query"
@@ -122,6 +129,28 @@ export function FireLendingMemberSearch({
           : hits.length === 1
             ? "single"
             : "multiple";
+
+  // Auto-commit exact single match into the parent wizard selection.
+  useEffect(() => {
+    if (!autoSelectExactMatch || loading || !onSelectMember) return;
+    const hit = shouldAutoSelectSearchHit(value, hits);
+    if (!hit) {
+      // Allow re-auto-select after the query no longer exact-matches the prior pick.
+      if (!selectedFireNepalId) lastAutoSelectedId.current = "";
+      return;
+    }
+    const id = hit.fireNepalId.toUpperCase();
+    if (selectedFireNepalId?.toUpperCase() === id) {
+      lastAutoSelectedId.current = id;
+      return;
+    }
+    // Parent cleared selection (e.g. new search) — commit again even for same FIRE ID.
+    if (lastAutoSelectedId.current === id && selectedFireNepalId) return;
+    lastAutoSelectedId.current = id;
+    onSelectMember(hit);
+    // hitsKey captures membership identity without depending on a fresh array each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelectExactMatch, loading, hitsKey, value, onSelectMember, selectedFireNepalId]);
 
   return (
     <div className="space-y-2">
@@ -156,7 +185,7 @@ export function FireLendingMemberSearch({
         </div>
       </label>
 
-          {error && hits.length === 0 ? (
+      {error && hits.length === 0 ? (
         <p role="alert" className="text-[11px] font-semibold text-rose-400">
           {error}
         </p>
@@ -180,9 +209,7 @@ export function FireLendingMemberSearch({
 
           {!loading && effectiveState === "no_results" ? (
             <div className={`px-3 py-4 text-sm font-semibold ${light ? "text-slate-600" : "text-emerald-200/70"}`}>
-              {error
-                ? error
-                : `No verified members match “${normalizeP2PSearchQuery(value)}”.`}
+              {error ? error : `No verified members match “${normalizeP2PSearchQuery(value)}”.`}
             </div>
           ) : null}
 
@@ -190,7 +217,7 @@ export function FireLendingMemberSearch({
             <ul className="divide-y divide-emerald-500/10">
               {effectiveState === "multiple" ? (
                 <li className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${light ? "bg-emerald-50 text-emerald-800" : "bg-emerald-500/10 text-lime-200/80"}`}>
-                  {hits.length} matching members
+                  {hits.length} matching members — tap one to select
                 </li>
               ) : null}
               {hits.map((hit) => {
@@ -200,7 +227,10 @@ export function FireLendingMemberSearch({
                     <FireLendingMemberPreviewCard
                       hit={hit}
                       selected={selected}
-                      onSelect={() => onSelectMember?.(hit)}
+                      onSelect={() => {
+                        lastAutoSelectedId.current = hit.fireNepalId.toUpperCase();
+                        onSelectMember?.(hit);
+                      }}
                     />
                   </li>
                 );
@@ -235,14 +265,19 @@ export function FireLendingMemberPreviewCard({
       className={`animate-fade-up px-3 py-3 transition ${
         selected
           ? light
-            ? "bg-emerald-50"
-            : "bg-emerald-500/15"
+            ? "bg-emerald-100/90 ring-1 ring-inset ring-emerald-400/70"
+            : "bg-emerald-500/20 ring-1 ring-inset ring-emerald-400/50"
           : light
             ? "hover:bg-emerald-50/70"
             : "hover:bg-emerald-500/10"
       }`}
     >
-      <button type="button" onClick={onSelect} className="flex w-full items-start gap-3 text-left">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className="flex w-full items-start gap-3 text-left"
+      >
         {hit.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -268,6 +303,16 @@ export function FireLendingMemberPreviewCard({
                 Verified
               </span>
             ) : null}
+            {selected ? (
+              <span
+                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                  light ? "bg-lime-100 text-lime-800" : "bg-lime-400/20 text-lime-200"
+                }`}
+              >
+                <Check size={11} />
+                Selected
+              </span>
+            ) : null}
           </div>
           <p className={`mt-0.5 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
             FIRE Nepal ID: {hit.fireNepalId}
@@ -278,11 +323,17 @@ export function FireLendingMemberPreviewCard({
           <p className={`text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
             Completed Loans: {hit.completedLoans} · On-time: {hit.onTimeRepaymentPct}%
           </p>
+          {!selected ? (
+            <p className={`mt-1.5 text-[10px] font-black uppercase tracking-wide ${light ? "text-emerald-700" : "text-lime-300"}`}>
+              Tap to select borrower
+            </p>
+          ) : null}
         </div>
       </button>
       <div className="mt-2 pl-14">
         <Link
           href={profileHref}
+          onClick={(e) => e.stopPropagation()}
           className={`inline-flex items-center gap-1 text-xs font-black transition hover:underline ${
             light ? "text-emerald-700" : "text-lime-300"
           }`}
