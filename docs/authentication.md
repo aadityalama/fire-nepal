@@ -9,7 +9,7 @@
 ## Production setup (checklist)
 
 1. **Vercel (or your host)**  
-   Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for the **Production** environment. Set **`NEXT_PUBLIC_SITE_URL=https://firenepal.com`** so Supabase `redirectTo` / `emailRedirectTo` values baked into the client point at production (fixes password reset and confirmation emails that would otherwise follow a wrong origin). **Redeploy** after changes.
+   Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for **Production and Preview** (PR review deploys use `NODE_ENV=production`; Preview-only missing vars cause the Supabase configuration / legacy-auth 503). Set **`NEXT_PUBLIC_SITE_URL=https://firenepal.com`** on **Production only** so email `redirectTo` / `emailRedirectTo` values point at the live site. On Preview, the app uses the request/`*.vercel.app` origin (`src/lib/public-site-url.ts`). **Redeploy** after changes. Vercel `npm run build` fails closed if public Supabase env is missing (`scripts/assert-supabase-env-on-vercel.mjs`).
 
 2. **Supabase → Authentication → Providers**  
    Enable **Email** and **Email / password**.

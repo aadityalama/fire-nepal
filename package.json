@@ -5,11 +5,11 @@
   "scripts": {
     "dev": "ulimit -n 8192 && WATCHPACK_POLLING=true next dev -H localhost --webpack",
     "dev:3001": "next dev -H localhost -p 3001",
-    "build": "next build",
+    "build": "node scripts/assert-supabase-env-on-vercel.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/membership-sync-architecture.test.mjs scripts/persistence-policy-regression.test.mjs scripts/budget-delete-flow.test.mjs scripts/group-member-delete-flow.test.mjs scripts/security/*.test.mjs scripts/reminders-pipeline.test.mjs scripts/nepse-hub-admin-overrides.test.mjs scripts/homepage-ssr-timeout.test.mjs && npx tsx --test scripts/notification-nav.test.mjs scripts/youtube-videos-flow.test.mjs scripts/blog-posts-flow.test.mjs scripts/ensure-admin-content-sync.test.mjs scripts/homepage-fire-ai.test.mjs scripts/return-checklist.test.mjs scripts/module-snapshots-cache.test.mjs scripts/module-snapshots-client-cache.test.mjs scripts/emergency-fund-plan.test.mjs scripts/historical-finance-analytics.test.mjs scripts/cashflow-income-total.test.mjs scripts/pension-official-policy.test.mjs",
+    "test": "node --test scripts/membership-sync-architecture.test.mjs scripts/persistence-policy-regression.test.mjs scripts/budget-delete-flow.test.mjs scripts/group-member-delete-flow.test.mjs scripts/security/*.test.mjs scripts/reminders-pipeline.test.mjs scripts/nepse-hub-admin-overrides.test.mjs scripts/homepage-ssr-timeout.test.mjs scripts/public-site-url-preview.test.mjs && npx tsx --test scripts/notification-nav.test.mjs scripts/youtube-videos-flow.test.mjs scripts/blog-posts-flow.test.mjs scripts/ensure-admin-content-sync.test.mjs scripts/homepage-fire-ai.test.mjs scripts/return-checklist.test.mjs scripts/module-snapshots-cache.test.mjs scripts/module-snapshots-client-cache.test.mjs scripts/emergency-fund-plan.test.mjs scripts/historical-finance-analytics.test.mjs scripts/cashflow-income-total.test.mjs scripts/pension-official-policy.test.mjs",
     "test:historical-finance": "npx tsx --test scripts/historical-finance-analytics.test.mjs",
     "test:cashflow-income": "npx tsx --test scripts/cashflow-income-total.test.mjs",
     "test:pension-policy": "npx tsx --test scripts/pension-official-policy.test.mjs",
