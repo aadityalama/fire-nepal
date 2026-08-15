@@ -1,11 +1,12 @@
 "use client";
 
-import { Banknote, PiggyBank, ReceiptText, Shield, ShieldCheck, Wallet } from "lucide-react";
+import { Banknote, BarChart3, PiggyBank, ReceiptText, Shield, ShieldCheck, Wallet } from "lucide-react";
 import { DashboardAccessGuard } from "@/components/auth/DashboardAccessGuard";
 import { EcosystemWorkspacePanel, type EcosystemWorkspaceItem } from "@/components/product/hub/EcosystemWorkspacePanel";
 
 const FINANCE_ITEMS: EcosystemWorkspaceItem[] = [
   { href: "/cashflow-dashboard", label: "Cashflow", description: "Income, burn, savings rate, and runway.", icon: Wallet },
+  { href: "/finance-analytics", label: "History", description: "Historical income, expenses, cashflow charts, and period breakdowns.", icon: BarChart3 },
   { href: "/emergency-fund", label: "Emergency Fund", description: "6‑month safety target, current reserve, and funding progress.", icon: Shield },
   { href: "/expense-dashboard?finance=personal", label: "Expense", description: "Personal expenses, categories, receipts, reports, and analytics.", icon: ReceiptText },
   { href: "/budget", label: "Budget", description: "Monthly budget workspace for FIRE planning.", icon: Banknote },
@@ -19,7 +20,7 @@ export default function FinanceWorkspacePage() {
       <EcosystemWorkspacePanel
         title="Finance"
         eyebrow="Finance workspace"
-        description="Cashflow, emergency fund, expenses, budget, saving goals, and insurance in one focused FIRE Nepal workspace."
+        description="Cashflow, history & analytics, emergency fund, expenses, budget, saving goals, and insurance in one focused FIRE Nepal workspace."
         items={FINANCE_ITEMS}
       />
     </DashboardAccessGuard>
