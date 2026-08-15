@@ -1,0 +1,108 @@
+import type { PensionPolicyRule } from "@/lib/pension-policy/types";
+
+/** EPF (Employees Provident Fund / Karmachari Sanchaya Kosh) — verified from epf.org.np where cited. */
+export const EPF_POLICY_RULES: PensionPolicyRule[] = [
+  {
+    id: "epf-mandate-v1",
+    institution: "epf",
+    policyServiceName: "Employees Provident Fund",
+    officialSourceUrl: "https://epf.org.np/about",
+    ruleCategory: "other",
+    effectiveDate: "1962-01-01",
+    version: "epf-mandate-v1",
+    lastVerifiedDate: "2026-08-15",
+    status: "active",
+    title: "Statutory provident fund mandate",
+    summary:
+      "EPF (Karmachari Sanchaya Kosh) is the statutory institution managing provident fund savings for government, public enterprise, and private-sector employees under the Employees Provident Fund Act.",
+  },
+  {
+    id: "epf-contributory-pension-overview-v1",
+    institution: "epf",
+    policyServiceName: "Contributory Pension Scheme (Pension Fund Act 2075)",
+    officialSourceUrl: "https://epf.org.np/service/contributory-pension/",
+    ruleCategory: "retirement_benefit",
+    effectiveDate: "2019-07-17",
+    version: "epf-cps-overview-v1",
+    lastVerifiedDate: "2026-08-15",
+    status: "active",
+    title: "EPF administers contributory pension for eligible government services",
+    summary:
+      "EPF implements the Contributory Pension Scheme under the Pension Fund Act 2075. Numeric contribution rates for that scheme are versioned under Government Pension; standard private-sector PF rates remain pending verification.",
+    notes: "See Government Pension desk for 6% + 6% contribution parameters.",
+  },
+  {
+    id: "epf-contributory-pension-eligibility-v1",
+    institution: "epf",
+    policyServiceName: "Contributory Pension Scheme (Pension Fund Act 2075)",
+    officialSourceUrl: "https://epf.org.np/service/contributory-pension/",
+    ruleCategory: "eligibility",
+    effectiveDate: "2019-07-17",
+    version: "epf-cps-eligibility-v1",
+    lastVerifiedDate: "2026-08-15",
+    status: "active",
+    title: "Contributory pension eligibility window",
+    summary:
+      "Contributory Retirement Scheme covers permanently appointed employees of listed government/security services from 2076 BS Shrawan 1 onward. Participants must complete KYC / UCIN steps prescribed by EPF.",
+  },
+  {
+    id: "epf-special-loan-online-v1",
+    institution: "epf",
+    policyServiceName: "Special loan (विशेष सापटी)",
+    officialSourceUrl: "https://epf.org.np/service/fdsf/",
+    ruleCategory: "loan",
+    effectiveDate: "2020-05-14",
+    version: "epf-loan-online-v1",
+    lastVerifiedDate: "2026-08-15",
+    status: "active",
+    title: "Online special loan facility",
+    summary:
+      "Members may apply online via https://login.epf.org.np/ or the EPF app for a special loan of up to 95% of the provident contribution balance, subject to updated individual and office KYC.",
+    parameters: {
+      maxLoanPctOfContributionBalance: 95,
+    },
+  },
+  {
+    id: "epf-pf-contribution-rates-pending",
+    institution: "epf",
+    policyServiceName: "Provident Fund contribution rates",
+    officialSourceUrl: "https://epf.org.np/",
+    ruleCategory: "contribution",
+    effectiveDate: "1962-01-01",
+    version: "epf-pf-rate-pending",
+    lastVerifiedDate: "2026-08-15",
+    status: "pending_verification",
+    title: "Standard PF employee/employer rates",
+    summary:
+      "Standard provident-fund salary contribution percentages for private/public members must be confirmed from the current official EPF rate notice before calculator use.",
+    notes: "Pending verification against a dated official EPF rate circular.",
+  },
+  {
+    id: "epf-interest-pending",
+    institution: "epf",
+    policyServiceName: "Declared interest / dividend rates",
+    officialSourceUrl: "https://epf.org.np/",
+    ruleCategory: "interest",
+    effectiveDate: "2024-07-16",
+    version: "epf-interest-pending",
+    lastVerifiedDate: "2026-08-15",
+    status: "pending_verification",
+    title: "Interest / profit distribution rate",
+    summary:
+      "EPF publishes interest or profit distribution rates periodically. FireNepal does not embed a rate until the current official circular is verified and versioned.",
+  },
+  {
+    id: "epf-withdrawal-pending",
+    institution: "epf",
+    policyServiceName: "Withdrawal and retirement settlement",
+    officialSourceUrl: "https://epf.org.np/",
+    ruleCategory: "withdrawal",
+    effectiveDate: "1962-01-01",
+    version: "epf-withdrawal-pending",
+    lastVerifiedDate: "2026-08-15",
+    status: "pending_verification",
+    title: "Withdrawal / settlement rules",
+    summary:
+      "Final settlement and interim withdrawal conditions are governed by EPF rules and must be confirmed on the official portal for the member’s scheme.",
+  },
+];

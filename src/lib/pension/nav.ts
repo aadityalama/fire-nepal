@@ -8,6 +8,7 @@ export const PENSION_TAB_LINKS: readonly { href: string; label: string }[] = [
   { href: `${PENSION_BASE}/ssf`, label: "SSF" },
   { href: `${PENSION_BASE}/epf`, label: "EPF" },
   { href: `${PENSION_BASE}/cit`, label: "CIT" },
+  { href: `${PENSION_BASE}/government`, label: "Government Pension" },
   { href: `${PENSION_BASE}/retirement-projection`, label: "Retirement Projection" },
   { href: `${PENSION_BASE}/contribution-history`, label: "Contribution History" },
   { href: `${PENSION_BASE}/benefits-center`, label: "Benefits Center" },

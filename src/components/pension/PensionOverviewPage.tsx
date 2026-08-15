@@ -2,13 +2,12 @@
 
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { Building2, Landmark, LineChart, Shield } from "lucide-react";
+import { Building2, Landmark, LineChart, Scale, Shield } from "lucide-react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { PENSION_BASE } from "@/lib/pension/nav";
 import { PensionChrome } from "@/components/pension/PensionChrome";
 import { formatMoney } from "@/lib/expense-utils";
-import { EPF_DEMO, CIT_DEMO } from "@/lib/pension/epf-cit-demo";
 
 function hubCard(
   light: boolean,
@@ -42,29 +41,36 @@ export function PensionOverviewPage() {
   return (
     <PensionChrome
       title="Pension Overview"
-      subtitle="Your master retirement desk — government social security, provident funds, tax-advantaged sleeves, and portfolio analytics in one glass workspace."
+      subtitle="Nepal Official Policy-Driven Pension & Retirement Planning Center — SSF, EPF, CIT, and Government Pension with verified portals only."
     >
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {hubCard(light, {
           title: "SSF Center",
-          body: "Social Security Fund continuity, contributions, and Nepal public-pension modeling.",
+          body: "Social Security Fund schemes, contributions, and official SOSYS login / pay links.",
           href: `${PENSION_BASE}/ssf`,
           cta: "Open SSF desk →",
           Icon: Shield,
         })}
         {hubCard(light, {
           title: "EPF Center",
-          body: "Employee provident fund balance, employer match, and voluntary top-up runway.",
+          body: "Provident fund, contributory pension rates, loans, and EPF iPortal.",
           href: `${PENSION_BASE}/epf`,
           cta: "Open EPF desk →",
           Icon: Building2,
         })}
         {hubCard(light, {
           title: "CIT Center",
-          body: "Citizen Investment Trust sleeves, lock-ins, and retirement tax-alpha tracking.",
+          body: "Citizen Investment Trust / NLK schemes via official e-Service.",
           href: `${PENSION_BASE}/cit`,
           cta: "Open CIT desk →",
           Icon: Landmark,
+        })}
+        {hubCard(light, {
+          title: "Government Pension",
+          body: "Contributory pension for eligible government services (Pension Fund Act 2075).",
+          href: `${PENSION_BASE}/government`,
+          cta: "Open government desk →",
+          Icon: Scale,
         })}
       </div>
 
@@ -75,7 +81,7 @@ export function PensionOverviewPage() {
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Retirement projection</h2>
           </div>
           <p className="text-sm font-semibold text-slate-600 dark:text-zinc-400">
-            Model salary curves, retirement age, and annuity-style outputs. Connect official statements for live balances.
+            Policy-driven contribution stacking using verified rates when available. Unverified formulas are never invented.
           </p>
           <Link
             href={`${PENSION_BASE}/retirement-projection`}
@@ -109,24 +115,12 @@ export function PensionOverviewPage() {
       </div>
 
       <section className={`wealth-glass p-4 sm:p-5 ${light ? "ring-1 ring-slate-900/[0.04]" : ""}`}>
-        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Quick snapshot</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className={`rounded-xl border px-3 py-3 ${light ? "border-slate-200/80 bg-white/80" : "border-white/10 bg-white/[0.03]"}`}>
-            <p className="text-[10px] font-black uppercase tracking-wide text-teal-700 dark:text-teal-300">EPF balance</p>
-            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(EPF_DEMO.memberBalanceNpr, "NPR")}</p>
-          </div>
-          <div className={`rounded-xl border px-3 py-3 ${light ? "border-slate-200/80 bg-white/80" : "border-white/10 bg-white/[0.03]"}`}>
-            <p className="text-[10px] font-black uppercase tracking-wide text-teal-700 dark:text-teal-300">CIT sleeves</p>
-            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(CIT_DEMO.totalUnitsNpr, "NPR")}</p>
-          </div>
-          <div className={`rounded-xl border px-3 py-3 ${light ? "border-slate-200/80 bg-white/80" : "border-white/10 bg-white/[0.03]"}`}>
-            <p className="text-[10px] font-black uppercase tracking-wide text-teal-700 dark:text-teal-300">Tax alpha (FY)</p>
-            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
-              {formatMoney(CIT_DEMO.schemes.reduce((s, x) => s + x.taxSavedNpr, 0), "NPR")}
-            </p>
-            <p className="mt-0.5 text-[10px] font-semibold text-slate-500">{CIT_DEMO.fyLabel}</p>
-          </div>
-        </div>
+        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Integrity rule</h2>
+        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">
+          FireNepal does not fabricate pension amounts, contribution rates, or withdrawal limits. When an official rule is
+          not verified, modules show: “Official policy information unavailable for verification.” Authentication and
+          payments always open the respective official portals.
+        </p>
       </section>
     </PensionChrome>
   );
