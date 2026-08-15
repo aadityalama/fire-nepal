@@ -1,7 +1,10 @@
 import type { CashflowDashboardState } from "@/components/cashflow/types";
-import { currentMonthKey, sumIncome } from "@/components/cashflow/cashflow-metrics";
+import {
+  currentMonthKey,
+  sumExpensesForMonth,
+  sumVisibleIncomeSourcesForMonth,
+} from "@/components/cashflow/cashflow-metrics";
 import { loadPersonalExpenseState } from "@/lib/personal-expense-storage";
-import { sumExpensesForMonth } from "@/components/cashflow/cashflow-metrics";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import { computeDashboardSummary } from "@/lib/savings/savings-utils";
 
@@ -42,7 +45,9 @@ export function readMonthlyExpenseFromModule(monthKey = currentMonthKey()): numb
 export function computeCashflowLiveMetrics(state: CashflowDashboardState, now = new Date()): CashflowLiveMetrics {
   const monthKey = currentMonthKey(now);
   const prevKey = previousMonthKey(now);
-  const monthlyIncome = sumIncome(state, monthKey);
+  // Total Income must equal the sum of Income Sources cards for this month
+  // (same filter + period amounts — do not amortize yearly as amount/12).
+  const monthlyIncome = sumVisibleIncomeSourcesForMonth(state, monthKey);
   const monthlyExpense = readMonthlyExpenseFromModule(monthKey);
   const totalSavings = readTotalSavingsFromModule();
   const remainingCash = monthlyIncome - monthlyExpense;
@@ -51,7 +56,7 @@ export function computeCashflowLiveMetrics(state: CashflowDashboardState, now = 
   const days = daysInCurrentMonth(now);
   const burnRateDaily = days > 0 ? monthlyExpense / days : 0;
 
-  const prevIncome = sumIncome(state, prevKey);
+  const prevIncome = sumVisibleIncomeSourcesForMonth(state, prevKey);
   const prevExpense = readMonthlyExpenseFromModule(prevKey);
   const previousMonthNetCashflow = prevIncome - prevExpense;
   const netCashflowChangePct =
@@ -79,7 +84,7 @@ export function buildIncomeHistoryChartData(state: CashflowDashboardState, month
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = currentMonthKey(date);
     const monthLabel = date.toLocaleDateString("en-GB", { month: "short" });
-    points.push({ month: monthLabel, income: sumIncome(state, monthKey) });
+    points.push({ month: monthLabel, income: sumVisibleIncomeSourcesForMonth(state, monthKey) });
   }
   return points;
 }
