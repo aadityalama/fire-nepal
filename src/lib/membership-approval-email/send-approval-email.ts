@@ -46,7 +46,6 @@ function isUniqueViolation(err: { code?: string; message?: string } | null | und
 async function resolveVerifiedRecipientEmail(
   admin: ServiceSb,
   userId: string,
-  _fallbackEmail: string,
 ): Promise<{ email: string | null; reason?: string }> {
   try {
     const { data, error } = await admin.auth.admin.getUserById(userId);
@@ -142,7 +141,7 @@ export async function sendMembershipApprovalEmail(
     return { ok: true, skipped: true, reason: "already_sent" };
   }
 
-  const recipient = await resolveVerifiedRecipientEmail(admin, userId, requestEmail);
+  const recipient = await resolveVerifiedRecipientEmail(admin, userId);
   if (!recipient.email) {
     console.info(
       LOG_PREFIX,
