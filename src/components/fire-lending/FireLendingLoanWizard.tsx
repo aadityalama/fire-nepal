@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, FileSignature, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
+import { Check, FileSignature, FileUp, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
 import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
@@ -15,8 +15,15 @@ import {
 } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { formatLendingMoney } from "@/lib/fire-lending/format";
+import { formatLendingMoney, uid } from "@/lib/fire-lending/format";
 import { findRequestForLoan, LOAN_REQUEST_UI } from "@/lib/fire-lending/loan-request-approval";
+import {
+  formatLoanDocSize,
+  loanDocTypeLabel,
+  pendingToFireLendingDocument,
+  type PendingLoanDocument,
+} from "@/lib/fire-lending/loan-documents";
+import { uploadFilesToPendingDocuments } from "@/lib/fire-lending/loan-document-client";
 import { partyToP2PSearchHit } from "@/lib/fire-lending/party-to-search-hit";
 import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
 import {
@@ -130,6 +137,11 @@ export function FireLendingLoanWizard() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pendingDocs, setPendingDocs] = useState<PendingLoanDocument[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [draftLoanKey] = useState(() => `draft_${uid("wiz")}`);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const initialMethod = (params.get("method") as ConnectionMethod | null) ?? "fire_id";
   const modeRequest = params.get("mode") === "request";
@@ -286,11 +298,56 @@ export function FireLendingLoanWizard() {
       setStep(0);
       return;
     }
-    const id = createLoanFromWizard(draft);
+    if (pendingDocs.some((d) => d.status === "uploading")) {
+      setStepError("Wait for document uploads to finish before continuing.");
+      return;
+    }
+    const readyDocs = pendingDocs
+      .filter((d) => d.status === "ready" && (d.url || d.storagePath))
+      .map((d) => pendingToFireLendingDocument(d, "pending"));
+    const id = createLoanFromWizard(draft, readyDocs);
     setCreatedLoanId(id);
     setSuccessMessage(null);
     setStepError(null);
     setStep(3);
+  };
+
+  const onPickDocuments = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const { docs, errors } = await uploadFilesToPendingDocuments({
+        files: fileList,
+        draftLoanId: draftLoanKey,
+        existing: pendingDocs.filter((d) => d.status !== "error"),
+        onProgress: setPendingDocs,
+      });
+      setPendingDocs(docs);
+      if (errors.length) {
+        setUploadError(errors.join(" "));
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const onRemovePendingDoc = (id: string) => {
+    setPendingDocs((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const onDownloadPendingDoc = async (doc: PendingLoanDocument) => {
+    if (!doc.url) {
+      setUploadError("This file is not ready to download yet.");
+      return;
+    }
+    try {
+      const { downloadFromUrlAsFile } = await import("@/lib/fire-lending/loan-documents");
+      await downloadFromUrlAsFile(doc.url, doc.fileName);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Could not download file.");
+    }
   };
 
   const onConfirmSendRequest = () => {
@@ -467,6 +524,90 @@ export function FireLendingLoanWizard() {
               <LendingInput label="Notes" value={draft.notes} onChange={(v) => patch("notes", v)} placeholder="Private notes" />
             </div>
           </div>
+
+          <div
+            className={`mt-5 rounded-xl border p-3 ${
+              light ? "border-emerald-200/80 bg-emerald-50/50" : "border-emerald-400/20 bg-emerald-500/5"
+            }`}
+            data-testid="loan-upload-documents-section"
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <FileUp size={16} className={light ? "text-emerald-700" : "text-lime-300"} />
+              <p className={`text-sm font-black ${light ? "text-slate-900" : "text-emerald-50"}`}>Upload Documents</p>
+            </div>
+            <p className={`mb-3 text-[11px] font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
+              Optional supporting files (PDF, JPG, PNG, DOC, DOCX). Multiple files allowed. Max 8 MB each.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="sr-only"
+              data-testid="loan-document-file-input"
+              onChange={(e) => void onPickDocuments(e.target.files)}
+            />
+            <LendingPrimaryButton
+              data-testid="loan-upload-documents-button"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? "Uploading…" : "+ Upload Documents"}
+            </LendingPrimaryButton>
+
+            {pendingDocs.length > 0 ? (
+              <div className="mt-3 space-y-2" data-testid="uploaded-documents-list">
+                <p className={`text-[11px] font-black uppercase tracking-wide ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+                  Uploaded Documents
+                </p>
+                <ul className="space-y-1.5">
+                  {pendingDocs.map((doc) => (
+                    <li
+                      key={doc.id}
+                      className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 ${
+                        light ? "border-emerald-200/70 bg-white" : "border-emerald-400/15 bg-black/25"
+                      }`}
+                      data-testid={`pending-doc-${doc.id}`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>
+                          📄 {doc.fileName}
+                        </p>
+                        <p className={`text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
+                          {loanDocTypeLabel(doc.mimeType, doc.fileName)} · {formatLoanDocSize(doc.sizeBytes)} ·{" "}
+                          {doc.status === "uploading"
+                            ? "Uploading…"
+                            : doc.status === "error"
+                              ? "Failed"
+                              : "Ready"}
+                        </p>
+                        {doc.error ? (
+                          <p role="alert" className="text-[11px] font-semibold text-rose-400">
+                            {doc.error}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <LendingSecondaryButton
+                          disabled={doc.status !== "ready" || !doc.url}
+                          onClick={() => void onDownloadPendingDoc(doc)}
+                        >
+                          Download
+                        </LendingSecondaryButton>
+                        <LendingSecondaryButton onClick={() => onRemovePendingDoc(doc.id)}>Remove</LendingSecondaryButton>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {uploadError ? (
+              <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400" data-testid="loan-upload-error">
+                {uploadError}
+              </p>
+            ) : null}
+          </div>
         </LendingGlassCard>
       ) : null}
 
@@ -587,7 +728,9 @@ export function FireLendingLoanWizard() {
               )}
             </div>
             {createdAgreement ? (
-              <LendingSecondaryButton onClick={() => void downloadAgreement(createdLoan.id)}>Download PDF</LendingSecondaryButton>
+              <LendingSecondaryButton onClick={() => void downloadAgreement(createdLoan.id)}>
+                Download Agreement Letter
+              </LendingSecondaryButton>
             ) : null}
             {createdLoan.lenderSigned && createdLoan.borrowerSigned ? (
               <p className={`text-sm font-black ${light ? "text-emerald-700" : "text-lime-300"}`}>

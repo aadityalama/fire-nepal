@@ -36,7 +36,14 @@ import {
   sendLoanRequest,
   type LoanRequestAction,
 } from "@/lib/fire-lending/loan-request-approval";
+import {
+  attachDocumentsToStore,
+  canAccessLoanDocument,
+  downloadFromUrlAsFile,
+  removeDocumentFromStore,
+} from "@/lib/fire-lending/loan-documents";
 import type {
+  FireLendingDocument,
   FireLendingLoan,
   FireLendingParty,
   FireLendingPayment,
@@ -62,7 +69,12 @@ type FireLendingContextValue = {
   partyById: (id: string) => FireLendingStore["parties"][number] | undefined;
   /** Upsert a counterparty from a safe P2P search hit (no private fields). Returns party id. */
   ensureCounterpartyFromSearchHit: (hit: P2PMemberSearchHit) => string;
-  createLoanFromWizard: (draft: LoanWizardDraft) => string;
+  createLoanFromWizard: (draft: LoanWizardDraft, documents?: FireLendingDocument[]) => string;
+  /** Attach supporting documents to an existing loan (preserves metadata). */
+  attachLoanDocuments: (loanId: string, documents: FireLendingDocument[], requestId?: string) => void;
+  removeLoanDocument: (documentId: string) => void;
+  /** Secure download of a supporting document for the given loan. */
+  downloadLoanDocument: (loanId: string, documentId: string) => Promise<void>;
   /** Requester sends approval request to the loan counterparty. Returns error message or null. */
   sendLoanRequestForLoan: (loanId: string, message?: string) => string | null;
   /** Counterparty Accept / Reject only — requester cannot act on their own request. */
@@ -169,7 +181,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     [setStore, store.currentUserId, store.parties],
   );
 
-  const createLoanFromWizard = useCallback((draft: LoanWizardDraft) => {
+  const createLoanFromWizard = useCallback((draft: LoanWizardDraft, documents?: FireLendingDocument[]) => {
     const loanId = uid("loan");
     const amount = Math.max(0, Number(draft.amount) || 0);
     const rate = Math.max(0, Number(draft.interestRate) || 0);
@@ -213,6 +225,19 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       months: installments,
     });
 
+    const attachedDocs = (documents ?? [])
+      .filter((d) => d.uploadStatus !== "error")
+      .map((d) => ({
+        ...d,
+        id: d.id || uid("doc"),
+        loanId,
+        title: d.title || d.fileName || "Document",
+        fileName: d.fileName || d.title,
+        kind: d.kind || ("other" as const),
+        createdAt: d.createdAt || todayIso(),
+        uploadStatus: "ready" as const,
+      }));
+
     setStore((prev) => ({
       ...prev,
       loans: [loan, ...prev.loans],
@@ -229,11 +254,74 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         },
         ...prev.agreements,
       ],
+      documents: [...attachedDocs, ...prev.documents],
       // Signature notification is created after the counterparty accepts the loan request.
     }));
 
     return loanId;
   }, [partyById, setStore, store.currentUserId, store.parties]);
+
+  const attachLoanDocuments = useCallback(
+    (loanId: string, documents: FireLendingDocument[], requestId?: string) => {
+      setStore((prev) => attachDocumentsToStore(prev, loanId, documents, requestId));
+    },
+    [setStore],
+  );
+
+  const removeLoanDocument = useCallback(
+    (documentId: string) => {
+      setStore((prev) => removeDocumentFromStore(prev, documentId));
+    },
+    [setStore],
+  );
+
+  const downloadLoanDocument = useCallback(
+    async (loanId: string, documentId: string) => {
+      const access = canAccessLoanDocument(store, {
+        documentId,
+        loanId,
+        actorPartyId: store.currentUserId,
+      });
+      if (!access.ok) {
+        appToast.error(access.error, { id: "fire-lending-doc-download" });
+        throw new Error(access.error);
+      }
+      const doc = access.document;
+      const fileName = doc.fileName || doc.title || "document";
+
+      try {
+        if (doc.storagePath) {
+          const res = await fetch("/api/fire-lending/documents/signed-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              storagePath: doc.storagePath,
+              loanId,
+              documentId,
+            }),
+          });
+          if (res.ok) {
+            const json = (await res.json()) as { url?: string; fileName?: string };
+            if (json.url) {
+              await downloadFromUrlAsFile(json.url, json.fileName || fileName);
+              return;
+            }
+          }
+        }
+        if (doc.url) {
+          await downloadFromUrlAsFile(doc.url, fileName);
+          return;
+        }
+        throw new Error("No downloadable file is available for this document.");
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Could not download document.";
+        appToast.error(message, { id: "fire-lending-doc-download" });
+        throw e;
+      }
+    },
+    [store],
+  );
 
   const sendLoanRequestForLoan = useCallback(
     (loanId: string, message?: string) => {
@@ -416,19 +504,33 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     async (loanId: string) => {
       const loan = store.loans.find((l) => l.id === loanId);
       const agreement = store.agreements.find((a) => a.loanId === loanId);
-      if (!loan || !agreement) return;
+      if (!loan || !agreement) {
+        appToast.error("Agreement not found for this loan.", { id: "fire-lending-agreement-pdf" });
+        throw new Error("Agreement not found for this loan.");
+      }
       const counterparty = partyById(loan.counterpartyId);
       const me = partyById(store.currentUserId);
-      if (!counterparty || !me) return;
+      if (!counterparty || !me) {
+        appToast.error("Could not resolve lender/borrower for the agreement PDF.", {
+          id: "fire-lending-agreement-pdf",
+        });
+        throw new Error("Could not resolve lender/borrower for the agreement PDF.");
+      }
       const lender = loan.role === "lender" ? me : counterparty;
       const borrower = loan.role === "borrower" ? me : counterparty;
-      await downloadAgreementPdf({
-        loan,
-        agreement,
-        lender,
-        borrower,
-        installments: store.installments.filter((i) => i.loanId === loanId).sort((a, b) => a.sequence - b.sequence),
-      });
+      try {
+        await downloadAgreementPdf({
+          loan,
+          agreement,
+          lender,
+          borrower,
+          installments: store.installments.filter((i) => i.loanId === loanId).sort((a, b) => a.sequence - b.sequence),
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Agreement PDF generation failed.";
+        appToast.error(message, { id: "fire-lending-agreement-pdf" });
+        throw e;
+      }
     },
     [partyById, store],
   );
@@ -460,6 +562,9 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     partyById,
     ensureCounterpartyFromSearchHit,
     createLoanFromWizard,
+    attachLoanDocuments,
+    removeLoanDocument,
+    downloadLoanDocument,
     sendLoanRequestForLoan,
     respondToRequest,
     recordPayment,

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { FileText, Landmark } from "lucide-react";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
@@ -15,18 +16,27 @@ import {
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
+import {
+  documentsForLoan,
+  formatLoanDocSize,
+  loanDocTypeLabel,
+} from "@/lib/fire-lending/loan-documents";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 
 export function FireLendingLoanDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
-  const { store, partyById, downloadAgreement, signAgreement } = useFireLending();
+  const { store, partyById, downloadAgreement, downloadLoanDocument, signAgreement } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const loan = store.loans.find((l) => l.id === id);
   const party = loan ? partyById(loan.counterpartyId) : undefined;
   const installments = store.installments.filter((i) => i.loanId === id).sort((a, b) => a.sequence - b.sequence);
   const payments = store.payments.filter((p) => p.loanId === id);
+  const documents = id ? documentsForLoan(store, id) : [];
+  const [docError, setDocError] = useState<string | null>(null);
+  const [agreementBusy, setAgreementBusy] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   if (!loan) {
     return (
@@ -36,6 +46,30 @@ export function FireLendingLoanDetailPage() {
       </LendingMobileScreen>
     );
   }
+
+  const onDownloadAgreement = async () => {
+    setDocError(null);
+    setAgreementBusy(true);
+    try {
+      await downloadAgreement(loan.id);
+    } catch (e) {
+      setDocError(e instanceof Error ? e.message : "Could not download agreement letter.");
+    } finally {
+      setAgreementBusy(false);
+    }
+  };
+
+  const onDownloadDoc = async (documentId: string) => {
+    setDocError(null);
+    setDownloadingId(documentId);
+    try {
+      await downloadLoanDocument(loan.id, documentId);
+    } catch (e) {
+      setDocError(e instanceof Error ? e.message : "Could not download document.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <LendingMobileScreen>
@@ -63,10 +97,56 @@ export function FireLendingLoanDetailPage() {
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <LendingPrimaryLink href="/fire-lending/payments/new">Record payment</LendingPrimaryLink>
-          <LendingSecondaryButton onClick={() => void downloadAgreement(loan.id)}>Download agreement</LendingSecondaryButton>
+          <LendingPrimaryButton
+            data-testid="download-agreement-letter"
+            disabled={agreementBusy}
+            onClick={() => void onDownloadAgreement()}
+          >
+            {agreementBusy ? "Generating…" : "Download Agreement Letter"}
+          </LendingPrimaryButton>
           {!loan.lenderSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "lender")}>Sign lender</LendingPrimaryButton> : null}
           {!loan.borrowerSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "borrower")}>Sign borrower</LendingPrimaryButton> : null}
         </div>
+      </LendingGlassCard>
+
+      <LendingGlassCard title="Documents" subtitle="Supporting files attached to this loan" icon={FileText}>
+        {documents.length === 0 ? (
+          <LendingEmptyState message="No supporting documents uploaded for this loan." />
+        ) : (
+          <ul className="space-y-1.5" data-testid="loan-detail-documents">
+            {documents.map((doc) => (
+              <li
+                key={doc.id}
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 ${
+                  light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>
+                    {doc.fileName || doc.title}
+                  </p>
+                  <p className={`text-[11px] ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
+                    {loanDocTypeLabel(doc.mimeType || "", doc.fileName || doc.title)}
+                    {doc.sizeBytes != null ? ` · ${formatLoanDocSize(doc.sizeBytes)}` : ""}
+                    {" · "}
+                    {formatCompactDate(doc.createdAt)}
+                  </p>
+                </div>
+                <LendingSecondaryButton
+                  disabled={downloadingId === doc.id || !(doc.url || doc.storagePath)}
+                  onClick={() => void onDownloadDoc(doc.id)}
+                >
+                  {downloadingId === doc.id ? "Downloading…" : "Download"}
+                </LendingSecondaryButton>
+              </li>
+            ))}
+          </ul>
+        )}
+        {docError ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+            {docError}
+          </p>
+        ) : null}
       </LendingGlassCard>
 
       {party ? (
