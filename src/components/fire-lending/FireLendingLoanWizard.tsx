@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, FileSignature, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
 import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
@@ -16,6 +16,7 @@ import {
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
+import { findRequestForLoan, LOAN_REQUEST_UI } from "@/lib/fire-lending/loan-request-approval";
 import { partyToP2PSearchHit } from "@/lib/fire-lending/party-to-search-hit";
 import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
 import {
@@ -24,20 +25,111 @@ import {
   shouldKeepBorrowerSelection,
 } from "@/lib/fire-lending/wizard-borrower-selection";
 import type { ConnectionMethod, CurrencyCode, LoanRole, LoanType, LoanWizardDraft } from "@/lib/fire-lending/types";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const STEPS = ["Borrower", "Details", "Agreement", "Approval", "Signatures"] as const;
+
+function SendLoanRequestConfirmDialog({
+  open,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const titleId = useId();
+  const bodyId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, panelRef);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onCancel, busy]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-end justify-center bg-emerald-950/70 p-3 backdrop-blur-md sm:items-center sm:p-6"
+      role="presentation"
+      data-testid="send-loan-request-dialog"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !busy) onCancel();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#04140f]/95 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-6"
+      >
+        <h2 id={titleId} className="text-lg font-black text-white sm:text-xl">
+          {LOAN_REQUEST_UI.title}
+        </h2>
+        <p id={bodyId} className="mt-3 text-sm font-semibold leading-relaxed text-emerald-100/80">
+          {LOAN_REQUEST_UI.prompt}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-black text-emerald-100/90 transition hover:bg-white/10 disabled:opacity-50"
+          >
+            {LOAN_REQUEST_UI.confirmCancel}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            aria-busy={busy}
+            data-autofocus
+            data-testid="confirm-send-loan-request"
+            onClick={onConfirm}
+            className="rounded-full bg-gradient-to-r from-emerald-600 to-lime-500 px-4 py-2 text-xs font-black text-emerald-950 shadow-lg shadow-emerald-900/30 transition hover:brightness-110 disabled:opacity-60"
+          >
+            {busy ? "Sending…" : LOAN_REQUEST_UI.confirmSend}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function FireLendingLoanWizard() {
   const router = useRouter();
   const params = useSearchParams();
-  const { store, createLoanFromWizard, signAgreement, downloadAgreement, partyById, ensureCounterpartyFromSearchHit } =
-    useFireLending();
+  const {
+    store,
+    createLoanFromWizard,
+    sendLoanRequestForLoan,
+    signAgreement,
+    downloadAgreement,
+    partyById,
+    ensureCounterpartyFromSearchHit,
+  } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const [step, setStep] = useState(0);
   const [createdLoanId, setCreatedLoanId] = useState<string | null>(null);
-  const [approval, setApproval] = useState<"pending" | "accepted" | "rejected" | "changes">("pending");
   const [stepError, setStepError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const initialMethod = (params.get("method") as ConnectionMethod | null) ?? "fire_id";
   const modeRequest = params.get("mode") === "request";
@@ -73,6 +165,12 @@ export function FireLendingLoanWizard() {
   const selected = partyById(draft.counterpartyId);
   const createdLoan = store.loans.find((l) => l.id === createdLoanId);
   const createdAgreement = store.agreements.find((a) => a.loanId === createdLoanId);
+  const linkedRequest = createdLoanId ? findRequestForLoan(store, createdLoanId) : undefined;
+  const requestStatus = linkedRequest?.status;
+  const borrowerAccepted = requestStatus === "accepted";
+  const borrowerRejected = requestStatus === "rejected";
+  const requestPending = requestStatus === "pending";
+  const requestSent = Boolean(linkedRequest);
   const borrowerStepReady = canContinueBorrowerStep(draft.counterpartyId);
 
   useEffect(() => {
@@ -152,7 +250,7 @@ export function FireLendingLoanWizard() {
   const canNext = () => {
     if (step === 0) return borrowerStepReady;
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
-    if (step === 3) return approval === "accepted";
+    if (step === 3) return borrowerAccepted;
     return true;
   };
 
@@ -190,7 +288,23 @@ export function FireLendingLoanWizard() {
     }
     const id = createLoanFromWizard(draft);
     setCreatedLoanId(id);
+    setSuccessMessage(null);
+    setStepError(null);
     setStep(3);
+  };
+
+  const onConfirmSendRequest = () => {
+    if (!createdLoanId || sending) return;
+    setSending(true);
+    setStepError(null);
+    const error = sendLoanRequestForLoan(createdLoanId);
+    setSending(false);
+    if (error) {
+      setStepError(error);
+      return;
+    }
+    setConfirmOpen(false);
+    setSuccessMessage(LOAN_REQUEST_UI.successMessage);
   };
 
   const connectionOptions: { method: ConnectionMethod; label: string; icon: typeof UserSearch }[] = [
@@ -380,18 +494,76 @@ export function FireLendingLoanWizard() {
       ) : null}
 
       {step === 3 && createdLoan ? (
-        <LendingGlassCard title="Borrower Approval" subtitle="Accept, reject or request changes" icon={FileSignature}>
+        <LendingGlassCard
+          title={requestSent ? LOAN_REQUEST_UI.waitingTitle : LOAN_REQUEST_UI.title}
+          subtitle={
+            borrowerAccepted
+              ? "Borrower accepted — continue to signatures"
+              : borrowerRejected
+                ? "Borrower rejected this loan request"
+                : requestPending
+                  ? "Waiting for the borrower’s response"
+                  : LOAN_REQUEST_UI.prompt
+          }
+          icon={FileSignature}
+        >
           <p className={`mb-3 text-sm font-semibold ${light ? "text-slate-700" : "text-emerald-100"}`}>
-            Counterparty notification sent for {createdLoan.agreementNumber}. Simulate their response:
+            {requestSent
+              ? `${createdLoan.agreementNumber} · Counterparty: ${selected?.name ?? "Borrower"}`
+              : LOAN_REQUEST_UI.prompt}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <LendingPrimaryButton onClick={() => setApproval("accepted")}>Accept</LendingPrimaryButton>
-            <LendingSecondaryButton onClick={() => setApproval("rejected")}>Reject</LendingSecondaryButton>
-            <LendingSecondaryButton onClick={() => setApproval("changes")}>Request Changes</LendingSecondaryButton>
-          </div>
-          <p className="mt-3">
-            <LendingStatusPill status={approval === "changes" ? "changes_requested" : approval} />
-          </p>
+
+          {!requestSent ? (
+            <div className="flex flex-wrap gap-2">
+              <LendingPrimaryButton
+                data-testid="loan-request-send-button"
+                onClick={() => {
+                  setStepError(null);
+                  setConfirmOpen(true);
+                }}
+              >
+                {LOAN_REQUEST_UI.requestButton}
+              </LendingPrimaryButton>
+            </div>
+          ) : null}
+
+          {successMessage ? (
+            <p
+              role="status"
+              data-testid="loan-request-success"
+              className={`mt-3 text-sm font-bold ${light ? "text-emerald-700" : "text-lime-300"}`}
+            >
+              {successMessage}
+            </p>
+          ) : null}
+
+          {requestSent ? (
+            <p className="mt-3" data-testid="loan-request-status">
+              <LendingStatusPill
+                status={
+                  requestStatus === "changes_requested"
+                    ? "changes_requested"
+                    : requestStatus === "accepted"
+                      ? "accepted"
+                      : requestStatus === "rejected"
+                        ? "rejected"
+                        : "pending"
+                }
+              />
+            </p>
+          ) : null}
+
+          {borrowerRejected ? (
+            <p role="alert" className="mt-3 text-sm font-bold text-rose-400">
+              The borrower rejected this loan request. The workflow cannot continue.
+            </p>
+          ) : null}
+
+          {stepError && step === 3 ? (
+            <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+              {stepError}
+            </p>
+          ) : null}
         </LendingGlassCard>
       ) : null}
 
@@ -452,6 +624,15 @@ export function FireLendingLoanWizard() {
           <LendingPrimaryButton onClick={() => router.push(`/fire-lending/loans/${createdLoan.id}`)}>Open loan</LendingPrimaryButton>
         ) : null}
       </div>
+
+      <SendLoanRequestConfirmDialog
+        open={confirmOpen}
+        busy={sending}
+        onCancel={() => {
+          if (!sending) setConfirmOpen(false);
+        }}
+        onConfirm={onConfirmSendRequest}
+      />
     </LendingMobileScreen>
   );
 }

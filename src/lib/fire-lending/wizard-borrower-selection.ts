@@ -51,12 +51,17 @@ export function resolveBorrowerContinue(opts: {
 /**
  * Minimal wizard step machine for regression tests (Borrower→…→Signatures).
  * Steps: 0 Borrower, 1 Details, 2 Agreement, 3 Approval, 4 Signatures
+ *
+ * Approval is counterparty-driven: requester must send the request, then wait
+ * until the borrower accepts before signatures.
  */
 export function advanceWizardStep(opts: {
   step: number;
   counterpartyId?: string;
   amount?: string;
   purpose?: string;
+  /** Whether the requester has sent the loan request. */
+  requestSent?: boolean;
   approval?: "pending" | "accepted" | "rejected" | "changes";
   partyExists?: boolean;
 }): { step: number; error: string | null } {
@@ -78,8 +83,14 @@ export function advanceWizardStep(opts: {
     return { step: 3, error: null };
   }
   if (step === 3) {
+    if (!opts.requestSent) {
+      return { step: 3, error: "Send the loan request to the borrower first." };
+    }
+    if (opts.approval === "rejected") {
+      return { step: 3, error: "Borrower rejected the loan request." };
+    }
     if (opts.approval !== "accepted") {
-      return { step: 3, error: "Borrower must accept before signatures." };
+      return { step: 3, error: "Waiting for the borrower to accept the loan request." };
     }
     return { step: 4, error: null };
   }

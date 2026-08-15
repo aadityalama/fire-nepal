@@ -139,10 +139,24 @@ export function FireLendingRequestsPage() {
   const { store, respondToRequest, partyById } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const onRespond = (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => {
+    setBusyId(id);
+    setActionError(null);
+    const error = respondToRequest(id, action, note);
+    setBusyId(null);
+    if (error) setActionError(error);
+  };
 
   return (
     <LendingMobileScreen>
-      <LendingCompactHeader eyebrow="Loan Requests" title="Incoming & outgoing" subtitle="Accept, reject or request changes." />
+      <LendingCompactHeader
+        eyebrow="Loan Requests"
+        title="Incoming & outgoing"
+        subtitle="Only the borrower/counterparty can Accept or Reject a pending request."
+      />
       <LendingGlassCard title="Requests" icon={Inbox}>
         {store.requests.length === 0 ? (
           <LendingEmptyState
@@ -154,9 +168,15 @@ export function FireLendingRequestsPage() {
             {store.requests.map((req) => {
               const from = partyById(req.fromPartyId);
               const to = partyById(req.toPartyId);
+              const linkedLoan = req.loanId ? store.loans.find((l) => l.id === req.loanId) : undefined;
+              const isRecipient = req.toPartyId === store.currentUserId;
+              const isRequester = req.fromPartyId === store.currentUserId;
+              const canAct = isRecipient && req.status === "pending";
               return (
                 <li
                   key={req.id}
+                  data-testid={`loan-request-${req.id}`}
+                  data-request-role={isRequester ? "requester" : isRecipient ? "recipient" : "other"}
                   className={`rounded-xl border px-3 py-3 ${light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"}`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -164,21 +184,64 @@ export function FireLendingRequestsPage() {
                       <p className={`text-sm font-black ${light ? "text-slate-900" : "text-emerald-50"}`}>
                         {from?.name} → {to?.name}
                       </p>
+                      {isRecipient && req.status === "pending" ? (
+                        <p className={`mt-1 text-xs font-bold ${light ? "text-emerald-800" : "text-lime-200"}`}>
+                          You have received a new loan request from {from?.name ?? "a member"}.
+                        </p>
+                      ) : null}
                       <p className={`text-[11px] font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
-                        {formatLendingMoney(req.amount, req.currency)} · {req.interestRate}% · {req.durationMonths} mo · {req.purpose}
+                        {formatLendingMoney(req.amount, req.currency)} · {req.interestRate}% · {req.durationMonths} mo ·{" "}
+                        {req.purpose}
                       </p>
-                      {req.message ? <p className={`mt-1 text-xs ${light ? "text-slate-500" : "text-emerald-200/55"}`}>{req.message}</p> : null}
-                      {req.changeRequest ? <p className={`mt-1 text-xs font-bold text-amber-500`}>{req.changeRequest}</p> : null}
+                      {linkedLoan ? (
+                        <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+                          Agreement {linkedLoan.agreementNumber}
+                          {linkedLoan.guarantor ? ` · Guarantor: ${linkedLoan.guarantor}` : ""}
+                          {linkedLoan.collateral ? ` · Collateral: ${linkedLoan.collateral}` : ""}
+                          {linkedLoan.notes ? ` · Notes: ${linkedLoan.notes}` : ""}
+                        </p>
+                      ) : null}
+                      {req.message ? (
+                        <p className={`mt-1 text-xs ${light ? "text-slate-500" : "text-emerald-200/55"}`}>{req.message}</p>
+                      ) : null}
+                      {req.changeRequest ? (
+                        <p className={`mt-1 text-xs font-bold text-amber-500`}>{req.changeRequest}</p>
+                      ) : null}
+                      {isRequester && req.status === "pending" ? (
+                        <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+                          Waiting for the borrower to respond. You cannot Accept or Reject your own request.
+                        </p>
+                      ) : null}
                     </div>
                     <LendingStatusPill status={req.status} />
                   </div>
-                  {req.status === "pending" ? (
+                  {canAct ? (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <LendingPrimaryButton onClick={() => respondToRequest(req.id, "accepted")}>Accept</LendingPrimaryButton>
-                      <LendingSecondaryButton onClick={() => respondToRequest(req.id, "rejected")}>Reject</LendingSecondaryButton>
-                      <LendingSecondaryButton onClick={() => respondToRequest(req.id, "changes_requested", "Please adjust rate/tenure.")}>
+                      <LendingPrimaryButton
+                        disabled={busyId === req.id}
+                        onClick={() => onRespond(req.id, "accepted")}
+                      >
+                        Accept
+                      </LendingPrimaryButton>
+                      <LendingSecondaryButton
+                        disabled={busyId === req.id}
+                        onClick={() => onRespond(req.id, "rejected")}
+                      >
+                        Reject
+                      </LendingSecondaryButton>
+                      <LendingSecondaryButton
+                        disabled={busyId === req.id}
+                        onClick={() => onRespond(req.id, "changes_requested", "Please adjust rate/tenure.")}
+                      >
                         Request changes
                       </LendingSecondaryButton>
+                    </div>
+                  ) : null}
+                  {linkedLoan && req.status === "accepted" ? (
+                    <div className="mt-2">
+                      <LendingPrimaryLink href={`/fire-lending/loans/${linkedLoan.id}`}>
+                        Review loan details
+                      </LendingPrimaryLink>
                     </div>
                   ) : null}
                 </li>
@@ -186,6 +249,11 @@ export function FireLendingRequestsPage() {
             })}
           </ul>
         )}
+        {actionError ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+            {actionError}
+          </p>
+        ) : null}
       </LendingGlassCard>
     </LendingMobileScreen>
   );

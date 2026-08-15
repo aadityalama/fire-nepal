@@ -31,11 +31,15 @@ import {
 } from "@/lib/fire-lending/storage";
 import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score";
 import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
+import {
+  respondToLoanRequest,
+  sendLoanRequest,
+  type LoanRequestAction,
+} from "@/lib/fire-lending/loan-request-approval";
 import type {
   FireLendingLoan,
   FireLendingParty,
   FireLendingPayment,
-  FireLendingRequest,
   FireLendingStore,
   LoanWizardDraft,
   PaymentMethod,
@@ -59,7 +63,10 @@ type FireLendingContextValue = {
   /** Upsert a counterparty from a safe P2P search hit (no private fields). Returns party id. */
   ensureCounterpartyFromSearchHit: (hit: P2PMemberSearchHit) => string;
   createLoanFromWizard: (draft: LoanWizardDraft) => string;
-  respondToRequest: (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => void;
+  /** Requester sends approval request to the loan counterparty. Returns error message or null. */
+  sendLoanRequestForLoan: (loanId: string, message?: string) => string | null;
+  /** Counterparty Accept / Reject only — requester cannot act on their own request. */
+  respondToRequest: (id: string, action: LoanRequestAction, note?: string) => string | null;
   recordPayment: (input: {
     loanId: string;
     amount: number;
@@ -188,7 +195,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       notes: draft.notes || undefined,
       guarantor: draft.guarantor || undefined,
       collateral: draft.collateral || undefined,
-      status: "pending_signature",
+      status: "pending_approval",
       createdAt: todayIso(),
       outstanding: amount,
       totalPaid: 0,
@@ -222,49 +229,68 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         },
         ...prev.agreements,
       ],
-      notifications: [
-        {
-          id: uid("ntf"),
-          kind: "signature",
-          title: "Signature required",
-          body: `Agreement ${agrNo} is ready for digital signatures.`,
-          createdAt: todayIso(),
-          read: false,
-          href: `/fire-lending/agreements`,
-        },
-        ...prev.notifications,
-      ],
+      // Signature notification is created after the counterparty accepts the loan request.
     }));
 
     return loanId;
   }, [partyById, setStore, store.currentUserId, store.parties]);
 
-  const respondToRequest = useCallback((id: string, action: FireLendingRequest["status"], note?: string) => {
-    setStore((prev) => ({
-      ...prev,
-      requests: prev.requests.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: action,
-              changeRequest: action === "changes_requested" ? note || r.changeRequest : r.changeRequest,
-            }
-          : r,
-      ),
-      notifications: [
-        {
-          id: uid("ntf"),
-          kind: "loan_request",
-          title: `Request ${action.replace("_", " ")}`,
-          body: note || `Loan request marked as ${action}.`,
-          createdAt: todayIso(),
-          read: false,
-          href: "/fire-lending/requests",
-        },
-        ...prev.notifications,
-      ],
-    }));
-  }, [setStore]);
+  const sendLoanRequestForLoan = useCallback(
+    (loanId: string, message?: string) => {
+      let error: string | null = null;
+      setStore((prev) => {
+        const result = sendLoanRequest(prev, {
+          loanId,
+          actorPartyId: prev.currentUserId,
+          message,
+        });
+        if (!result.ok) {
+          error = result.error;
+          return prev;
+        }
+        return result.store;
+      });
+      if (error) {
+        appToast.error(error, { id: "fire-lending-send-request" });
+        return error;
+      }
+      appToast.success("Loan request sent successfully. Waiting for the borrower’s response.", {
+        id: "fire-lending-send-request",
+      });
+      return null;
+    },
+    [setStore],
+  );
+
+  const respondToRequest = useCallback(
+    (id: string, action: LoanRequestAction, note?: string) => {
+      let error: string | null = null;
+      setStore((prev) => {
+        const result = respondToLoanRequest(prev, {
+          requestId: id,
+          actorPartyId: prev.currentUserId,
+          action,
+          note,
+        });
+        if (!result.ok) {
+          error = result.error;
+          return prev;
+        }
+        return result.store;
+      });
+      if (error) {
+        appToast.error(error, { id: "fire-lending-respond-request" });
+        return error;
+      }
+      if (action === "accepted") {
+        appToast.success("Loan request accepted.", { id: "fire-lending-respond-request" });
+      } else if (action === "rejected") {
+        appToast.success("Loan request rejected.", { id: "fire-lending-respond-request" });
+      }
+      return null;
+    },
+    [setStore],
+  );
 
   const recordPayment = useCallback(
     (input: {
@@ -434,6 +460,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     partyById,
     ensureCounterpartyFromSearchHit,
     createLoanFromWizard,
+    sendLoanRequestForLoan,
     respondToRequest,
     recordPayment,
     signAgreement,
