@@ -156,7 +156,7 @@ export function FireLendingMemberSearch({
         </div>
       </label>
 
-      {error ? (
+          {error && hits.length === 0 ? (
         <p role="alert" className="text-[11px] font-semibold text-rose-400">
           {error}
         </p>
@@ -180,7 +180,9 @@ export function FireLendingMemberSearch({
 
           {!loading && effectiveState === "no_results" ? (
             <div className={`px-3 py-4 text-sm font-semibold ${light ? "text-slate-600" : "text-emerald-200/70"}`}>
-              No verified members match “{normalizeP2PSearchQuery(value)}”.
+              {error
+                ? error
+                : `No verified members match “${normalizeP2PSearchQuery(value)}”.`}
             </div>
           ) : null}
 
