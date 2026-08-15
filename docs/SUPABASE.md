@@ -2,12 +2,13 @@
 
 ## Environment variables
 
-Copy to `.env.local` (local) and set the same keys in **Vercel → Project → Settings → Environment Variables** for **Production** (and Preview if you test PRs against a real project):
+Copy to `.env.local` (local) and set the same keys in **Vercel → Project → Settings → Environment Variables** for **Production and Preview** (PR review deployments need Preview; Production-only leaves review login broken):
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_public_key
-# Production: forces password-reset and sign-up email links to the live site.
+# Production only: forces password-reset and sign-up email links to the live site.
+# Do not rely on this on Preview — the app uses the preview host origin instead.
 NEXT_PUBLIC_SITE_URL=https://firenepal.com
 ```
 
