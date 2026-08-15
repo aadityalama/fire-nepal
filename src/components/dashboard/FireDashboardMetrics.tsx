@@ -70,7 +70,7 @@ export function FireDashboardMetrics({
     let cancelled = false;
     const run = async () => {
       try {
-        const res = await fetch(`/api/market/gold-price?_t=${Date.now()}`, { cache: "no-store" });
+        const res = await fetch("/api/market/gold-price", { headers: { Accept: "application/json" } });
         if (!res.ok || cancelled) return;
         const raw: unknown = await res.json();
         const j = normalizeGoldSilverPriceResponse(raw);

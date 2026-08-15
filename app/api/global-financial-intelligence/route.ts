@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/api/rate-limit";
+import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { buildMarketSnapshot } from "@/services/market/build-snapshot";
 import type {
@@ -13,10 +14,12 @@ import type {
 export const runtime = "nodejs";
 
 const LIVE_HEADERS = {
-  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
+  "Cache-Control": "public, max-age=30, s-maxage=120, stale-while-revalidate=300",
 } as const;
+
+const intelCache = createMemoryTtlCache();
+const INTEL_CACHE_KEY = "global-financial-intelligence-v1";
+const INTEL_TTL_MS = 120_000;
 
 const FOREX_CODES: GlobalForexCode[] = ["KRW", "USD", "EUR", "GBP", "JPY", "AED", "QAR", "SAR"];
 const FOREX_NAMES: Record<GlobalForexCode, string> = {
@@ -140,6 +143,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests", retryAfterSec: rl.retryAfterSec }, { status: 429 });
   }
 
+  const cached = intelCache.get<GlobalFinancialIntelligenceSnapshot>(INTEL_CACHE_KEY);
+  if (cached) {
+    return NextResponse.json(cached, { headers: LIVE_HEADERS });
+  }
+
   const [market, forex] = await Promise.all([
     buildMarketSnapshot({ extraSymbols: GLOBAL_SYMBOLS, cryptoIds: CRYPTO_IDS }),
     fetchForexQuotes(),
@@ -154,6 +162,8 @@ export async function GET(req: NextRequest) {
     macro: MACRO,
     fearGreed: buildFearGreed(market),
   };
+
+  intelCache.set(INTEL_CACHE_KEY, snapshot, INTEL_TTL_MS);
 
   return NextResponse.json(snapshot, { headers: LIVE_HEADERS });
 }

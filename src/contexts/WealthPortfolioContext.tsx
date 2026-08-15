@@ -262,9 +262,8 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     setBullionFetchInFlight(true);
     try {
-      const res = await fetch(`/api/market/gold-price?_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      const res = await fetch("/api/market/gold-price", {
+        headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw: unknown = await res.json();

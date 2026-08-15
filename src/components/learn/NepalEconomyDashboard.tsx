@@ -43,7 +43,7 @@ import type {
   NepalEconomyNewsItem,
 } from "@/types/nepal-economy";
 
-const AUTO_REFRESH_MS = 15 * 60 * 1000;
+const AUTO_REFRESH_MS = 30 * 60 * 1000;
 const LOCAL_STORAGE_KEY = "fire-nepal:nepal-economy-dashboard";
 
 const cardIcons: Record<NepalEconomyCardId, LucideIcon> = {
@@ -283,7 +283,7 @@ export function NepalEconomyDashboard() {
 
   const refreshData = useCallback(async () => {
     try {
-      const response = await fetch("/api/learn/nepal-economy", { cache: "no-store" });
+      const response = await fetch("/api/learn/nepal-economy");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = (await response.json()) as NepalEconomyDashboardData;
       setData(payload);

@@ -14,9 +14,7 @@ import type { NepalEconomyCard, NepalEconomyDashboardData } from "@/types/nepal-
 export const runtime = "nodejs";
 
 const HEADERS = {
-  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
+  "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=900",
 } as const;
 
 function officialFallbackCards(): NepalEconomyCard[] {

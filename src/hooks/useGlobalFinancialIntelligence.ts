@@ -3,12 +3,12 @@
 import useSWR from "swr";
 import type { GlobalFinancialIntelligenceSnapshot } from "@/types/global-financial-intelligence";
 
-const REFRESH_MS = 45_000;
+/** Was 45s — too aggressive for a multi-upstream aggregation route. */
+const REFRESH_MS = 5 * 60_000;
 
 async function fetcher(url: string): Promise<GlobalFinancialIntelligenceSnapshot> {
   const res = await fetch(url, {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    headers: { Accept: "application/json" },
   });
   if (res.status === 429) {
     const body = (await res.json().catch(() => null)) as { retryAfterSec?: number } | null;
@@ -24,9 +24,10 @@ export function useGlobalFinancialIntelligence() {
     fetcher,
     {
       refreshInterval: REFRESH_MS,
-      dedupingInterval: 15_000,
-      errorRetryInterval: 30_000,
-      revalidateOnFocus: true,
+      dedupingInterval: 60_000,
+      errorRetryInterval: 60_000,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
       keepPreviousData: true,
       shouldRetryOnError: true,
     },

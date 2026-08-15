@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const payload = await loadTerminalBoard();
     return NextResponse.json(payload, {
-      headers: { "cache-control": "public, max-age=15, s-maxage=20, stale-while-revalidate=60" },
+      headers: { "cache-control": "public, max-age=20, s-maxage=30, stale-while-revalidate=90" },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load terminal board";

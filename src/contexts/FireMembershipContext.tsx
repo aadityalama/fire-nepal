@@ -134,10 +134,22 @@ export function FireMembershipProvider({ children }: { children: ReactNode }) {
       void syncServerEntitlement();
     };
     window.addEventListener(MEMBERSHIP_UPDATED_EVENT, onUpdated);
-    window.addEventListener("focus", onUpdated);
+    // Avoid refetch storms: only sync entitlement when the tab returns after being hidden,
+    // not on every window focus (devtools, alt-tab flickers, etc.).
+    let lastHiddenAt = 0;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        lastHiddenAt = Date.now();
+        return;
+      }
+      if (lastHiddenAt > 0 && Date.now() - lastHiddenAt >= 60_000) {
+        void syncServerEntitlement();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       window.removeEventListener(MEMBERSHIP_UPDATED_EVENT, onUpdated);
-      window.removeEventListener("focus", onUpdated);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [syncServerEntitlement]);
 
