@@ -125,16 +125,18 @@ test("plan selection email includes CTA, branding footer, and plan choices", () 
   });
   assert.equal(built.subject, PLAN_SELECTION_EMAIL_SUBJECT);
   assert.match(built.html, /Sita Sharma/);
-  assert.match(built.html, /Premium/);
-  assert.match(built.html, /Elite/);
-  assert.match(built.html, /Choose Premium or Elite/);
+  assert.match(built.html, /Thank you for being a part of FIRE Nepal/);
+  assert.match(built.html, /Your current membership is/);
+  assert.match(built.html, /Free/);
+  assert.match(built.html, /Upgrade your FIRE Nepal membership/);
+  assert.match(built.html, />Choose Your Plan</);
   assert.match(built.html, /dashboard\/membership\?invite=abc/);
   assert.match(built.html, /email-logo\.png/);
   assert.match(built.html, /www\.firenepal\.com/);
   assert.match(built.html, /support@firenepal\.com/);
   assert.match(built.html, /mailto:support@firenepal\.com/);
   assert.match(built.html, /© FIRE Nepal\. All rights reserved\./);
-  assert.match(built.text, /Choose Premium or Elite/);
+  assert.match(built.text, /Choose Your Plan:/);
 });
 
 test("sendPlanSelectionEmailForAdmin succeeds for Free member with verified email", async () => {
@@ -262,7 +264,7 @@ test("MemberCrmDrawer shows plan-selection Quick Action only for Free members", 
   const src = readFileSync(new URL("../src/components/admin/MemberCrmDrawer.tsx", import.meta.url), "utf8");
   assert.match(src, /const isFree = crm\?\.planType === "free"/);
   assert.match(src, /\{isFree \? \(/);
-  assert.match(src, /Send plan selection email/);
+  assert.match(src, /Choose Your Plan/);
   assert.match(src, /plan-selection-email/);
   assert.match(src, /PLAN_SELECTION_EMAIL_SUCCESS_MESSAGE|Plan selection email sent successfully/);
   // Paid renew/reminder gates remain separate
@@ -270,7 +272,7 @@ test("MemberCrmDrawer shows plan-selection Quick Action only for Free members", 
   assert.match(src, /\{paid \? \([\s\S]*Send reminder/);
   // Free action must not be gated on paid
   const freeBlock = src.slice(src.indexOf("{isFree ? ("), src.indexOf("{!archived ? ("));
-  assert.match(freeBlock, /Send plan selection email/);
+  assert.match(freeBlock, /Choose Your Plan/);
   assert.doesNotMatch(freeBlock, /planType === "premium"/);
 });
 

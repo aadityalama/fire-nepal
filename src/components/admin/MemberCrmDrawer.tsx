@@ -422,7 +422,7 @@ export function MemberCrmDrawer({
                       ) : (
                         <Mail className="h-3.5 w-3.5" aria-hidden />
                       )}
-                      {busy === "plan-selection" ? "Sending…" : "Send plan selection email"}
+                      {busy === "plan-selection" ? "Sending…" : "Choose Your Plan"}
                     </button>
                   ) : null}
                   {!archived ? (

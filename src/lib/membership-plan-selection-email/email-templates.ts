@@ -4,7 +4,7 @@ import {
 } from "@/lib/membership-approval-email/email-templates";
 import { FIRE_NEPAL_CANONICAL_ORIGIN } from "@/lib/brand/site-seo";
 
-export const PLAN_SELECTION_EMAIL_SUBJECT = "Choose your FIRE Nepal membership plan";
+export const PLAN_SELECTION_EMAIL_SUBJECT = "Choose Your FIRE Nepal Membership Plan";
 
 export type PlanSelectionEmailInput = {
   memberName: string;
@@ -75,17 +75,17 @@ export function buildPlanSelectionEmail(input: PlanSelectionEmailInput): {
 <table class="fn-shell" role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:${BRAND.bg};border-radius:18px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
 <tr><td class="fn-pad" style="padding:26px 28px;border-bottom:1px solid rgba(16,185,129,0.28);background:linear-gradient(135deg,#052116 0%,#0f5132 70%);">
 <p style="margin:0;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${BRAND.soft};font-weight:800;">FIRE Nepal</p>
-<h1 style="margin:10px 0 0;font-size:24px;line-height:1.2;font-weight:900;color:#fff;">Choose your membership plan</h1>
+<h1 style="margin:10px 0 0;font-size:24px;line-height:1.2;font-weight:900;color:#fff;">Choose Your Membership Plan</h1>
 </td></tr>
 <tr><td class="fn-pad" style="padding:28px 28px 8px;">
 <p style="margin:0 0 14px;font-size:15px;line-height:1.6;">Hello <strong style="color:#fff;">${escapeHtml(memberName)}</strong>,</p>
-<p style="margin:0 0 14px;font-size:15px;line-height:1.6;">You're invited to choose a FIRE Nepal membership plan. Open the secure link below to review <strong style="color:#fff;">Premium</strong> and <strong style="color:#fff;">Elite</strong>, then continue with payment.</p>
-<p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:${BRAND.muted};">This link opens your membership plan-selection page. Sign in with your verified FIRE Nepal account to continue.</p>
+<p style="margin:0 0 14px;font-size:15px;line-height:1.6;">Thank you for being a part of FIRE Nepal.</p>
+<p style="margin:0 0 14px;font-size:15px;line-height:1.6;">Your current membership is <strong style="color:#fff;">Free</strong>. You can now explore our available membership plans and choose the plan that best suits your needs.</p>
+<p style="margin:0 0 22px;font-size:15px;line-height:1.6;">Upgrade your FIRE Nepal membership and unlock more features and benefits.</p>
 <p style="margin:26px 0 8px;">
-<a class="fn-cta" href="${escapeHtml(input.planSelectionUrl)}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:linear-gradient(135deg,#059669,#34d399);color:#022c22;font-weight:900;text-decoration:none;font-size:14px;">Choose Premium or Elite →</a>
+<a class="fn-cta" href="${escapeHtml(input.planSelectionUrl)}" style="display:inline-block;padding:14px 22px;border-radius:12px;background:linear-gradient(135deg,#059669,#34d399);color:#022c22;font-weight:900;text-decoration:none;font-size:14px;">Choose Your Plan</a>
 </p>
-<p style="margin:22px 0 0;font-size:15px;line-height:1.6;">Thank you for choosing FIRE Nepal.</p>
-<p style="margin:18px 0 0;font-size:14px;line-height:1.55;">
+<p style="margin:22px 0 0;font-size:14px;line-height:1.55;">
 Best regards,<br/>
 <strong style="color:#fff;">FIRE Nepal Team</strong><br/>
 <span style="color:${BRAND.muted};font-size:13px;">${escapeHtml(FIRE_NEPAL_EMAIL_CONTACT.tagline)}</span>
@@ -102,11 +102,13 @@ ${brandedFooter(input.logoUrl)}
     "",
     `Hello ${memberName},`,
     "",
-    "You're invited to choose a FIRE Nepal membership plan. Open the secure link below to review Premium and Elite, then continue with payment.",
+    "Thank you for being a part of FIRE Nepal.",
     "",
-    `Choose Premium or Elite → ${input.planSelectionUrl}`,
+    "Your current membership is Free. You can now explore our available membership plans and choose the plan that best suits your needs.",
     "",
-    "Sign in with your verified FIRE Nepal account to continue.",
+    "Upgrade your FIRE Nepal membership and unlock more features and benefits.",
+    "",
+    `Choose Your Plan: ${input.planSelectionUrl}`,
     "",
     "Best regards,",
     "FIRE Nepal Team",
