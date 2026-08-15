@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { FireThemeToggle } from "@/components/dashboard/FireThemeToggle";
 import { FireLendingMobileBottomNav } from "@/components/fire-lending/FireLendingMobileBottomNav";
+import { FireLendingNotificationBell } from "@/components/fire-lending/FireLendingNotificationBell";
 import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemindersHeaderBell";
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireLending } from "@/contexts/FireLendingContext";
@@ -128,14 +129,17 @@ function LendingNavSections({
                   ) : null}
                   {count > 0 ? (
                     <span
+                      data-testid={navItem.badgeKey === "notifications" ? "nav-notifications-badge" : undefined}
                       className={`grid min-w-[1.25rem] place-items-center rounded-full px-1.5 py-0.5 text-[10px] font-black ${
-                        active
-                          ? light
-                            ? "bg-emerald-700 text-white"
-                            : "bg-emerald-950/40 text-emerald-50"
-                          : light
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-emerald-500/20 text-lime-200"
+                        navItem.badgeKey === "notifications" || navItem.badgeKey === "requests"
+                          ? "bg-red-500 text-white shadow-sm shadow-red-500/40"
+                          : active
+                            ? light
+                              ? "bg-emerald-700 text-white"
+                              : "bg-emerald-950/40 text-emerald-50"
+                            : light
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-emerald-500/20 text-lime-200"
                       }`}
                     >
                       {count}
@@ -282,6 +286,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <FireLendingNotificationBell />
             <SmartRemindersHeaderBell />
             <FireThemeToggle variant="header" />
             <UserMenuDropdown variant={light ? "light" : "dark"} />

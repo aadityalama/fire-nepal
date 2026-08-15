@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, FileSignature, FileUp, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
 import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
+import { FireLendingSignaturePanel } from "@/components/fire-lending/FireLendingSignaturePanel";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
   LendingGlassCard,
@@ -16,6 +17,7 @@ import {
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatLendingMoney, uid } from "@/lib/fire-lending/format";
+import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { findRequestForLoan, LOAN_REQUEST_UI } from "@/lib/fire-lending/loan-request-approval";
 import {
   formatLoanDocSize,
@@ -262,7 +264,8 @@ export function FireLendingLoanWizard() {
   const canNext = () => {
     if (step === 0) return borrowerStepReady;
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
-    if (step === 3) return borrowerAccepted;
+    // After sending the request, continue to role-based signatures (Accept happens later).
+    if (step === 3) return requestSent && !borrowerRejected;
     return true;
   };
 
@@ -709,35 +712,32 @@ export function FireLendingLoanWizard() {
       ) : null}
 
       {step === 4 && createdLoan ? (
-        <LendingGlassCard title="Digital Signatures" subtitle="Both parties must sign to activate" icon={FileSignature} elite>
-          <div className="space-y-2">
-            <div className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${light ? "border-emerald-200/70 bg-white" : "border-emerald-400/15 bg-black/20"}`}>
-              <span className="text-sm font-bold">Lender signature</span>
-              {createdLoan.lenderSigned ? (
-                <LendingStatusPill status="signed" />
-              ) : (
-                <LendingPrimaryButton onClick={() => signAgreement(createdLoan.id, "lender")}>Sign as lender</LendingPrimaryButton>
-              )}
-            </div>
-            <div className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${light ? "border-emerald-200/70 bg-white" : "border-emerald-400/15 bg-black/20"}`}>
-              <span className="text-sm font-bold">Borrower signature</span>
-              {createdLoan.borrowerSigned ? (
-                <LendingStatusPill status="signed" />
-              ) : (
-                <LendingPrimaryButton onClick={() => signAgreement(createdLoan.id, "borrower")}>Sign as borrower</LendingPrimaryButton>
-              )}
-            </div>
-            {createdAgreement ? (
+        <LendingGlassCard
+          title="Digital Signatures"
+          subtitle="Sign only your own role. Both parties must sign before approval."
+          icon={FileSignature}
+          elite
+        >
+          <FireLendingSignaturePanel
+            loan={createdLoan}
+            currentUserId={store.currentUserId}
+            onSign={(as) => signAgreement(createdLoan.id, as)}
+          />
+          {createdAgreement ? (
+            <div className="mt-3">
               <LendingSecondaryButton onClick={() => void downloadAgreement(createdLoan.id)}>
                 Download Agreement Letter
               </LendingSecondaryButton>
-            ) : null}
-            {createdLoan.lenderSigned && createdLoan.borrowerSigned ? (
-              <p className={`text-sm font-black ${light ? "text-emerald-700" : "text-lime-300"}`}>
-                Agreement active. Loan is live in your portfolio.
-              </p>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
+          {bothPartiesSigned(createdLoan) ? (
+            <p
+              data-testid="wizard-both-signed-ready"
+              className={`mt-3 text-sm font-black ${light ? "text-emerald-700" : "text-lime-300"}`}
+            >
+              {LOAN_REQUEST_UI.readyForApproval}
+            </p>
+          ) : null}
         </LendingGlassCard>
       ) : null}
 
@@ -763,8 +763,13 @@ export function FireLendingLoanWizard() {
             Continue to signatures
           </LendingPrimaryButton>
         ) : null}
-        {step === 4 && createdLoan?.lenderSigned && createdLoan.borrowerSigned ? (
+        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && borrowerAccepted ? (
           <LendingPrimaryButton onClick={() => router.push(`/fire-lending/loans/${createdLoan.id}`)}>Open loan</LendingPrimaryButton>
+        ) : null}
+        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && !borrowerAccepted ? (
+          <LendingPrimaryButton onClick={() => router.push("/fire-lending/requests")}>
+            View loan request
+          </LendingPrimaryButton>
         ) : null}
       </div>
 

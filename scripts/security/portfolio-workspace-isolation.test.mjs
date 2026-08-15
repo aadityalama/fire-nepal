@@ -61,7 +61,7 @@ test("portfolio cloud save surfaces exact Supabase errors to console and toast",
   assert.match(PORTFOLIO_SERVICE, /portfolioSaveError\("portfolio_extensions upsert"/);
   assert.match(PORTFOLIO_SYNC_HOOK, /client\.auth\.getUser\(\)/);
   assert.match(PORTFOLIO_SYNC_HOOK, /console\.error\("Portfolio save failed:", error\)/);
-  assert.match(PORTFOLIO_SYNC_HOOK, /toast\.error\(portfolioErrorMessage\(error\)\)/);
+  assert.match(PORTFOLIO_SYNC_HOOK, /appToast\.error\(portfolioErrorMessage\(error\)/);
 });
 
 test("portfolio RLS migration limits portfolio rows to authenticated owner", () => {

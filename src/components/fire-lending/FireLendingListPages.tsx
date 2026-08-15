@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { LendingFloatingActionButton } from "@/components/fire-lending/FireLendingFloatingActionButton";
+import { FireLendingSignaturePanel } from "@/components/fire-lending/FireLendingSignaturePanel";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
   LendingEmptyState,
@@ -34,6 +35,11 @@ import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmM
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
+import {
+  canShowLoanRequestApprovalControls,
+  LOAN_REQUEST_UI,
+} from "@/lib/fire-lending/loan-request-approval";
+import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 import { FireLendingDashboardAnalytics } from "@/components/fire-lending/FireLendingDashboardAnalytics";
 import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
@@ -155,7 +161,7 @@ export function FireLendingRequestsPage() {
       <LendingCompactHeader
         eyebrow="Loan Requests"
         title="Incoming & outgoing"
-        subtitle="Only the borrower/counterparty can Accept or Reject a pending request."
+        subtitle="Accept or Reject only after both parties have signed. You cannot approve your own request."
       />
       <LendingGlassCard title="Requests" icon={Inbox}>
         {store.requests.length === 0 ? (
@@ -171,7 +177,10 @@ export function FireLendingRequestsPage() {
               const linkedLoan = req.loanId ? store.loans.find((l) => l.id === req.loanId) : undefined;
               const isRecipient = req.toPartyId === store.currentUserId;
               const isRequester = req.fromPartyId === store.currentUserId;
-              const canAct = isRecipient && req.status === "pending";
+              const signaturesDone = linkedLoan ? bothPartiesSigned(linkedLoan) : !req.loanId;
+              const canAct = canShowLoanRequestApprovalControls(req, store.currentUserId, linkedLoan) ||
+                // Orphan seed requests without a linked loan keep prior counterparty-only Accept.
+                (isRecipient && req.status === "pending" && !req.loanId);
               return (
                 <li
                   key={req.id}
@@ -212,11 +221,27 @@ export function FireLendingRequestsPage() {
                           Waiting for the borrower to respond. You cannot Accept or Reject your own request.
                         </p>
                       ) : null}
+                      {isRecipient && req.status === "pending" && linkedLoan && !signaturesDone ? (
+                        <p
+                          data-testid="approval-blocked-awaiting-signatures"
+                          className={`mt-1 text-[11px] font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}
+                        >
+                          {LOAN_REQUEST_UI.signaturesRequiredBeforeApproval}
+                        </p>
+                      ) : null}
+                      {isRecipient && req.status === "pending" && linkedLoan && signaturesDone ? (
+                        <p
+                          data-testid="approval-ready-both-signed"
+                          className={`mt-1 text-[11px] font-semibold ${light ? "text-emerald-700" : "text-lime-300"}`}
+                        >
+                          {LOAN_REQUEST_UI.readyForApproval}
+                        </p>
+                      ) : null}
                     </div>
                     <LendingStatusPill status={req.status} />
                   </div>
                   {canAct ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2" data-testid="loan-request-approval-controls">
                       <LendingPrimaryButton
                         disabled={busyId === req.id}
                         onClick={() => onRespond(req.id, "accepted")}
@@ -237,7 +262,7 @@ export function FireLendingRequestsPage() {
                       </LendingSecondaryButton>
                     </div>
                   ) : null}
-                  {linkedLoan && req.status === "accepted" ? (
+                  {linkedLoan ? (
                     <div className="mt-2">
                       <LendingPrimaryLink href={`/fire-lending/loans/${linkedLoan.id}`}>
                         Review loan details
@@ -521,7 +546,7 @@ export function FireLendingAgreementsPage() {
 
   return (
     <LendingMobileScreen>
-      <LendingCompactHeader eyebrow="Agreements" title="Digital contracts" subtitle="PDF download, QR verify, signatures." />
+      <LendingCompactHeader eyebrow="Agreements" title="Digital contracts" subtitle="PDF download, QR verify, role-based signatures." />
       <LendingGlassCard title="Agreements" icon={FileText}>
         <ul className="space-y-2">
           {store.agreements.map((agr) => {
@@ -544,13 +569,16 @@ export function FireLendingAgreementsPage() {
                   <LendingSecondaryButton onClick={() => void downloadAgreement(agr.loanId)}>
                     Download Agreement Letter
                   </LendingSecondaryButton>
-                  {loan && !loan.lenderSigned ? (
-                    <LendingPrimaryButton onClick={() => signAgreement(agr.loanId, "lender")}>Sign lender</LendingPrimaryButton>
-                  ) : null}
-                  {loan && !loan.borrowerSigned ? (
-                    <LendingPrimaryButton onClick={() => signAgreement(agr.loanId, "borrower")}>Sign borrower</LendingPrimaryButton>
-                  ) : null}
                 </div>
+                {loan ? (
+                  <div className="mt-3">
+                    <FireLendingSignaturePanel
+                      loan={loan}
+                      currentUserId={store.currentUserId}
+                      onSign={(as) => signAgreement(loan.id, as)}
+                    />
+                  </div>
+                ) : null}
               </li>
             );
           })}

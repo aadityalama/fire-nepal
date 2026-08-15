@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { FileText, Landmark } from "lucide-react";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
+import { FireLendingSignaturePanel } from "@/components/fire-lending/FireLendingSignaturePanel";
 import {
   LendingEmptyState,
   LendingGlassCard,
@@ -15,18 +16,25 @@ import {
 } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
 import {
   documentsForLoan,
   formatLoanDocSize,
   loanDocTypeLabel,
 } from "@/lib/fire-lending/loan-documents";
+import {
+  canShowLoanRequestApprovalControls,
+  findRequestForLoan,
+  LOAN_REQUEST_UI,
+} from "@/lib/fire-lending/loan-request-approval";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 
 export function FireLendingLoanDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
-  const { store, partyById, downloadAgreement, downloadLoanDocument, signAgreement } = useFireLending();
+  const { store, partyById, downloadAgreement, downloadLoanDocument, signAgreement, respondToRequest } =
+    useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const loan = store.loans.find((l) => l.id === id);
@@ -34,9 +42,15 @@ export function FireLendingLoanDetailPage() {
   const installments = store.installments.filter((i) => i.loanId === id).sort((a, b) => a.sequence - b.sequence);
   const payments = store.payments.filter((p) => p.loanId === id);
   const documents = id ? documentsForLoan(store, id) : [];
+  const linkedRequest = loan ? findRequestForLoan(store, loan.id) : undefined;
+  const canApprove =
+    linkedRequest && loan
+      ? canShowLoanRequestApprovalControls(linkedRequest, store.currentUserId, loan)
+      : false;
   const [docError, setDocError] = useState<string | null>(null);
   const [agreementBusy, setAgreementBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   if (!loan) {
     return (
@@ -104,9 +118,47 @@ export function FireLendingLoanDetailPage() {
           >
             {agreementBusy ? "Generating…" : "Download Agreement Letter"}
           </LendingPrimaryButton>
-          {!loan.lenderSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "lender")}>Sign lender</LendingPrimaryButton> : null}
-          {!loan.borrowerSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "borrower")}>Sign borrower</LendingPrimaryButton> : null}
         </div>
+      </LendingGlassCard>
+
+      <LendingGlassCard title="Agreement signatures" subtitle="Each party signs only their own role" icon={FileText}>
+        <FireLendingSignaturePanel
+          loan={loan}
+          currentUserId={store.currentUserId}
+          onSign={(as) => signAgreement(loan.id, as)}
+        />
+        {linkedRequest?.status === "pending" && !bothPartiesSigned(loan) ? (
+          <p className={`mt-2 text-[11px] font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}>
+            {LOAN_REQUEST_UI.signaturesRequiredBeforeApproval}
+          </p>
+        ) : null}
+        {canApprove && linkedRequest ? (
+          <div className="mt-3 flex flex-wrap gap-2" data-testid="loan-detail-approval-controls">
+            <LendingPrimaryButton
+              onClick={() => {
+                setApprovalError(null);
+                const err = respondToRequest(linkedRequest.id, "accepted");
+                if (err) setApprovalError(err);
+              }}
+            >
+              Accept
+            </LendingPrimaryButton>
+            <LendingSecondaryButton
+              onClick={() => {
+                setApprovalError(null);
+                const err = respondToRequest(linkedRequest.id, "rejected");
+                if (err) setApprovalError(err);
+              }}
+            >
+              Reject
+            </LendingSecondaryButton>
+          </div>
+        ) : null}
+        {approvalError ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+            {approvalError}
+          </p>
+        ) : null}
       </LendingGlassCard>
 
       <LendingGlassCard title="Documents" subtitle="Supporting files attached to this loan" icon={FileText}>
