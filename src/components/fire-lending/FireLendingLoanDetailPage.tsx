@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FileText, Landmark } from "lucide-react";
+import { useState } from "react";
+import { FileText, Landmark, Loader2 } from "lucide-react";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
   LendingEmptyState,
@@ -23,10 +24,21 @@ export function FireLendingLoanDetailPage() {
   const { store, partyById, downloadAgreement, signAgreement } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const loan = store.loans.find((l) => l.id === id);
   const party = loan ? partyById(loan.counterpartyId) : undefined;
   const installments = store.installments.filter((i) => i.loanId === id).sort((a, b) => a.sequence - b.sequence);
   const payments = store.payments.filter((p) => p.loanId === id);
+
+  const onDownloadAgreement = async () => {
+    if (!loan || downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    const result = await downloadAgreement(loan.id);
+    if (!result.ok) setDownloadError(result.error);
+    setDownloading(false);
+  };
 
   if (!loan) {
     return (
@@ -63,17 +75,31 @@ export function FireLendingLoanDetailPage() {
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <LendingPrimaryLink href="/fire-lending/payments/new">Record payment</LendingPrimaryLink>
-          <LendingSecondaryButton onClick={() => void downloadAgreement(loan.id)}>Download agreement</LendingSecondaryButton>
+          <LendingSecondaryButton onClick={() => void onDownloadAgreement()} disabled={downloading}>
+            {downloading ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                Generating PDF…
+              </span>
+            ) : (
+              "Download agreement"
+            )}
+          </LendingSecondaryButton>
           {!loan.lenderSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "lender")}>Sign lender</LendingPrimaryButton> : null}
           {!loan.borrowerSigned ? <LendingPrimaryButton onClick={() => signAgreement(loan.id, "borrower")}>Sign borrower</LendingPrimaryButton> : null}
         </div>
+        {downloadError ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+            {downloadError}
+          </p>
+        ) : null}
       </LendingGlassCard>
 
       {party ? (
         <LendingGlassCard title="Counterparty" icon={FileText}>
           <p className={`text-sm font-black ${light ? "text-slate-900" : "text-white"}`}>{party.name}</p>
           <p className={`text-xs font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
-            {party.fireNepalId} · {party.mobile} · Trust {party.trustScore} ({trustLabel(party.trustScore)})
+            {party.fireNepalId} · Trust {party.trustScore} ({trustLabel(party.trustScore)})
           </p>
           <LendingStatusPill status={party.identityVerified ? "verified" : "unverified"} />
         </LendingGlassCard>

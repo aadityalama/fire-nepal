@@ -18,7 +18,7 @@ import {
   buildTopBorrowers,
   buildUpcomingPayments,
 } from "@/lib/fire-lending/analytics";
-import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
+import { downloadAgreementPdf, resolveInstallmentsForAgreement, synthesizeAgreementForLoan } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
 import {
@@ -41,6 +41,7 @@ import type {
   PaymentMethod,
 } from "@/lib/fire-lending/types";
 import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
+import { appToast } from "@/lib/toast";
 
 type FireLendingContextValue = {
   store: FireLendingStore;
@@ -68,7 +69,8 @@ type FireLendingContextValue = {
     isSettlement?: boolean;
   }) => void;
   signAgreement: (loanId: string, as: "lender" | "borrower") => void;
-  downloadAgreement: (loanId: string) => Promise<void>;
+  downloadAgreement: (loanId: string) => Promise<{ ok: true; filename: string } | { ok: false; error: string }>;
+
   markNotificationRead: (id: string) => void;
   resetDemoData: () => void;
 };
@@ -374,24 +376,61 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   }, [setStore]);
 
   const downloadAgreement = useCallback(
-    async (loanId: string) => {
-      const loan = store.loans.find((l) => l.id === loanId);
-      const agreement = store.agreements.find((a) => a.loanId === loanId);
-      if (!loan || !agreement) return;
-      const counterparty = partyById(loan.counterpartyId);
-      const me = partyById(store.currentUserId);
-      if (!counterparty || !me) return;
-      const lender = loan.role === "lender" ? me : counterparty;
-      const borrower = loan.role === "borrower" ? me : counterparty;
-      await downloadAgreementPdf({
-        loan,
-        agreement,
-        lender,
-        borrower,
-        installments: store.installments.filter((i) => i.loanId === loanId).sort((a, b) => a.sequence - b.sequence),
-      });
+    async (loanId: string): Promise<{ ok: true; filename: string } | { ok: false; error: string }> => {
+      try {
+        const loan = store.loans.find((l) => l.id === loanId);
+        if (!loan) {
+          const error = "Loan not found. Refresh and try again.";
+          appToast.error(error, { id: "fire-lending-agreement-download" });
+          return { ok: false, error };
+        }
+
+        let agreement = store.agreements.find((a) => a.loanId === loanId);
+        if (!agreement) {
+          // Persist a synthesized agreement so later downloads stay consistent.
+          agreement = synthesizeAgreementForLoan(loan);
+          setStore((prev) => ({
+            ...prev,
+            agreements: [agreement!, ...prev.agreements.filter((a) => a.loanId !== loanId)],
+          }));
+        }
+
+        const counterparty = partyById(loan.counterpartyId);
+        const me = partyById(store.currentUserId);
+        if (!me) {
+          const error = "Your lending profile is missing. Reset demo data or re-open FIRE Lending.";
+          appToast.error(error, { id: "fire-lending-agreement-download" });
+          return { ok: false, error };
+        }
+        if (!counterparty) {
+          const error = "Counterparty details are missing for this loan, so the agreement cannot be generated.";
+          appToast.error(error, { id: "fire-lending-agreement-download" });
+          return { ok: false, error };
+        }
+
+        const lender = loan.role === "lender" ? me : counterparty;
+        const borrower = loan.role === "borrower" ? me : counterparty;
+        const installments = resolveInstallmentsForAgreement(
+          loan,
+          store.installments.filter((i) => i.loanId === loanId),
+        );
+
+        const { filename } = await downloadAgreementPdf({
+          loan,
+          agreement,
+          lender,
+          borrower,
+          installments,
+        });
+        appToast.success(`Agreement downloaded: ${filename}`, { id: "fire-lending-agreement-download" });
+        return { ok: true, filename };
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "Could not download the loan agreement.";
+        appToast.error(error, { id: "fire-lending-agreement-download" });
+        return { ok: false, error };
+      }
     },
-    [partyById, store],
+    [partyById, setStore, store],
   );
 
   const markNotificationRead = useCallback((id: string) => {
