@@ -6,7 +6,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  FIRE_NEPAL_EMAIL_CONTACT,
   MEMBERSHIP_APPROVAL_EMAIL_SUBJECT,
   buildMembershipApprovalEmail,
   formatApprovalDate,
