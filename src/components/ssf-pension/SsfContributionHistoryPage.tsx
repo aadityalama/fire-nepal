@@ -3,11 +3,15 @@
 import { PensionChrome } from "@/components/pension/PensionChrome";
 import { OfficialPortalActions } from "@/components/pension/OfficialPortalActions";
 import {
-  PensionBody,
-  PensionGlassPanel,
-  PensionHeading,
-  PensionSectionLabel,
+  PcCopy,
+  PcEyebrow,
+  PcSurface,
+  PcTitle,
+  SummaryStat,
+  TimelineItem,
 } from "@/components/pension/PensionUi";
+
+const NOT_SYNCED = { kind: "not_synced" as const };
 
 export function SsfContributionHistoryPage() {
   return (
@@ -19,32 +23,51 @@ export function SsfContributionHistoryPage() {
         <OfficialPortalActions institution="ssf" />
         <OfficialPortalActions institution="epf" />
       </div>
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <PensionSectionLabel>Ledger source of truth</PensionSectionLabel>
-        <PensionHeading>View paid months on official portals</PensionHeading>
-        <PensionBody className="mt-2">
-          Official policy information unavailable for verification for imported contribution history. Use{" "}
-          <strong className="text-slate-900 dark:text-white">Official Login</strong> on SSF SOSYS or EPF iPortal to view
-          paid months, employer shares, and statements.
-        </PensionBody>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {[
-            { label: "Paid months", value: "Portal" },
-            { label: "Employer share", value: "Portal" },
-            { label: "Statements", value: "Portal" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl border border-teal-500/20 bg-teal-500/[0.07] px-3.5 py-3 text-center"
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">
-                {item.label}
-              </p>
-              <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{item.value}</p>
-            </div>
-          ))}
+
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Ledger snapshot</PcEyebrow>
+        <PcTitle as="h2">Imported statements</PcTitle>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <SummaryStat label="Paid months" field={NOT_SYNCED} />
+          <SummaryStat label="Employer share" field={NOT_SYNCED} />
+          <SummaryStat label="Employee share" field={NOT_SYNCED} />
+          <SummaryStat label="Last statement" field={NOT_SYNCED} />
         </div>
-      </PensionGlassPanel>
+      </PcSurface>
+
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Timeline</PcEyebrow>
+        <PcTitle as="h2">Contribution activity</PcTitle>
+        <PcCopy className="mt-2 text-xs">
+          Empty until you open Official Login on SSF SOSYS or EPF iPortal and sync is available.
+        </PcCopy>
+        <ol className="relative mt-5 space-y-3 border-l border-white/10 ml-1.5">
+          <TimelineItem
+            title="Portal sync"
+            meta="Status"
+            body="Not Synced — no contribution months imported from official systems."
+            tone="warn"
+          />
+          <TimelineItem
+            title="SSF SOSYS ledger"
+            meta="SSF"
+            body="Use Official Login on SOSYS to view paid months, employer shares, and statements."
+            tone="muted"
+          />
+          <TimelineItem
+            title="EPF iPortal ledger"
+            meta="EPF"
+            body="Use Official Login on EPF iPortal for provident / contributory pension statements."
+            tone="muted"
+          />
+          <TimelineItem
+            title="Fabricated rows"
+            meta="Blocked"
+            body="FireNepal never invents contribution history amounts or dates."
+            tone="ok"
+          />
+        </ol>
+      </PcSurface>
     </PensionChrome>
   );
 }

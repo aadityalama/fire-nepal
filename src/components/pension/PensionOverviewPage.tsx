@@ -1,139 +1,131 @@
 "use client";
 
-import { Building2, Landmark, LineChart, Scale, Shield, ShieldCheck } from "lucide-react";
-import Link from "next/link";
-import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
+import {
+  Bell,
+  History,
+  LineChart,
+  ShieldCheck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { PENSION_BASE } from "@/lib/pension/nav";
+import { buildProviderDesks } from "@/lib/pension/provider-desk";
 import { PensionChrome } from "@/components/pension/PensionChrome";
 import {
-  PensionActionLink,
-  PensionBody,
-  PensionGlassPanel,
-  PensionHeading,
-  PensionProviderCard,
-  PensionSectionLabel,
+  ModuleRow,
+  PcCopy,
+  PcEyebrow,
+  PcSurface,
+  PcTitle,
+  ProjectionViz,
+  ProviderAccountCard,
+  SummaryStat,
 } from "@/components/pension/PensionUi";
-import { formatMoney } from "@/lib/expense-utils";
+
+const NOT_CONNECTED = { kind: "not_connected" as const };
+const NOT_SYNCED = { kind: "not_synced" as const };
 
 export function PensionOverviewPage() {
-  const { totals, fireScore, hydrated } = useWealthPortfolio();
+  const desks = buildProviderDesks();
+  const verifiedRateCount = desks.filter((d) => d.verifiedPolicyRateLabel).length;
 
   return (
     <PensionChrome
-      title="Pension Overview"
-      subtitle="Nepal Official Policy-Driven Pension & Retirement Planning Center — SSF, EPF, CIT, and Government Pension with verified portals only."
+      title="Your Pension"
+      subtitle="Mobile-first Nepal pension desk for SSF, EPF, CIT, and Government Pension — official portals only, policy-verified rates, zero invented balances."
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 sm:gap-4">
-        <PensionProviderCard
-          title="SSF Center"
-          body="Social Security Fund schemes, contributions, and official SOSYS login / pay links."
-          href={`${PENSION_BASE}/ssf`}
-          cta="Open SSF desk →"
-          icon={Shield}
-          accent="teal"
-          badge="SSF"
-        />
-        <PensionProviderCard
-          title="EPF Center"
-          body="Provident fund, contributory pension rates, loans, and EPF iPortal."
-          href={`${PENSION_BASE}/epf`}
-          cta="Open EPF desk →"
-          icon={Building2}
-          accent="emerald"
-          badge="EPF"
-        />
-        <PensionProviderCard
-          title="CIT Center"
-          body="Citizen Investment Trust / NLK schemes via official e-Service."
-          href={`${PENSION_BASE}/cit`}
-          cta="Open CIT desk →"
-          icon={Landmark}
-          accent="cyan"
-          badge="CIT"
-        />
-        <PensionProviderCard
-          title="Government Pension"
-          body="Contributory pension for eligible government services (Pension Fund Act 2075)."
-          href={`${PENSION_BASE}/government`}
-          cta="Open government desk →"
-          icon={Scale}
-          accent="lime"
-          badge="Gov"
-        />
-      </div>
+      <PcSurface className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <PcEyebrow>Ledger summary</PcEyebrow>
+          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100">
+            Sync offline
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <SummaryStat label="Total balance" field={NOT_CONNECTED} hint="Official sync required" />
+          <SummaryStat label="Monthly contribution" field={NOT_SYNCED} hint="From employer / portal" />
+          <SummaryStat label="Contribution months" field={NOT_SYNCED} hint="Ledger not imported" />
+          <SummaryStat label="Last contribution" field={NOT_SYNCED} hint="No statement linked" />
+        </div>
+      </PcSurface>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <PensionGlassPanel hover className="p-4 sm:p-5">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200">
-              <LineChart size={18} />
-            </span>
-            <div>
-              <PensionSectionLabel>Planning</PensionSectionLabel>
-              <PensionHeading>Retirement projection</PensionHeading>
-            </div>
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-3 px-0.5">
+          <div>
+            <PcEyebrow>Providers</PcEyebrow>
+            <PcTitle as="h2">Accounts</PcTitle>
           </div>
-          <PensionBody>
-            Policy-driven contribution stacking using verified rates when available. Unverified formulas are never
-            invented.
-          </PensionBody>
-          <div className="mt-4">
-            <PensionActionLink href={`${PENSION_BASE}/retirement-projection`}>
-              Open retirement projection →
-            </PensionActionLink>
-          </div>
-        </PensionGlassPanel>
+          <p className="text-[11px] font-semibold text-[#6b7c8f]">{verifiedRateCount}/4 rates verified</p>
+        </div>
+        <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 no-scrollbar">
+          {desks.map((desk) => (
+            <ProviderAccountCard key={desk.id} desk={desk} />
+          ))}
+        </div>
+      </section>
 
-        <PensionGlassPanel hover className="p-4 sm:p-5">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
-              <ShieldCheck size={18} />
-            </span>
-            <div>
-              <PensionSectionLabel>Wealth link</PensionSectionLabel>
-              <PensionHeading>Portfolio link</PensionHeading>
-            </div>
-          </div>
-          <PensionBody>
-            Desk FIRE readiness {hydrated ? `${Math.round(fireScore)}%` : "—"} · Retirement sleeve{" "}
-            {!hydrated ? "—" : formatMoney(totals.retirementNpr, "NPR")}
-          </PensionBody>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <PensionActionLink href="/portfolio/retirement" variant="ghost">
-              Global retirement assets →
-            </PensionActionLink>
-            <PensionActionLink href={`${PENSION_BASE}/withdrawal-planner`} variant="secondary">
-              Withdrawal planner →
-            </PensionActionLink>
-          </div>
-        </PensionGlassPanel>
-      </div>
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Retirement projection</PcEyebrow>
+        <PcTitle as="h2">Planning visual</PcTitle>
+        <div className="mt-4">
+          <ProjectionViz yearsLabel="Not Synced" rateLabel="Use verified policy %" />
+        </div>
+        <div className="mt-4">
+          <ModuleRow
+            href={`${PENSION_BASE}/retirement-projection`}
+            title="Open projection desk"
+            body="Policy-driven calculator — no invented annuity factors"
+            icon={LineChart}
+          />
+        </div>
+      </PcSurface>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { href: `${PENSION_BASE}/contribution-history`, label: "Contribution History" },
-          { href: `${PENSION_BASE}/benefits-center`, label: "Benefits Center" },
-          { href: `${PENSION_BASE}/family-protection`, label: "Family Protection" },
-          { href: `${PENSION_BASE}/reminder-center`, label: "Reminder Center" },
-        ].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="rounded-2xl border border-teal-500/20 bg-teal-500/[0.07] px-3.5 py-3 text-center text-xs font-black text-teal-950 transition hover:border-teal-400/40 hover:bg-teal-500/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 dark:text-teal-50"
-          >
-            {item.label} →
-          </Link>
-        ))}
-      </div>
+      <section className="space-y-2">
+        <PcEyebrow>Workspace</PcEyebrow>
+        <PcTitle as="h2">Tools</PcTitle>
+        <div className="mt-3 space-y-2">
+          <ModuleRow
+            href={`${PENSION_BASE}/contribution-history`}
+            title="Contribution History"
+            body="Timeline · Not Synced until official ledger import"
+            icon={History}
+          />
+          <ModuleRow
+            href={`${PENSION_BASE}/benefits-center`}
+            title="Benefits Center"
+            body="SSF schemes from the verified policy layer"
+            icon={ShieldCheck}
+          />
+          <ModuleRow
+            href={`${PENSION_BASE}/withdrawal-planner`}
+            title="Withdrawal Planner"
+            body="Official withdrawal / loan notes only"
+            icon={Wallet}
+          />
+          <ModuleRow
+            href={`${PENSION_BASE}/family-protection`}
+            title="Family Protection"
+            body="Dependent rules · nominees on official portals"
+            icon={Users}
+          />
+          <ModuleRow
+            href={`${PENSION_BASE}/reminder-center`}
+            title="Reminder Center"
+            body="Local prefs · Pay still on official portals"
+            icon={Bell}
+          />
+        </div>
+      </section>
 
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <PensionSectionLabel>Integrity rule</PensionSectionLabel>
-        <PensionBody className="mt-2">
-          FireNepal does not fabricate pension amounts, contribution rates, or withdrawal limits. When an official rule
-          is not verified, modules show: “Official policy information unavailable for verification.” Authentication and
-          payments always open the respective official portals.
-        </PensionBody>
-      </PensionGlassPanel>
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Integrity</PcEyebrow>
+        <PcCopy className="mt-2">
+          FireNepal never fabricates pension balances, contribution months, or withdrawal limits. When official sync is
+          unavailable, fields show <strong className="text-amber-100">Not Connected</strong> or{" "}
+          <strong className="text-amber-100">Not Synced</strong>. Pay and login always open verified government portals —
+          passwords and OTPs are never collected here.
+        </PcCopy>
+      </PcSurface>
     </PensionChrome>
   );
 }

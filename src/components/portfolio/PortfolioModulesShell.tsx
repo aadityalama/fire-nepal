@@ -89,14 +89,16 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
   const { ratesLoading } = useWealthPortfolio();
   const pathname = usePathname() ?? "";
   // Main portfolio + gold + NEPSE investments own their summary UI — skip global wealth cards.
+  const onPension = pathname === "/portfolio/pension" || pathname.startsWith("/portfolio/pension/");
   const hideTotalsStrip =
+    onPension ||
     pathname === "/portfolio" ||
     pathname === "/portfolio/investments" ||
     pathname.startsWith("/portfolio/investments/") ||
     pathname === "/portfolio/gold" ||
     pathname.startsWith("/portfolio/gold/");
   const hideGlobalAddFab =
-    pathname === "/portfolio/investments" || pathname.startsWith("/portfolio/investments/");
+    onPension || pathname === "/portfolio/investments" || pathname.startsWith("/portfolio/investments/");
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const muted = light ? "text-slate-800" : "text-gray-100";

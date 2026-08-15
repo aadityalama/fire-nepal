@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, BookOpen, CheckCircle2, Clock } from "lucide-react";
-import type { PensionInstitutionId, PensionPolicyRule } from "@/lib/pension-policy";
+import type { PensionInstitutionId } from "@/lib/pension-policy";
 import {
   INSTITUTION_LABELS,
   listActiveRulesForInstitution,
@@ -11,13 +10,16 @@ import {
 } from "@/lib/pension-policy";
 import { OfficialPortalActions } from "@/components/pension/OfficialPortalActions";
 import { PENSION_BASE } from "@/lib/pension/nav";
+import { buildProviderDesks } from "@/lib/pension/provider-desk";
 import {
-  PensionBody,
-  PensionGlassPanel,
-  PensionHeading,
-  PensionSectionLabel,
-  PensionSoftRow,
-  PensionStatusPill,
+  PcCopy,
+  PcEyebrow,
+  PcSurface,
+  PcTitle,
+  PolicyNoteCard,
+  StickyPortalBar,
+  SummaryStat,
+  SyncStatusChip,
 } from "@/components/pension/PensionUi";
 
 const MODULE_LINKS: { href: string; label: string }[] = [
@@ -39,112 +41,80 @@ export function InstitutionPolicyDesk({
 }) {
   const asOf = todayIsoDate();
   const rules = listActiveRulesForInstitution(PENSION_POLICY_CATALOG, institution, asOf);
+  const desk = buildProviderDesks().find((d) => d.id === institution)!;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-5">
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <PensionSectionLabel>Overview</PensionSectionLabel>
-        <PensionHeading>{INSTITUTION_LABELS[institution]}</PensionHeading>
-        <PensionBody className="mt-2">{overview}</PensionBody>
-        <p className="mt-3 text-[11px] font-bold text-slate-500 dark:text-zinc-500">
-          Policy-driven desk · as of {asOf} · unverified rates are never auto-applied
-        </p>
-      </PensionGlassPanel>
+      <PcSurface className="overflow-hidden p-0">
+        <div className="border-b border-white/[0.06] bg-[radial-gradient(90%_120%_at_0%_0%,rgba(45,212,191,0.12),transparent_60%)] px-4 py-5 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <PcEyebrow>Provider account</PcEyebrow>
+            <SyncStatusChip connected={false} />
+          </div>
+          <PcTitle as="h2">{INSTITUTION_LABELS[institution]}</PcTitle>
+          <PcCopy className="mt-2">{overview}</PcCopy>
+          <p className="mt-3 text-[11px] font-semibold text-[#6b7c8f]">
+            Policy desk · as of {asOf} · {desk.activePolicyCount} active · {desk.pendingPolicyCount} pending
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-4 sm:p-5">
+          <SummaryStat label="Balance" field={desk.balance} />
+          <SummaryStat label="Monthly contribution" field={desk.monthlyContribution} />
+          <SummaryStat label="Contribution months" field={desk.contributionMonths} />
+          <SummaryStat label="Last contribution" field={desk.lastContribution} />
+        </div>
+        {desk.verifiedPolicyRateLabel ? (
+          <p className="border-t border-white/[0.06] px-4 py-3 text-xs font-semibold text-[#9aa8b8] sm:px-5">
+            Verified official rate · <span className="text-[#7dd3c0]">{desk.verifiedPolicyRateLabel}</span> (not a personal
+            balance)
+          </p>
+        ) : (
+          <p className="border-t border-white/[0.06] px-4 py-3 text-xs font-semibold text-amber-100/90 sm:px-5">
+            Contribution percentages pending official verification — calculator will not invent rates.
+          </p>
+        )}
+      </PcSurface>
 
+      <StickyPortalBar payHref={desk.payHref} loginHref={desk.loginHref} />
       <OfficialPortalActions institution={institution} />
 
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <div className="mb-4 flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200">
-            <BookOpen size={18} />
-          </span>
-          <div>
-            <PensionSectionLabel>Policy layer</PensionSectionLabel>
-            <PensionHeading>Official policy rules</PensionHeading>
-          </div>
-        </div>
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Official policy</PcEyebrow>
+        <PcTitle as="h2">Versioned rules</PcTitle>
         {rules.length === 0 ? (
-          <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+          <p className="mt-3 text-sm font-semibold text-amber-100">
             Official policy information unavailable for verification.
           </p>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="mt-3 flex flex-col gap-2.5">
             {rules.map((rule) => (
-              <PolicyRuleRow key={rule.id} rule={rule} />
+              <li key={rule.id}>
+                <PolicyNoteCard
+                  title={rule.title}
+                  summary={rule.summary}
+                  status={rule.status}
+                  sourceUrl={rule.officialSourceUrl}
+                />
+              </li>
             ))}
           </ul>
         )}
-      </PensionGlassPanel>
+      </PcSurface>
 
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <PensionSectionLabel>Planning modules</PensionSectionLabel>
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Continue planning</PcEyebrow>
         <div className="mt-3 flex flex-wrap gap-2">
           {MODULE_LINKS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full border border-teal-500/25 bg-teal-500/10 px-3.5 py-2 text-[11px] font-black text-teal-950 transition hover:bg-teal-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 dark:text-teal-50"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[11px] font-bold text-[#c5d0db] hover:border-[#2dd4bf]/35 hover:text-white"
             >
               {item.label} →
             </Link>
           ))}
         </div>
-      </PensionGlassPanel>
+      </PcSurface>
     </div>
   );
-}
-
-function PolicyRuleRow({ rule }: { rule: PensionPolicyRule }) {
-  const pending = rule.status === "pending_verification";
-  return (
-    <li>
-      <PensionSoftRow>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-slate-900 dark:text-white">{rule.title}</p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{rule.summary}</p>
-            {pending ? (
-              <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                <AlertTriangle size={12} /> Official policy information unavailable for verification.
-              </p>
-            ) : null}
-            {rule.notes ? <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{rule.notes}</p> : null}
-          </div>
-          <StatusPill status={rule.status} />
-        </div>
-        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-          <span>{rule.ruleCategory.replaceAll("_", " ")}</span>
-          <span>v{rule.version}</span>
-          <span>Effective {rule.effectiveDate}</span>
-          <span>Verified {rule.lastVerifiedDate}</span>
-          <a
-            href={rule.officialSourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-300"
-          >
-            Official source ↗
-          </a>
-        </div>
-      </PensionSoftRow>
-    </li>
-  );
-}
-
-function StatusPill({ status }: { status: PensionPolicyRule["status"] }) {
-  if (status === "active") {
-    return (
-      <PensionStatusPill tone="active">
-        <CheckCircle2 size={11} /> Active
-      </PensionStatusPill>
-    );
-  }
-  if (status === "pending_verification") {
-    return (
-      <PensionStatusPill tone="pending">
-        <Clock size={11} /> Pending verification
-      </PensionStatusPill>
-    );
-  }
-  return <PensionStatusPill tone="neutral">{status}</PensionStatusPill>;
 }

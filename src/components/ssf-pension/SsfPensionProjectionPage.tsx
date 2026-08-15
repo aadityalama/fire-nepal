@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen } from "lucide-react";
 import {
   computePolicyDrivenProjection,
   INSTITUTION_LABELS,
@@ -13,27 +12,22 @@ import {
 import { PensionChrome } from "@/components/pension/PensionChrome";
 import { OfficialPortalActions } from "@/components/pension/OfficialPortalActions";
 import {
-  PensionBody,
-  PensionGlassPanel,
-  PensionHeading,
-  PensionSectionLabel,
-  PensionSoftRow,
+  PcCopy,
+  PcEyebrow,
+  PcSurface,
+  PcTitle,
+  PolicyNoteCard,
+  ProjectionViz,
+  SummaryStat,
 } from "@/components/pension/PensionUi";
-import { formatMoney } from "@/lib/expense-utils";
-
-function ResultMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-teal-500/20 bg-teal-500/[0.07] px-3 py-2.5">
-      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300">{label}</p>
-      <p className="mt-1 truncate text-sm font-black text-slate-900 dark:text-white sm:text-base">{value}</p>
-    </div>
-  );
-}
 
 const INSTITUTIONS: PensionInstitutionId[] = ["government_pension", "epf", "ssf", "cit"];
 
 const fieldClass =
-  "mt-1.5 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2.5 text-sm font-black text-slate-900 outline-none transition focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/25 dark:border-white/10 dark:bg-white/[0.06] dark:text-white";
+  "mt-1.5 w-full rounded-xl border border-white/10 bg-[#080d13] px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-[#2dd4bf]/45 focus:ring-2 focus:ring-[#2dd4bf]/20";
+
+const NOT_CONNECTED = { kind: "not_connected" as const };
+const NOT_SYNCED = { kind: "not_synced" as const };
 
 export function SsfPensionProjectionPage() {
   const [institution, setInstitution] = useState<PensionInstitutionId>("government_pension");
@@ -65,20 +59,57 @@ export function SsfPensionProjectionPage() {
     (r) => r.ruleCategory === "retirement_benefit" || r.ruleCategory === "contribution",
   );
 
+  const rateLabel =
+    result.monthlyEmployeeRatePct != null && result.monthlyEmployerRatePct != null
+      ? `Policy ${result.monthlyEmployeeRatePct}% + ${result.monthlyEmployerRatePct}%`
+      : "Rate Not Verified";
+
   return (
     <PensionChrome
       title="Retirement Projection"
-      subtitle="Policy-driven calculator — uses verified contribution rates from the official policy layer. Never invents interest or pension conversion factors."
+      subtitle="Policy-driven calculator — uses verified contribution rates only. Personal balances stay Not Connected unless you enter planning inputs explicitly."
     >
       <OfficialPortalActions institution={institution} />
 
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Visualization</PcEyebrow>
+        <PcTitle as="h2">Readiness arc</PcTitle>
+        <div className="mt-4">
+          <ProjectionViz yearsLabel={`${result.yearsToRetirement} yrs`} rateLabel={rateLabel} />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <SummaryStat label="Synced balance" field={NOT_CONNECTED} hint="Portal sync offline" />
+          <SummaryStat label="Monthly from portal" field={NOT_SYNCED} hint="Use inputs below for desk model" />
+          <SummaryStat
+            label="Employee rate"
+            field={
+              result.monthlyEmployeeRatePct == null
+                ? NOT_SYNCED
+                : { kind: "connected", value: `${result.monthlyEmployeeRatePct}%` }
+            }
+            hint="Verified policy only"
+          />
+          <SummaryStat
+            label="Employer / Gov rate"
+            field={
+              result.monthlyEmployerRatePct == null
+                ? NOT_SYNCED
+                : { kind: "connected", value: `${result.monthlyEmployerRatePct}%` }
+            }
+            hint="Verified policy only"
+          />
+        </div>
+      </PcSurface>
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <PensionGlassPanel className="space-y-3.5 p-4 sm:p-5">
-          <div>
-            <PensionSectionLabel>Your inputs</PensionSectionLabel>
-            <PensionHeading>Projection desk</PensionHeading>
-          </div>
-          <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
+        <PcSurface className="space-y-3.5 p-4 sm:p-5">
+          <PcEyebrow>Planning inputs</PcEyebrow>
+          <PcTitle as="h2">Desk model</PcTitle>
+          <PcCopy className="text-xs">
+            Inputs are local planning assumptions — not imported official balances. Leave contribution fields at 0 to use
+            verified policy percentages when available.
+          </PcCopy>
+          <label className="block text-xs font-bold text-[#8b9aab]">
             Institution / scheme
             <select
               className={fieldClass}
@@ -102,7 +133,7 @@ export function SsfPensionProjectionPage() {
               ["Expected retirement age", retireAge, setRetireAge, 45, 70, 1],
             ] as const
           ).map(([label, value, setter, min, max, step]) => (
-            <label key={label} className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
+            <label key={label} className="block text-xs font-bold text-[#8b9aab]">
               {label}
               <input
                 type="number"
@@ -115,82 +146,67 @@ export function SsfPensionProjectionPage() {
               />
             </label>
           ))}
-        </PensionGlassPanel>
+        </PcSurface>
 
-        <PensionGlassPanel className="space-y-4 p-4 sm:p-5">
-          <div>
-            <PensionSectionLabel>Policy result</PensionSectionLabel>
-            <PensionHeading>Verified projection</PensionHeading>
-          </div>
+        <PcSurface className="space-y-3 p-4 sm:p-5">
+          <PcEyebrow>Policy result</PcEyebrow>
+          <PcTitle as="h2">Verified projection</PcTitle>
           {result.unavailableMessage ? (
-            <p className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm font-bold text-amber-950 dark:text-amber-100">
+            <p className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-sm font-semibold text-amber-50">
               {result.unavailableMessage}
             </p>
           ) : (
             <>
-              <PensionBody>{result.narrative}</PensionBody>
-              <div className="grid grid-cols-2 gap-2.5">
-                <ResultMetric
-                  label="Employee rate"
-                  value={result.monthlyEmployeeRatePct == null ? "—" : `${result.monthlyEmployeeRatePct}%`}
-                />
-                <ResultMetric
-                  label="Employer / Gov rate"
-                  value={result.monthlyEmployerRatePct == null ? "—" : `${result.monthlyEmployerRatePct}%`}
-                />
-                <ResultMetric
-                  label="Projected contributions"
-                  value={result.projectedBalanceNpr == null ? "—" : formatMoney(result.projectedBalanceNpr, "NPR")}
-                />
-                <ResultMetric label="Years to retirement" value={String(result.yearsToRetirement)} />
+              <PcCopy>{result.narrative}</PcCopy>
+              <div className="rounded-2xl border border-white/[0.07] bg-[#080d13] px-3.5 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6b7c8f]">
+                  Projected stacked contributions
+                </p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {result.projectedBalanceNpr == null
+                    ? "Not available"
+                    : new Intl.NumberFormat("en-NP", {
+                        style: "currency",
+                        currency: "NPR",
+                        maximumFractionDigits: 0,
+                      }).format(result.projectedBalanceNpr)}
+                </p>
+                <p className="mt-1 text-[11px] text-[#6b7c8f]">
+                  Desk model from verified rates + your inputs — not a synced portal balance.
+                </p>
               </div>
-              <p className="text-[11px] font-bold text-slate-500 dark:text-zinc-500">
+              <p className="text-[11px] font-semibold text-amber-100/90">
                 Monthly pension conversion: Official policy information unavailable for verification.
               </p>
             </>
           )}
           {result.warnings.map((w) => (
-            <p key={w} className="text-[11px] font-semibold text-slate-500 dark:text-zinc-500">
+            <p key={w} className="text-[11px] text-[#6b7c8f]">
               {w}
             </p>
           ))}
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[#5f6f80]">
             Policy versions: {result.policyVersionIds.join(", ") || "none"} · as of {result.asOfDate}
           </p>
-        </PensionGlassPanel>
+        </PcSurface>
       </div>
 
-      <PensionGlassPanel className="p-4 sm:p-5">
-        <div className="mb-3 flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200">
-            <BookOpen size={18} />
-          </span>
-          <div>
-            <PensionSectionLabel>Policy notes</PensionSectionLabel>
-            <PensionHeading>Applicable policy notes</PensionHeading>
-          </div>
-        </div>
-        <ul className="space-y-2.5">
+      <PcSurface className="p-4 sm:p-5">
+        <PcEyebrow>Policy notes</PcEyebrow>
+        <PcTitle as="h2">Applicable rules</PcTitle>
+        <ul className="mt-3 space-y-2.5">
           {benefitRules.map((rule) => (
             <li key={rule.id}>
-              <PensionSoftRow>
-                <span className="font-black text-slate-900 dark:text-white">{rule.title}</span>
-                <span className="mt-1 block text-xs font-semibold text-slate-600 dark:text-zinc-400">
-                  {rule.summary}{" "}
-                  <a
-                    href={rule.officialSourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-teal-700 dark:text-teal-300"
-                  >
-                    Source ↗
-                  </a>
-                </span>
-              </PensionSoftRow>
+              <PolicyNoteCard
+                title={rule.title}
+                summary={rule.summary}
+                status={rule.status}
+                sourceUrl={rule.officialSourceUrl}
+              />
             </li>
           ))}
         </ul>
-      </PensionGlassPanel>
+      </PcSurface>
     </PensionChrome>
   );
 }

@@ -1,21 +1,28 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, Flame, Home, PiggyBank, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { isPensionOverviewPath, PENSION_BASE, PENSION_TAB_LINKS } from "@/lib/pension/nav";
-import { useFireTheme } from "@/contexts/FireThemeContext";
-import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
-import { formatMoney } from "@/lib/expense-utils";
-import { PensionGlassPanel, PensionSectionLabel } from "@/components/pension/PensionUi";
+import { PcEyebrow, SyncStatusChip } from "@/components/pension/PensionUi";
 
-const WEALTH_STRIP = [
-  { href: "/portfolio", label: "Net worth", icon: Home },
-  { href: "/savings-tracker", label: "Saving Goals", icon: PiggyBank },
-  { href: "/portfolio/investments", label: "Investments", icon: TrendingUp },
-  { href: "/fire-summary", label: "FIRE goals", icon: Flame },
-  { href: "/family", label: "Family Hub", icon: Users },
+const PRIMARY_TABS = [
+  { href: PENSION_BASE, label: "Home" },
+  { href: `${PENSION_BASE}/ssf`, label: "SSF" },
+  { href: `${PENSION_BASE}/epf`, label: "EPF" },
+  { href: `${PENSION_BASE}/cit`, label: "CIT" },
+  { href: `${PENSION_BASE}/government`, label: "Gov" },
 ] as const;
+
+const MORE_TABS = PENSION_TAB_LINKS.filter(
+  (t) =>
+    t.href !== PENSION_BASE &&
+    !t.href.endsWith("/ssf") &&
+    !t.href.endsWith("/epf") &&
+    !t.href.endsWith("/cit") &&
+    !t.href.endsWith("/government"),
+);
 
 export function PensionChrome({
   title,
@@ -27,139 +34,92 @@ export function PensionChrome({
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
-  const { resolvedTheme } = useFireTheme();
-  const light = resolvedTheme === "light";
-  const { totals, hydrated, fireScore } = useWealthPortfolio();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const activeMore = useMemo(
+    () => MORE_TABS.some((t) => pathname === t.href || pathname.startsWith(`${t.href}/`)),
+    [pathname],
+  );
 
   return (
-    <div className="flex flex-col gap-5 lg:gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pb-28 sm:max-w-5xl sm:gap-5 sm:pb-8 lg:max-w-6xl">
+      <header className="flex items-center justify-between gap-3">
         <Link
           href="/portfolio"
-          className={`inline-flex min-h-[44px] w-fit items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black shadow-sm backdrop-blur-md transition duration-300 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/45 sm:text-sm ${
-            light
-              ? "border-emerald-200/90 bg-white/95 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-50/90"
-              : "border-emerald-400/18 bg-white/[0.06] text-emerald-50/95 hover:border-teal-300/35 hover:bg-white/10"
-          }`}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-[#0c1219] px-3.5 text-xs font-bold text-[#c5d0db] transition hover:border-[#2dd4bf]/35 hover:text-white"
         >
-          <ArrowLeft size={15} /> Wealth dashboard
+          <ArrowLeft size={15} /> Portfolio
         </Link>
-        <div
-          className={`flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-[11px] ${
-            light ? "text-emerald-800/75" : "text-emerald-200/65"
-          }`}
-        >
-          <span className="rounded-full border border-teal-500/30 bg-gradient-to-r from-teal-500/15 to-emerald-500/10 px-2.5 py-1 text-teal-800 shadow-[0_0_24px_-12px_rgba(45,212,191,0.45)] dark:text-teal-200/90">
-            Pension OS
-          </span>
-          <span className="hidden sm:inline">Retirement center · Nepal & diaspora</span>
+        <SyncStatusChip connected={false} />
+      </header>
+
+      <section className="rounded-[1.5rem] border border-white/[0.08] bg-[radial-gradient(120%_80%_at_0%_0%,rgba(45,212,191,0.14),transparent_55%),linear-gradient(165deg,#0e1620_0%,#090e14_100%)] px-4 py-5 sm:px-6 sm:py-6">
+        <PcEyebrow>Pension Center · Nepal</PcEyebrow>
+        <h1 className="mt-2 text-[1.65rem] font-semibold tracking-[-0.035em] text-white sm:text-3xl">{title}</h1>
+        {subtitle ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#8b9aab]">{subtitle}</p> : null}
+        <p className="mt-3 text-[11px] font-semibold text-amber-100/85">
+          Official portal sync not connected — personal balances show as Not Connected / Not Synced. Never fabricated.
+        </p>
+      </section>
+
+      <nav aria-label="Pension primary" className="sticky top-0 z-30 -mx-1 border-b border-white/[0.05] bg-[#070b10]/90 px-1 py-2 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {PRIMARY_TABS.map((item) => {
+            const active =
+              item.href === PENSION_BASE
+                ? isPensionOverviewPath(pathname)
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition ${
+                  active
+                    ? "bg-[#14b8a6] text-[#042f2e]"
+                    : "border border-white/10 bg-[#0c1219] text-[#9aa8b8] hover:text-white"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold transition ${
+              activeMore || moreOpen
+                ? "bg-white/10 text-white"
+                : "border border-white/10 bg-[#0c1219] text-[#9aa8b8]"
+            }`}
+          >
+            <MoreHorizontal size={14} /> Plan
+          </button>
         </div>
-      </div>
-
-      <PensionGlassPanel className="p-4 sm:p-6">
-        <div className="flex flex-col gap-5">
-          <div className="max-w-3xl">
-            <PensionSectionLabel>FIRE Nepal · Pension Center</PensionSectionLabel>
-            <h1 className="mt-1.5 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl lg:text-[2.05rem]">
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="mt-2 max-w-3xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400 sm:text-[0.95rem]">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {WEALTH_STRIP.map((item) => {
-              const Icon = item.icon;
+        {moreOpen ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {MORE_TABS.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 sm:text-xs ${
-                    light
-                      ? "border-slate-200/90 bg-white/90 text-slate-800 hover:border-teal-300/80 hover:bg-teal-50/80"
-                      : "border-white/10 bg-white/[0.05] text-zinc-100 hover:border-teal-400/35 hover:bg-white/[0.08]"
+                  onClick={() => setMoreOpen(false)}
+                  className={`rounded-xl border px-3 py-2.5 text-[11px] font-bold ${
+                    active
+                      ? "border-[#2dd4bf]/40 bg-[#2dd4bf]/15 text-[#99f6e4]"
+                      : "border-white/10 bg-[#0c1219] text-[#9aa8b8]"
                   }`}
                 >
-                  <Icon size={14} className="opacity-80" />
                   {item.label}
-                  <ChevronRight size={12} className="opacity-60" />
                 </Link>
               );
             })}
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <HeaderMetric
-              light={light}
-              label="Portfolio net worth"
-              value={!hydrated ? "—" : formatMoney(totals.netWorthNpr, "NPR")}
-            />
-            <HeaderMetric
-              light={light}
-              label="Retirement sleeve"
-              value={!hydrated ? "—" : formatMoney(totals.retirementNpr, "NPR")}
-            />
-            <HeaderMetric
-              light={light}
-              label="FIRE readiness"
-              value={!hydrated ? "—" : `${Math.round(fireScore)}%`}
-            />
-          </div>
-        </div>
-      </PensionGlassPanel>
-
-      <nav
-        aria-label="Pension sections"
-        className={`-mx-1 flex flex-nowrap gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2 pt-0.5 no-scrollbar sm:gap-2.5 sm:pb-2 ${
-          light ? "" : ""
-        }`}
-      >
-        {PENSION_TAB_LINKS.map((item) => {
-          const active =
-            item.href === PENSION_BASE
-              ? isPensionOverviewPath(pathname)
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-bold transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 sm:px-3.5 sm:text-xs ${
-                active
-                  ? light
-                    ? "border-teal-500/50 bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm"
-                    : "border-teal-400/45 bg-gradient-to-r from-teal-500/30 via-emerald-500/22 to-lime-400/15 text-white shadow-[0_0_28px_-8px_rgba(45,212,191,0.4)]"
-                  : light
-                    ? "border-slate-200/80 bg-white/80 text-slate-700 hover:border-teal-200"
-                    : "border-white/10 bg-white/[0.04] text-zinc-300 hover:border-teal-400/25 hover:text-white"
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+        ) : null}
       </nav>
 
       <div className="flex flex-col gap-4 sm:gap-5">{children}</div>
-    </div>
-  );
-}
-
-function HeaderMetric({ light, label, value }: { light: boolean; label: string; value: string }) {
-  return (
-    <div
-      className={`rounded-2xl border px-3.5 py-3 ${
-        light
-          ? "border-emerald-200/80 bg-white/80 text-emerald-950"
-          : "border-white/10 bg-white/[0.045] text-white"
-      }`}
-    >
-      <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-teal-700/80 dark:text-teal-300/75">
-        {label}
-      </span>
-      <span className="mt-1 block truncate text-base font-black tracking-tight sm:text-lg">{value}</span>
     </div>
   );
 }
