@@ -11,6 +11,14 @@ import {
 } from "@/lib/pension-policy";
 import { OfficialPortalActions } from "@/components/pension/OfficialPortalActions";
 import { PENSION_BASE } from "@/lib/pension/nav";
+import {
+  PensionBody,
+  PensionGlassPanel,
+  PensionHeading,
+  PensionSectionLabel,
+  PensionSoftRow,
+  PensionStatusPill,
+} from "@/components/pension/PensionUi";
 
 const MODULE_LINKS: { href: string; label: string }[] = [
   { href: `${PENSION_BASE}/retirement-projection`, label: "Retirement Projection" },
@@ -23,7 +31,6 @@ const MODULE_LINKS: { href: string; label: string }[] = [
 
 export function InstitutionPolicyDesk({
   institution,
-  light,
   overview,
 }: {
   institution: PensionInstitutionId;
@@ -32,25 +39,29 @@ export function InstitutionPolicyDesk({
 }) {
   const asOf = todayIsoDate();
   const rules = listActiveRulesForInstitution(PENSION_POLICY_CATALOG, institution, asOf);
-  const glass = light ? "ring-1 ring-slate-900/[0.04]" : "";
 
   return (
-    <div className="flex flex-col gap-4">
-      <section className={`wealth-glass p-4 sm:p-5 ${glass}`}>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">Overview</p>
-        <h2 className="mt-1 text-lg font-black text-slate-900 dark:text-white">{INSTITUTION_LABELS[institution]}</h2>
-        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{overview}</p>
+    <div className="flex flex-col gap-4 sm:gap-5">
+      <PensionGlassPanel className="p-4 sm:p-5">
+        <PensionSectionLabel>Overview</PensionSectionLabel>
+        <PensionHeading>{INSTITUTION_LABELS[institution]}</PensionHeading>
+        <PensionBody className="mt-2">{overview}</PensionBody>
         <p className="mt-3 text-[11px] font-bold text-slate-500 dark:text-zinc-500">
           Policy-driven desk · as of {asOf} · unverified rates are never auto-applied
         </p>
-      </section>
+      </PensionGlassPanel>
 
-      <OfficialPortalActions institution={institution} light={light} />
+      <OfficialPortalActions institution={institution} />
 
-      <section className={`wealth-glass p-4 sm:p-5 ${glass}`}>
-        <div className="mb-3 flex items-center gap-2">
-          <BookOpen size={18} className="text-teal-600 dark:text-teal-300" />
-          <h2 className="text-lg font-black text-slate-900 dark:text-white">Official policy rules</h2>
+      <PensionGlassPanel className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-xl border border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-200">
+            <BookOpen size={18} />
+          </span>
+          <div>
+            <PensionSectionLabel>Policy layer</PensionSectionLabel>
+            <PensionHeading>Official policy rules</PensionHeading>
+          </div>
         </div>
         {rules.length === 0 ? (
           <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
@@ -59,65 +70,63 @@ export function InstitutionPolicyDesk({
         ) : (
           <ul className="flex flex-col gap-3">
             {rules.map((rule) => (
-              <PolicyRuleRow key={rule.id} rule={rule} light={light} />
+              <PolicyRuleRow key={rule.id} rule={rule} />
             ))}
           </ul>
         )}
-      </section>
+      </PensionGlassPanel>
 
-      <section className={`wealth-glass p-4 sm:p-5 ${glass}`}>
-        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Planning modules</h2>
+      <PensionGlassPanel className="p-4 sm:p-5">
+        <PensionSectionLabel>Planning modules</PensionSectionLabel>
         <div className="mt-3 flex flex-wrap gap-2">
           {MODULE_LINKS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-full border border-teal-500/25 bg-teal-500/10 px-3 py-2 text-[11px] font-black text-teal-950 hover:bg-teal-500/15 dark:text-teal-50"
+              className="rounded-full border border-teal-500/25 bg-teal-500/10 px-3.5 py-2 text-[11px] font-black text-teal-950 transition hover:bg-teal-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 dark:text-teal-50"
             >
               {item.label} →
             </Link>
           ))}
         </div>
-      </section>
+      </PensionGlassPanel>
     </div>
   );
 }
 
-function PolicyRuleRow({ rule, light }: { rule: PensionPolicyRule; light?: boolean }) {
+function PolicyRuleRow({ rule }: { rule: PensionPolicyRule }) {
   const pending = rule.status === "pending_verification";
   return (
-    <li
-      className={`rounded-xl border px-3 py-3 ${
-        light ? "border-slate-200/80 bg-white/70" : "border-white/10 bg-white/[0.03]"
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-black text-slate-900 dark:text-white">{rule.title}</p>
-          <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{rule.summary}</p>
-          {pending ? (
-            <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
-              <AlertTriangle size={12} /> Official policy information unavailable for verification.
-            </p>
-          ) : null}
-          {rule.notes ? <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{rule.notes}</p> : null}
+    <li>
+      <PensionSoftRow>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-900 dark:text-white">{rule.title}</p>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-600 dark:text-zinc-400">{rule.summary}</p>
+            {pending ? (
+              <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                <AlertTriangle size={12} /> Official policy information unavailable for verification.
+              </p>
+            ) : null}
+            {rule.notes ? <p className="mt-1 text-[11px] font-semibold text-slate-500 dark:text-zinc-500">{rule.notes}</p> : null}
+          </div>
+          <StatusPill status={rule.status} />
         </div>
-        <StatusPill status={rule.status} />
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-        <span>{rule.ruleCategory.replaceAll("_", " ")}</span>
-        <span>v{rule.version}</span>
-        <span>Effective {rule.effectiveDate}</span>
-        <span>Verified {rule.lastVerifiedDate}</span>
-        <a
-          href={rule.officialSourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-300"
-        >
-          Official source ↗
-        </a>
-      </div>
+        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+          <span>{rule.ruleCategory.replaceAll("_", " ")}</span>
+          <span>v{rule.version}</span>
+          <span>Effective {rule.effectiveDate}</span>
+          <span>Verified {rule.lastVerifiedDate}</span>
+          <a
+            href={rule.officialSourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-300"
+          >
+            Official source ↗
+          </a>
+        </div>
+      </PensionSoftRow>
     </li>
   );
 }
@@ -125,21 +134,17 @@ function PolicyRuleRow({ rule, light }: { rule: PensionPolicyRule; light?: boole
 function StatusPill({ status }: { status: PensionPolicyRule["status"] }) {
   if (status === "active") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-200">
+      <PensionStatusPill tone="active">
         <CheckCircle2 size={11} /> Active
-      </span>
+      </PensionStatusPill>
     );
   }
   if (status === "pending_verification") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900 dark:text-amber-200">
+      <PensionStatusPill tone="pending">
         <Clock size={11} /> Pending verification
-      </span>
+      </PensionStatusPill>
     );
   }
-  return (
-    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-black uppercase text-zinc-400">
-      {status}
-    </span>
-  );
+  return <PensionStatusPill tone="neutral">{status}</PensionStatusPill>;
 }

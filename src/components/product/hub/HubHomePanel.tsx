@@ -122,6 +122,14 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         plan: "free",
       },
       {
+        href: "/portfolio/pension",
+        title: "Your Pension",
+        body: "SSF, EPF, CIT & retirement planning",
+        icon: Landmark,
+        accent: "from-teal-500/25 to-emerald-400/10",
+        plan: "free",
+      },
+      {
         href: "/group-expenses",
         title: "Group/Roommate Expenses",
         body: "Shared bills, roommates & settlements",

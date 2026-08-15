@@ -148,6 +148,13 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
         accent: "from-amber-500/15 to-emerald-500/10",
       },
       {
+        href: "/portfolio/pension",
+        title: "Your Pension",
+        body: "SSF, EPF, CIT & retirement planning",
+        icon: Landmark,
+        accent: "from-teal-500/25 to-emerald-400/10",
+      },
+      {
         href: "/group-expenses",
         title: "Group/Roommate Expenses",
         body: "Shared bills, roommates & settlements",
