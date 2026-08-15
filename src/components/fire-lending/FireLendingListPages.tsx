@@ -541,7 +541,9 @@ export function FireLendingAgreementsPage() {
                   <LendingStatusPill status={agr.status} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <LendingSecondaryButton onClick={() => void downloadAgreement(agr.loanId)}>Download PDF</LendingSecondaryButton>
+                  <LendingSecondaryButton onClick={() => void downloadAgreement(agr.loanId)}>
+                    Download Agreement Letter
+                  </LendingSecondaryButton>
                   {loan && !loan.lenderSigned ? (
                     <LendingPrimaryButton onClick={() => signAgreement(agr.loanId, "lender")}>Sign lender</LendingPrimaryButton>
                   ) : null}
@@ -590,32 +592,71 @@ export function FireLendingTrustScorePage() {
 }
 
 export function FireLendingDocumentsPage() {
-  const { store } = useFireLending();
+  const { store, downloadLoanDocument, downloadAgreement } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <LendingMobileScreen>
       <LendingCompactHeader eyebrow="Documents" title="Vault" subtitle="Agreements, IDs, collateral & proofs." />
       <LendingGlassCard title="Files" icon={Shield}>
-        <ul className="space-y-1.5">
-          {store.documents.map((doc) => (
-            <li
-              key={doc.id}
-              className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${
-                light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
-              }`}
-            >
-              <div>
-                <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{doc.title}</p>
-                <p className={`text-[11px] ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
-                  {doc.kind} · {formatCompactDate(doc.createdAt)}
-                </p>
-              </div>
-              <LendingStatusPill status={doc.kind} />
-            </li>
-          ))}
-        </ul>
+        {store.documents.length === 0 ? (
+          <LendingEmptyState message="No documents in your vault yet." />
+        ) : (
+          <ul className="space-y-1.5">
+            {store.documents.map((doc) => (
+              <li
+                key={doc.id}
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 ${
+                  light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
+                }`}
+              >
+                <div>
+                  <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>
+                    {doc.fileName || doc.title}
+                  </p>
+                  <p className={`text-[11px] ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
+                    {doc.kind} · {formatCompactDate(doc.createdAt)}
+                    {doc.loanId ? ` · Loan ${doc.loanId.slice(0, 12)}` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <LendingStatusPill status={doc.kind} />
+                  {doc.loanId && (doc.url || doc.storagePath) ? (
+                    <LendingSecondaryButton
+                      onClick={() => {
+                        setError(null);
+                        void downloadLoanDocument(doc.loanId!, doc.id).catch((e) =>
+                          setError(e instanceof Error ? e.message : "Download failed."),
+                        );
+                      }}
+                    >
+                      Download
+                    </LendingSecondaryButton>
+                  ) : null}
+                  {doc.kind === "agreement" && doc.loanId ? (
+                    <LendingSecondaryButton
+                      onClick={() => {
+                        setError(null);
+                        void downloadAgreement(doc.loanId!).catch((e) =>
+                          setError(e instanceof Error ? e.message : "Agreement download failed."),
+                        );
+                      }}
+                    >
+                      Download Agreement Letter
+                    </LendingSecondaryButton>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {error ? (
+          <p role="alert" className="mt-2 text-[11px] font-semibold text-rose-400">
+            {error}
+          </p>
+        ) : null}
       </LendingGlassCard>
     </LendingMobileScreen>
   );

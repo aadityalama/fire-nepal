@@ -152,10 +152,28 @@ export type FireLendingNotification = {
 export type FireLendingDocument = {
   id: string;
   loanId?: string;
+  /** Linked loan request when created from the approval flow. */
+  requestId?: string;
   partyId?: string;
   title: string;
   kind: "agreement" | "id" | "collateral" | "payment_proof" | "other";
   createdAt: string;
+  /** Original file name including extension. */
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  /**
+   * Private storage object path (`{userId}/{loanId}/{fileId}.ext`).
+   * Prefer signed-url refresh over embedding long-lived public URLs.
+   */
+  storagePath?: string;
+  /**
+   * Short-lived signed HTTPS URL or guest data URL for local preview/download.
+   * Never treat as a durable public link.
+   */
+  url?: string;
+  uploadStatus?: "pending" | "uploading" | "ready" | "error";
+  uploadError?: string;
 };
 
 export type PortfolioSummary = {
