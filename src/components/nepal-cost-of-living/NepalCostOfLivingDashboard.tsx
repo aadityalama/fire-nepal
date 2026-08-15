@@ -557,58 +557,55 @@ function MobileExpenseCard({
   const pct = total > 0 ? (item.amount / total) * 100 : 0;
 
   return (
-    <article className="rounded-xl border border-emerald-500/14 bg-emerald-950/35 px-4 py-4">
-      <div className="flex min-w-0 items-start gap-3.5">
-        <span className="mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
+    <article className="col-mobile-expense-card rounded-xl border border-emerald-500/14 bg-emerald-950/35 px-4 py-4">
+      {/* Row 1: icon + name + edit — never shares space with amount */}
+      <div className="flex w-full items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
           <Icon size={20} className="text-white" fill="currentColor" strokeWidth={1.6} />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="min-w-0 break-words text-[18px] font-black leading-snug text-white">{item.label}</h3>
-            <button
-              type="button"
-              aria-label={`Edit ${item.label} monthly cost`}
-              onClick={() => {
-                inputRef.current?.focus();
-                if (inputRef.current) scrollAmountFieldIntoView(inputRef.current);
-              }}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-emerald-500/16 bg-white/5 text-emerald-100/80"
-            >
-              <Pencil size={18} />
-            </button>
-          </div>
+        <h3 className="min-w-0 flex-1 break-words pr-1 text-[18px] font-black leading-snug text-white">{item.label}</h3>
+        <button
+          type="button"
+          aria-label={`Edit ${item.label} monthly cost`}
+          onClick={() => {
+            inputRef.current?.focus();
+            if (inputRef.current) scrollAmountFieldIntoView(inputRef.current);
+          }}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/16 bg-white/5 text-emerald-100/80"
+        >
+          <Pencil size={17} />
+        </button>
+      </div>
 
-          <label className="mt-3.5 block">
-            <span className="block text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Monthly Cost</span>
-            <span className="sr-only">{item.label} monthly amount in NPR</span>
-            <input
-              ref={inputRef}
-              type="number"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              enterKeyHint="done"
-              min={0}
-              step={500}
-              value={draft}
-              onChange={(event) => handleChange(event.target.value)}
-              onFocus={(event) => scrollAmountFieldIntoView(event.currentTarget)}
-              onBlur={() => commit(draft)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-              className="col-mobile-amount-input mt-2 box-border min-h-[52px] w-full min-w-0 rounded-lg border border-emerald-500/18 bg-black/25 px-4 py-3 text-[22px] font-extrabold leading-none tracking-tight text-white outline-none tabular-nums [appearance:textfield] [font-variant-numeric:tabular-nums] focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </label>
+      {/* Row 2: labeled full-width amount — sole primary value */}
+      <label className="mt-4 block w-full">
+        <span className="mb-2 block text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Monthly Cost</span>
+        <input
+          ref={inputRef}
+          type="number"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          enterKeyHint="done"
+          min={0}
+          step={500}
+          value={draft}
+          aria-label={`${item.label} monthly amount in NPR`}
+          onChange={(event) => handleChange(event.target.value)}
+          onFocus={(event) => scrollAmountFieldIntoView(event.currentTarget)}
+          onBlur={() => commit(draft)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="col-mobile-amount-input w-full border border-emerald-500/18 bg-black/25 text-white outline-none tabular-nums [appearance:textfield] [font-variant-numeric:tabular-nums] focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+      </label>
 
-          <div className="mt-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] font-semibold text-emerald-50/65">
-            <span className="min-w-0">{pct.toFixed(1)}% of total</span>
-            <NumericText className="shrink-0 text-emerald-300/90">{formatNprInteger(item.amount)}</NumericText>
-          </div>
+      {/* Row 3: secondary % — own row, never beside amount */}
+      <p className="mt-3 text-[11px] font-semibold leading-none text-emerald-50/60">{pct.toFixed(1)}% of total</p>
 
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950">
-            <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
-          </div>
-        </div>
+      {/* Row 4: secondary progress — own row */}
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950" aria-hidden>
+        <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
     </article>
   );
@@ -1187,7 +1184,7 @@ export function NepalCostOfLivingDashboard() {
             </div>
 
             <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
-              <GlassCard className="min-h-0 overflow-hidden rounded-lg p-0 min-[1000px]:col-span-7" delay={0.08}>
+              <GlassCard className="min-h-0 overflow-visible rounded-lg p-0 max-md:overflow-visible min-[1000px]:col-span-7 min-[1000px]:overflow-hidden" delay={0.08}>
                 <div className="flex min-h-10 flex-col items-start gap-2 border-b border-emerald-500/12 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                   <h2 className="text-[15px] font-black uppercase tracking-wide text-white">Monthly Expense Breakdown</h2>
                   <button
@@ -1200,7 +1197,7 @@ export function NepalCostOfLivingDashboard() {
                   </button>
                 </div>
                 {/* Mobile: stacked expense cards (<=767px / max-md) */}
-                <div className="space-y-4 px-3 py-3.5 md:hidden">
+                <div className="flex flex-col gap-4 px-3 py-4 md:hidden">
                   {snapshot.items.map((item) => (
                     <MobileExpenseCard
                       key={item.id}
@@ -1210,23 +1207,23 @@ export function NepalCostOfLivingDashboard() {
                       onAmountChange={(amount) => patchExpense(item.id, amount)}
                     />
                   ))}
-                  <div className="rounded-xl border border-emerald-400/28 bg-gradient-to-br from-emerald-500/18 via-emerald-950/50 to-[#021510]/90 px-4 py-4">
-                    <div className="flex min-w-0 items-center gap-3.5">
-                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
-                        <BarChart3 size={20} className="text-white" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Total Monthly Cost</p>
-                        <p className="mt-1.5 break-words text-[26px] font-black leading-none tracking-tight text-white tabular-nums">
-                          {formatNprInteger(snapshot.total)}
-                        </p>
-                        <p className="mt-1.5 text-[11px] font-semibold text-emerald-300/90">100% of total</p>
-                      </div>
+
+                  {/* Completely separate total section below all categories */}
+                  <section
+                    aria-label="Total monthly cost summary"
+                    className="mt-2 flex w-full flex-col gap-2 border-t border-emerald-400/25 pt-4"
+                  >
+                    <div className="rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/18 via-emerald-950/50 to-[#021510]/90 px-4 py-4">
+                      <p className="text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Total Monthly Cost</p>
+                      <p className="mt-2 break-words text-[26px] font-black leading-none tracking-tight text-white tabular-nums">
+                        {formatNprInteger(snapshot.total)}
+                      </p>
+                      <p className="mt-2 text-[11px] font-semibold text-emerald-300/90">100% of total</p>
                     </div>
-                  </div>
-                  <p className="px-0.5 text-[11px] font-semibold text-emerald-50/55">
-                    Tap any amount to edit. Changes are saved automatically.
-                  </p>
+                    <p className="px-0.5 text-[11px] font-semibold text-emerald-50/55">
+                      Tap any amount to edit. Changes are saved automatically.
+                    </p>
+                  </section>
                 </div>
 
                 {/* Desktop: existing table layout (md+) */}

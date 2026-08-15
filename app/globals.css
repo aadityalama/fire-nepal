@@ -111,9 +111,9 @@ input {
     -webkit-text-size-adjust: 100%;
   }
 
-  input[type="number"]:not(.fn-mobile-numeric-input),
-  input[inputmode="numeric"]:not(.fn-mobile-numeric-input),
-  input[inputmode="decimal"]:not(.fn-mobile-numeric-input) {
+  input[type="number"]:not(.fn-mobile-numeric-input):not(.col-mobile-amount-input),
+  input[inputmode="numeric"]:not(.fn-mobile-numeric-input):not(.col-mobile-amount-input),
+  input[inputmode="decimal"]:not(.fn-mobile-numeric-input):not(.col-mobile-amount-input) {
     height: 56px;
     border-radius: 19px;
     padding-inline: 20px;
@@ -134,17 +134,36 @@ input {
       0 0 24px rgba(52, 211, 153, 0.12);
   }
 
-  /* Cost-of-living mobile expense cards: enlarge amount field beyond the 18px floor */
+  /* Cost-of-living mobile expense cards: full-width stacked amount field */
+  .col-mobile-expense-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  .col-mobile-expense-card .col-mobile-amount-input,
   input.col-mobile-amount-input[type="number"],
   input.col-mobile-amount-input[inputmode="numeric"] {
-    min-height: 56px;
-    height: auto;
+    display: block;
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100%;
+    min-height: 52px !important;
+    height: auto !important;
+    margin: 0;
+    padding: 14px 16px !important;
+    border-radius: 12px !important;
     font-size: 22px !important;
     font-weight: 800 !important;
-    text-align: left;
-    border-radius: 0.5rem;
-    padding-block: 12px;
-    padding-inline: 16px;
+    line-height: 1.15 !important;
+    text-align: left !important;
+    overflow: visible;
+    -webkit-appearance: none;
+    appearance: none;
   }
 }
 
