@@ -36,6 +36,7 @@ import {
 } from "@/components/cashflow-workspace/cashflow-workspace-utils";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 import { formatNpr } from "@/components/expense-workspace/expense-workspace-utils";
+import { currentMonthKey, entryMonthlyAmount } from "@/components/cashflow/cashflow-metrics";
 import {
   buildIncomeHistoryChartData,
   hasIncomeChartData,
@@ -123,16 +124,19 @@ function KpiCard({ label, value, tone = "emerald" }: { label: string; value: str
 function IncomeSourceCard({
   entry,
   index,
+  monthKey,
   onEdit,
   onDelete,
 }: {
   entry: IncomeEntry;
   index: number;
+  monthKey: string;
   onEdit: (entry: IncomeEntry) => void;
   onDelete: (id: string) => void;
 }) {
   const typeMeta = getIncomeTypeMeta(entry.incomeType);
   const [menuOpen, setMenuOpen] = useState(false);
+  const periodAmount = entryMonthlyAmount(entry, monthKey);
 
   return (
     <motion.article
@@ -192,7 +196,7 @@ function IncomeSourceCard({
       <div className="mt-4 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-xl border border-white/8 bg-black/15 px-2 py-2">
           <p className="text-[9px] font-black uppercase tracking-[0.12em] text-emerald-100/40">Amount</p>
-          <p className="mt-1 text-sm font-black tabular-nums text-lime-100">{formatNpr(entry.amount)}</p>
+          <p className="mt-1 text-sm font-black tabular-nums text-lime-100">{formatNpr(periodAmount)}</p>
         </div>
         <div className="rounded-xl border border-white/8 bg-black/15 px-2 py-2">
           <p className="text-[9px] font-black uppercase tracking-[0.12em] text-emerald-100/40">Frequency</p>
@@ -243,6 +247,7 @@ export function CashflowWorkspaceDashboard({
   }, []);
 
   const monthEntries = useMemo(() => getIncomeEntriesForMonth(state), [state]);
+  const incomeMonthKey = useMemo(() => currentMonthKey(), [state]);
   const allEntries = useMemo(() => sortIncomeEntriesByDateDesc(state.incomeEntries ?? []), [state.incomeEntries]);
   const incomeChartData = useMemo(() => buildIncomeHistoryChartData(state), [state]);
   const showChart = hasIncomeChartData(incomeChartData);
@@ -393,6 +398,7 @@ export function CashflowWorkspaceDashboard({
                           key={entry.id}
                           entry={entry}
                           index={index}
+                          monthKey={incomeMonthKey}
                           onEdit={openEditForm}
                           onDelete={(id) => {
                             const target = entries.find((item) => item.id === id);

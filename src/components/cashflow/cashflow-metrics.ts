@@ -22,18 +22,36 @@ export function entryAppliesToMonth(entry: IncomeEntry, monthKey: string): boole
   return entry.date.startsWith(monthKey);
 }
 
+/**
+ * Amount this income entry contributes to a calendar month's cashflow total.
+ * Must match what Income Sources cards show for that month:
+ * - once / monthly / yearly (anniversary month only): full recorded amount
+ * - weekly: ~4 weeks (monthly equivalent)
+ *
+ * Yearly is NOT divided by 12 here — cash arrives (and is listed) as a lump sum
+ * in the anniversary month only via `entryAppliesToMonth`.
+ */
 export function entryMonthlyAmount(entry: IncomeEntry, monthKey: string): number {
   if (!entryAppliesToMonth(entry, monthKey)) return 0;
   const frequency: IncomeFrequency = entry.frequency ?? (entry.repeatMonthly ? "monthly" : "once");
   const amount = finiteNonNeg(entry.amount);
   if (frequency === "weekly") return Math.round(amount * 4);
-  if (frequency === "yearly") return Math.round(amount / 12);
   return amount;
 }
 
 export function sumIncomeEntriesForMonth(state: CashflowDashboardState, monthKey = currentMonthKey()): number {
   const entries = state.incomeEntries ?? [];
   return entries.reduce((acc, entry) => acc + entryMonthlyAmount(entry, monthKey), 0);
+}
+
+/** Sum of period amounts for the same income entries Income Sources lists this month. */
+export function sumVisibleIncomeSourcesForMonth(
+  state: CashflowDashboardState,
+  monthKey = currentMonthKey(),
+): number {
+  return (state.incomeEntries ?? [])
+    .filter((entry) => entryAppliesToMonth(entry, monthKey))
+    .reduce((acc, entry) => acc + entryMonthlyAmount(entry, monthKey), 0);
 }
 
 export function sumLegacyIncome(state: CashflowDashboardState): number {
