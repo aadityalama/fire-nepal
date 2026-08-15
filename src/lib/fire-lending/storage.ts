@@ -1,12 +1,72 @@
 import { createSeedStore } from "@/lib/fire-lending/seed";
-import type { FireLendingStore } from "@/lib/fire-lending/types";
+import { computeTrustScore } from "@/lib/fire-lending/trust-score";
+import type { FireLendingParty, FireLendingStore } from "@/lib/fire-lending/types";
 
 export const FIRE_LENDING_STORAGE_KEY = "fire-nepal.fire-lending.v1";
 
+const FALLBACK_SELF_ID = "party_me";
+
 export function createEmptyLendingStore(): FireLendingStore {
   return {
-    currentUserId: "party_me",
+    currentUserId: FALLBACK_SELF_ID,
     parties: [],
+    loans: [],
+    payments: [],
+    installments: [],
+    requests: [],
+    agreements: [],
+    notifications: [],
+    documents: [],
+  };
+}
+
+function ensureSelfParty(store: FireLendingStore): FireLendingParty {
+  const currentUserId = store.currentUserId?.trim() || FALLBACK_SELF_ID;
+  const existing =
+    store.parties.find((p) => p.id === currentUserId) ||
+    store.parties.find((p) => p.id === FALLBACK_SELF_ID);
+
+  if (existing) {
+    const cleared: FireLendingParty = {
+      ...existing,
+      id: currentUserId,
+      // Reset P2P lending-specific counters / activity only — keep identity fields.
+      onTimePayments: 0,
+      latePayments: 0,
+      loansCompleted: 0,
+      notes: existing.notes,
+    };
+    return { ...cleared, trustScore: computeTrustScore(cleared) };
+  }
+
+  const synthesized: FireLendingParty = {
+    id: currentUserId,
+    fireNepalId: "FN-LOCAL-USER",
+    name: "You",
+    mobile: "",
+    trustScore: 0,
+    verified: false,
+    rolePreference: "both",
+    onTimePayments: 0,
+    latePayments: 0,
+    loansCompleted: 0,
+    identityVerified: false,
+  };
+  return { ...synthesized, trustScore: computeTrustScore(synthesized) };
+}
+
+/**
+ * Reset only the current user's P2P lending/loan demo data.
+ * Clears loans, payments, installments, requests, agreements, notifications,
+ * documents, and borrower/demo counterparties — while preserving the current
+ * user's lending profile identity so downloads/wizard never hit a missing profile.
+ * Does not touch FIRE Nepal account, membership, finance, pension, or other modules.
+ */
+export function resetUserLoanData(store: FireLendingStore): FireLendingStore {
+  const me = ensureSelfParty(store);
+  return {
+    currentUserId: me.id,
+    parties: [me],
     loans: [],
     payments: [],
     installments: [],
@@ -67,8 +127,15 @@ export function saveLendingStore(store: FireLendingStore): void {
   }
 }
 
+/** @deprecated Prefer resetUserLoanData — full seed replace is only for guest bootstrap. */
 export function resetLendingStore(): FireLendingStore {
   const seed = createSeedStore();
   saveLendingStore(seed);
   return seed;
+}
+
+export function persistResetUserLoanData(store: FireLendingStore): FireLendingStore {
+  const next = resetUserLoanData(store);
+  saveLendingStore(next);
+  return next;
 }

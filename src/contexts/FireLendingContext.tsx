@@ -25,7 +25,7 @@ import {
   clearFireLendingLocalCache,
   createEmptyLendingStore,
   loadLendingStore,
-  resetLendingStore,
+  persistResetUserLoanData,
   saveLendingStore,
   sanitizeFireLendingStore,
 } from "@/lib/fire-lending/storage";
@@ -41,6 +41,7 @@ import type {
   PaymentMethod,
 } from "@/lib/fire-lending/types";
 import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
+import { appToast } from "@/lib/toast";
 
 type FireLendingContextValue = {
   store: FireLendingStore;
@@ -70,7 +71,8 @@ type FireLendingContextValue = {
   signAgreement: (loanId: string, as: "lender" | "borrower") => void;
   downloadAgreement: (loanId: string) => Promise<void>;
   markNotificationRead: (id: string) => void;
-  resetDemoData: () => void;
+  /** Clears current-user P2P loan demo data only (not account/other modules). */
+  resetLoanData: () => void;
 };
 
 const FireLendingContext = createContext<FireLendingContextValue | null>(null);
@@ -401,8 +403,9 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     }));
   }, [setStore]);
 
-  const resetDemoData = useCallback(() => {
-    setStore(resetLendingStore());
+  const resetLoanData = useCallback(() => {
+    setStore((prev) => persistResetUserLoanData(prev));
+    appToast.success("Your loan data has been reset.", { id: "fire-lending-reset-loan-data" });
   }, [setStore]);
 
   const value: FireLendingContextValue = {
@@ -425,7 +428,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     signAgreement,
     downloadAgreement,
     markNotificationRead,
-    resetDemoData,
+    resetLoanData,
   };
 
   return <FireLendingContext.Provider value={value}>{children}</FireLendingContext.Provider>;

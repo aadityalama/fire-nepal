@@ -30,6 +30,7 @@ import {
   LendingInput,
   LendingSelect,
 } from "@/components/fire-lending/FireLendingUiPrimitives";
+import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmModal";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
@@ -553,22 +554,54 @@ export function FireLendingDocumentsPage() {
 }
 
 export function FireLendingSettingsPage() {
-  const { resetDemoData, store } = useFireLending();
+  const { resetLoanData, store } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const me = store.parties.find((p) => p.id === store.currentUserId);
+
+  const onConfirmReset = () => {
+    setBusy(true);
+    try {
+      resetLoanData();
+      setConfirmOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <LendingMobileScreen>
-      <LendingCompactHeader eyebrow="Settings" title="Lending preferences" subtitle="Demo data, notifications & future marketplace." />
+      <LendingCompactHeader
+        eyebrow="Settings"
+        title="Lending preferences"
+        subtitle="Loan data, notifications & future marketplace."
+      />
       <LendingGlassCard title="Module settings" icon={Settings}>
         <p className={`mb-3 text-sm font-semibold ${light ? "text-slate-600" : "text-emerald-200/70"}`}>
-          Current user FIRE ID: {store.parties.find((p) => p.id === store.currentUserId)?.fireNepalId ?? "—"}
+          Current user FIRE ID: {me?.fireNepalId ?? "—"}
         </p>
         <p className={`mb-4 text-xs font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
-          Architecture is ready for public P2P marketplace, escrow, multi-currency, guarantor & insurance modules.
+          Reset only clears your P2P lending loans and related demo records. Your FIRE Nepal account,
+          membership, finance, pension, and other modules are not affected.
         </p>
-        <LendingSecondaryButton onClick={resetDemoData}>Reset demo portfolio</LendingSecondaryButton>
+        <LendingSecondaryButton onClick={() => setConfirmOpen(true)} disabled={busy}>
+          Reset Your Loan Data
+        </LendingSecondaryButton>
       </LendingGlassCard>
+      <DataResetConfirmModal
+        open={confirmOpen}
+        title="Reset Your Loan Data?"
+        body="This will remove your current P2P lending demo loans, payments, installments, requests, and related agreements. Your other FIRE Nepal data will not be affected."
+        confirmLabel="Reset Loan Data"
+        cancelLabel="Cancel"
+        busy={busy}
+        onCancel={() => {
+          if (!busy) setConfirmOpen(false);
+        }}
+        onConfirm={onConfirmReset}
+      />
     </LendingMobileScreen>
   );
 }
