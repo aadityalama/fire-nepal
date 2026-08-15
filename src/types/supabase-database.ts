@@ -781,6 +781,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      membership_plan_selection_emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          sent_at: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject: string | null;
+          provider_message: string | null;
+          resend_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          sent_at?: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          email?: string;
+          sent_at?: string;
+          delivery_status?: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       membership_reminder_queue: {
         Row: {
           id: string;
