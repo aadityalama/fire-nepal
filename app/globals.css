@@ -133,6 +133,19 @@ input {
       0 0 0 4px rgba(16, 185, 129, 0.14),
       0 0 24px rgba(52, 211, 153, 0.12);
   }
+
+  /* Cost-of-living mobile expense cards: enlarge amount field beyond the 18px floor */
+  input.col-mobile-amount-input[type="number"],
+  input.col-mobile-amount-input[inputmode="numeric"] {
+    min-height: 56px;
+    height: auto;
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    text-align: left;
+    border-radius: 0.5rem;
+    padding-block: 12px;
+    padding-inline: 16px;
+  }
 }
 
 .font-nepali {

@@ -557,14 +557,14 @@ function MobileExpenseCard({
   const pct = total > 0 ? (item.amount / total) * 100 : 0;
 
   return (
-    <article className="rounded-xl border border-emerald-500/14 bg-emerald-950/35 px-3.5 py-3.5">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500">
-          <Icon size={16} className="text-white" fill="currentColor" strokeWidth={1.6} />
+    <article className="rounded-xl border border-emerald-500/14 bg-emerald-950/35 px-4 py-4">
+      <div className="flex min-w-0 items-start gap-3.5">
+        <span className="mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
+          <Icon size={20} className="text-white" fill="currentColor" strokeWidth={1.6} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <h3 className="min-w-0 break-words text-[15px] font-black leading-snug text-white">{item.label}</h3>
+            <h3 className="min-w-0 break-words text-[18px] font-black leading-snug text-white">{item.label}</h3>
             <button
               type="button"
               aria-label={`Edit ${item.label} monthly cost`}
@@ -572,14 +572,14 @@ function MobileExpenseCard({
                 inputRef.current?.focus();
                 if (inputRef.current) scrollAmountFieldIntoView(inputRef.current);
               }}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/16 bg-white/5 text-emerald-100/80"
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-emerald-500/16 bg-white/5 text-emerald-100/80"
             >
-              <Pencil size={16} />
+              <Pencil size={18} />
             </button>
           </div>
 
-          <label className="mt-3 block">
-            <span className="block text-[11px] font-semibold uppercase tracking-wide text-emerald-50/70">Monthly Cost</span>
+          <label className="mt-3.5 block">
+            <span className="block text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Monthly Cost</span>
             <span className="sr-only">{item.label} monthly amount in NPR</span>
             <input
               ref={inputRef}
@@ -596,16 +596,16 @@ function MobileExpenseCard({
               onKeyDown={(event) => {
                 if (event.key === "Enter") event.currentTarget.blur();
               }}
-              className="mt-1.5 box-border min-h-11 w-full min-w-0 rounded-lg border border-emerald-500/18 bg-black/25 px-3.5 py-2.5 text-[18px] font-extrabold leading-none tracking-tight text-white outline-none tabular-nums [appearance:textfield] [font-variant-numeric:tabular-nums] focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="col-mobile-amount-input mt-2 box-border min-h-[52px] w-full min-w-0 rounded-lg border border-emerald-500/18 bg-black/25 px-4 py-3 text-[22px] font-extrabold leading-none tracking-tight text-white outline-none tabular-nums [appearance:textfield] [font-variant-numeric:tabular-nums] focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </label>
 
-          <div className="mt-2.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[12px] font-semibold text-emerald-50/75">
+          <div className="mt-2 flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] font-semibold text-emerald-50/65">
             <span className="min-w-0">{pct.toFixed(1)}% of total</span>
-            <NumericText className="shrink-0 text-emerald-300">{formatNprInteger(item.amount)}</NumericText>
+            <NumericText className="shrink-0 text-emerald-300/90">{formatNprInteger(item.amount)}</NumericText>
           </div>
 
-          <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-emerald-950">
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950">
             <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
           </div>
         </div>
@@ -1200,7 +1200,7 @@ export function NepalCostOfLivingDashboard() {
                   </button>
                 </div>
                 {/* Mobile: stacked expense cards (<=767px / max-md) */}
-                <div className="space-y-3 px-3 py-3 md:hidden">
+                <div className="space-y-4 px-3 py-3.5 md:hidden">
                   {snapshot.items.map((item) => (
                     <MobileExpenseCard
                       key={item.id}
@@ -1210,17 +1210,17 @@ export function NepalCostOfLivingDashboard() {
                       onAmountChange={(amount) => patchExpense(item.id, amount)}
                     />
                   ))}
-                  <div className="rounded-xl border border-emerald-400/28 bg-gradient-to-br from-emerald-500/18 via-emerald-950/50 to-[#021510]/90 px-3.5 py-3.5">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500">
-                        <BarChart3 size={16} className="text-white" />
+                  <div className="rounded-xl border border-emerald-400/28 bg-gradient-to-br from-emerald-500/18 via-emerald-950/50 to-[#021510]/90 px-4 py-4">
+                    <div className="flex min-w-0 items-center gap-3.5">
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
+                        <BarChart3 size={20} className="text-white" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-50/70">Total Monthly Cost</p>
-                        <p className="mt-1 break-words text-[22px] font-black leading-none tracking-tight text-white tabular-nums">
+                        <p className="text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Total Monthly Cost</p>
+                        <p className="mt-1.5 break-words text-[26px] font-black leading-none tracking-tight text-white tabular-nums">
                           {formatNprInteger(snapshot.total)}
                         </p>
-                        <p className="mt-1.5 text-[12px] font-bold text-emerald-300">100% of total</p>
+                        <p className="mt-1.5 text-[11px] font-semibold text-emerald-300/90">100% of total</p>
                       </div>
                     </div>
                   </div>
