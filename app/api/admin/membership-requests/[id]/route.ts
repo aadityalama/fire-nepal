@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { type MembershipRequestPlan } from "@/lib/membership-payment";
+import { type MembershipPaymentMethod, type MembershipRequestPlan } from "@/lib/membership-payment";
+import { scheduleMembershipApprovalEmail } from "@/lib/membership-approval-email/send-approval-email";
 import { requireAdminApi } from "@/lib/admin/verify-admin-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { writeMembership } from "@/services/membership-service";
@@ -164,6 +165,19 @@ export async function PATCH(request: Request, ctx: RouteParams) {
   if (revErr) {
     return NextResponse.json({ error: `Revenue log failed: ${revErr.message}` }, { status: 500 });
   }
+
+  // Member notification — only after approval + ledger writes succeed. Deduped by request id.
+  scheduleMembershipApprovalEmail(admin, {
+    membershipRequestId: id,
+    userId: row.user_id,
+    requestEmail: row.email,
+    plan,
+    amountNpr,
+    paymentMethod: paymentMethod as MembershipPaymentMethod,
+    paymentReference: row.reference ?? null,
+    approvedAtIso: periodStart,
+    expiryAtIso: periodEnd,
+  });
 
   return NextResponse.json({ ok: true, status: "approved", plan, current_period_end: periodEnd });
 }
