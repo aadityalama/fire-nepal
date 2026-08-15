@@ -104,6 +104,10 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   const ensureCounterpartyFromSearchHit = useCallback(
     (hit: P2PMemberSearchHit) => {
       const fireNepalId = hit.fireNepalId.trim().toUpperCase();
+      if (!fireNepalId) return "";
+
+      // Resolve id synchronously from latest known parties so wizard Continue can
+      // commit counterpartyId immediately (setState updaters are not a safe return channel).
       const existing = store.parties.find(
         (p) => p.id !== store.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
       );
@@ -145,7 +149,14 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         identityVerified: hit.verificationStatus === "verified",
       };
       const party = { ...base, trustScore: computeTrustScore(base) };
-      setStore((prev) => ({ ...prev, parties: [...prev.parties, party] }));
+      setStore((prev) => {
+        // Race-safe: another call may have inserted the same FIRE ID already.
+        const raced = prev.parties.find(
+          (p) => p.id !== prev.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
+        );
+        if (raced) return prev;
+        return { ...prev, parties: [...prev.parties, party] };
+      });
       return partyId;
     },
     [setStore, store.currentUserId, store.parties],
