@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API_URL = "https://open.er-api.com/v6/latest/USD";
 const CACHE_KEY = "fire-nepal-global-exchange-rates-v2";
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 5 * 60_000;
 const BANK_SPREAD = 0.006;
 
 const currencies = [

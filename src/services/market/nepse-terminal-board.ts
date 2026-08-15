@@ -35,6 +35,14 @@ const SHAREHUB_BROKERS = "https://shubhamnpk.github.io/yonepse/data/sharehub_bro
 const BROKERS_META = "https://shubhamnpk.github.io/yonepse/data/brokers.json";
 const cache = createMemoryTtlCache();
 
+/** Full board assembly is expensive (chunked 52W EOD scans) — reuse across serverless invocations on the same instance. */
+const BOARD_CACHE_KEY = "terminal-board-v1";
+const BOARD_TTL_MS = 25_000;
+const RANGES_52W_CACHE_KEY = "terminal-52w-ranges-v1";
+const RANGES_52W_TTL_MS = 10 * 60_000;
+
+let boardInflight: Promise<NepseTerminalBoardPayload> | null = null;
+
 function matchSector(sector: string | undefined, matchers: string[]): boolean {
   if (!sector) return false;
   const lower = sector.toLowerCase();
@@ -83,6 +91,54 @@ async function load52wRanges(bySymbol: Record<string, NepseSecurityTick>): Promi
   const symbols = Object.keys(bySymbol);
   const sb = createMarketDataServiceClient();
   if (!sb || !symbols.length) return empty;
+
+  const cachedRanges = cache.get<{
+    nearHigh: TerminalRange52W[];
+    nearLow: TerminalRange52W[];
+    bySymbol: Map<string, { high: number; low: number }>;
+  }>(RANGES_52W_CACHE_KEY);
+  if (cachedRanges) {
+    // Recompute near-high/low against the current LTP snapshot using cached high/low map.
+    const nearHigh: TerminalRange52W[] = [];
+    const nearLow: TerminalRange52W[] = [];
+    for (const [symbol, range] of cachedRanges.bySymbol) {
+      const tick = bySymbol[symbol];
+      if (!tick || tick.ltpNpr <= 0) continue;
+      const high = Number.isFinite(range.high) ? range.high : null;
+      const low = Number.isFinite(range.low) && range.low !== Infinity ? range.low : null;
+      if (high != null && high > 0) {
+        const distancePct = ((tick.ltpNpr - high) / high) * 100;
+        if (distancePct >= -3) {
+          nearHigh.push({
+            symbol,
+            companyName: tick.companyName ?? null,
+            sector: tick.sector ?? null,
+            ltpNpr: tick.ltpNpr,
+            high52wNpr: high,
+            low52wNpr: low,
+            distancePct,
+          });
+        }
+      }
+      if (low != null && low > 0) {
+        const distancePct = ((tick.ltpNpr - low) / low) * 100;
+        if (distancePct <= 3) {
+          nearLow.push({
+            symbol,
+            companyName: tick.companyName ?? null,
+            sector: tick.sector ?? null,
+            ltpNpr: tick.ltpNpr,
+            high52wNpr: high,
+            low52wNpr: low,
+            distancePct,
+          });
+        }
+      }
+    }
+    nearHigh.sort((a, b) => (b.distancePct ?? -99) - (a.distancePct ?? -99));
+    nearLow.sort((a, b) => (a.distancePct ?? 99) - (b.distancePct ?? 99));
+    return { nearHigh: nearHigh.slice(0, 25), nearLow: nearLow.slice(0, 25), bySymbol: cachedRanges.bySymbol };
+  }
 
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - 370);
@@ -149,7 +205,9 @@ async function load52wRanges(bySymbol: Record<string, NepseSecurityTick>): Promi
 
   nearHigh.sort((a, b) => (b.distancePct ?? -99) - (a.distancePct ?? -99));
   nearLow.sort((a, b) => (a.distancePct ?? 99) - (b.distancePct ?? 99));
-  return { nearHigh: nearHigh.slice(0, 25), nearLow: nearLow.slice(0, 25), bySymbol: agg };
+  const result = { nearHigh: nearHigh.slice(0, 25), nearLow: nearLow.slice(0, 25), bySymbol: agg };
+  cache.set(RANGES_52W_CACHE_KEY, result, RANGES_52W_TTL_MS);
+  return result;
 }
 
 async function loadBrokerBoard(): Promise<TerminalBrokerBoard> {
@@ -212,6 +270,17 @@ async function loadBrokerBoard(): Promise<TerminalBrokerBoard> {
 
 /** Assemble the institutional terminal board from one atomic official snapshot + DB ranges. */
 export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
+  const cached = cache.get<NepseTerminalBoardPayload>(BOARD_CACHE_KEY);
+  if (cached) return cached;
+  if (boardInflight) return boardInflight;
+
+  boardInflight = assembleTerminalBoard().finally(() => {
+    boardInflight = null;
+  });
+  return boardInflight;
+}
+
+async function assembleTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   // Single official snapshot — never merge board + cache from different fetches.
   const [official, brokers] = await Promise.all([
     getCachedNepseYonepseBundle().catch(() => null) as Promise<NepseOfficialBundle | null>,
@@ -314,7 +383,7 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
   if (ranges.nearHigh.length || ranges.nearLow.length) sources.push("nepse_eod_prices 52W ranges");
   if (brokers.topByTurnover.length) sources.push("Sharehub broker turnover");
 
-  return {
+  const payload: NepseTerminalBoardPayload = {
     status: {
       label: feedIsOpen === true ? "Open" : feedIsOpen === false ? clock.label === "Pre-open" ? "Pre-open" : "Closed" : clock.label,
       live: feedIsOpen === true ? true : feedIsOpen === false ? false : clock.live,
@@ -348,4 +417,6 @@ export async function loadTerminalBoard(): Promise<NepseTerminalBoardPayload> {
     loadedAt: official?.syncMeta.syncedAt ?? new Date().toISOString(),
     sources,
   };
+  cache.set(BOARD_CACHE_KEY, payload, BOARD_TTL_MS);
+  return payload;
 }

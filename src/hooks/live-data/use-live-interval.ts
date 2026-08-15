@@ -2,15 +2,40 @@
 
 import { useEffect, useRef } from "react";
 
-/** Stable interval polling for live dashboards (browser may throttle background tabs). */
+function isDocumentVisible(): boolean {
+  return typeof document === "undefined" || document.visibilityState === "visible";
+}
+
+/**
+ * Stable interval polling for live dashboards.
+ * Skips ticks while the tab is hidden (browsers may throttle anyway; this also
+ * avoids waking serverless routes for background tabs).
+ */
 export function useLiveInterval(callback: () => void, intervalMs: number, enabled: boolean) {
   const cb = useRef(callback);
-  cb.current = callback;
+
+  useEffect(() => {
+    cb.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     if (!enabled || intervalMs <= 0) return;
-    const tick = () => cb.current();
+
+    const tick = () => {
+      if (!isDocumentVisible()) return;
+      cb.current();
+    };
+
     const id = window.setInterval(tick, intervalMs);
-    return () => window.clearInterval(id);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") cb.current();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [intervalMs, enabled]);
 }

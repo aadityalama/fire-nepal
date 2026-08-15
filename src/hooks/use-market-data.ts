@@ -6,13 +6,8 @@ import type { MarketSnapshot } from "@/types/market";
 
 export type MarketDataStatus = "idle" | "loading" | "ready" | "error";
 
-const DEFAULT_POLL_MS = 20_000;
-
-function withCacheBust(url: string): string {
-  const u = new URL(url);
-  u.searchParams.set("_t", String(Date.now()));
-  return u.toString();
-}
+/** Aligned with short server TTL on /api/market/summary — was 20–22.5s with cache-busting. */
+const DEFAULT_POLL_MS = 60_000;
 
 export function useMarketData(opts: {
   symbolsCsv: string;
@@ -42,10 +37,9 @@ export function useMarketData(opts: {
     if (!hasDataRef.current) setStatus("loading");
 
     try {
-      const busted = withCacheBust(fetchUrl);
-      const res = await fetch(busted, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      // Do not append cache-busting query params — allow CDN / browser to reuse short TTL.
+      const res = await fetch(fetchUrl, {
+        headers: { Accept: "application/json" },
       });
       if (res.status === 429) {
         const j = (await res.json().catch(() => null)) as { retryAfterSec?: number } | null;
@@ -72,14 +66,6 @@ export function useMarketData(opts: {
   }, [load]);
 
   useLiveInterval(() => void load(), opts.pollMs ?? DEFAULT_POLL_MS, opts.enabled !== false && Boolean(fetchUrl));
-
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && opts.enabled !== false && fetchUrl) void load();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [load, opts.enabled, fetchUrl]);
 
   return { snapshot, status, error, reload: load };
 }

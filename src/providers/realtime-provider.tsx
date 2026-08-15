@@ -43,7 +43,7 @@ export function RealtimeMarketProvider({ children }: { children: ReactNode }) {
   const { snapshot, status, error, reload } = useMarketData({
     symbolsCsv,
     cryptoCsv,
-    pollMs: 22_500,
+    pollMs: 60_000,
     enabled: hydrated,
   });
 
