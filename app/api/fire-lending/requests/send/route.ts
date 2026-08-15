@@ -11,8 +11,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 /**
  * POST /api/fire-lending/requests/send
  * Body: { loanId, message? }
- * Creates a pending request for the loan counterparty and an in-app notification.
- * Best-effort email is also sent when the recipient has a verified account email.
+ * Creates a pending request from borrower to lender and an in-app notification.
+ * Best-effort email is also sent when the lender has a verified account email.
  */
 export async function POST(req: Request) {
   if (!isSupabaseConfigured()) {
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
     loanId?: string;
     message?: string;
     toPartyId?: string;
+    role?: string;
   } | null;
 
   const loanId = String(body?.loanId ?? "").trim();
@@ -44,7 +45,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: loaded.error }, { status: loaded.status });
   }
 
-  // Ignore client toPartyId — recipient is always loan.counterpartyId.
+  // Ignore client toPartyId / role — recipient is always loan.lenderId; sender must be borrower.
+  void body?.toPartyId;
+  void body?.role;
+
   const result = sendLoanRequest(loaded.store, {
     loanId,
     actorPartyId: loaded.store.currentUserId,
@@ -64,14 +68,10 @@ export async function POST(req: Request) {
   }
 
   const loan = result.store.loans.find((l) => l.id === loanId);
-  const requester = result.store.parties.find((p) => p.id === result.request.fromPartyId);
-  const recipient = result.store.parties.find((p) => p.id === result.request.toPartyId);
-  if (loan && requester && recipient) {
+  if (loan) {
     void sendLoanRequestNotificationEmail({
       store: result.store,
       loan,
-      requester,
-      recipient,
     }).catch((err) => {
       console.error("[FIRE Nepal loan-request-email]", err);
     });

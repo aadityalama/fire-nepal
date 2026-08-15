@@ -4,16 +4,18 @@ import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score
 import type { FireLendingStore } from "@/lib/fire-lending/types";
 
 export function createSeedStore(): FireLendingStore {
-  const meId = "party_me";
-  const aId = "party_anjali";
+  /** Distinct test LENDER (A) — never reuse as borrower on the same loan. */
+  const meId = "party_test_lender_a";
+  /** Distinct test BORROWER (B). */
+  const aId = "party_test_borrower_b";
   const bId = "party_binod";
   const cId = "party_sita";
 
   const parties = [
     {
       id: meId,
-      fireNepalId: "FN-88421",
-      name: "You",
+      fireNepalId: "FN-TEST-LENDER-A",
+      name: "Test Lender A",
       mobile: "9800000001",
       trustScore: 0,
       verified: true,
@@ -22,12 +24,12 @@ export function createSeedStore(): FireLendingStore {
       latePayments: 1,
       loansCompleted: 4,
       identityVerified: true,
-      notes: "Primary FIRE Nepal account",
+      notes: "Primary FIRE Nepal test lender account",
     },
     {
       id: aId,
-      fireNepalId: "FN-55102",
-      name: "Anjali Shrestha",
+      fireNepalId: "FN-TEST-BORROWER-B",
+      name: "Test Borrower B",
       mobile: "9812345678",
       trustScore: 0,
       verified: true,
@@ -78,6 +80,8 @@ export function createSeedStore(): FireLendingStore {
       agreementNumber: agreementNumber(),
       role: "lender" as const,
       counterpartyId: aId,
+      lenderId: meId,
+      borrowerId: aId,
       amount: 150000,
       currency: "NPR" as const,
       interestRate: 12,
@@ -105,6 +109,8 @@ export function createSeedStore(): FireLendingStore {
       agreementNumber: agreementNumber(),
       role: "borrower" as const,
       counterpartyId: bId,
+      lenderId: bId,
+      borrowerId: meId,
       amount: 80000,
       currency: "NPR" as const,
       interestRate: 10,
@@ -130,6 +136,8 @@ export function createSeedStore(): FireLendingStore {
       agreementNumber: agreementNumber(),
       role: "lender" as const,
       counterpartyId: cId,
+      lenderId: meId,
+      borrowerId: cId,
       amount: 50000,
       currency: "NPR" as const,
       interestRate: 14,
@@ -265,11 +273,12 @@ export function createSeedStore(): FireLendingStore {
       {
         id: uid("ntf"),
         kind: "loan_request",
-        title: "New loan request",
-        body: "You have received a new loan request from Anjali Shrestha.",
+        title: "New Loan Request",
+        body: "Test Borrower B has sent you a loan request. Please review the loan details and respond.",
         createdAt: todayIso(),
         read: false,
         href: "/fire-lending/requests",
+        forPartyId: meId,
       },
       {
         id: uid("ntf"),

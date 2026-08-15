@@ -23,6 +23,7 @@ import {
   formatLoanDocSize,
   loanDocTypeLabel,
 } from "@/lib/fire-lending/loan-documents";
+import { isSelfLoan } from "@/lib/fire-lending/loan-party-identity";
 import {
   canShowLoanRequestApprovalControls,
   findRequestForLoan,
@@ -43,8 +44,9 @@ export function FireLendingLoanDetailPage() {
   const payments = store.payments.filter((p) => p.loanId === id);
   const documents = id ? documentsForLoan(store, id) : [];
   const linkedRequest = loan ? findRequestForLoan(store, loan.id) : undefined;
+  const identityBroken = loan ? Boolean(loan.identityInvalid || isSelfLoan(loan)) : false;
   const canApprove =
-    linkedRequest && loan
+    linkedRequest && loan && !identityBroken
       ? canShowLoanRequestApprovalControls(linkedRequest, store.currentUserId, loan)
       : false;
   const [docError, setDocError] = useState<string | null>(null);
@@ -122,12 +124,21 @@ export function FireLendingLoanDetailPage() {
       </LendingGlassCard>
 
       <LendingGlassCard title="Agreement signatures" subtitle="Each party signs only their own role" icon={FileText}>
+        {identityBroken ? (
+          <p
+            role="alert"
+            data-testid="loan-detail-identity-invalid"
+            className={`mb-2 text-sm font-bold ${light ? "text-rose-700" : "text-rose-300"}`}
+          >
+            Invalid loan identity: lender and borrower must be different members. Signing and approval are disabled.
+          </p>
+        ) : null}
         <FireLendingSignaturePanel
           loan={loan}
           currentUserId={store.currentUserId}
           onSign={(as) => signAgreement(loan.id, as)}
         />
-        {linkedRequest?.status === "pending" && !bothPartiesSigned(loan) ? (
+        {!identityBroken && linkedRequest?.status === "pending" && !bothPartiesSigned(loan) ? (
           <p className={`mt-2 text-[11px] font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}>
             {LOAN_REQUEST_UI.signaturesRequiredBeforeApproval}
           </p>

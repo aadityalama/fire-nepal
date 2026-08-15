@@ -66,8 +66,22 @@ export type EmiInstallment = {
 export type FireLendingLoan = {
   id: string;
   agreementNumber: string;
+  /**
+   * Viewer-oriented role in this snapshot (legacy / UI).
+   * Authorization MUST use lenderId / borrowerId, not this field alone.
+   */
   role: LoanRole;
+  /** Other party from the snapshot owner's perspective (legacy / UI). */
   counterpartyId: string;
+  /** Durable authenticated member/party id for the lender. Must differ from borrowerId. */
+  lenderId: string;
+  /** Durable authenticated member/party id for the borrower. Must differ from lenderId. */
+  borrowerId: string;
+  /**
+   * Set when lenderId === borrowerId (corrupt/self-loan). Dual-party actions must be refused.
+   * Do not silently reinterpret as a valid two-party loan.
+   */
+  identityInvalid?: boolean;
   amount: number;
   currency: CurrencyCode;
   interestRate: number;

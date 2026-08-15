@@ -19,8 +19,8 @@ import {
   buildUpcomingPayments,
 } from "@/lib/fire-lending/analytics";
 import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
-import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
-import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
+import { refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
+import { todayIso, uid } from "@/lib/fire-lending/format";
 import {
   clearFireLendingLocalCache,
   createEmptyLendingStore,
@@ -29,8 +29,10 @@ import {
   saveLendingStore,
   sanitizeFireLendingStore,
 } from "@/lib/fire-lending/storage";
-import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score";
+import { computeTrustScore } from "@/lib/fire-lending/trust-score";
 import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
+import { createLoanInStore } from "@/lib/fire-lending/loan-creation";
+import { resolveLoanPartyIds, SELF_LOAN_ERROR } from "@/lib/fire-lending/loan-party-identity";
 import {
   respondToLoanRequest,
   sendLoanRequest,
@@ -45,7 +47,6 @@ import {
 } from "@/lib/fire-lending/loan-documents";
 import type {
   FireLendingDocument,
-  FireLendingLoan,
   FireLendingParty,
   FireLendingPayment,
   FireLendingStore,
@@ -71,7 +72,7 @@ type FireLendingContextValue = {
   partyById: (id: string) => FireLendingStore["parties"][number] | undefined;
   /** Upsert a counterparty from a safe P2P search hit (no private fields). Returns party id. */
   ensureCounterpartyFromSearchHit: (hit: P2PMemberSearchHit) => string;
-  createLoanFromWizard: (draft: LoanWizardDraft, documents?: FireLendingDocument[]) => string;
+  createLoanFromWizard: (draft: LoanWizardDraft, documents?: FireLendingDocument[]) => string | null;
   /** Attach supporting documents to an existing loan (preserves metadata). */
   attachLoanDocuments: (loanId: string, documents: FireLendingDocument[], requestId?: string) => void;
   removeLoanDocument: (documentId: string) => void;
@@ -127,6 +128,13 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       const fireNepalId = hit.fireNepalId.trim().toUpperCase();
       if (!fireNepalId) return "";
 
+      const me = store.parties.find((p) => p.id === store.currentUserId);
+      const myFireId = me?.fireNepalId?.trim().toUpperCase() || "";
+      if (myFireId && myFireId === fireNepalId) {
+        appToast.error(SELF_LOAN_ERROR, { id: "fire-lending-self-counterparty" });
+        return "";
+      }
+
       // Resolve id synchronously from latest known parties so wizard Continue can
       // commit counterpartyId immediately (setState updaters are not a safe return channel).
       const existing = store.parties.find(
@@ -171,7 +179,6 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       };
       const party = { ...base, trustScore: computeTrustScore(base) };
       setStore((prev) => {
-        // Race-safe: another call may have inserted the same FIRE ID already.
         const raced = prev.parties.find(
           (p) => p.id !== prev.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
         );
@@ -183,85 +190,27 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     [setStore, store.currentUserId, store.parties],
   );
 
-  const createLoanFromWizard = useCallback((draft: LoanWizardDraft, documents?: FireLendingDocument[]) => {
-    const loanId = uid("loan");
-    const amount = Math.max(0, Number(draft.amount) || 0);
-    const rate = Math.max(0, Number(draft.interestRate) || 0);
-    const months = Math.max(1, Number(draft.durationMonths) || 1);
-    const installments = Math.max(1, Number(draft.installmentCount) || months);
-    const agrNo = agreementNumber();
-    const counterpartyId = draft.counterpartyId || store.parties.find((p) => p.id !== store.currentUserId)?.id || store.parties[1]?.id;
-
-    const loan: FireLendingLoan = {
-      id: loanId,
-      agreementNumber: agrNo,
-      role: draft.role,
-      counterpartyId,
-      amount,
-      currency: draft.currency,
-      interestRate: rate,
-      loanType: draft.loanType,
-      durationMonths: months,
-      installmentCount: installments,
-      gracePeriodDays: Math.max(0, Number(draft.gracePeriodDays) || 0),
-      lateFeePercent: Math.max(0, Number(draft.lateFeePercent) || 0),
-      purpose: draft.purpose || "Peer loan",
-      notes: draft.notes || undefined,
-      guarantor: draft.guarantor || undefined,
-      collateral: draft.collateral || undefined,
-      status: "pending_approval",
-      createdAt: todayIso(),
-      outstanding: amount,
-      totalPaid: 0,
-      interestEarned: 0,
-      connectionMethod: draft.connectionMethod,
-      borrowerSigned: false,
-      lenderSigned: false,
-      riskScore: riskFromTrust(partyById(counterpartyId)?.trustScore ?? 60, 0),
-    };
-
-    const schedule = buildInstallmentSchedule({
-      loanId,
-      principal: amount,
-      annualRatePct: rate,
-      months: installments,
-    });
-
-    const attachedDocs = (documents ?? [])
-      .filter((d) => d.uploadStatus !== "error")
-      .map((d) => ({
-        ...d,
-        id: d.id || uid("doc"),
-        loanId,
-        title: d.title || d.fileName || "Document",
-        fileName: d.fileName || d.title,
-        kind: d.kind || ("other" as const),
-        createdAt: d.createdAt || todayIso(),
-        uploadStatus: "ready" as const,
-      }));
-
-    setStore((prev) => ({
-      ...prev,
-      loans: [loan, ...prev.loans],
-      installments: [...schedule, ...prev.installments],
-      agreements: [
-        {
-          id: uid("agr"),
-          loanId,
-          agreementNumber: agrNo,
-          status: "awaiting_signatures",
-          generatedAt: todayIso(),
-          terms: "FIRE Nepal Peer Lending Terms — digital agreement. Both parties must sign to activate.",
-          qrPayload: `fire-nepal://verify/agreement/${agrNo}`,
-        },
-        ...prev.agreements,
-      ],
-      documents: [...attachedDocs, ...prev.documents],
-      // Signature notification is created after the counterparty accepts the loan request.
-    }));
-
-    return loanId;
-  }, [partyById, setStore, store.currentUserId, store.parties]);
+  const createLoanFromWizard = useCallback(
+    (draft: LoanWizardDraft, documents?: FireLendingDocument[]) => {
+      let createdId: string | null = null;
+      let error: string | null = null;
+      setStore((prev) => {
+        const result = createLoanInStore(prev, draft, documents);
+        if (!result.ok) {
+          error = result.error;
+          return prev;
+        }
+        createdId = result.loanId;
+        return result.store;
+      });
+      if (error || !createdId) {
+        appToast.error(error || SELF_LOAN_ERROR, { id: "fire-lending-create-loan" });
+        return null;
+      }
+      return createdId;
+    },
+    [setStore],
+  );
 
   const attachLoanDocuments = useCallback(
     (loanId: string, documents: FireLendingDocument[], requestId?: string) => {
@@ -512,16 +461,15 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         appToast.error("Agreement not found for this loan.", { id: "fire-lending-agreement-pdf" });
         throw new Error("Agreement not found for this loan.");
       }
-      const counterparty = partyById(loan.counterpartyId);
-      const me = partyById(store.currentUserId);
-      if (!counterparty || !me) {
-        appToast.error("Could not resolve lender/borrower for the agreement PDF.", {
+      const { lenderId, borrowerId } = resolveLoanPartyIds(loan, store.currentUserId);
+      const lender = partyById(lenderId);
+      const borrower = partyById(borrowerId);
+      if (!lender || !borrower || lenderId === borrowerId) {
+        appToast.error("Could not resolve distinct lender/borrower for the agreement PDF.", {
           id: "fire-lending-agreement-pdf",
         });
-        throw new Error("Could not resolve lender/borrower for the agreement PDF.");
+        throw new Error("Could not resolve distinct lender/borrower for the agreement PDF.");
       }
-      const lender = loan.role === "lender" ? me : counterparty;
-      const borrower = loan.role === "borrower" ? me : counterparty;
       try {
         await downloadAgreementPdf({
           loan,

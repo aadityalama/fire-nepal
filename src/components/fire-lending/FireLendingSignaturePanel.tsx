@@ -7,6 +7,7 @@ import {
   SIGNATURE_UI,
   signatureStatusMessage,
 } from "@/lib/fire-lending/agreement-signatures";
+import { isSelfLoan } from "@/lib/fire-lending/loan-party-identity";
 import type { FireLendingLoan, LoanRole } from "@/lib/fire-lending/types";
 import { LendingPrimaryButton, LendingStatusPill } from "@/components/fire-lending/FireLendingUiPrimitives";
 import { useFireTheme } from "@/contexts/FireThemeContext";
@@ -22,13 +23,24 @@ type Props = {
 export function FireLendingSignaturePanel({ loan, currentUserId, onSign, busy, compact }: Props) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const viewerRole = actorRoleOnLoan(loan, currentUserId, currentUserId);
+  const viewerRole = actorRoleOnLoan(loan, currentUserId);
   const statusMsg = signatureStatusMessage(loan, viewerRole);
   const both = bothPartiesSigned(loan);
+  const invalidIdentity = Boolean(loan.identityInvalid || isSelfLoan(loan));
 
   const rowClass = light
     ? "border-emerald-200/70 bg-white"
     : "border-emerald-400/15 bg-black/20";
+
+  if (invalidIdentity) {
+    return (
+      <div className="space-y-2" data-testid="signature-panel-invalid-identity">
+        <p role="alert" className={`text-sm font-bold ${light ? "text-rose-700" : "text-rose-300"}`}>
+          Invalid loan identity: lender and borrower are the same member. Signatures are disabled.
+        </p>
+      </div>
+    );
+  }
 
   const renderPartyRow = (role: LoanRole, signed: boolean) => {
     const isViewer = viewerRole === role;

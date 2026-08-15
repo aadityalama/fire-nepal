@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const matches = await searchP2PMembers(query, limit);
+    const matches = await searchP2PMembers(query, limit, { excludeAuthUserId: auth.user.id });
     return NextResponse.json(
       {
         ok: true,

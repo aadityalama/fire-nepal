@@ -1,4 +1,5 @@
 import { createSeedStore } from "@/lib/fire-lending/seed";
+import { normalizeStoreLoanIdentities } from "@/lib/fire-lending/loan-party-identity";
 import { computeTrustScore } from "@/lib/fire-lending/trust-score";
 import type { FireLendingParty, FireLendingStore } from "@/lib/fire-lending/types";
 
@@ -42,7 +43,7 @@ function ensureSelfParty(store: FireLendingStore): FireLendingParty {
   const synthesized: FireLendingParty = {
     id: currentUserId,
     fireNepalId: "FN-LOCAL-USER",
-    name: "You",
+    name: "Local Member",
     mobile: "",
     trustScore: 0,
     verified: false,
@@ -80,10 +81,10 @@ export function resetUserLoanData(store: FireLendingStore): FireLendingStore {
 export function sanitizeFireLendingStore(raw: unknown): FireLendingStore {
   if (!raw || typeof raw !== "object") return createEmptyLendingStore();
   const parsed = raw as Partial<FireLendingStore>;
-  return {
+  const base: FireLendingStore = {
     currentUserId: typeof parsed.currentUserId === "string" ? parsed.currentUserId : "party_me",
     parties: Array.isArray(parsed.parties) ? parsed.parties : [],
-    loans: Array.isArray(parsed.loans) ? parsed.loans : [],
+    loans: Array.isArray(parsed.loans) ? (parsed.loans as FireLendingStore["loans"]) : [],
     payments: Array.isArray(parsed.payments) ? parsed.payments : [],
     installments: Array.isArray(parsed.installments) ? parsed.installments : [],
     requests: Array.isArray(parsed.requests) ? parsed.requests : [],
@@ -91,6 +92,7 @@ export function sanitizeFireLendingStore(raw: unknown): FireLendingStore {
     notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
     documents: Array.isArray(parsed.documents) ? parsed.documents : [],
   };
+  return normalizeStoreLoanIdentities(base);
 }
 
 export function clearFireLendingLocalCache(): void {

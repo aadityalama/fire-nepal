@@ -40,17 +40,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Loan not found." }, { status: 404 });
   }
 
-  const requester = loaded.store.parties.find((p) => p.id === loaded.store.currentUserId);
-  const recipient = loaded.store.parties.find((p) => p.id === loan.counterpartyId);
-  if (!requester || !recipient) {
-    return NextResponse.json({ ok: false, error: "Could not resolve parties." }, { status: 400 });
-  }
-
   const result = await sendLoanRequestNotificationEmail({
     store: loaded.store,
     loan,
-    requester,
-    recipient,
   });
 
   if (!result.ok) {

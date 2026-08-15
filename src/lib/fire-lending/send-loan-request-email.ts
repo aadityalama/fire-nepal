@@ -7,7 +7,12 @@ import {
 } from "@/lib/fire-lending/loan-request-email";
 import { resolveApprovalEmailLogoUrl } from "@/lib/membership-approval-email/email-templates";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
-import type { FireLendingLoan, FireLendingParty, FireLendingStore } from "@/lib/fire-lending/types";
+import {
+  partyDisplayName,
+  resolveLoanPartyIds,
+  SELF_LOAN_ERROR,
+} from "@/lib/fire-lending/loan-party-identity";
+import type { FireLendingLoan, FireLendingStore } from "@/lib/fire-lending/types";
 import { isResendApiKeyConfigured, resolveResendFromAddress, sendEmailViaResend } from "@/lib/resend-api";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 
@@ -16,13 +21,11 @@ const LOG_PREFIX = "[FIRE Nepal loan-request-email]";
 export type SendLoanRequestEmailInput = {
   store: FireLendingStore;
   loan: FireLendingLoan;
-  requester: FireLendingParty;
-  recipient: FireLendingParty;
 };
 
 /**
- * Best-effort professional email to the counterparty when a loan request is sent.
- * Looks up the recipient by FIRE Nepal ID → user_profiles → verified auth email.
+ * Email the lender (User B) that the borrower (User A) sent a loan request.
+ * Names come from loan.lenderId / loan.borrowerId — never both from the current user.
  */
 export async function sendLoanRequestNotificationEmail(
   input: SendLoanRequestEmailInput,
@@ -31,12 +34,23 @@ export async function sendLoanRequestNotificationEmail(
     return { ok: true, skipped: "resend_not_configured" };
   }
 
+  const { lenderId, borrowerId } = resolveLoanPartyIds(input.loan, input.store.currentUserId);
+  if (!lenderId || !borrowerId || lenderId === borrowerId) {
+    return { ok: false, error: SELF_LOAN_ERROR };
+  }
+
+  const lenderParty = input.store.parties.find((p) => p.id === lenderId);
+  const borrowerParty = input.store.parties.find((p) => p.id === borrowerId);
+  const lenderName = partyDisplayName(lenderParty, "Member");
+  const borrowerName = partyDisplayName(borrowerParty, "a FIRE Nepal member");
+
   const admin = createSupabaseServiceRoleClient();
   if (!admin) {
     return { ok: true, skipped: "service_role_missing" };
   }
 
-  const fireId = input.recipient.fireNepalId?.trim().toUpperCase();
+  // Recipient is the lender.
+  const fireId = lenderParty?.fireNepalId?.trim().toUpperCase();
   if (!fireId) {
     return { ok: true, skipped: "recipient_fire_id_missing" };
   }
@@ -65,16 +79,14 @@ export async function sendLoanRequestNotificationEmail(
   }
 
   const siteOrigin = getSiteOrigin();
-  const requesterIsLender = input.loan.role === "lender";
+  const recipientName =
+    profile.full_name?.trim() || profile.display_name?.trim() || lenderName;
+
   const tpl = buildLoanRequestEmail({
-    recipientName:
-      profile.full_name?.trim() ||
-      profile.display_name?.trim() ||
-      input.recipient.name ||
-      "Member",
-    requesterName: input.requester.name,
-    requesterRoleLabel: requesterIsLender ? "Lender" : "Borrower",
-    counterpartyRoleLabel: requesterIsLender ? "Borrower" : "Lender",
+    recipientName,
+    requesterName: borrowerName,
+    requesterRoleLabel: "Borrower",
+    counterpartyRoleLabel: "Lender",
     loanReference: input.loan.agreementNumber,
     amountLabel: formatLendingMoney(input.loan.amount, input.loan.currency),
     interestRate: input.loan.interestRate,
@@ -83,6 +95,11 @@ export async function sendLoanRequestNotificationEmail(
     reviewUrl: loanRequestReviewUrl(input.loan.id, siteOrigin),
     logoUrl: resolveApprovalEmailLogoUrl(siteOrigin),
   });
+
+  if (/^you has sent you/i.test(tpl.text) || /You has sent you/i.test(tpl.html)) {
+    console.error(LOG_PREFIX, "refusing self-referential email copy");
+    return { ok: false, error: "Invalid personalized email content." };
+  }
 
   const sendRes = await sendEmailViaResend({
     from: resolveResendFromAddress(),
@@ -97,6 +114,6 @@ export async function sendLoanRequestNotificationEmail(
     return { ok: false, error: sendRes.message };
   }
 
-  console.info(LOG_PREFIX, "sent", { loanId: input.loan.id, id: sendRes.id ?? null });
+  console.info(LOG_PREFIX, "sent", { loanId: input.loan.id, lenderId, borrowerId, id: sendRes.id ?? null });
   return { ok: true };
 }

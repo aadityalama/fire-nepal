@@ -90,7 +90,7 @@ describe("wizard borrower selection", () => {
   it("Continue with FN-2026-000016 committed advances Borrower → Details", () => {
     const blocked = resolveBorrowerContinue({ counterpartyId: "", partyExists: false });
     assert.equal(blocked.nextStep, null);
-    assert.match(blocked.error ?? "", /Select a verified borrower/);
+    assert.match(blocked.error ?? "", /Select a verified counterparty/);
 
     const ok = resolveBorrowerContinue({ counterpartyId: "party_tejesh", partyExists: true });
     assert.equal(ok.nextStep, 1);
@@ -122,12 +122,14 @@ describe("wizard borrower selection", () => {
     assert.equal(step, 3);
     assert.match(error ?? "", /Send the loan request/);
 
+    // After send, signatures are available while waiting for lender Accept.
     ({ step, error } = advanceWizardStep({ step, requestSent: true, approval: "pending" }));
-    assert.equal(step, 3);
-    assert.match(error ?? "", /Waiting for the borrower/);
-
-    ({ step, error } = advanceWizardStep({ step, requestSent: true, approval: "accepted" }));
     assert.equal(error, null);
     assert.equal(step, 4); // Signatures
+
+    step = 3;
+    ({ step, error } = advanceWizardStep({ step, requestSent: true, approval: "rejected" }));
+    assert.equal(step, 3);
+    assert.match(error ?? "", /Lender rejected/);
   });
 });

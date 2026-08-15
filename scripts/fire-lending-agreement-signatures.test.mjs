@@ -35,7 +35,9 @@ function baseLoan(overrides = {}) {
     id: "loan_sig_1",
     agreementNumber: "FL-SIG-001",
     role: "lender",
-    counterpartyId: "party_anjali",
+    counterpartyId: "party_test_borrower_b",
+    lenderId: "party_test_lender_a",
+    borrowerId: "party_test_borrower_b",
     amount: 100000,
     currency: "NPR",
     interestRate: 12,
@@ -96,7 +98,7 @@ describe("agreement signatures — role enforcement", () => {
 
   it("2. borrower can sign only as borrower", () => {
     const store = storeWithLoan();
-    const borrowerId = "party_anjali";
+    const borrowerId = "party_test_borrower_b";
     assert.equal(actorRoleOnLoan(store.loans[0], borrowerId, store.currentUserId), "borrower");
     const ok = canSignAgreement(store.loans[0], borrowerId, "borrower", store.currentUserId);
     assert.equal(ok.ok, true);
@@ -127,7 +129,7 @@ describe("agreement signatures — role enforcement", () => {
 
   it("4. borrower cannot sign as lender", () => {
     const store = storeWithLoan();
-    const denied = canSignAgreement(store.loans[0], "party_anjali", "lender", store.currentUserId);
+    const denied = canSignAgreement(store.loans[0], "party_test_borrower_b", "lender", store.currentUserId);
     assert.equal(denied.ok, false);
     if (denied.ok) return;
     assert.match(denied.error, /only sign as the borrower/i);
@@ -147,7 +149,7 @@ describe("agreement signatures — role enforcement", () => {
     // Payload role spoof: borrower claims "lender"
     const spoof = signLoanAgreement(store, {
       loanId: "loan_sig_1",
-      actorPartyId: "party_anjali",
+      actorPartyId: "party_test_borrower_b",
       as: "lender",
     });
     assert.equal(spoof.ok, false);
@@ -189,89 +191,128 @@ describe("agreement signatures — role enforcement", () => {
 });
 
 describe("approval requires both signatures", () => {
+  const USER_A = "party_test_borrower_b";
+  const USER_B = "party_test_lender_a";
+
+  function requestLoan(overrides = {}) {
+    return baseLoan({
+      role: "borrower",
+      counterpartyId: USER_B,
+      lenderId: USER_B,
+      borrowerId: USER_A,
+      ...overrides,
+    });
+  }
+
+  function storeForRequest(loan = requestLoan()) {
+    const seed = createSeedStore();
+    return {
+      ...seed,
+      currentUserId: USER_A,
+      loans: [loan, ...seed.loans.filter((l) => l.id !== loan.id)],
+      agreements: [
+        {
+          id: "agr_sig_req_1",
+          loanId: loan.id,
+          agreementNumber: loan.agreementNumber,
+          status: "awaiting_signatures",
+          generatedAt: loan.createdAt,
+          terms: "Test terms",
+          qrPayload: `fire-nepal://verify/agreement/${loan.agreementNumber}`,
+        },
+        ...seed.agreements,
+      ],
+    };
+  }
+
   it("6. both signatures are required before approval", () => {
-    const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const store = storeForRequest();
+    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(sent.ok, true);
     if (!sent.ok) return;
-    const early = canRespondToLoanRequest(sent.request, "party_anjali", sent.store.loans.find((l) => l.id === "loan_sig_1"));
+    const early = canRespondToLoanRequest(
+      sent.request,
+      USER_B,
+      sent.store.loans.find((l) => l.id === "loan_sig_1"),
+    );
     assert.equal(early.ok, false);
     if (!early.ok) assert.match(early.error, /must sign/i);
 
     const attempt = respondToLoanRequest(sent.store, {
       requestId: sent.request.id,
-      actorPartyId: "party_anjali",
+      actorPartyId: USER_B,
       action: "accepted",
     });
     assert.equal(attempt.ok, false);
   });
 
   it("7. approval controls are hidden before both signatures", () => {
-    const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const store = storeForRequest();
+    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(sent.ok, true);
     if (!sent.ok) return;
     const loan = sent.store.loans.find((l) => l.id === "loan_sig_1");
-    assert.equal(canShowLoanRequestApprovalControls(sent.request, "party_anjali", loan), false);
+    assert.equal(canShowLoanRequestApprovalControls(sent.request, USER_B, loan), false);
 
-    const lenderSigned = signLoanAgreement(sent.store, {
+    const borrowerSigned = signLoanAgreement(sent.store, {
       loanId: "loan_sig_1",
-      actorPartyId: store.currentUserId,
-      as: "lender",
+      actorPartyId: USER_A,
+      as: "borrower",
     });
-    assert.equal(lenderSigned.ok, true);
-    if (!lenderSigned.ok) return;
+    assert.equal(borrowerSigned.ok, true);
+    if (!borrowerSigned.ok) return;
     assert.equal(
-      canShowLoanRequestApprovalControls(sent.request, "party_anjali", lenderSigned.loan),
+      canShowLoanRequestApprovalControls(sent.request, USER_B, borrowerSigned.loan),
       false,
     );
   });
 
-  it("8. requester cannot approve their own request", () => {
-    let store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+  it("8. requester (borrower) cannot approve their own request", () => {
+    let store = storeForRequest();
+    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(sent.ok, true);
     if (!sent.ok) return;
     store = sent.store;
-    const s1 = signLoanAgreement(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId, as: "lender" });
+    const s1 = signLoanAgreement(store, { loanId: "loan_sig_1", actorPartyId: USER_A, as: "borrower" });
     assert.equal(s1.ok, true);
     if (!s1.ok) return;
-    const s2 = signLoanAgreement(s1.store, { loanId: "loan_sig_1", actorPartyId: "party_anjali", as: "borrower" });
+    const s2 = signLoanAgreement(s1.store, { loanId: "loan_sig_1", actorPartyId: USER_B, as: "lender" });
     assert.equal(s2.ok, true);
     if (!s2.ok) return;
     assert.equal(bothPartiesSigned(s2.loan), true);
     const self = respondToLoanRequest(s2.store, {
       requestId: sent.request.id,
-      actorPartyId: store.currentUserId,
+      actorPartyId: USER_A,
       action: "accepted",
     });
     assert.equal(self.ok, false);
     if (!self.ok) assert.match(self.error, /cannot accept or reject your own/i);
   });
 
-  it("13. borrower can Accept after both signatures", () => {
-    let store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+  it("13. lender can Accept after both signatures", () => {
+    let store = storeForRequest();
+    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(sent.ok, true);
     if (!sent.ok) return;
     const s1 = signLoanAgreement(sent.store, {
       loanId: "loan_sig_1",
-      actorPartyId: store.currentUserId,
-      as: "lender",
+      actorPartyId: USER_A,
+      as: "borrower",
     });
     assert.equal(s1.ok, true);
     if (!s1.ok) return;
     const s2 = signLoanAgreement(s1.store, {
       loanId: "loan_sig_1",
-      actorPartyId: "party_anjali",
-      as: "borrower",
+      actorPartyId: USER_B,
+      as: "lender",
     });
     assert.equal(s2.ok, true);
     if (!s2.ok) return;
-    assert.equal(canShowLoanRequestApprovalControls(sent.request, "party_anjali", s2.loan), true);
+    assert.equal(canShowLoanRequestApprovalControls(sent.request, USER_B, s2.loan), true);
+    assert.equal(canShowLoanRequestApprovalControls(sent.request, USER_A, s2.loan), false);
     const accepted = respondToLoanRequest(s2.store, {
       requestId: sent.request.id,
-      actorPartyId: "party_anjali",
+      actorPartyId: USER_B,
       action: "accepted",
     });
     assert.equal(accepted.ok, true);
@@ -280,28 +321,28 @@ describe("approval requires both signatures", () => {
     assert.equal(accepted.store.loans.find((l) => l.id === "loan_sig_1")?.status, "active");
   });
 
-  it("14. borrower can Reject after both signatures", () => {
-    const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+  it("14. lender can Reject after both signatures", () => {
+    const store = storeForRequest();
+    const sent = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(sent.ok, true);
     if (!sent.ok) return;
     const s1 = signLoanAgreement(sent.store, {
       loanId: "loan_sig_1",
-      actorPartyId: store.currentUserId,
-      as: "lender",
+      actorPartyId: USER_A,
+      as: "borrower",
     });
     assert.equal(s1.ok, true);
     if (!s1.ok) return;
     const s2 = signLoanAgreement(s1.store, {
       loanId: "loan_sig_1",
-      actorPartyId: "party_anjali",
-      as: "borrower",
+      actorPartyId: USER_B,
+      as: "lender",
     });
     assert.equal(s2.ok, true);
     if (!s2.ok) return;
     const rejected = respondToLoanRequest(s2.store, {
       requestId: sent.request.id,
-      actorPartyId: "party_anjali",
+      actorPartyId: USER_B,
       action: "rejected",
     });
     assert.equal(rejected.ok, true);
@@ -312,37 +353,71 @@ describe("approval requires both signatures", () => {
 });
 
 describe("loan request notifications", () => {
-  it("9. counterparty receives the request notification", () => {
-    const store = storeWithLoan();
-    const me = store.parties.find((p) => p.id === store.currentUserId);
-    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+  const USER_A = "party_test_borrower_b";
+  const USER_B = "party_test_lender_a";
+
+  function storeForRequest() {
+    const seed = createSeedStore();
+    const loan = baseLoan({
+      role: "borrower",
+      counterpartyId: USER_B,
+      lenderId: USER_B,
+      borrowerId: USER_A,
+    });
+    return {
+      ...seed,
+      currentUserId: USER_A,
+      loans: [loan, ...seed.loans.filter((l) => l.id !== loan.id)],
+      agreements: [
+        {
+          id: "agr_sig_ntf_1",
+          loanId: loan.id,
+          agreementNumber: loan.agreementNumber,
+          status: "awaiting_signatures",
+          generatedAt: loan.createdAt,
+          terms: "Test terms",
+          qrPayload: `fire-nepal://verify/agreement/${loan.agreementNumber}`,
+        },
+        ...seed.agreements,
+      ],
+    };
+  }
+
+  it("9. lender receives the request notification from borrower", () => {
+    const store = storeForRequest();
+    const borrower = store.parties.find((p) => p.id === USER_A);
+    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const ntf = result.store.notifications[0];
     assert.equal(ntf.kind, "loan_request");
     assert.equal(ntf.title, borrowerNotificationTitle());
-    assert.equal(ntf.forPartyId, "party_anjali");
+    assert.equal(ntf.forPartyId, USER_B);
     assert.equal(ntf.read, false);
-    assert.match(ntf.body, new RegExp(borrowerNotificationBody(me?.name ?? "You").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(
+      ntf.body,
+      new RegExp(borrowerNotificationBody(borrower?.name ?? "a FIRE Nepal member").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
+    assert.doesNotMatch(ntf.body, /You has sent you/i);
     assert.match(ntf.body, /FL-SIG-001/);
     assert.equal(ntf.href, "/fire-lending/loans/loan_sig_1");
   });
 
-  it("10. new request shows unread notification (red badge count)", () => {
-    const store = storeWithLoan();
-    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+  it("10. new request shows unread notification for lender (red badge count)", () => {
+    const store = storeForRequest();
+    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    const unreadForBorrower = result.store.notifications.filter(
-      (n) => !n.read && n.forPartyId === "party_anjali",
+    const unreadForLender = result.store.notifications.filter(
+      (n) => !n.read && n.forPartyId === USER_B,
     );
-    assert.ok(unreadForBorrower.length >= 1);
-    assert.equal(unreadForBorrower[0].kind, "loan_request");
+    assert.ok(unreadForLender.length >= 1);
+    assert.equal(unreadForLender[0].kind, "loan_request");
   });
 
   it("11. opening the notification marks it as read", () => {
-    const store = storeWithLoan();
-    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const store = storeForRequest();
+    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const ntfId = result.store.notifications[0].id;
@@ -354,8 +429,8 @@ describe("loan request notifications", () => {
   });
 
   it("12. notification opens the correct loan request", () => {
-    const store = storeWithLoan();
-    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const store = storeForRequest();
+    const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.store.notifications[0].href, `/fire-lending/loans/loan_sig_1`);
@@ -364,24 +439,23 @@ describe("loan request notifications", () => {
   });
 
   it("15. duplicate notifications are prevented", () => {
-    const store = storeWithLoan();
-    const first = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const store = storeForRequest();
+    const first = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(first.ok, true);
     if (!first.ok) return;
     assert.equal(
-      hasLoanRequestNotification(first.store, { loanId: "loan_sig_1", toPartyId: "party_anjali" }),
+      hasLoanRequestNotification(first.store, { loanId: "loan_sig_1", toPartyId: USER_B }),
       true,
     );
-    // Inject a second send path by clearing pending request but keeping notification
     const cleared = {
       ...first.store,
       requests: first.store.requests.filter((r) => r.id !== first.request.id),
     };
-    const second = sendLoanRequest(cleared, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
+    const second = sendLoanRequest(cleared, { loanId: "loan_sig_1", actorPartyId: USER_A });
     assert.equal(second.ok, true);
     if (!second.ok) return;
     const loanRequestNtfs = second.store.notifications.filter(
-      (n) => n.kind === "loan_request" && n.forPartyId === "party_anjali" && n.relatedLoanId === "loan_sig_1",
+      (n) => n.kind === "loan_request" && n.forPartyId === USER_B && n.relatedLoanId === "loan_sig_1",
     );
     assert.equal(loanRequestNtfs.length, 1);
   });
@@ -423,7 +497,7 @@ describe("loan documents & email & creation", () => {
     const loan = store.loans[0];
     const { lenderId, borrowerId } = resolveLoanPartyIds(loan, store.currentUserId);
     assert.equal(lenderId, store.currentUserId);
-    assert.equal(borrowerId, "party_anjali");
+    assert.equal(borrowerId, "party_test_borrower_b");
     assert.ok(store.agreements.some((a) => a.loanId === loan.id));
   });
 
@@ -438,10 +512,10 @@ describe("loan documents & email & creation", () => {
 
   it("loan request email includes required fields and CTA", () => {
     const built = buildLoanRequestEmail({
-      recipientName: "Anjali Shrestha",
-      requesterName: "TEJESH GHIMIRE",
-      requesterRoleLabel: "Lender",
-      counterpartyRoleLabel: "Borrower",
+      recipientName: "Test Lender A",
+      requesterName: "Test Borrower B",
+      requesterRoleLabel: "Borrower",
+      counterpartyRoleLabel: "Lender",
       loanReference: "FL-SIG-001",
       amountLabel: "NPR 100,000",
       interestRate: 12,
@@ -456,7 +530,9 @@ describe("loan documents & email & creation", () => {
     assert.match(built.html, /NPR 100,000/);
     assert.match(built.html, /12%/);
     assert.match(built.html, /12 months/);
-    assert.match(built.html, /TEJESH GHIMIRE/);
+    assert.match(built.html, /Test Borrower B/);
+    assert.match(built.html, /Hello <strong[^>]*>Test Lender A<\/strong>/);
+    assert.doesNotMatch(built.html, /You has sent you/);
     assert.match(built.html, /Action is required|action is required/i);
     assert.match(built.html, /fire-lending\/loans\/loan_sig_1/);
     assert.match(built.text, /Review Loan Request/);

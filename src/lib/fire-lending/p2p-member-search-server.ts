@@ -149,7 +149,11 @@ async function fetchRowByFireNepalId(fireNepalId: string): Promise<P2PProfileSou
   return mapRow(result.data as unknown as Record<string, unknown>);
 }
 
-export async function searchP2PMembers(query: string, limit = 8): Promise<P2PMemberSearchHit[]> {
+export async function searchP2PMembers(
+  query: string,
+  limit = 8,
+  opts?: { excludeAuthUserId?: string },
+): Promise<P2PMemberSearchHit[]> {
   if (!isSupabaseConfigured()) return [];
   if (!isP2PSearchQueryReady(query)) return [];
 
@@ -157,10 +161,13 @@ export async function searchP2PMembers(query: string, limit = 8): Promise<P2PMem
   const candidates = await fetchCandidateRows(query, capped);
   const hits: P2PMemberSearchHit[] = [];
 
-  for (const row of candidates.slice(0, capped)) {
+  for (const row of candidates.slice(0, Math.max(capped * 2, capped))) {
+    // Never return the authenticated viewer as a counterparty candidate.
+    if (opts?.excludeAuthUserId && row.id === opts.excludeAuthUserId) continue;
     const verified = resolveVerificationStatus(row) === "verified";
     const metrics = await loadLendingMetricsForUser(row.id, verified);
     hits.push(buildP2PMemberSearchHit(row, metrics));
+    if (hits.length >= capped) break;
   }
 
   return rankP2PSearchHits(query, hits).slice(0, capped);

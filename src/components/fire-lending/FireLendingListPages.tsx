@@ -39,6 +39,7 @@ import {
   canShowLoanRequestApprovalControls,
   LOAN_REQUEST_UI,
 } from "@/lib/fire-lending/loan-request-approval";
+import { isSelfLoan } from "@/lib/fire-lending/loan-party-identity";
 import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 import { FireLendingDashboardAnalytics } from "@/components/fire-lending/FireLendingDashboardAnalytics";
@@ -178,8 +179,10 @@ export function FireLendingRequestsPage() {
               const isRecipient = req.toPartyId === store.currentUserId;
               const isRequester = req.fromPartyId === store.currentUserId;
               const signaturesDone = linkedLoan ? bothPartiesSigned(linkedLoan) : !req.loanId;
-              const canAct = canShowLoanRequestApprovalControls(req, store.currentUserId, linkedLoan) ||
-                // Orphan seed requests without a linked loan keep prior counterparty-only Accept.
+              const canAct =
+                (!(linkedLoan?.identityInvalid || (linkedLoan && isSelfLoan(linkedLoan))) &&
+                  canShowLoanRequestApprovalControls(req, store.currentUserId, linkedLoan)) ||
+                // Orphan seed requests without a linked loan keep prior lender-only Accept.
                 (isRecipient && req.status === "pending" && !req.loanId);
               return (
                 <li
@@ -218,7 +221,7 @@ export function FireLendingRequestsPage() {
                       ) : null}
                       {isRequester && req.status === "pending" ? (
                         <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
-                          Waiting for the borrower to respond. You cannot Accept or Reject your own request.
+                          Waiting for the lender to respond. You cannot Accept or Reject your own request.
                         </p>
                       ) : null}
                       {isRecipient && req.status === "pending" && linkedLoan && !signaturesDone ? (

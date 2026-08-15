@@ -165,7 +165,8 @@ export function FireLendingLoanWizard() {
     notes: "",
     guarantor: "",
     collateral: "",
-    role: modeRequest ? "borrower" : "lender",
+    // Loan request flow: User A (borrower) requests from User B (lender).
+    role: "borrower",
   });
 
   const localHits = useMemo(
@@ -181,10 +182,11 @@ export function FireLendingLoanWizard() {
   const createdAgreement = store.agreements.find((a) => a.loanId === createdLoanId);
   const linkedRequest = createdLoanId ? findRequestForLoan(store, createdLoanId) : undefined;
   const requestStatus = linkedRequest?.status;
-  const borrowerAccepted = requestStatus === "accepted";
-  const borrowerRejected = requestStatus === "rejected";
+  const lenderAccepted = requestStatus === "accepted";
+  const lenderRejected = requestStatus === "rejected";
   const requestPending = requestStatus === "pending";
   const requestSent = Boolean(linkedRequest);
+  const isBorrowerRequester = createdLoan?.role === "borrower" || draft.role === "borrower";
   const borrowerStepReady = canContinueBorrowerStep(draft.counterpartyId);
 
   useEffect(() => {
@@ -264,8 +266,8 @@ export function FireLendingLoanWizard() {
   const canNext = () => {
     if (step === 0) return borrowerStepReady;
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
-    // After sending the request, continue to role-based signatures (Accept happens later).
-    if (step === 3) return requestSent && !borrowerRejected;
+    // After sending the request, continue to role-based signatures (lender Accept happens later).
+    if (step === 3) return requestSent && !lenderRejected;
     return true;
   };
 
@@ -274,9 +276,10 @@ export function FireLendingLoanWizard() {
       const result = resolveBorrowerContinue({
         counterpartyId: draft.counterpartyId,
         partyExists: Boolean(partyById(draft.counterpartyId)),
+        currentUserId: store.currentUserId,
       });
       if (result.error || result.nextStep == null) {
-        setStepError(result.error ?? "Select a verified borrower before continuing to loan details.");
+        setStepError(result.error ?? "Select a verified counterparty before continuing to loan details.");
         return;
       }
       setStepError(null);
@@ -297,7 +300,7 @@ export function FireLendingLoanWizard() {
 
   const onCreate = () => {
     if (!canContinueBorrowerStep(draft.counterpartyId)) {
-      setStepError("Borrower selection was lost. Go back and select the borrower again.");
+      setStepError("Counterparty selection was lost. Go back and select the other party again.");
       setStep(0);
       return;
     }
@@ -309,6 +312,10 @@ export function FireLendingLoanWizard() {
       .filter((d) => d.status === "ready" && (d.url || d.storagePath))
       .map((d) => pendingToFireLendingDocument(d, "pending"));
     const id = createLoanFromWizard(draft, readyDocs);
+    if (!id) {
+      setStepError("Could not create the loan. Lender and borrower must be different members.");
+      return;
+    }
     setCreatedLoanId(id);
     setSuccessMessage(null);
     setStepError(null);
@@ -407,7 +414,15 @@ export function FireLendingLoanWizard() {
       </div>
 
       {step === 0 ? (
-        <LendingGlassCard title="Borrower Selection" subtitle="Search verified FIRE Nepal members securely" icon={UserSearch}>
+        <LendingGlassCard
+          title={draft.role === "borrower" ? "Lender Selection" : "Borrower Selection"}
+          subtitle={
+            draft.role === "borrower"
+              ? "Select the lender you are requesting funds from"
+              : "Search verified FIRE Nepal members securely"
+          }
+          icon={UserSearch}
+        >
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {connectionOptions.map((opt) => (
               <button
@@ -487,10 +502,14 @@ export function FireLendingLoanWizard() {
               label="Your role"
               value={draft.role}
               onChange={(v) => patch("role", v as LoanRole)}
-              options={[
-                { value: "lender", label: "I am lending" },
-                { value: "borrower", label: "I am borrowing" },
-              ]}
+              options={
+                modeRequest
+                  ? [{ value: "borrower", label: "I am borrowing (requesting from a lender)" }]
+                  : [
+                      { value: "borrower", label: "I am borrowing (request from a lender)" },
+                      { value: "lender", label: "I am lending (offer a loan)" },
+                    ]
+              }
             />
             <LendingSelect
               label="Currency"
@@ -641,23 +660,23 @@ export function FireLendingLoanWizard() {
         <LendingGlassCard
           title={requestSent ? LOAN_REQUEST_UI.waitingTitle : LOAN_REQUEST_UI.title}
           subtitle={
-            borrowerAccepted
-              ? "Borrower accepted — continue to signatures"
-              : borrowerRejected
-                ? "Borrower rejected this loan request"
+            lenderAccepted
+              ? "Lender accepted — continue to signatures if needed"
+              : lenderRejected
+                ? "Lender rejected this loan request"
                 : requestPending
-                  ? "Waiting for the borrower’s response"
+                  ? "Waiting for the lender’s response"
                   : LOAN_REQUEST_UI.prompt
           }
           icon={FileSignature}
         >
           <p className={`mb-3 text-sm font-semibold ${light ? "text-slate-700" : "text-emerald-100"}`}>
             {requestSent
-              ? `${createdLoan.agreementNumber} · Counterparty: ${selected?.name ?? "Borrower"}`
+              ? `${createdLoan.agreementNumber} · Lender: ${selected?.name ?? "Lender"}`
               : LOAN_REQUEST_UI.prompt}
           </p>
 
-          {!requestSent ? (
+          {!requestSent && isBorrowerRequester ? (
             <div className="flex flex-wrap gap-2">
               <LendingPrimaryButton
                 data-testid="loan-request-send-button"
@@ -669,6 +688,12 @@ export function FireLendingLoanWizard() {
                 {LOAN_REQUEST_UI.requestButton}
               </LendingPrimaryButton>
             </div>
+          ) : null}
+
+          {!requestSent && !isBorrowerRequester ? (
+            <p role="status" className={`text-sm font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}>
+              {LOAN_REQUEST_UI.mustBeBorrower}
+            </p>
           ) : null}
 
           {successMessage ? (
@@ -697,9 +722,9 @@ export function FireLendingLoanWizard() {
             </p>
           ) : null}
 
-          {borrowerRejected ? (
+          {lenderRejected ? (
             <p role="alert" className="mt-3 text-sm font-bold text-rose-400">
-              The borrower rejected this loan request. The workflow cannot continue.
+              The lender rejected this loan request. The workflow cannot continue.
             </p>
           ) : null}
 
@@ -763,10 +788,10 @@ export function FireLendingLoanWizard() {
             Continue to signatures
           </LendingPrimaryButton>
         ) : null}
-        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && borrowerAccepted ? (
+        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && lenderAccepted ? (
           <LendingPrimaryButton onClick={() => router.push(`/fire-lending/loans/${createdLoan.id}`)}>Open loan</LendingPrimaryButton>
         ) : null}
-        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && !borrowerAccepted ? (
+        {step === 4 && createdLoan && bothPartiesSigned(createdLoan) && !lenderAccepted ? (
           <LendingPrimaryButton onClick={() => router.push("/fire-lending/requests")}>
             View loan request
           </LendingPrimaryButton>

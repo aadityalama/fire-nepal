@@ -32,44 +32,56 @@ export function canContinueBorrowerStep(counterpartyId: string | null | undefine
 }
 
 /**
- * When Continue is pressed on borrower step: advance only with a committed id.
- * Returns next step index or an error message (null next means stay).
+ * When Continue is pressed on borrower step: advance only with a committed id
+ * that is not the authenticated member.
  */
 export function resolveBorrowerContinue(opts: {
   counterpartyId: string | null | undefined;
   partyExists: boolean;
+  /** Authenticated party id — must differ from counterpartyId. */
+  currentUserId?: string | null;
 }): { nextStep: number | null; error: string | null } {
   if (!canContinueBorrowerStep(opts.counterpartyId) || !opts.partyExists) {
     return {
       nextStep: null,
-      error: "Select a verified borrower before continuing to loan details.",
+      error: "Select a verified counterparty before continuing to loan details.",
+    };
+  }
+  const me = String(opts.currentUserId ?? "").trim();
+  const other = String(opts.counterpartyId ?? "").trim();
+  if (me && other && me === other) {
+    return {
+      nextStep: null,
+      error: "Lender and borrower must be different members.",
     };
   }
   return { nextStep: 1, error: null };
 }
 
 /**
- * Minimal wizard step machine for regression tests (Borrower→…→Signatures).
- * Steps: 0 Borrower, 1 Details, 2 Agreement, 3 Approval, 4 Signatures
+ * Minimal wizard step machine for regression tests (Counterparty→…→Signatures).
+ * Steps: 0 Counterparty, 1 Details, 2 Agreement, 3 Approval (send request), 4 Signatures
  *
- * Approval is counterparty-driven: requester must send the request, then wait
- * until the borrower accepts before signatures.
+ * Loan request flow: borrower (A) sends to lender (B), then both sign.
+ * Lender Accept/Reject happens after both signatures (not required to reach step 4).
  */
 export function advanceWizardStep(opts: {
   step: number;
   counterpartyId?: string;
   amount?: string;
   purpose?: string;
-  /** Whether the requester has sent the loan request. */
+  /** Whether the borrower has sent the loan request to the lender. */
   requestSent?: boolean;
   approval?: "pending" | "accepted" | "rejected" | "changes";
   partyExists?: boolean;
+  currentUserId?: string;
 }): { step: number; error: string | null } {
   const { step } = opts;
   if (step === 0) {
     const result = resolveBorrowerContinue({
       counterpartyId: opts.counterpartyId,
       partyExists: opts.partyExists !== false && Boolean(opts.counterpartyId),
+      currentUserId: opts.currentUserId,
     });
     return { step: result.nextStep ?? 0, error: result.error };
   }
@@ -84,14 +96,12 @@ export function advanceWizardStep(opts: {
   }
   if (step === 3) {
     if (!opts.requestSent) {
-      return { step: 3, error: "Send the loan request to the borrower first." };
+      return { step: 3, error: "Send the loan request to the lender first." };
     }
     if (opts.approval === "rejected") {
-      return { step: 3, error: "Borrower rejected the loan request." };
+      return { step: 3, error: "Lender rejected the loan request." };
     }
-    if (opts.approval !== "accepted") {
-      return { step: 3, error: "Waiting for the borrower to accept the loan request." };
-    }
+    // Signatures proceed while the request is pending; lender Accept comes later.
     return { step: 4, error: null };
   }
   return { step, error: null };
