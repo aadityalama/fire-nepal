@@ -1,149 +1,164 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { BookOpen } from "lucide-react";
 import { useFireTheme } from "@/contexts/FireThemeContext";
-import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
-import { useSsfPension } from "@/contexts/SsfPensionContext";
-import { computePensionProjection } from "@/lib/ssf-pension/projection";
-import { analyzeRetireInNepal } from "@/lib/ssf-pension/nepal-retire";
-import { SSF_SUMMARY } from "@/lib/ssf-pension/demo-data";
+import {
+  computePolicyDrivenProjection,
+  INSTITUTION_LABELS,
+  listActiveRulesForInstitution,
+  PENSION_POLICY_CATALOG,
+  todayIsoDate,
+  type PensionInstitutionId,
+} from "@/lib/pension-policy";
 import { PensionChrome } from "@/components/pension/PensionChrome";
+import { OfficialPortalActions } from "@/components/pension/OfficialPortalActions";
 import { formatMoney } from "@/lib/expense-utils";
 
-function verdictStyles(v: string, light: boolean) {
-  if (v === "SAFE")
-    return light ? "border-emerald-300/80 bg-emerald-50 text-emerald-950" : "border-emerald-400/30 bg-emerald-500/15 text-emerald-50";
-  if (v === "MODERATE RISK")
-    return light ? "border-amber-300/80 bg-amber-50 text-amber-950" : "border-amber-400/25 bg-amber-500/10 text-amber-50";
-  return light ? "border-rose-300/80 bg-rose-50 text-rose-950" : "border-rose-400/25 bg-rose-500/10 text-rose-50";
-}
+const INSTITUTIONS: PensionInstitutionId[] = ["government_pension", "epf", "ssf", "cit"];
 
 export function SsfPensionProjectionPage() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const { fireScore, passiveMonthly, totals } = useWealthPortfolio();
-  const { workspace, setProjection } = useSsfPension();
-  const p = useMemo(() => computePensionProjection(workspace.projection), [workspace.projection]);
-  const { projection: i } = workspace;
+  const glass = light ? "ring-1 ring-slate-900/[0.04]" : "";
 
-  const savingsIncomeProxy = Math.round(totals.liquidNpr / 180);
-  const investIncomeProxy = Math.round((totals.investmentsLiveNpr + totals.retirementNpr) / 420);
-  const nepal = analyzeRetireInNepal({
-    monthlyFamilySpendNpr: workspace.retireNepal.monthlyFamilySpendNpr,
-    assumedInflationPct: workspace.retireNepal.assumedInflationPct,
-    otherMonthlyIncomeNpr: workspace.retireNepal.otherMonthlyIncomeNpr,
-    ssfMonthlyPensionNpr: SSF_SUMMARY.estimatedMonthlyPensionNpr,
-    savingsMonthlyNpr: savingsIncomeProxy,
-    investmentsIncomeMonthlyNpr: investIncomeProxy + passiveMonthly * 0.35,
-    fireReadinessPct: fireScore,
-  });
+  const [institution, setInstitution] = useState<PensionInstitutionId>("government_pension");
+  const [age, setAge] = useState(32);
+  const [salary, setSalary] = useState(80000);
+  const [employeeContrib, setEmployeeContrib] = useState(0);
+  const [employerContrib, setEmployerContrib] = useState(0);
+  const [balance, setBalance] = useState(0);
+  const [retireAge, setRetireAge] = useState(60);
+
+  const asOf = todayIsoDate();
+  const result = useMemo(
+    () =>
+      computePolicyDrivenProjection({
+        institution,
+        age,
+        monthlySalaryNpr: salary,
+        monthlyEmployeeContributionNpr: employeeContrib,
+        monthlyEmployerContributionNpr: employerContrib,
+        contributionMonths: Math.max(0, (retireAge - age) * 12),
+        currentBalanceNpr: balance,
+        expectedRetirementAge: retireAge,
+        asOfDate: asOf,
+      }),
+    [institution, age, salary, employeeContrib, employerContrib, balance, retireAge, asOf],
+  );
+
+  const benefitRules = listActiveRulesForInstitution(PENSION_POLICY_CATALOG, institution, asOf).filter(
+    (r) => r.ruleCategory === "retirement_benefit" || r.ruleCategory === "contribution",
+  );
 
   return (
     <PensionChrome
       title="Retirement Projection"
-      subtitle="On-device inputs until you connect data — outputs are illustrative, not statutory fund statements."
+      subtitle="Policy-driven calculator — uses verified contribution rates from the official policy layer. Never invents interest or pension conversion factors."
     >
-      <section className={`wealth-glass p-4 sm:p-5 ${light ? "ring-1 ring-slate-900/[0.04]" : ""}`}>
-        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Nepal retirement readiness</h2>
-        <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-zinc-400">{nepal.headline}</p>
-        <p className={`mt-3 inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black ${verdictStyles(nepal.verdict, light)}`}>
-          {nepal.verdict}
-        </p>
-        <p className="mt-2 text-[11px] font-bold text-slate-500 dark:text-zinc-500">
-          Coverage {nepal.coverageRatio.toFixed(2)}× · Gap NPR {Math.max(0, nepal.monthlyGapNpr).toLocaleString("en-IN")}/mo (model)
-        </p>
-      </section>
+      <OfficialPortalActions institution={institution} light={light} />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="wealth-glass space-y-4 p-4 sm:p-5">
-          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Inputs</h2>
+        <section className={`wealth-glass space-y-3 p-4 sm:p-5 ${glass}`}>
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Your inputs</h2>
           <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
-            Current age
-            <input
-              type="number"
+            Institution / scheme
+            <select
               className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              value={i.currentAge}
-              min={18}
-              max={70}
-              onChange={(e) => setProjection({ currentAge: Math.round(Number(e.target.value)) })}
-            />
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value as PensionInstitutionId)}
+            >
+              {INSTITUTIONS.map((id) => (
+                <option key={id} value={id}>
+                  {INSTITUTION_LABELS[id]}
+                </option>
+              ))}
+            </select>
           </label>
-          <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
-            Monthly salary (NPR)
-            <input
-              type="number"
-              className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              value={i.monthlySalaryNpr}
-              min={25_000}
-              max={2_000_000}
-              step={1000}
-              onChange={(e) => setProjection({ monthlySalaryNpr: Math.round(Number(e.target.value)) })}
-            />
-          </label>
-          <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
-            Monthly SSF contribution (NPR)
-            <input
-              type="number"
-              className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              value={i.monthlySsfContributionNpr}
-              min={0}
-              max={200_000}
-              step={250}
-              onChange={(e) => setProjection({ monthlySsfContributionNpr: Math.round(Number(e.target.value)) })}
-            />
-          </label>
-          <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
-            Retirement age
-            <input
-              type="number"
-              className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              value={i.retirementAge}
-              min={40}
-              max={70}
-              onChange={(e) => setProjection({ retirementAge: Math.round(Number(e.target.value)) })}
-            />
-          </label>
-          <label className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
-            Expected salary growth (%/yr)
-            <input
-              type="number"
-              className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
-              value={i.annualSalaryGrowthPct}
-              min={0}
-              max={20}
-              step={0.25}
-              onChange={(e) => setProjection({ annualSalaryGrowthPct: Number(e.target.value) })}
-            />
-          </label>
+          {(
+            [
+              ["Current age", age, setAge, 18, 70, 1],
+              ["Monthly salary (NPR)", salary, setSalary, 0, 5_000_000, 1000],
+              ["Employee contribution / mo (0 = use policy %)", employeeContrib, setEmployeeContrib, 0, 500_000, 500],
+              ["Employer contribution / mo (0 = use policy %)", employerContrib, setEmployerContrib, 0, 500_000, 500],
+              ["Current accumulated balance (NPR)", balance, setBalance, 0, 50_000_000, 1000],
+              ["Expected retirement age", retireAge, setRetireAge, 45, 70, 1],
+            ] as const
+          ).map(([label, value, setter, min, max, step]) => (
+            <label key={label} className="block text-xs font-bold text-slate-600 dark:text-zinc-400">
+              {label}
+              <input
+                type="number"
+                className="mt-1 w-full rounded-xl border border-slate-200/90 bg-white/90 px-3 py-2 text-sm font-black text-slate-900 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
+                value={value}
+                min={min}
+                max={max}
+                step={step}
+                onChange={(e) => setter(Math.round(Number(e.target.value) || 0))}
+              />
+            </label>
+          ))}
         </section>
 
-        <section className="wealth-glass space-y-4 p-4 sm:p-5">
-          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Outputs</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-teal-500/20 bg-teal-500/10 p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-teal-900 dark:text-teal-100/80">Monthly pension</p>
-              <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(p.estimatedMonthlyPensionNpr, "NPR")}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">Lump sum (heuristic)</p>
-              <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(p.lumpSumEstimateNpr, "NPR")}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">Future corpus</p>
-              <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(p.futureCorpusNpr, "NPR")}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500 dark:text-zinc-400">Inflation-adjusted</p>
-              <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{formatMoney(p.inflationAdjustedCorpusNpr, "NPR")}</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm font-semibold leading-relaxed text-emerald-950 dark:text-emerald-50">
-            <p className="text-[11px] font-black uppercase tracking-wide text-emerald-800/80 dark:text-emerald-200/80">Example</p>
-            <p className="mt-2 text-base font-black leading-snug">{p.narrativeExample}</p>
-            <p className="mt-2 text-xs opacity-90">Retirement year {p.retirementYear} · Runway {p.yearsToRetirement} years</p>
-          </div>
+        <section className={`wealth-glass space-y-3 p-4 sm:p-5 ${glass}`}>
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">Policy result</h2>
+          {result.unavailableMessage ? (
+            <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3 text-sm font-bold text-amber-950 dark:text-amber-100">
+              {result.unavailableMessage}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold leading-relaxed text-slate-700 dark:text-zinc-300">{result.narrative}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Metric label="Employee rate" value={result.monthlyEmployeeRatePct == null ? "—" : `${result.monthlyEmployeeRatePct}%`} />
+                <Metric label="Employer / Gov rate" value={result.monthlyEmployerRatePct == null ? "—" : `${result.monthlyEmployerRatePct}%`} />
+                <Metric
+                  label="Projected contributions"
+                  value={result.projectedBalanceNpr == null ? "—" : formatMoney(result.projectedBalanceNpr, "NPR")}
+                />
+                <Metric label="Years to retirement" value={String(result.yearsToRetirement)} />
+              </div>
+              <p className="text-[11px] font-bold text-slate-500 dark:text-zinc-500">
+                Monthly pension conversion: Official policy information unavailable for verification.
+              </p>
+            </>
+          )}
+          {result.warnings.map((w) => (
+            <p key={w} className="text-[11px] font-semibold text-slate-500 dark:text-zinc-500">
+              {w}
+            </p>
+          ))}
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Policy versions: {result.policyVersionIds.join(", ") || "none"} · as of {result.asOfDate}
+          </p>
         </section>
       </div>
+
+      <section className={`wealth-glass p-4 sm:p-5 ${glass}`}>
+        <div className="mb-3 flex items-center gap-2">
+          <BookOpen size={18} className="text-teal-600 dark:text-teal-300" />
+          <h2 className="text-lg font-black text-slate-900 dark:text-white">Applicable policy notes</h2>
+        </div>
+        <ul className="space-y-2">
+          {benefitRules.map((rule) => (
+            <li key={rule.id} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-zinc-400">
+              <span className="font-black text-slate-900 dark:text-white">{rule.title}</span> — {rule.summary}{" "}
+              <a href={rule.officialSourceUrl} target="_blank" rel="noopener noreferrer" className="text-teal-700 dark:text-teal-300">
+                Source ↗
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
     </PensionChrome>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+      <p className="text-[10px] font-black uppercase tracking-wide text-teal-700 dark:text-teal-300">{label}</p>
+      <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{value}</p>
+    </div>
   );
 }
