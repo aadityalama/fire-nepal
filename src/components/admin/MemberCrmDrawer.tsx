@@ -22,6 +22,8 @@ import {
   MEMBER_PERMANENT_DELETE_CONFIRMATION,
   MEMBER_PERMANENT_DELETE_WARNING,
 } from "@/lib/admin/member-permanent-delete-phrase";
+import { PLAN_SELECTION_EMAIL_SUCCESS_MESSAGE } from "@/lib/membership-plan-selection-email/send-plan-selection-email";
+import { toast } from "@/lib/toast";
 
 function formatNpr(n: number): string {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(n);
@@ -181,6 +183,29 @@ export function MemberCrmDrawer({
     }
   };
 
+  const sendPlanSelectionEmail = async () => {
+    if (!userId) return;
+    setBusy("plan-selection");
+    try {
+      const r = await fetch(`/api/admin/members/${userId}/plan-selection-email`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const j = (await r.json()) as { error?: string; message?: string };
+      if (!r.ok) {
+        toast.error(j.error ?? "Could not send plan selection email.", { id: "plan-selection-email" });
+        return;
+      }
+      toast.success(j.message?.trim() || PLAN_SELECTION_EMAIL_SUCCESS_MESSAGE, { id: "plan-selection-email" });
+      await load();
+    } catch {
+      toast.error("Network error. Could not send plan selection email.", { id: "plan-selection-email" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const submitRenew = async () => {
     if (!userId) return;
     const days = Math.floor(Number(renewDays));
@@ -202,6 +227,7 @@ export function MemberCrmDrawer({
   if (!open) return null;
 
   const paid = crm?.planType === "premium" || crm?.planType === "elite";
+  const isFree = crm?.planType === "free";
   const suspended = crm?.membershipStatus === "Suspended";
   const archived = Boolean(crm?.isArchived);
 
@@ -381,6 +407,22 @@ export function MemberCrmDrawer({
                     >
                       <Mail className="h-3.5 w-3.5" aria-hidden />
                       Send reminder
+                    </button>
+                  ) : null}
+                  {isFree ? (
+                    <button
+                      type="button"
+                      disabled={!!busy || suspended || archived}
+                      onClick={() => void sendPlanSelectionEmail()}
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
+                      data-testid="send-plan-selection-email"
+                    >
+                      {busy === "plan-selection" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <Mail className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {busy === "plan-selection" ? "Sending…" : "Send plan selection email"}
                     </button>
                   ) : null}
                   {!archived ? (
