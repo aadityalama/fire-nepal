@@ -266,7 +266,7 @@ export function createSeedStore(): FireLendingStore {
         id: uid("ntf"),
         kind: "loan_request",
         title: "New loan request",
-        body: "Anjali Shrestha requested NPR 100,000 for shop inventory.",
+        body: "You have received a new loan request from Anjali Shrestha.",
         createdAt: todayIso(),
         read: false,
         href: "/fire-lending/requests",

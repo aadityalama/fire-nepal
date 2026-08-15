@@ -171,10 +171,14 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
   const close = useCallback(() => setDrawerOpen(false), []);
 
   const badges = {
-    requests: store.requests.filter((r) => r.status === "pending").length,
+    requests: store.requests.filter(
+      (r) => r.status === "pending" && r.toPartyId === store.currentUserId,
+    ).length,
     payments: store.installments.filter((i) => i.status === "due" || i.status === "overdue").length,
     agreements: agreementCenter.pendingSignature + agreementCenter.waitingApproval,
-    notifications: store.notifications.filter((n) => !n.read).length,
+    notifications: store.notifications.filter(
+      (n) => !n.read && (!n.forPartyId || n.forPartyId === store.currentUserId),
+    ).length,
   };
 
   useEffect(() => {

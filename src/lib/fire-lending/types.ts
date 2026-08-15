@@ -108,6 +108,8 @@ export type FireLendingPayment = {
 
 export type FireLendingRequest = {
   id: string;
+  /** Linked peer loan when the request was created from the loan wizard. */
+  loanId?: string;
   fromPartyId: string;
   toPartyId: string;
   amount: number;
@@ -141,6 +143,10 @@ export type FireLendingNotification = {
   createdAt: string;
   read: boolean;
   href?: string;
+  /** When set, only this party should see the notification. */
+  forPartyId?: string;
+  relatedRequestId?: string;
+  relatedLoanId?: string;
 };
 
 export type FireLendingDocument = {

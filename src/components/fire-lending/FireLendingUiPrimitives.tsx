@@ -300,17 +300,20 @@ export function LendingPrimaryButton({
   onClick,
   type = "button",
   disabled,
+  "data-testid": dataTestId,
 }: {
   children: ReactNode;
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  "data-testid"?: string;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      data-testid={dataTestId}
       className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-2.5 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-105 active:scale-[0.98] disabled:opacity-50"
     >
       {children}
@@ -323,11 +326,13 @@ export function LendingSecondaryButton({
   onClick,
   type = "button",
   disabled,
+  "data-testid": dataTestId,
 }: {
   children: ReactNode;
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  "data-testid"?: string;
 }) {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
@@ -336,6 +341,7 @@ export function LendingSecondaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
+      data-testid={dataTestId}
       className={`inline-flex min-h-[44px] items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
         light
           ? "border-emerald-300/70 bg-white text-emerald-800 hover:bg-emerald-50"
