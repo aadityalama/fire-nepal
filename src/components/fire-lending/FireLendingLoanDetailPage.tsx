@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { FileText, Landmark } from "lucide-react";
+import { FireLendingConfirmDialog } from "@/components/fire-lending/FireLendingConfirmDialog";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import { FireLendingSignaturePanel } from "@/components/fire-lending/FireLendingSignaturePanel";
 import {
@@ -47,10 +48,13 @@ export function FireLendingLoanDetailPage() {
     linkedRequest && loan
       ? canShowLoanRequestApprovalControls(linkedRequest, store.currentUserId, loan)
       : false;
+  const approvalRequester = linkedRequest ? partyById(linkedRequest.fromPartyId) : undefined;
   const [docError, setDocError] = useState<string | null>(null);
   const [agreementBusy, setAgreementBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState(false);
 
   if (!loan) {
     return (
@@ -137,8 +141,7 @@ export function FireLendingLoanDetailPage() {
             <LendingPrimaryButton
               onClick={() => {
                 setApprovalError(null);
-                const err = respondToRequest(linkedRequest.id, "accepted");
-                if (err) setApprovalError(err);
+                setApprovalOpen(true);
               }}
             >
               Accept
@@ -146,8 +149,7 @@ export function FireLendingLoanDetailPage() {
             <LendingSecondaryButton
               onClick={() => {
                 setApprovalError(null);
-                const err = respondToRequest(linkedRequest.id, "rejected");
-                if (err) setApprovalError(err);
+                setApprovalOpen(true);
               }}
             >
               Reject
@@ -246,6 +248,44 @@ export function FireLendingLoanDetailPage() {
       <Link href="/fire-lending/loans" className={`text-sm font-bold ${light ? "text-emerald-700" : "text-lime-300"}`}>
         ← Back to loans
       </Link>
+
+      <FireLendingConfirmDialog
+        open={approvalOpen && Boolean(linkedRequest)}
+        busy={approvalBusy}
+        title={LOAN_REQUEST_UI.title}
+        description={
+          approvalRequester
+            ? `${approvalRequester.name} sent you a loan request. ${LOAN_REQUEST_UI.approvalPrompt}`
+            : LOAN_REQUEST_UI.approvalPrompt
+        }
+        cancelLabel={LOAN_REQUEST_UI.confirmCancel}
+        confirmLabel={LOAN_REQUEST_UI.confirmAccept}
+        secondaryLabel={LOAN_REQUEST_UI.confirmReject}
+        confirmTestId="confirm-accept-loan-request"
+        secondaryTestId="confirm-reject-loan-request"
+        testId="loan-request-approval-dialog"
+        onCancel={() => {
+          if (!approvalBusy) setApprovalOpen(false);
+        }}
+        onConfirm={() => {
+          if (!linkedRequest) return;
+          setApprovalBusy(true);
+          setApprovalError(null);
+          const err = respondToRequest(linkedRequest.id, "accepted");
+          setApprovalBusy(false);
+          if (err) setApprovalError(err);
+          else setApprovalOpen(false);
+        }}
+        onSecondary={() => {
+          if (!linkedRequest) return;
+          setApprovalBusy(true);
+          setApprovalError(null);
+          const err = respondToRequest(linkedRequest.id, "rejected");
+          setApprovalBusy(false);
+          if (err) setApprovalError(err);
+          else setApprovalOpen(false);
+        }}
+      />
     </LendingMobileScreen>
   );
 }

@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { LendingFloatingActionButton } from "@/components/fire-lending/FireLendingFloatingActionButton";
+import { FireLendingConfirmDialog } from "@/components/fire-lending/FireLendingConfirmDialog";
 import { FireLendingSignaturePanel } from "@/components/fire-lending/FireLendingSignaturePanel";
 import { LendingCompactHeader, LendingMobileScreen } from "@/components/fire-lending/FireLendingMobileScreens";
 import {
@@ -147,6 +148,7 @@ export function FireLendingRequestsPage() {
   const light = resolvedTheme === "light";
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [approvalRequestId, setApprovalRequestId] = useState<string | null>(null);
 
   const onRespond = (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => {
     setBusyId(id);
@@ -154,7 +156,13 @@ export function FireLendingRequestsPage() {
     const error = respondToRequest(id, action, note);
     setBusyId(null);
     if (error) setActionError(error);
+    else setApprovalRequestId(null);
   };
+
+  const approvalRequest = approvalRequestId
+    ? store.requests.find((r) => r.id === approvalRequestId)
+    : undefined;
+  const approvalFrom = approvalRequest ? partyById(approvalRequest.fromPartyId) : undefined;
 
   return (
     <LendingMobileScreen>
@@ -244,13 +252,19 @@ export function FireLendingRequestsPage() {
                     <div className="mt-2 flex flex-wrap gap-2" data-testid="loan-request-approval-controls">
                       <LendingPrimaryButton
                         disabled={busyId === req.id}
-                        onClick={() => onRespond(req.id, "accepted")}
+                        onClick={() => {
+                          setActionError(null);
+                          setApprovalRequestId(req.id);
+                        }}
                       >
                         Accept
                       </LendingPrimaryButton>
                       <LendingSecondaryButton
                         disabled={busyId === req.id}
-                        onClick={() => onRespond(req.id, "rejected")}
+                        onClick={() => {
+                          setActionError(null);
+                          setApprovalRequestId(req.id);
+                        }}
                       >
                         Reject
                       </LendingSecondaryButton>
@@ -280,6 +294,32 @@ export function FireLendingRequestsPage() {
           </p>
         ) : null}
       </LendingGlassCard>
+
+      <FireLendingConfirmDialog
+        open={Boolean(approvalRequest)}
+        busy={Boolean(approvalRequestId && busyId === approvalRequestId)}
+        title={LOAN_REQUEST_UI.title}
+        description={
+          approvalFrom
+            ? `${approvalFrom.name} sent you a loan request. ${LOAN_REQUEST_UI.approvalPrompt}`
+            : LOAN_REQUEST_UI.approvalPrompt
+        }
+        cancelLabel={LOAN_REQUEST_UI.confirmCancel}
+        confirmLabel={LOAN_REQUEST_UI.confirmAccept}
+        secondaryLabel={LOAN_REQUEST_UI.confirmReject}
+        confirmTestId="confirm-accept-loan-request"
+        secondaryTestId="confirm-reject-loan-request"
+        testId="loan-request-approval-dialog"
+        onCancel={() => {
+          if (!busyId) setApprovalRequestId(null);
+        }}
+        onConfirm={() => {
+          if (approvalRequestId) onRespond(approvalRequestId, "accepted");
+        }}
+        onSecondary={() => {
+          if (approvalRequestId) onRespond(approvalRequestId, "rejected");
+        }}
+      />
     </LendingMobileScreen>
   );
 }

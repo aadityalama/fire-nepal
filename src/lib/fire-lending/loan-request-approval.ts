@@ -340,4 +340,7 @@ export const LOAN_REQUEST_UI = {
   pendingStatus: "pending" as const,
   readyForApproval: "Both parties have signed. Loan request is ready for approval.",
   signaturesRequiredBeforeApproval: "Both parties must sign before Accept or Reject is available.",
+  approvalPrompt: "Do you want to accept or reject this loan request?",
+  confirmAccept: "Accept",
+  confirmReject: "Reject",
 } as const;
