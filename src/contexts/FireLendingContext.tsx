@@ -36,6 +36,7 @@ import {
   sendLoanRequest,
   type LoanRequestAction,
 } from "@/lib/fire-lending/loan-request-approval";
+import { signLoanAgreement } from "@/lib/fire-lending/agreement-signatures";
 import {
   attachDocumentsToStore,
   canAccessLoanDocument,
@@ -48,6 +49,7 @@ import type {
   FireLendingParty,
   FireLendingPayment,
   FireLendingStore,
+  LoanRole,
   LoanWizardDraft,
   PaymentMethod,
 } from "@/lib/fire-lending/types";
@@ -87,7 +89,7 @@ type FireLendingContextValue = {
     isPartial?: boolean;
     isSettlement?: boolean;
   }) => void;
-  signAgreement: (loanId: string, as: "lender" | "borrower") => void;
+  signAgreement: (loanId: string, as: LoanRole) => string | null;
   downloadAgreement: (loanId: string) => Promise<void>;
   markNotificationRead: (id: string) => void;
   /** Clears current-user P2P loan demo data only (not account/other modules). */
@@ -345,6 +347,14 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       appToast.success("Loan request sent successfully. Waiting for the borrower’s response.", {
         id: "fire-lending-send-request",
       });
+      // Best-effort email to counterparty (no-op when Resend/auth email unavailable).
+      void fetch("/api/fire-lending/requests/notify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loanId }),
+      }).catch(() => {
+        /* guest / offline */
+      });
       return null;
     },
     [setStore],
@@ -466,39 +476,33 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     [setStore],
   );
 
-  const signAgreement = useCallback((loanId: string, as: "lender" | "borrower") => {
-    setStore((prev) => {
-      const loans = prev.loans.map((l) => {
-        if (l.id !== loanId) return l;
-        const next = {
-          ...l,
-          lenderSigned: as === "lender" ? true : l.lenderSigned,
-          borrowerSigned: as === "borrower" ? true : l.borrowerSigned,
-        };
-        const both = next.lenderSigned && next.borrowerSigned;
-        return {
-          ...next,
-          status: both ? ("active" as const) : ("pending_signature" as const),
-          startDate: both ? todayIso() : next.startDate,
-        };
+  const signAgreement = useCallback(
+    (loanId: string, as: LoanRole) => {
+      let error: string | null = null;
+      setStore((prev) => {
+        const result = signLoanAgreement(prev, {
+          loanId,
+          actorPartyId: prev.currentUserId,
+          as,
+        });
+        if (!result.ok) {
+          error = result.error;
+          return prev;
+        }
+        return result.store;
       });
-      const loan = loans.find((l) => l.id === loanId);
-      return {
-        ...prev,
-        loans,
-        agreements: prev.agreements.map((a) =>
-          a.loanId === loanId
-            ? {
-                ...a,
-                lenderSignedAt: as === "lender" ? todayIso() : a.lenderSignedAt,
-                borrowerSignedAt: as === "borrower" ? todayIso() : a.borrowerSignedAt,
-                status: loan?.lenderSigned && loan.borrowerSigned ? ("active" as const) : ("awaiting_signatures" as const),
-              }
-            : a,
-        ),
-      };
-    });
-  }, [setStore]);
+      if (error) {
+        appToast.error(error, { id: "fire-lending-sign-agreement" });
+        return error;
+      }
+      appToast.success(
+        as === "lender" ? "Lender signature recorded." : "Borrower signature recorded.",
+        { id: "fire-lending-sign-agreement" },
+      );
+      return null;
+    },
+    [setStore],
+  );
 
   const downloadAgreement = useCallback(
     async (loanId: string) => {

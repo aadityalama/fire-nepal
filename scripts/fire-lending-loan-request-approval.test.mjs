@@ -1,10 +1,13 @@
 /**
- * Counterparty-driven loan approval: requester sends Request; only borrower Accept/Reject.
+ * Counterparty-driven loan approval: requester sends Request; only borrower Accept/Reject
+ * after both parties have signed.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { bothPartiesSigned, signLoanAgreement } from "../src/lib/fire-lending/agreement-signatures.ts";
 import {
   borrowerNotificationBody,
+  borrowerNotificationTitle,
   canRespondToLoanRequest,
   findRequestForLoan,
   isLoanRequestRecipient,
@@ -63,6 +66,29 @@ function storeWithLoan(loan = baseLoan()) {
   };
 }
 
+/** Send request then both parties sign so Accept/Reject is allowed. */
+function sendAndBothSign(store) {
+  const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
+  assert.equal(sent.ok, true);
+  if (!sent.ok) return sent;
+  const s1 = signLoanAgreement(sent.store, {
+    loanId: "loan_test_1",
+    actorPartyId: store.currentUserId,
+    as: "lender",
+  });
+  assert.equal(s1.ok, true);
+  if (!s1.ok) return s1;
+  const s2 = signLoanAgreement(s1.store, {
+    loanId: "loan_test_1",
+    actorPartyId: "party_anjali",
+    as: "borrower",
+  });
+  assert.equal(s2.ok, true);
+  if (!s2.ok) return s2;
+  assert.equal(bothPartiesSigned(s2.loan), true);
+  return { ok: true, store: s2.store, request: sent.request };
+}
+
 describe("loan request approval — requester side", () => {
   it("1. requester can send a loan request", () => {
     const store = storeWithLoan();
@@ -91,16 +117,20 @@ describe("loan request approval — requester side", () => {
 
   it("3. requester cannot Accept their own request", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const denied = canRespondToLoanRequest(sent.request, store.currentUserId);
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const denied = canRespondToLoanRequest(
+      ready.request,
+      store.currentUserId,
+      ready.store.loans.find((l) => l.id === "loan_test_1"),
+    );
     assert.equal(denied.ok, false);
     if (denied.ok) return;
     assert.match(denied.error, /cannot accept or reject your own/i);
 
-    const attempt = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const attempt = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: store.currentUserId,
       action: "accepted",
     });
@@ -109,11 +139,11 @@ describe("loan request approval — requester side", () => {
 
   it("4. requester cannot Reject their own request", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const attempt = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const attempt = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: store.currentUserId,
       action: "rejected",
     });
@@ -138,9 +168,9 @@ describe("loan request approval — borrower side", () => {
     if (!result.ok) return;
     const ntf = result.store.notifications[0];
     assert.equal(ntf.kind, "loan_request");
+    assert.equal(ntf.title, borrowerNotificationTitle());
     assert.equal(ntf.forPartyId, "party_anjali");
-    assert.equal(ntf.body, borrowerNotificationBody(me?.name ?? "You"));
-    assert.match(ntf.body, /You have received a new loan request from/);
+    assert.match(ntf.body, new RegExp(borrowerNotificationBody(me?.name ?? "You").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
   it("7. borrower can view the linked loan details via request.loanId", () => {
@@ -160,14 +190,14 @@ describe("loan request approval — borrower side", () => {
     assert.equal(linked.agreementNumber, "FL-TEST-001");
   });
 
-  it("8. borrower can Accept the request", () => {
+  it("8. borrower can Accept the request after both signatures", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    assert.equal(isLoanRequestRecipient(sent.request, "party_anjali"), true);
-    const accepted = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    assert.equal(isLoanRequestRecipient(ready.request, "party_anjali"), true);
+    const accepted = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "accepted",
     });
@@ -176,13 +206,13 @@ describe("loan request approval — borrower side", () => {
     assert.equal(accepted.request.status, "accepted");
   });
 
-  it("9. borrower can Reject the request", () => {
+  it("9. borrower can Reject the request after both signatures", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const rejected = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const rejected = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "rejected",
     });
@@ -193,11 +223,11 @@ describe("loan request approval — borrower side", () => {
 
   it("10. request status becomes Accepted after borrower accepts", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const accepted = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const accepted = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "accepted",
     });
@@ -205,16 +235,16 @@ describe("loan request approval — borrower side", () => {
     if (!accepted.ok) return;
     const req = findRequestForLoan(accepted.store, "loan_test_1");
     assert.equal(req?.status, "accepted");
-    assert.equal(accepted.store.loans.find((l) => l.id === "loan_test_1")?.status, "pending_signature");
+    assert.equal(accepted.store.loans.find((l) => l.id === "loan_test_1")?.status, "active");
   });
 
   it("11. request status becomes Rejected after borrower rejects", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const rejected = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const rejected = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "rejected",
     });
@@ -227,11 +257,11 @@ describe("loan request approval — borrower side", () => {
 
   it("12. requester sees updated Accepted status and notification", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const accepted = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const accepted = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "accepted",
     });
@@ -248,11 +278,11 @@ describe("loan request approval — borrower side", () => {
 
   it("13. requester sees updated Rejected status and notification", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const rejected = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const rejected = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_anjali",
       action: "rejected",
     });
@@ -279,11 +309,11 @@ describe("loan request approval — borrower side", () => {
 
   it("15. unauthorized users cannot approve or reject the request", () => {
     const store = storeWithLoan();
-    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
-    assert.equal(sent.ok, true);
-    if (!sent.ok) return;
-    const stranger = respondToLoanRequest(sent.store, {
-      requestId: sent.request.id,
+    const ready = sendAndBothSign(store);
+    assert.equal(ready.ok, true);
+    if (!ready.ok) return;
+    const stranger = respondToLoanRequest(ready.store, {
+      requestId: ready.request.id,
       actorPartyId: "party_binod",
       action: "accepted",
     });
@@ -304,5 +334,19 @@ describe("loan request approval — borrower side", () => {
     assert.equal(loan?.amount, 100000);
     assert.equal(loan?.counterpartyId, "party_anjali");
     assert.ok(store.agreements.some((a) => a.loanId === "loan_test_1"));
+  });
+
+  it("17. accept is blocked until both signatures exist", () => {
+    const store = storeWithLoan();
+    const sent = sendLoanRequest(store, { loanId: "loan_test_1", actorPartyId: store.currentUserId });
+    assert.equal(sent.ok, true);
+    if (!sent.ok) return;
+    const blocked = respondToLoanRequest(sent.store, {
+      requestId: sent.request.id,
+      actorPartyId: "party_anjali",
+      action: "accepted",
+    });
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) assert.match(blocked.error, /must sign/i);
   });
 });
