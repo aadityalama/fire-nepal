@@ -947,7 +947,7 @@ export function FireMembershipPage() {
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div id="membership-plan-selection" className="scroll-mt-28 space-y-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-300/70">Choose your plan</h2>
