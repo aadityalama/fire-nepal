@@ -17,6 +17,8 @@ import {
   formatRs,
 } from "@/lib/savings/savings-utils";
 import type { SavingsGoal, SavingsGoalFormInput, SavingsReminderTiming } from "@/lib/savings/savings-types";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 type SavingsGoalSheetProps = {
   open: boolean;
@@ -131,7 +133,9 @@ export function SavingsGoalSheet({ open, editingGoal, onClose, onSave, saving }:
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 bg-[#020806]"
+          className={`fixed inset-0 ${FN_Z_CLASS.sheet} bg-[#020806]`}
+          data-fn-layer="sheet"
+          data-fn-sheet="savings-goal"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -155,11 +159,13 @@ export function SavingsGoalSheet({ open, editingGoal, onClose, onSave, saving }:
               {step === "form" ? (
                 <button
                   type="button"
+                  data-fn-save="savings-goal-header"
                   onClick={() => void handleSave()}
                   disabled={saving || !form.name.trim() || form.targetAmountNpr <= 0}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 disabled:opacity-60"
+                  aria-busy={saving}
+                  className="relative z-10 inline-flex min-h-[44px] touch-manipulation items-center gap-2 rounded-full bg-gradient-to-r from-emerald-300 to-lime-300 px-4 text-sm font-black text-emerald-950 disabled:opacity-60"
                 >
-                  <Save size={16} /> {saving ? "Saving..." : "Save"}
+                  <Save size={16} /> {saving ? SAVE_FEEDBACK.saving : "Save"}
                 </button>
               ) : (
                 <span className="min-w-[44px]" />
@@ -324,11 +330,13 @@ export function SavingsGoalSheet({ open, editingGoal, onClose, onSave, saving }:
 
                   <button
                     type="button"
+                    data-fn-save="savings-goal"
                     onClick={() => void handleSave()}
                     disabled={saving || !form.name.trim() || form.targetAmountNpr <= 0}
-                    className="min-h-[52px] w-full rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 disabled:opacity-60"
+                    aria-busy={saving}
+                    className="relative z-10 min-h-[52px] w-full touch-manipulation rounded-2xl bg-gradient-to-r from-emerald-300 to-lime-300 text-base font-black text-emerald-950 disabled:opacity-60"
                   >
-                    {saving ? "Saving..." : "Save Goal"}
+                    {saving ? SAVE_FEEDBACK.saving : "Save Goal"}
                   </button>
                   <button type="button" onClick={onClose} className="min-h-[48px] w-full rounded-2xl border border-white/10 text-sm font-black text-emerald-100">
                     Cancel

@@ -52,15 +52,15 @@ async function hydrateCashflowCache(userId: string): Promise<CashflowDashboardSt
   return next;
 }
 
-async function hydrateSavingsCache(): Promise<void> {
+async function hydrateSavingsCache(userId: string): Promise<void> {
   const remote = await fetchSavingsWorkspace();
   const next = remote ?? sanitizeSavingsWorkspaceState(null);
-  saveSavingsWorkspaceState(next);
+  saveSavingsWorkspaceState(next, userId);
 }
 
-async function hydrateInsuranceCache(): Promise<void> {
+async function hydrateInsuranceCache(userId: string): Promise<void> {
   const { policies } = await fetchInsurancePolicies();
-  replaceInsuranceCacheWithCloud(policies);
+  replaceInsuranceCacheWithCloud(policies, userId);
 }
 
 async function hydratePersonalExpensesCache(userId: string): Promise<void> {
@@ -69,7 +69,7 @@ async function hydratePersonalExpensesCache(userId: string): Promise<void> {
   const rows = await listPersistedPersonalExpenses(client, userId);
   const empty = emptyPersonalExpenseState();
   if (rows.length === 0) {
-    savePersonalExpenseState(empty);
+    savePersonalExpenseState(empty, userId);
     return;
   }
   const expenses = rows.map((row) => {
@@ -93,7 +93,7 @@ async function hydratePersonalExpensesCache(userId: string): Promise<void> {
     ...empty,
     expenses,
     members: members.length > 0 ? members : ["personal-user"],
-  });
+  }, userId);
 }
 
 async function hydrateGroupExpensesCache(userId: string): Promise<void> {
@@ -140,28 +140,25 @@ export async function hydrateAuthenticatedFinanceCache(
         result.cashflow = cashflow;
       })
       .catch((error) => {
-        // Empty cache on failure — never leave another browser's stale blob as truth.
-        saveCashflowState(defaultCashflowState(), userId);
+        // Keep existing scoped cache on temporary failure — never treat failed GET as empty.
         if (process.env.NODE_ENV !== "production") {
           console.error("[finance-cache] cashflow hydrate failed", error);
         }
       }),
-    hydrateSavingsCache()
+    hydrateSavingsCache(userId)
       .then(() => {
         result.savingsOk = true;
       })
       .catch((error) => {
-        saveSavingsWorkspaceState(sanitizeSavingsWorkspaceState(null));
         if (process.env.NODE_ENV !== "production") {
           console.error("[finance-cache] savings hydrate failed", error);
         }
       }),
-    hydrateInsuranceCache()
+    hydrateInsuranceCache(userId)
       .then(() => {
         result.insuranceOk = true;
       })
       .catch((error) => {
-        replaceInsuranceCacheWithCloud([]);
         if (process.env.NODE_ENV !== "production") {
           console.error("[finance-cache] insurance hydrate failed", error);
         }
@@ -171,7 +168,6 @@ export async function hydrateAuthenticatedFinanceCache(
         result.personalExpensesOk = true;
       })
       .catch((error) => {
-        savePersonalExpenseState(emptyPersonalExpenseState());
         if (process.env.NODE_ENV !== "production") {
           console.error("[finance-cache] personal expenses hydrate failed", error);
         }

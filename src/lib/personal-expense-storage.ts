@@ -8,8 +8,13 @@ import {
 import { EXPENSE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import type { TimelineActivity } from "@/lib/expense-storage";
 import { STORAGE_KEY as LEGACY_SHARED_KEY } from "@/lib/expense-storage";
+import { readJsonWithLegacyMigration, scopedStorageKey, writeJsonScoped } from "@/lib/ux/scoped-storage";
 
 export const PERSONAL_EXPENSES_STORAGE_KEY = "fire-nepal-personal-expenses-v1";
+
+export function personalExpensesStorageKey(userId?: string | null) {
+  return scopedStorageKey(PERSONAL_EXPENSES_STORAGE_KEY, userId);
+}
 
 export type PersonalExpensePersistedState = {
   version: 1;
@@ -64,32 +69,33 @@ function migrateLegacySharedState(): PersonalExpensePersistedState | null {
   }
 }
 
-export function loadPersonalExpenseState(): PersonalExpensePersistedState | null {
+export function loadPersonalExpenseState(userId?: string | null): PersonalExpensePersistedState | null {
   if (typeof window === "undefined") return null;
 
-  try {
-    const raw = window.localStorage.getItem(PERSONAL_EXPENSES_STORAGE_KEY);
-    if (raw) {
+  const fromScoped = readJsonWithLegacyMigration(PERSONAL_EXPENSES_STORAGE_KEY, userId, (raw) => {
+    try {
       const parsed = JSON.parse(raw) as PersonalExpensePersistedState;
       if (parsed.version === 1 && Array.isArray(parsed.expenses)) return parsed;
+      return null;
+    } catch {
+      return null;
     }
+  });
+  if (fromScoped) return fromScoped;
 
-    const migrated = migrateLegacySharedState();
-    if (migrated) {
-      savePersonalExpenseState(migrated);
-      return migrated;
-    }
-
-    return null;
-  } catch {
-    return null;
+  const migrated = migrateLegacySharedState();
+  if (migrated) {
+    savePersonalExpenseState(migrated, userId);
+    return migrated;
   }
+
+  return null;
 }
 
-export function savePersonalExpenseState(state: PersonalExpensePersistedState) {
+export function savePersonalExpenseState(state: PersonalExpensePersistedState, userId?: string | null) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(PERSONAL_EXPENSES_STORAGE_KEY, JSON.stringify(state));
+    writeJsonScoped(PERSONAL_EXPENSES_STORAGE_KEY, userId, state);
     window.dispatchEvent(new Event(EXPENSE_MODULE_SYNC_EVENT));
   } catch {
     console.warn("FIRE Nepal: personal expense storage quota reached.");

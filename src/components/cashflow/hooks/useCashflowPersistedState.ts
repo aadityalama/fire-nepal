@@ -97,15 +97,11 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
       .then((json) => {
         if (!alive) return;
         if (!json.ok) {
-          // Never keep browser-local data as truth after login.
-          const empty = defaultCashflowState();
-          setState(empty);
-          lastCloudSavedRef.current = JSON.stringify(empty);
-          try {
-            window.localStorage.removeItem(cashflowStorageKey(userId));
-          } catch {
-            /* ignore */
-          }
+          // Temporary / auth cloud failure must NOT wipe valid local state.
+          const cached = loadCashflowState(userId);
+          const keep = hasCashflowData(cached) ? cached : defaultCashflowState();
+          setState(keep);
+          lastCloudSavedRef.current = JSON.stringify(keep);
           toast.error(json.error ?? "Could not load cashflow from Supabase.");
           setCloudReady(true);
           return;
@@ -125,14 +121,10 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
       })
       .catch((error) => {
         if (!alive) return;
-        const empty = defaultCashflowState();
-        setState(empty);
-        lastCloudSavedRef.current = JSON.stringify(empty);
-        try {
-          window.localStorage.removeItem(cashflowStorageKey(userId));
-        } catch {
-          /* ignore */
-        }
+        const cached = loadCashflowState(userId);
+        const keep = hasCashflowData(cached) ? cached : defaultCashflowState();
+        setState(keep);
+        lastCloudSavedRef.current = JSON.stringify(keep);
         if (process.env.NODE_ENV !== "production") {
           console.error("[cashflow] cloud hydrate failed", error);
         }
@@ -161,10 +153,8 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
       })
         .then(async (res) => {
           if (!res.ok) {
-            if (process.env.NODE_ENV !== "production") {
-              const json = (await res.json().catch(() => null)) as { error?: string } | null;
-              console.error("[cashflow] background sync failed", json?.error ?? res.statusText);
-            }
+            const json = (await res.json().catch(() => null)) as { error?: string } | null;
+            toast.error(json?.error ?? "Save failed — please try again");
             return;
           }
           lastCloudSavedRef.current = serialized;
@@ -176,9 +166,8 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
           }
         })
         .catch((error) => {
-          if (error?.name !== "AbortError" && process.env.NODE_ENV !== "production") {
-            console.error("[cashflow] background sync failed", error);
-          }
+          if (error?.name === "AbortError") return;
+          toast.error(error instanceof Error ? error.message : "Save failed — please try again");
         });
     }, 700);
     return () => {
@@ -221,7 +210,16 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
 
   const persistCashflowState = useCallback(
     async (next: CashflowDashboardState) => {
-      if (!userId) throw new Error("Please sign in to save cashflow.");
+      if (!userId) {
+        setState(next);
+        try {
+          window.localStorage.setItem(cashflowStorageKey(null), JSON.stringify(next));
+        } catch {
+          /* quota */
+        }
+        lastCloudSavedRef.current = JSON.stringify(next);
+        return;
+      }
       const saveResponse = await fetch("/api/cashflow", {
         method: "PUT",
         credentials: "include",

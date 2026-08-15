@@ -8,6 +8,7 @@ import {
   Flame,
   Gauge,
   PiggyBank,
+  Save,
   ShieldCheck,
   Sparkles,
   Target,
@@ -52,6 +53,8 @@ import { downloadEmergencyFundSafetyReportPdf } from "@/lib/emergency-fund-repor
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
 import { formatMoney } from "@/lib/expense-utils";
+import { FN_Z_CLASS } from "@/lib/ux/layering";
+import { runSaveAction, SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 function sanitizeDecimalInput(value: string) {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -225,7 +228,7 @@ export function EmergencyFundDashboard() {
   const [returnToNepal, setReturnToNepal] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [recommendedMonths, setRecommendedMonths] = useState(DEFAULT_EMERGENCY_FUND_MONTHS);
-  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savingReserve, setSavingReserve] = useState(false);
   const seededContributionRef = useRef(false);
 
   const bumpSync = useCallback(() => {
@@ -294,25 +297,26 @@ export function EmergencyFundDashboard() {
   }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, uid]);
 
   const persistEmergencyReserve = useCallback(
-    (fundNpr: number) => {
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      persistTimer.current = setTimeout(() => {
-        void patchCashflowState(uid, (cf) => ({
-          ...cf,
-          emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
-        }))
-          .then(() => {
-            bumpSync();
-          })
-          .catch((error) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.warn("[emergency-fund] cashflow persist failed", error);
-            }
-          });
-      }, 450);
+    async (fundNpr: number) => {
+      await patchCashflowState(uid, (cf) => ({
+        ...cf,
+        emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
+      }));
+      bumpSync();
     },
     [bumpSync, uid],
   );
+
+  const handleSaveEmergencyFund = useCallback(async () => {
+    const amount = parseNumber(currentFundRaw);
+    await runSaveAction({
+      setSaving: setSavingReserve,
+      toastId: "emergency-fund-save",
+      action: async () => {
+        await persistEmergencyReserve(amount);
+      },
+    });
+  }, [currentFundRaw, persistEmergencyReserve]);
 
   useEffect(() => {
     const onExternal = () => {
@@ -585,10 +589,23 @@ export function EmergencyFundDashboard() {
             onChange={(next) => {
               const cleaned = sanitizeIntegerInput(next);
               setCurrentFundRaw(cleaned);
-              persistEmergencyReserve(parseNumber(cleaned));
             }}
             inputMode="numeric"
           />
+          <button
+            type="button"
+            data-fn-save="emergency-fund"
+            onClick={() => void handleSaveEmergencyFund()}
+            disabled={savingReserve}
+            aria-busy={savingReserve}
+            className="relative z-10 mt-4 inline-flex min-h-[52px] w-full touch-manipulation items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-lime-500 text-base font-black text-white shadow-lg shadow-emerald-700/25 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save size={18} />
+            {savingReserve ? SAVE_FEEDBACK.saving : "Save Emergency Fund"}
+          </button>
+          <p className="mt-2 text-xs font-bold text-slate-500">
+            Target = essential monthly expenses × {DEFAULT_EMERGENCY_FUND_MONTHS}. FIRE Progress reads this reserve automatically.
+          </p>
         </section>
 
         {!showSetup ? (
@@ -860,7 +877,7 @@ export function EmergencyFundDashboard() {
       </section>
 
       {!showSetup ? (
-        <div className="fixed inset-x-3 bottom-3 z-30 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-[0_18px_60px_rgba(0,63,47,0.18)] backdrop-blur-xl sm:hidden">
+        <div className={`fixed inset-x-3 bottom-3 ${FN_Z_CLASS.pageChrome} rounded-3xl border border-white/70 bg-white/85 p-3 shadow-[0_18px_60px_rgba(0,63,47,0.18)] backdrop-blur-xl sm:hidden`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Progress</p>

@@ -40,6 +40,7 @@ import {
   sortGoalsStable,
 } from "@/lib/savings/savings-utils";
 import type { SavingsGoal, SavingsGoalFormInput, SavingsWorkspaceState } from "@/lib/savings/savings-types";
+import { SAVE_FEEDBACK } from "@/lib/ux/save-feedback";
 
 const glassCard = "rounded-[1.5rem] border border-white/10 bg-white/[0.055] backdrop-blur-xl sm:rounded-[1.65rem]";
 
@@ -86,7 +87,7 @@ export function SavingsWorkspaceDashboard() {
     async function hydrate() {
       // Guests may use localStorage. Authenticated users must use Supabase only.
       if (!user?.id) {
-        const local = loadSavingsWorkspaceState();
+        const local = loadSavingsWorkspaceState(null);
         if (!cancelled) {
           setState(local);
           setHydrated(true);
@@ -100,16 +101,17 @@ export function SavingsWorkspaceDashboard() {
         // Empty cloud ⇒ empty UI. Never merge or seed from browser-local data.
         const next = remote ?? emptySavingsWorkspaceState();
         // Clear stale browser blobs, then cache the cloud snapshot (optional offline cache).
-        clearSavingsWorkspaceLocalCache();
-        saveSavingsWorkspaceState(next);
+        clearSavingsWorkspaceLocalCache(user.id);
+        saveSavingsWorkspaceState(next, user.id);
         setState(next);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[savings-workspace] hydrate failed", error);
         }
         if (!cancelled) {
-          clearSavingsWorkspaceLocalCache();
-          setState(emptySavingsWorkspaceState());
+          // Temporary cloud failure must not clear a valid scoped cache.
+          const cached = loadSavingsWorkspaceState(user.id);
+          setState(cached);
           toast.error(error instanceof Error ? error.message : "Could not load savings from Supabase.");
         }
       } finally {
@@ -126,7 +128,7 @@ export function SavingsWorkspaceDashboard() {
   useEffect(() => {
     if (!hydrated || user?.id) return;
     // Guests only: authenticated users never treat localStorage as source of truth.
-    saveSavingsWorkspaceState(state);
+    saveSavingsWorkspaceState(state, null);
   }, [state, hydrated, user?.id]);
 
   const goals = useMemo(() => sortGoalsStable(state.goals), [state.goals]);
@@ -141,13 +143,13 @@ export function SavingsWorkspaceDashboard() {
     async (next: SavingsWorkspaceState) => {
       if (!user?.id) {
         setState(next);
-        saveSavingsWorkspaceState(next);
+        saveSavingsWorkspaceState(next, null);
         return next;
       }
       const saved = await saveSavingsWorkspaceToCloud(next);
       const remote = (await fetchSavingsWorkspace()) ?? saved;
       // Optional cache only after successful cloud sync.
-      saveSavingsWorkspaceState(remote);
+      saveSavingsWorkspaceState(remote, user.id);
       setState(remote);
       return remote;
     },
@@ -181,7 +183,7 @@ export function SavingsWorkspaceDashboard() {
             ),
           };
           await persistState(nextState);
-          toast.success("Goal updated successfully");
+          toast.success(SAVE_FEEDBACK.saved);
         } else {
           const newGoal: SavingsGoal = {
             id: createGoalId(),
@@ -206,12 +208,12 @@ export function SavingsWorkspaceDashboard() {
             });
           }
           await persistState(nextState);
-          toast.success("Goal saved successfully");
+          toast.success(SAVE_FEEDBACK.saved);
         }
         setSheetOpen(false);
         setEditingGoal(null);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not save goal.");
+        toast.error(error instanceof Error ? error.message : SAVE_FEEDBACK.failed);
         throw error;
       } finally {
         setSaving(false);

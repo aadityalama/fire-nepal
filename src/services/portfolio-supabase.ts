@@ -61,7 +61,12 @@ function portfolioSaveError(operation: string, error: unknown, fallback: string)
 
 export async function loadWealthPortfolioFromSupabase(client: Client, userId: string): Promise<WealthPortfolioStateV2 | null> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "loadWealthPortfolioFromSupabase");
-  if (!workspace) return null;
+  if (!workspace) {
+    throw new PortfolioSupabaseError(
+      "Authenticated workspace owner mismatch. Please sign in again.",
+      "loadWealthPortfolioFromSupabase",
+    );
+  }
   const ownerId = workspace.user_id;
 
   const [banks, inv, metals, re, veh, liab, ret, ext] = await Promise.all([
@@ -166,6 +171,7 @@ async function deleteMissingRows(
   table: "bank_accounts" | "investments" | "gold_assets" | "real_estate" | "vehicles" | "liabilities" | "retirement_assets",
   ownerId: string,
   keepIds: string[],
+  options?: { allowEmptyWipe?: boolean },
 ) {
   const { data, error } = await client.from(table).select("row_id").eq("user_id", ownerId);
   if (error || !data) {
@@ -174,18 +180,31 @@ async function deleteMissingRows(
   const keep = new Set(keepIds);
   const stale = (data as { row_id: string }[]).map((r) => r.row_id).filter((id) => !keep.has(id));
   if (!stale.length) return;
+  // Refuse accidental full-table wipes from a temporary empty sync payload.
+  if (keepIds.length === 0 && stale.length > 0 && !options?.allowEmptyWipe) {
+    console.warn(
+      `[portfolio-supabase] refusing empty wipe of ${table} (${stale.length} remote rows). Pass allowEmptyWipe after confirmed empty hydrate.`,
+    );
+    return;
+  }
   const { error: deleteError } = await client.from(table).delete().eq("user_id", ownerId).in("row_id", stale);
   if (deleteError) {
     portfolioSaveError(`${table} stale row delete`, deleteError, `Could not remove stale ${table}.`);
   }
 }
 
-export async function saveWealthPortfolioToSupabase(client: Client, userId: string, state: WealthPortfolioStateV2): Promise<boolean> {
+export async function saveWealthPortfolioToSupabase(
+  client: Client,
+  userId: string,
+  state: WealthPortfolioStateV2,
+  options?: { allowEmptyTableWipe?: boolean },
+): Promise<boolean> {
   const workspace = await ensureAuthenticatedWorkspace(client, userId, "saveWealthPortfolioToSupabase");
   if (!workspace) {
     throw new PortfolioSupabaseError("Authenticated workspace owner mismatch. Please sign in again.", "workspace");
   }
   const ownerId = workspace.user_id;
+  const allowEmptyTableWipe = Boolean(options?.allowEmptyTableWipe);
 
   const liquidRows = state.liquidCash.map((payload) => ({
     user_id: ownerId,
@@ -204,7 +223,9 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   if (bankUpsertErr) {
     portfolioSaveError("bank_accounts upsert", bankUpsertErr, "Could not save portfolio accounts.");
   }
-  await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "bank_accounts", ownerId, bankPayload.map((r) => r.row_id), {
+    allowEmptyWipe: allowEmptyTableWipe,
+  });
 
   const invPayload = state.investments.map((payload) => ({
     user_id: ownerId,
@@ -215,7 +236,9 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   if (invErr) {
     portfolioSaveError("investments upsert", invErr, "Could not save investment accounts.");
   }
-  await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "investments", ownerId, invPayload.map((r) => r.row_id), {
+    allowEmptyWipe: allowEmptyTableWipe,
+  });
 
   const metalPayload = state.metals.map((payload) => ({
     user_id: ownerId,
@@ -226,7 +249,9 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
   if (metalErr) {
     portfolioSaveError("gold_assets upsert", metalErr, "Could not save metal accounts.");
   }
-  await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id));
+  await deleteMissingRows(client, "gold_assets", ownerId, metalPayload.map((r) => r.row_id), {
+    allowEmptyWipe: allowEmptyTableWipe,
+  });
 
   const mapUpsert = async (
     table: "real_estate" | "vehicles" | "liabilities" | "retirement_assets",
@@ -242,7 +267,9 @@ export async function saveWealthPortfolioToSupabase(client: Client, userId: stri
     if (e) {
       portfolioSaveError(`${table} upsert`, e, `Could not save ${table}.`);
     }
-    await deleteMissingRows(client, table, ownerId, payload.map((p) => p.row_id));
+    await deleteMissingRows(client, table, ownerId, payload.map((p) => p.row_id), {
+      allowEmptyWipe: allowEmptyTableWipe,
+    });
     return true;
   };
 

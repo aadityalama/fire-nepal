@@ -45,6 +45,8 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState, onCloudRea
   const [remoteLoaded, setRemoteLoaded] = useState(!needRemote);
   const lastSavedRef = useRef<string>("");
   const stateRef = useRef(state);
+  /** True only after a successful cloud GET (including confirmed empty). */
+  const hydrateSucceededRef = useRef(!needRemote);
 
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -58,6 +60,7 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState, onCloudRea
     }
     let cancelled = false;
     onCloudReady?.(false);
+    hydrateSucceededRef.current = false;
     void (async () => {
       try {
         const client = getSupabaseBrowserClient();
@@ -74,17 +77,27 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState, onCloudRea
           lastSavedRef.current = JSON.stringify(empty);
           cachePortfolioLocally(user.id, empty);
         }
+        hydrateSucceededRef.current = true;
       } catch (e) {
         console.error(e);
-        // Never keep browser-local data as truth after login.
-        const empty = defaultWealthState();
-        setState(empty);
-        lastSavedRef.current = JSON.stringify(empty);
-        try {
-          window.localStorage.removeItem(portfolioStorageKey(user.id));
-        } catch {
-          /* ignore */
+        // Temporary cloud failure must not wipe valid in-memory / cached portfolio.
+        const cachedRaw = (() => {
+          try {
+            return window.localStorage.getItem(portfolioStorageKey(user.id));
+          } catch {
+            return null;
+          }
+        })();
+        if (cachedRaw) {
+          try {
+            const cached = JSON.parse(cachedRaw) as WealthPortfolioStateV2;
+            setState(cached);
+            lastSavedRef.current = JSON.stringify(cached);
+          } catch {
+            /* ignore bad cache */
+          }
         }
+        hydrateSucceededRef.current = false;
         appToast.error("Could not load portfolio from cloud.", {
           id: "portfolio-cloud-load",
         });
@@ -119,17 +132,17 @@ export function WealthPortfolioCloudSync({ hydrated, state, setState, onCloudRea
         const snapshot = JSON.stringify(toSave);
         if (snapshot === lastSavedRef.current) return;
 
-        const ok = await saveWealthPortfolioToSupabase(client, user.id, toSave);
+        const ok = await saveWealthPortfolioToSupabase(client, user.id, toSave, {
+          allowEmptyTableWipe: hydrateSucceededRef.current,
+        });
         if (ok) {
           if (JSON.stringify(stateRef.current) === snapshot) {
             lastSavedRef.current = snapshot;
             cachePortfolioLocally(user.id, toSave);
-            appToast.success("Portfolio synced to cloud.", { id: "portfolio-cloud-save", duration: 2200 });
+            appToast.saveSuccess(undefined, "portfolio-cloud-save");
           }
         } else {
-          appToast.error("Portfolio cloud sync failed. Changes were not saved to Supabase.", {
-            id: "portfolio-cloud-save-error",
-          });
+          appToast.saveError("Portfolio cloud sync failed. Changes were not saved to Supabase.", "portfolio-cloud-save-error");
         }
       } catch (error) {
         console.error("Portfolio save failed:", error);

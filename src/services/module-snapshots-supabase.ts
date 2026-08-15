@@ -43,6 +43,10 @@ function mapError(error: { message?: string; code?: string } | null | undefined,
   return message || fallback;
 }
 
+/**
+ * Source of truth: `user_module_snapshots`.
+ * `fire_goals` fallback is used only when that table is missing — never dual-write.
+ */
 /** Fallback marker in fire_goals when user_module_snapshots is missing. */
 export function fireGoalsMarkerForModule(moduleKey: ModuleSnapshotKey): string {
   return `__fire_nepal_module_${moduleKey}_v1__`;

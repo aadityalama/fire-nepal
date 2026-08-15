@@ -1,12 +1,17 @@
 import { INSURANCE_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import { normalizeInsurancePolicy } from "@/lib/insurance/insurance-normalize";
 import type { InsurancePolicy, InsuranceWorkspaceState } from "@/lib/insurance/insurance-types";
+import { readJsonWithLegacyMigration, scopedStorageKey, writeJsonScoped } from "@/lib/ux/scoped-storage";
 
 export const INSURANCE_WORKSPACE_STORAGE_KEY = "fire-nepal-insurance-workspace-v1";
 /** Marks that Supabase is source of truth for this user; localStorage is cache-only. */
 export const INSURANCE_CLOUD_PRIMARY_KEY = "fire-nepal-insurance-cloud-primary-v1";
 /** Per-user fingerprints already migrated — prevents repeat localStorage imports. */
 export const INSURANCE_MIGRATION_LEDGER_KEY = "fire-nepal-insurance-migration-ledger-v1";
+
+export function insuranceWorkspaceStorageKey(userId?: string | null) {
+  return scopedStorageKey(INSURANCE_WORKSPACE_STORAGE_KEY, userId);
+}
 
 const DEFAULT_STATE: InsuranceWorkspaceState = {
   version: 1,
@@ -21,32 +26,31 @@ function sortPolicies(policies: InsurancePolicy[]) {
   });
 }
 
-export function loadInsuranceWorkspaceState(): InsuranceWorkspaceState {
+export function loadInsuranceWorkspaceState(userId?: string | null): InsuranceWorkspaceState {
   if (typeof window === "undefined") return DEFAULT_STATE;
-  try {
-    const raw = window.localStorage.getItem(INSURANCE_WORKSPACE_STORAGE_KEY);
-    if (!raw) return DEFAULT_STATE;
-    const parsed = JSON.parse(raw) as InsuranceWorkspaceState;
-    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.policies)) return DEFAULT_STATE;
-    return {
-      version: 1,
-      policies: sortPolicies(parsed.policies.map((policy) => normalizeInsurancePolicy(policy))),
-    };
-  } catch {
-    return DEFAULT_STATE;
-  }
+  const parsed = readJsonWithLegacyMigration(INSURANCE_WORKSPACE_STORAGE_KEY, userId, (raw) => {
+    try {
+      const value = JSON.parse(raw) as InsuranceWorkspaceState;
+      if (!value || value.version !== 1 || !Array.isArray(value.policies)) return null;
+      return {
+        version: 1 as const,
+        policies: sortPolicies(value.policies.map((policy) => normalizeInsurancePolicy(policy))),
+      };
+    } catch {
+      return null;
+    }
+  });
+  return parsed ?? DEFAULT_STATE;
 }
 
-export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState) {
+export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState, userId?: string | null) {
   if (typeof window === "undefined") return;
+  const payload = {
+    ...state,
+    policies: sortPolicies(state.policies.map((policy) => normalizeInsurancePolicy(policy))),
+  };
   try {
-    window.localStorage.setItem(
-      INSURANCE_WORKSPACE_STORAGE_KEY,
-      JSON.stringify({
-        ...state,
-        policies: sortPolicies(state.policies.map((policy) => normalizeInsurancePolicy(policy))),
-      }),
-    );
+    writeJsonScoped(INSURANCE_WORKSPACE_STORAGE_KEY, userId, payload);
     window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
   } catch (error) {
     // Chrome iOS can throw QuotaExceededError when legacy policies store large document dataUrls.
@@ -69,7 +73,7 @@ export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState) {
           }),
         ),
       };
-      window.localStorage.setItem(INSURANCE_WORKSPACE_STORAGE_KEY, JSON.stringify(slim));
+      writeJsonScoped(INSURANCE_WORKSPACE_STORAGE_KEY, userId, slim);
       window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
     } catch {
       /* ignore — keep in-memory state only */
@@ -78,8 +82,8 @@ export function saveInsuranceWorkspaceState(state: InsuranceWorkspaceState) {
 }
 
 /** Write-through offline cache of cloud rows (never the primary store once cloud-ready). */
-export function cacheInsurancePoliciesLocally(policies: InsurancePolicy[]) {
-  saveInsuranceWorkspaceState({ version: 1, policies });
+export function cacheInsurancePoliciesLocally(policies: InsurancePolicy[], userId?: string | null) {
+  saveInsuranceWorkspaceState({ version: 1, policies }, userId);
 }
 
 type CloudPrimaryMap = Record<string, { readyAt: string }>;
@@ -158,10 +162,10 @@ export function markInsuranceFingerprintsMigrated(userId: string, fingerprints: 
 }
 
 /** Wipe insurance workspace cache (localStorage policies). */
-export function clearInsuranceWorkspaceCache() {
+export function clearInsuranceWorkspaceCache(userId?: string | null) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(INSURANCE_WORKSPACE_STORAGE_KEY);
+    window.localStorage.removeItem(insuranceWorkspaceStorageKey(userId));
     window.dispatchEvent(new Event(INSURANCE_MODULE_SYNC_EVENT));
   } catch {
     /* ignore */
@@ -169,13 +173,13 @@ export function clearInsuranceWorkspaceCache() {
 }
 
 /** After cloud sync: drop stale local rows, keep only the Supabase snapshot as cache. */
-export function replaceInsuranceCacheWithCloud(policies: InsurancePolicy[]) {
-  clearInsuranceWorkspaceCache();
-  cacheInsurancePoliciesLocally(policies);
+export function replaceInsuranceCacheWithCloud(policies: InsurancePolicy[], userId?: string | null) {
+  clearInsuranceWorkspaceCache(userId);
+  cacheInsurancePoliciesLocally(policies, userId);
 }
 
-export function countInsurancePoliciesInLocalStorage(): number {
-  return loadInsuranceWorkspaceState().policies.length;
+export function countInsurancePoliciesInLocalStorage(userId?: string | null): number {
+  return loadInsuranceWorkspaceState(userId).policies.length;
 }
 
 export function createPolicyId() {
