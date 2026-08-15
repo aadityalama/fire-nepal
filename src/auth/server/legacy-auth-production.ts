@@ -11,10 +11,16 @@ export function isLegacyAuthBlockedInProduction(): boolean {
 }
 
 export function legacyAuthNotPersistedResponse(): NextResponse {
+  const vercelEnv = (process.env.VERCEL_ENV ?? "").trim();
+  const previewHint =
+    vercelEnv === "preview"
+      ? " This is a Vercel Preview deployment — enable those variables for the Preview environment (not Production-only), then redeploy."
+      : "";
   return NextResponse.json(
     {
       error:
-        "This host cannot persist email/password accounts without Supabase. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (and redeploy). Legacy auth only works for local development.",
+        "This host cannot persist email/password accounts without Supabase. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (and redeploy). Legacy auth only works for local development." +
+        previewHint,
     },
     { status: 503 },
   );
