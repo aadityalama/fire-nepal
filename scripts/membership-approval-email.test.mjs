@@ -363,3 +363,133 @@ test("sendMembershipApprovalEmail sends via Resend after approval success path d
     globalThis.fetch = prevFetch;
   }
 });
+
+test("admin approve route schedules email only after success and never awaits send", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../app/api/admin/membership-requests/[id]/route.ts", import.meta.url), "utf8");
+
+  assert.match(route, /scheduleMembershipApprovalEmail\(/);
+  // Email is scheduled after revenue_events insert succeeds.
+  const revIdx = route.indexOf("Revenue log failed");
+  const scheduleIdx = route.indexOf("scheduleMembershipApprovalEmail(admin");
+  const returnIdx = route.lastIndexOf('status: "approved"');
+  assert.ok(revIdx > 0 && scheduleIdx > revIdx, "email must schedule only after approval ledger success");
+  assert.ok(returnIdx > scheduleIdx, "API returns approved after scheduling email");
+  // Must not await the send — approval must not fail if email fails.
+  assert.doesNotMatch(route, /await\s+sendMembershipApprovalEmail/);
+  assert.doesNotMatch(route, /await\s+scheduleMembershipApprovalEmail/);
+  // Reject path must not schedule member approval email.
+  const rejectBlock = route.slice(route.indexOf('action === "reject"'), route.indexOf("// approve"));
+  assert.doesNotMatch(rejectBlock, /scheduleMembershipApprovalEmail/);
+});
+
+test("scheduleMembershipApprovalEmail swallows send failures so approval stays successful", async () => {
+  const prevFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({}),
+    text: async () => "provider down",
+  });
+
+  try {
+    const { scheduleMembershipApprovalEmail, sendMembershipApprovalEmail } = await import(
+      "../src/lib/membership-approval-email/send-approval-email.ts"
+    );
+
+    const inserts = [];
+    const admin = {
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: {
+              user: {
+                email: "verified@firenepal.com",
+                email_confirmed_at: "2026-02-01T00:00:00.000Z",
+              },
+            },
+            error: null,
+          }),
+        },
+      },
+      from(table) {
+        if (table === "membership_approval_emails") {
+          return {
+            select() {
+              return {
+                eq() {
+                  return {
+                    eq() {
+                      return {
+                        maybeSingle: async () => ({ data: null, error: null }),
+                      };
+                    },
+                  };
+                },
+              };
+            },
+            insert(row) {
+              inserts.push(row);
+              return Promise.resolve({ error: null });
+            },
+          };
+        }
+        if (table === "user_profiles") {
+          return {
+            select() {
+              return {
+                eq() {
+                  return {
+                    maybeSingle: async () => ({ data: { full_name: "Maya", display_name: null }, error: null }),
+                  };
+                },
+              };
+            },
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    process.env.RESEND_API_KEY = "test-resend-key";
+    const sendResult = await sendMembershipApprovalEmail(admin, {
+      membershipRequestId: "req-fail",
+      userId: "user-fail",
+      requestEmail: "verified@firenepal.com",
+      plan: "premium",
+      amountNpr: 500,
+      paymentMethod: "khalti_qr",
+      paymentReference: "REF-FAIL",
+      approvedAtIso: "2026-08-15T12:00:00.000Z",
+      expiryAtIso: "2027-08-15T12:00:00.000Z",
+    });
+    assert.equal(sendResult.ok, false);
+    assert.equal(sendResult.reason, "send_failed");
+    assert.equal(inserts[0]?.delivery_status, "failed");
+
+    // Scheduler must not throw even when the background send fails.
+    assert.doesNotThrow(() =>
+      scheduleMembershipApprovalEmail(admin, {
+        membershipRequestId: "req-fail-2",
+        userId: "user-fail",
+        requestEmail: "verified@firenepal.com",
+        plan: "premium",
+        amountNpr: 500,
+        paymentMethod: "khalti_qr",
+        paymentReference: null,
+        approvedAtIso: "2026-08-15T12:00:00.000Z",
+        expiryAtIso: "2027-08-15T12:00:00.000Z",
+      }),
+    );
+  } finally {
+    globalThis.fetch = prevFetch;
+  }
+});
+
+test("admin UI approve action posts to membership-requests payment-plan approval API", async () => {
+  const { readFileSync } = await import("node:fs");
+  const ui = readFileSync(new URL("../src/components/admin/AdminMembershipRequestsClient.tsx", import.meta.url), "utf8");
+  assert.match(ui, /\/api\/admin\/membership-requests\/\$\{id\}/);
+  assert.match(ui, /action:\s*"approve"\s*\|\s*"reject"/);
+  assert.match(ui, /JSON\.stringify\(\{\s*action\s*\}\)/);
+});
