@@ -15,8 +15,8 @@ export type AgreementPdfInput = {
   installments: EmiInstallment[];
 };
 
-export function agreementPdfFilename(loanId: string): string {
-  const safe = String(loanId || "loan")
+export function agreementPdfFilename(loanIdOrAgreementNumber: string): string {
+  const safe = String(loanIdOrAgreementNumber || "loan")
     .trim()
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -116,7 +116,8 @@ export async function buildAgreementPdfBlob(input: AgreementPdfInput): Promise<{
 
   const installments = resolveInstallmentsForAgreement(input.loan, input.installments);
   const agreement = input.agreement ?? synthesizeAgreementForLoan(input.loan);
-  const filename = agreementPdfFilename(input.loan.id);
+  // Prefer the public agreement/loan number (e.g. FN-LN-2026-681232) for the download name.
+  const filename = agreementPdfFilename(agreement.agreementNumber || input.loan.agreementNumber || input.loan.id);
 
   let jsPDF: typeof import("jspdf").jsPDF;
   try {

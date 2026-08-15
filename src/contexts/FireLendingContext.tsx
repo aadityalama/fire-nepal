@@ -18,6 +18,12 @@ import {
   buildTopBorrowers,
   buildUpcomingPayments,
 } from "@/lib/fire-lending/analytics";
+import {
+  findAgreementInStore,
+  findLoanInStore,
+  mergePartiesIntoStore,
+  resolveAgreementParties,
+} from "@/lib/fire-lending/agreement-parties";
 import { downloadAgreementPdf, resolveInstallmentsForAgreement, synthesizeAgreementForLoan } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
@@ -195,35 +201,39 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       months: installments,
     });
 
-    setStore((prev) => ({
-      ...prev,
-      loans: [loan, ...prev.loans],
-      installments: [...schedule, ...prev.installments],
-      agreements: [
-        {
-          id: uid("agr"),
-          loanId,
-          agreementNumber: agrNo,
-          status: "awaiting_signatures",
-          generatedAt: todayIso(),
-          terms: "FIRE Nepal Peer Lending Terms — digital agreement. Both parties must sign to activate.",
-          qrPayload: `fire-nepal://verify/agreement/${agrNo}`,
-        },
-        ...prev.agreements,
-      ],
-      notifications: [
-        {
-          id: uid("ntf"),
-          kind: "signature",
-          title: "Signature required",
-          body: `Agreement ${agrNo} is ready for digital signatures.`,
-          createdAt: todayIso(),
-          read: false,
-          href: `/fire-lending/agreements`,
-        },
-        ...prev.notifications,
-      ],
-    }));
+    setStore((prev) => {
+      // Ensure current-user party exists so agreement downloads never need a demo reset.
+      const withSelf = mergePartiesIntoStore(prev, resolveAgreementParties(prev, loan).partiesToPersist);
+      return {
+        ...withSelf,
+        loans: [loan, ...withSelf.loans],
+        installments: [...schedule, ...withSelf.installments],
+        agreements: [
+          {
+            id: uid("agr"),
+            loanId,
+            agreementNumber: agrNo,
+            status: "awaiting_signatures",
+            generatedAt: todayIso(),
+            terms: "FIRE Nepal Peer Lending Terms — digital agreement. Both parties must sign to activate.",
+            qrPayload: `fire-nepal://verify/agreement/${agrNo}`,
+          },
+          ...withSelf.agreements,
+        ],
+        notifications: [
+          {
+            id: uid("ntf"),
+            kind: "signature",
+            title: "Signature required",
+            body: `Agreement ${agrNo} is ready for digital signatures.`,
+            createdAt: todayIso(),
+            read: false,
+            href: `/fire-lending/agreements`,
+          },
+          ...withSelf.notifications,
+        ],
+      };
+    });
 
     return loanId;
   }, [partyById, setStore, store.currentUserId, store.parties]);
@@ -376,50 +386,43 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   }, [setStore]);
 
   const downloadAgreement = useCallback(
-    async (loanId: string): Promise<{ ok: true; filename: string } | { ok: false; error: string }> => {
+    async (loanIdOrAgreement: string): Promise<{ ok: true; filename: string } | { ok: false; error: string }> => {
       try {
-        const loan = store.loans.find((l) => l.id === loanId);
+        // Resolve by internal loan id OR public agreement number (e.g. FN-LN-2026-681232).
+        const loan = findLoanInStore(store, loanIdOrAgreement);
         if (!loan) {
-          const error = "Loan not found. Refresh and try again.";
+          const error = "Loan not found. Open the loan detail page and try again.";
           appToast.error(error, { id: "fire-lending-agreement-download" });
           return { ok: false, error };
         }
 
-        let agreement = store.agreements.find((a) => a.loanId === loanId);
+        let agreement = findAgreementInStore(store, loan);
         if (!agreement) {
           // Persist a synthesized agreement so later downloads stay consistent.
           agreement = synthesizeAgreementForLoan(loan);
           setStore((prev) => ({
             ...prev,
-            agreements: [agreement!, ...prev.agreements.filter((a) => a.loanId !== loanId)],
+            agreements: [agreement!, ...prev.agreements.filter((a) => a.loanId !== loan.id)],
           }));
         }
 
-        const counterparty = partyById(loan.counterpartyId);
-        const me = partyById(store.currentUserId);
-        if (!me) {
-          const error = "Your lending profile is missing. Reset demo data or re-open FIRE Lending.";
-          appToast.error(error, { id: "fire-lending-agreement-download" });
-          return { ok: false, error };
-        }
-        if (!counterparty) {
-          const error = "Counterparty details are missing for this loan, so the agreement cannot be generated.";
-          appToast.error(error, { id: "fire-lending-agreement-download" });
-          return { ok: false, error };
+        // Never block on a missing "lending profile" / demo seed — resolve from
+        // stored loan + parties, synthesizing placeholders only when needed (no deletes).
+        const resolved = resolveAgreementParties(store, loan);
+        if (resolved.partiesToPersist.length > 0) {
+          setStore((prev) => mergePartiesIntoStore(prev, resolved.partiesToPersist));
         }
 
-        const lender = loan.role === "lender" ? me : counterparty;
-        const borrower = loan.role === "borrower" ? me : counterparty;
         const installments = resolveInstallmentsForAgreement(
           loan,
-          store.installments.filter((i) => i.loanId === loanId),
+          store.installments.filter((i) => i.loanId === loan.id),
         );
 
         const { filename } = await downloadAgreementPdf({
           loan,
           agreement,
-          lender,
-          borrower,
+          lender: resolved.lender,
+          borrower: resolved.borrower,
           installments,
         });
         appToast.success(`Agreement downloaded: ${filename}`, { id: "fire-lending-agreement-download" });
@@ -430,7 +433,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
         return { ok: false, error };
       }
     },
-    [partyById, setStore, store],
+    [setStore, store],
   );
 
   const markNotificationRead = useCallback((id: string) => {
