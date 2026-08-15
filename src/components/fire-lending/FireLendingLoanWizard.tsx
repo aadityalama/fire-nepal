@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, FileSignature, QrCode, Smartphone, Link2, UserSearch } from "lucide-react";
 import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
@@ -18,6 +18,10 @@ import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
 import { partyToP2PSearchHit } from "@/lib/fire-lending/party-to-search-hit";
 import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
+import {
+  canContinueBorrowerStep,
+  shouldKeepBorrowerSelection,
+} from "@/lib/fire-lending/wizard-borrower-selection";
 import type { ConnectionMethod, CurrencyCode, LoanRole, LoanType, LoanWizardDraft } from "@/lib/fire-lending/types";
 
 const STEPS = ["Borrower", "Details", "Agreement", "Approval", "Signatures"] as const;
@@ -67,6 +71,7 @@ export function FireLendingLoanWizard() {
   const selected = partyById(draft.counterpartyId);
   const createdLoan = store.loans.find((l) => l.id === createdLoanId);
   const createdAgreement = store.agreements.find((a) => a.loanId === createdLoanId);
+  const borrowerStepReady = canContinueBorrowerStep(draft.counterpartyId);
 
   useEffect(() => {
     if (!prefillFireId || draft.counterpartyId) return;
@@ -74,25 +79,50 @@ export function FireLendingLoanWizard() {
       (p) => p.id !== store.currentUserId && p.fireNepalId.trim().toUpperCase() === prefillFireId.toUpperCase(),
     );
     if (existing) {
-      setDraft((d) => ({ ...d, counterpartyId: existing.id, counterpartyQuery: prefillFireId }));
+      setDraft((d) => ({ ...d, counterpartyId: existing.id, counterpartyQuery: existing.fireNepalId }));
     }
   }, [prefillFireId, draft.counterpartyId, store.currentUserId, store.parties]);
 
   const patch = <K extends keyof LoanWizardDraft>(key: K, value: LoanWizardDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
-  const onSelectMember = (hit: P2PMemberSearchHit) => {
-    const partyId = ensureCounterpartyFromSearchHit(hit);
-    setDraft((d) => ({
-      ...d,
-      counterpartyId: partyId,
-      counterpartyQuery: hit.displayName,
-      connectionMethod: "fire_id",
-    }));
-  };
+  const onSelectMember = useCallback(
+    (hit: P2PMemberSearchHit) => {
+      const partyId = ensureCounterpartyFromSearchHit(hit);
+      if (!partyId) return;
+      setDraft((d) => ({
+        ...d,
+        // Commit the wizard borrower selection used by Continue / createLoan.
+        counterpartyId: partyId,
+        // Keep canonical FIRE Nepal ID in the search box (stable, exact-match friendly).
+        counterpartyQuery: hit.fireNepalId,
+        connectionMethod: "fire_id",
+      }));
+    },
+    [ensureCounterpartyFromSearchHit],
+  );
+
+  const onSearchQueryChange = useCallback(
+    (query: string) => {
+      setDraft((d) => {
+        const current = d.counterpartyId ? store.parties.find((p) => p.id === d.counterpartyId) : undefined;
+        const keep = shouldKeepBorrowerSelection({
+          query,
+          selectedFireNepalId: current?.fireNepalId,
+          selectedDisplayName: current?.name,
+        });
+        return {
+          ...d,
+          counterpartyQuery: query,
+          counterpartyId: keep ? d.counterpartyId : "",
+        };
+      });
+    },
+    [store.parties],
+  );
 
   const canNext = () => {
-    if (step === 0) return Boolean(draft.counterpartyId);
+    if (step === 0) return borrowerStepReady;
     if (step === 1) return Number(draft.amount) > 0 && draft.purpose.trim().length > 0;
     if (step === 3) return approval === "accepted";
     return true;
@@ -170,7 +200,7 @@ export function FireLendingLoanWizard() {
           {draft.connectionMethod === "fire_id" || draft.connectionMethod === "qr" ? (
             <FireLendingMemberSearch
               value={draft.counterpartyQuery}
-              onQueryChange={(q) => patch("counterpartyQuery", q)}
+              onQueryChange={onSearchQueryChange}
               onSelectMember={onSelectMember}
               selectedFireNepalId={selected?.fireNepalId}
               localHits={localHits}
@@ -181,17 +211,18 @@ export function FireLendingLoanWizard() {
             <LendingInput
               label={draft.connectionMethod === "mobile" ? "Mobile number" : "Invite link / code"}
               value={draft.counterpartyQuery}
-              onChange={(v) => patch("counterpartyQuery", v)}
+              onChange={onSearchQueryChange}
               placeholder={draft.connectionMethod === "mobile" ? "Search by mobile in your network…" : "Paste invite code…"}
               helperText="For verified FIRE ID discovery, switch to FIRE Nepal ID search."
             />
           )}
 
-          {selected ? (
+          {selected && borrowerStepReady ? (
             <div
               className={`mt-3 rounded-xl border px-3 py-2.5 ${
                 light ? "border-emerald-300 bg-emerald-50/80" : "border-emerald-400/30 bg-emerald-500/10"
               }`}
+              data-testid="selected-borrower-summary"
             >
               <p className={`text-sm font-black ${light ? "text-slate-900" : "text-emerald-50"}`}>
                 Selected: {selected.name}
@@ -203,7 +234,11 @@ export function FireLendingLoanWizard() {
                 <LendingStatusPill status={selected.verified ? "verified" : "unverified"} />
               </div>
             </div>
-          ) : null}
+          ) : (
+            <p className={`mt-3 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/50"}`}>
+              Select a verified member above to enable Continue.
+            </p>
+          )}
         </LendingGlassCard>
       ) : null}
 
@@ -332,7 +367,10 @@ export function FireLendingLoanWizard() {
           <LendingSecondaryButton onClick={() => setStep((s) => Math.max(0, s - 1))}>Back</LendingSecondaryButton>
         ) : null}
         {step < 2 ? (
-          <LendingPrimaryButton disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>
+          <LendingPrimaryButton
+            disabled={!canNext()}
+            onClick={() => setStep((s) => s + 1)}
+          >
             Continue
           </LendingPrimaryButton>
         ) : null}
