@@ -102,51 +102,56 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   const ensureCounterpartyFromSearchHit = useCallback(
     (hit: P2PMemberSearchHit) => {
       const fireNepalId = hit.fireNepalId.trim().toUpperCase();
-      const existing = store.parties.find(
-        (p) => p.id !== store.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
-      );
-      if (existing) {
-        setStore((prev) => ({
-          ...prev,
-          parties: prev.parties.map((p) => {
-            if (p.id !== existing.id) return p;
-            const updated: FireLendingParty = {
-              ...p,
-              name: hit.displayName || p.name,
-              fireNepalId,
-              photoUrl: hit.avatarUrl ?? p.photoUrl,
-              verified: hit.verificationStatus === "verified",
-              identityVerified: hit.verificationStatus === "verified" || p.identityVerified,
-              loansCompleted: Math.max(p.loansCompleted, hit.completedLoans),
-              onTimePayments: Math.max(p.onTimePayments, hit.onTimePayments),
-              latePayments: Math.max(p.latePayments, hit.latePayments),
-            };
-            return { ...updated, trustScore: computeTrustScore(updated) };
-          }),
-        }));
-        return existing.id;
-      }
+      let resolvedId = "";
 
-      const partyId = uid("party");
-      const base: FireLendingParty = {
-        id: partyId,
-        fireNepalId,
-        name: hit.displayName,
-        mobile: "",
-        photoUrl: hit.avatarUrl ?? undefined,
-        trustScore: 0,
-        verified: hit.verificationStatus === "verified",
-        rolePreference: "both",
-        onTimePayments: hit.onTimePayments,
-        latePayments: hit.latePayments,
-        loansCompleted: hit.completedLoans,
-        identityVerified: hit.verificationStatus === "verified",
-      };
-      const party = { ...base, trustScore: computeTrustScore(base) };
-      setStore((prev) => ({ ...prev, parties: [...prev.parties, party] }));
-      return partyId;
+      setStore((prev) => {
+        const existing = prev.parties.find(
+          (p) => p.id !== prev.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
+        );
+        if (existing) {
+          resolvedId = existing.id;
+          return {
+            ...prev,
+            parties: prev.parties.map((p) => {
+              if (p.id !== existing.id) return p;
+              const updated: FireLendingParty = {
+                ...p,
+                name: hit.displayName || p.name,
+                fireNepalId,
+                photoUrl: hit.avatarUrl ?? p.photoUrl,
+                verified: hit.verificationStatus === "verified",
+                identityVerified: hit.verificationStatus === "verified" || p.identityVerified,
+                loansCompleted: Math.max(p.loansCompleted, hit.completedLoans),
+                onTimePayments: Math.max(p.onTimePayments, hit.onTimePayments),
+                latePayments: Math.max(p.latePayments, hit.latePayments),
+              };
+              return { ...updated, trustScore: computeTrustScore(updated) };
+            }),
+          };
+        }
+
+        resolvedId = uid("party");
+        const base: FireLendingParty = {
+          id: resolvedId,
+          fireNepalId,
+          name: hit.displayName,
+          mobile: "",
+          photoUrl: hit.avatarUrl ?? undefined,
+          trustScore: 0,
+          verified: hit.verificationStatus === "verified",
+          rolePreference: "both",
+          onTimePayments: hit.onTimePayments,
+          latePayments: hit.latePayments,
+          loansCompleted: hit.completedLoans,
+          identityVerified: hit.verificationStatus === "verified",
+        };
+        const party = { ...base, trustScore: computeTrustScore(base) };
+        return { ...prev, parties: [...prev.parties, party] };
+      });
+
+      return resolvedId;
     },
-    [setStore, store.currentUserId, store.parties],
+    [setStore],
   );
 
   const createLoanFromWizard = useCallback((draft: LoanWizardDraft) => {
