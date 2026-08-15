@@ -34,9 +34,13 @@ import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
-import { useState } from "react";
-import type { PaymentMethod } from "@/lib/fire-lending/types";
 import { FireLendingDashboardAnalytics } from "@/components/fire-lending/FireLendingDashboardAnalytics";
+import { FireLendingMemberSearch } from "@/components/fire-lending/FireLendingMemberSearch";
+import { partyToP2PSearchHit } from "@/lib/fire-lending/party-to-search-hit";
+import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
+import { useMemo, useState } from "react";
+import type { PaymentMethod } from "@/lib/fire-lending/types";
+import { useRouter } from "next/navigation";
 
 function LoanList({ filter }: { filter?: "borrowed" | "lent" | "all" }) {
   const { store, partyById, loading } = useFireLending();
@@ -357,35 +361,69 @@ export function FireLendingInstallmentsPage() {
 }
 
 function PartyList({ role }: { role: "borrower" | "lender" }) {
-  const { store } = useFireLending();
+  const router = useRouter();
+  const { store, ensureCounterpartyFromSearchHit } = useFireLending();
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const parties = store.parties.filter((p) => p.id !== store.currentUserId && (p.rolePreference === role || p.rolePreference === "both"));
+  const [query, setQuery] = useState("");
+  const parties = store.parties.filter(
+    (p) => p.id !== store.currentUserId && (p.rolePreference === role || p.rolePreference === "both"),
+  );
+  const localHits = useMemo(
+    () =>
+      store.parties
+        .filter((p) => p.id !== store.currentUserId && (p.verified || p.identityVerified))
+        .map(partyToP2PSearchHit),
+    [store.currentUserId, store.parties],
+  );
+
+  const onSelectMember = (hit: P2PMemberSearchHit) => {
+    ensureCounterpartyFromSearchHit(hit);
+    router.push(`/fire-lending/members/${encodeURIComponent(hit.fireNepalId)}`);
+  };
 
   return (
-    <LendingGlassCard title={role === "borrower" ? "Borrowers" : "Lenders"} icon={role === "borrower" ? Users : UserRound}>
-      <ul className="space-y-1.5">
-        {parties.map((p) => (
-          <li
-            key={p.id}
-            className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${
-              light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
-            }`}
-          >
-            <div>
-              <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{p.name}</p>
-              <p className={`text-[11px] ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
-                {p.fireNepalId} · {p.mobile} · {trustLabel(p.trustScore)}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className={`text-lg font-black tabular-nums ${light ? "text-amber-700" : "text-amber-300"}`}>{p.trustScore}</p>
-              <LendingStatusPill status={p.identityVerified ? "verified" : "unverified"} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </LendingGlassCard>
+    <div className="space-y-3">
+      <LendingGlassCard
+        title="Find verified members"
+        subtitle="Search by FIRE Nepal ID or name for P2P decisions"
+        icon={role === "borrower" ? Users : UserRound}
+      >
+        <FireLendingMemberSearch
+          value={query}
+          onQueryChange={setQuery}
+          onSelectMember={onSelectMember}
+          localHits={localHits}
+          placeholder="Search FIRE Nepal ID or member name..."
+        />
+      </LendingGlassCard>
+
+      <LendingGlassCard title={role === "borrower" ? "Borrowers" : "Lenders"} icon={role === "borrower" ? Users : UserRound}>
+        <ul className="space-y-1.5">
+          {parties.map((p) => (
+            <li key={p.id}>
+              <Link
+                href={`/fire-lending/members/${encodeURIComponent(p.fireNepalId)}`}
+                className={`flex items-center justify-between rounded-xl border px-3 py-2.5 transition hover:-translate-y-0.5 ${
+                  light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"
+                }`}
+              >
+                <div>
+                  <p className={`text-sm font-bold ${light ? "text-slate-900" : "text-emerald-50"}`}>{p.name}</p>
+                  <p className={`text-[11px] ${light ? "text-slate-500" : "text-emerald-200/60"}`}>
+                    {p.fireNepalId} · {trustLabel(p.trustScore)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-lg font-black tabular-nums ${light ? "text-amber-700" : "text-amber-300"}`}>{p.trustScore}</p>
+                  <LendingStatusPill status={p.identityVerified ? "verified" : "unverified"} />
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </LendingGlassCard>
+    </div>
   );
 }
 

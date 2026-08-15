@@ -30,8 +30,10 @@ import {
   sanitizeFireLendingStore,
 } from "@/lib/fire-lending/storage";
 import { computeTrustScore, riskFromTrust } from "@/lib/fire-lending/trust-score";
+import type { P2PMemberSearchHit } from "@/lib/fire-lending/p2p-member-types";
 import type {
   FireLendingLoan,
+  FireLendingParty,
   FireLendingPayment,
   FireLendingRequest,
   FireLendingStore,
@@ -53,6 +55,8 @@ type FireLendingContextValue = {
   topBorrowers: ReturnType<typeof buildTopBorrowers>;
   agreementCenter: ReturnType<typeof buildAgreementCenter>;
   partyById: (id: string) => FireLendingStore["parties"][number] | undefined;
+  /** Upsert a counterparty from a safe P2P search hit (no private fields). Returns party id. */
+  ensureCounterpartyFromSearchHit: (hit: P2PMemberSearchHit) => string;
   createLoanFromWizard: (draft: LoanWizardDraft) => string;
   respondToRequest: (id: string, action: "accepted" | "rejected" | "changes_requested", note?: string) => void;
   recordPayment: (input: {
@@ -94,6 +98,56 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
   const agreementCenter = useMemo(() => buildAgreementCenter(store), [store]);
 
   const partyById = useCallback((id: string) => store.parties.find((p) => p.id === id), [store.parties]);
+
+  const ensureCounterpartyFromSearchHit = useCallback(
+    (hit: P2PMemberSearchHit) => {
+      const fireNepalId = hit.fireNepalId.trim().toUpperCase();
+      const existing = store.parties.find(
+        (p) => p.id !== store.currentUserId && p.fireNepalId.trim().toUpperCase() === fireNepalId,
+      );
+      if (existing) {
+        setStore((prev) => ({
+          ...prev,
+          parties: prev.parties.map((p) => {
+            if (p.id !== existing.id) return p;
+            const updated: FireLendingParty = {
+              ...p,
+              name: hit.displayName || p.name,
+              fireNepalId,
+              photoUrl: hit.avatarUrl ?? p.photoUrl,
+              verified: hit.verificationStatus === "verified",
+              identityVerified: hit.verificationStatus === "verified" || p.identityVerified,
+              loansCompleted: Math.max(p.loansCompleted, hit.completedLoans),
+              onTimePayments: Math.max(p.onTimePayments, hit.onTimePayments),
+              latePayments: Math.max(p.latePayments, hit.latePayments),
+            };
+            return { ...updated, trustScore: computeTrustScore(updated) };
+          }),
+        }));
+        return existing.id;
+      }
+
+      const partyId = uid("party");
+      const base: FireLendingParty = {
+        id: partyId,
+        fireNepalId,
+        name: hit.displayName,
+        mobile: "",
+        photoUrl: hit.avatarUrl ?? undefined,
+        trustScore: 0,
+        verified: hit.verificationStatus === "verified",
+        rolePreference: "both",
+        onTimePayments: hit.onTimePayments,
+        latePayments: hit.latePayments,
+        loansCompleted: hit.completedLoans,
+        identityVerified: hit.verificationStatus === "verified",
+      };
+      const party = { ...base, trustScore: computeTrustScore(base) };
+      setStore((prev) => ({ ...prev, parties: [...prev.parties, party] }));
+      return partyId;
+    },
+    [setStore, store.currentUserId, store.parties],
+  );
 
   const createLoanFromWizard = useCallback((draft: LoanWizardDraft) => {
     const loanId = uid("loan");
@@ -364,6 +418,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     topBorrowers,
     agreementCenter,
     partyById,
+    ensureCounterpartyFromSearchHit,
     createLoanFromWizard,
     respondToRequest,
     recordPayment,
