@@ -1,5 +1,11 @@
 import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { todayIso, uid } from "@/lib/fire-lending/format";
+import {
+  isSelfLoan,
+  partyDisplayName,
+  resolveLoanPartyIds,
+  SELF_LOAN_ERROR,
+} from "@/lib/fire-lending/loan-party-identity";
 import type {
   FireLendingLoan,
   FireLendingNotification,
@@ -29,11 +35,28 @@ export type LoanRequestMutationResult =
   | { ok: true; store: FireLendingStore; request: FireLendingRequest }
   | { ok: false; error: string; store: FireLendingStore; status?: number };
 
-/** Counterparty (toPartyId) may Accept/Reject; the requester (fromPartyId) never may. */
+/** Per-party action matrix for Requests / signature UI. */
+export type LoanRequestPartyActions = {
+  isRequester: boolean;
+  isRecipient: boolean;
+  isSelfRequest: boolean;
+  canSignAsBorrower: boolean;
+  canSignAsLender: boolean;
+  canAccept: boolean;
+  canReject: boolean;
+  /** Dialog Cancel only — never cancels the underlying pending request. */
+  canDismissApprovalDialog: boolean;
+};
+
+/**
+ * Counterparty (toPartyId) may Accept/Reject; the requester (fromPartyId) never may.
+ * For the primary Loan Request flow (borrower → lender), toPartyId is the lender.
+ */
 export function canRespondToLoanRequest(
   request: FireLendingRequest | undefined,
   actorPartyId: string,
   linkedLoan?: FireLendingLoan,
+  storeCurrentUserId?: string,
 ): { ok: true } | { ok: false; error: string; status: number } {
   if (!request) {
     return { ok: false, error: "Loan request not found.", status: 404 };
@@ -55,12 +78,15 @@ export function canRespondToLoanRequest(
   if (request.toPartyId !== actorPartyId) {
     return {
       ok: false,
-      error: "Only the borrower/counterparty can accept or reject this request.",
+      error: "Only the lender/counterparty can accept or reject this request.",
       status: 403,
     };
   }
 
-  // Accept / Reject only after both required party signatures are complete.
+  if (linkedLoan && storeCurrentUserId && isSelfLoan(linkedLoan, storeCurrentUserId)) {
+    return { ok: false, error: SELF_LOAN_ERROR, status: 400 };
+  }
+
   if (linkedLoan && !bothPartiesSigned(linkedLoan)) {
     return {
       ok: false,
@@ -85,16 +111,58 @@ export function isLoanRequestRequester(request: FireLendingRequest, actorPartyId
   return request.fromPartyId === actorPartyId;
 }
 
+/** Self-request: same party is both from and to (invalid / mis-delivered). */
+export function isSelfLoanRequest(request: FireLendingRequest): boolean {
+  return Boolean(request.fromPartyId && request.fromPartyId === request.toPartyId);
+}
+
 /** Accept/Reject controls are visible only to the recipient after both signatures. */
 export function canShowLoanRequestApprovalControls(
   request: FireLendingRequest,
   actorPartyId: string,
   linkedLoan: FireLendingLoan | undefined,
 ): boolean {
+  if (isSelfLoanRequest(request)) return false;
   if (!isLoanRequestRecipient(request, actorPartyId)) return false;
   if (request.status !== "pending") return false;
   if (!linkedLoan) return false;
   return bothPartiesSigned(linkedLoan);
+}
+
+/**
+ * Correct Cancel / Accept / Reject / Signature actions for the session user.
+ * Cancel here is the approval-dialog dismiss only (requester never sees Accept/Reject).
+ */
+export function requestActionsForParty(
+  request: FireLendingRequest,
+  actorPartyId: string,
+  linkedLoan: FireLendingLoan | undefined,
+  storeCurrentUserId: string,
+): LoanRequestPartyActions {
+  const isRequester = isLoanRequestRequester(request, actorPartyId);
+  const isRecipient = request.toPartyId === actorPartyId;
+  const self = isSelfLoanRequest(request) || (isRequester && isRecipient);
+  const { lenderId, borrowerId } = linkedLoan
+    ? resolveLoanPartyIds(linkedLoan, storeCurrentUserId)
+    : { lenderId: "", borrowerId: "" };
+
+  const canSignAsBorrower =
+    Boolean(linkedLoan) && !self && actorPartyId === borrowerId && !linkedLoan!.borrowerSigned;
+  const canSignAsLender =
+    Boolean(linkedLoan) && !self && actorPartyId === lenderId && !linkedLoan!.lenderSigned;
+  const canAccept = !self && canShowLoanRequestApprovalControls(request, actorPartyId, linkedLoan);
+  const canReject = canAccept;
+
+  return {
+    isRequester,
+    isRecipient,
+    isSelfRequest: self,
+    canSignAsBorrower,
+    canSignAsLender,
+    canAccept,
+    canReject,
+    canDismissApprovalDialog: canAccept || canReject,
+  };
 }
 
 export function findPendingRequestForLoan(
@@ -141,7 +209,8 @@ export function hasLoanRequestNotification(
 
 /**
  * Requester sends a loan request to the loan counterparty.
- * Prevents duplicate pending requests for the same loan.
+ * Primary flow: User A (borrower) → User B (lender): fromPartyId=borrower, toPartyId=lender.
+ * Prevents duplicate pending requests and self-requests.
  */
 export function sendLoanRequest(
   store: FireLendingStore,
@@ -157,12 +226,20 @@ export function sendLoanRequest(
     return { ok: false, error: "You must be signed in to send a loan request.", store, status: 401 };
   }
 
-  // Creator of the loan request is the authenticated user; recipient is always the counterparty.
+  if (isSelfLoan(loan, store.currentUserId)) {
+    return { ok: false, error: SELF_LOAN_ERROR, store, status: 400 };
+  }
+
+  const { lenderId, borrowerId } = resolveLoanPartyIds(loan, store.currentUserId);
+  if (!lenderId || !borrowerId || lenderId === borrowerId) {
+    return { ok: false, error: SELF_LOAN_ERROR, store, status: 400 };
+  }
+
   const toPartyId = loan.counterpartyId;
   if (!toPartyId || toPartyId === requesterId) {
     return {
       ok: false,
-      error: "Select a valid borrower/counterparty before sending the request.",
+      error: "You cannot send a loan request to yourself. Select a different member.",
       store,
       status: 400,
     };
@@ -171,14 +248,14 @@ export function sendLoanRequest(
   if (findPendingRequestForLoan(store, loan.id)) {
     return {
       ok: false,
-      error: "A loan request is already pending for this loan. Wait for the borrower’s response.",
+      error: "A loan request is already pending for this loan. Wait for the counterparty’s response.",
       store,
       status: 409,
     };
   }
 
   const requester = store.parties.find((p) => p.id === requesterId);
-  const requesterName = requester?.name?.trim() || "a FIRE Nepal member";
+  const requesterName = partyDisplayName(requester, "a FIRE Nepal member");
   const createdAt = todayIso();
   const createdAtDisplay = new Date().toISOString();
 
@@ -196,6 +273,10 @@ export function sendLoanRequest(
     createdAt,
     message: input.message,
   };
+
+  if (isSelfLoanRequest(request)) {
+    return { ok: false, error: SELF_LOAN_ERROR, store, status: 400 };
+  }
 
   const alreadyNotified = hasLoanRequestNotification(store, {
     loanId: loan.id,
@@ -221,6 +302,8 @@ export function sendLoanRequest(
     l.id === loan.id
       ? {
           ...l,
+          lenderId,
+          borrowerId,
           status: bothPartiesSigned(l) ? ("pending_approval" as const) : ("pending_signature" as const),
         }
       : l,
@@ -248,7 +331,12 @@ export function respondToLoanRequest(
   const linkedLoan = request?.loanId
     ? store.loans.find((l) => l.id === request.loanId)
     : undefined;
-  const auth = canRespondToLoanRequest(request, input.actorPartyId, linkedLoan);
+  const auth = canRespondToLoanRequest(
+    request,
+    input.actorPartyId,
+    linkedLoan,
+    store.currentUserId,
+  );
   if (!request || !auth.ok) {
     return {
       ok: false,
@@ -268,7 +356,6 @@ export function respondToLoanRequest(
   const loans = store.loans.map((l) => {
     if (!request.loanId || l.id !== request.loanId) return l;
     if (input.action === "accepted") {
-      // Both signatures already verified — activate the loan.
       return {
         ...l,
         status: "active" as const,
@@ -278,7 +365,6 @@ export function respondToLoanRequest(
     if (input.action === "rejected") {
       return { ...l, status: "rejected" as const };
     }
-    // changes_requested — keep waiting on approval
     return { ...l, status: "pending_approval" as const };
   });
 
@@ -306,7 +392,7 @@ export function respondToLoanRequest(
           : input.action === "rejected"
             ? "Loan request rejected"
             : "Changes requested",
-      body: input.note || `The borrower ${actionLabel} your loan request.`,
+      body: input.note || `The counterparty ${actionLabel} your loan request.`,
       createdAt: todayIso(),
       read: false,
       href: request.loanId ? `/fire-lending/loans/${request.loanId}` : "/fire-lending/requests",
@@ -328,15 +414,18 @@ export function respondToLoanRequest(
   return { ok: true, store: nextStore, request: updatedRequest };
 }
 
-/** Wizard approval step copy helpers (requester side). */
+/**
+ * Wizard approval step copy helpers (requester side).
+ * Primary Loan Request flow targets the lender (borrower → lender).
+ */
 export const LOAN_REQUEST_UI = {
   title: "Loan Request",
-  prompt: "Do you want to send this loan request to the borrower?",
+  prompt: "Do you want to send this loan request to the lender?",
   requestButton: "Request",
   confirmSend: "Send Request",
   confirmCancel: "Cancel",
-  successMessage: "Loan request sent successfully. Waiting for the borrower’s response.",
-  waitingTitle: "Request Sent — Waiting for Borrower",
+  successMessage: "Loan request sent successfully. Waiting for the lender’s response.",
+  waitingTitle: "Request Sent — Waiting for Lender",
   pendingStatus: "pending" as const,
   readyForApproval: "Both parties have signed. Loan request is ready for approval.",
   signaturesRequiredBeforeApproval: "Both parties must sign before Accept or Reject is available.",

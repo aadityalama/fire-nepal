@@ -37,10 +37,15 @@ import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { formatCompactDate, formatLendingMoney } from "@/lib/fire-lending/format";
 import {
-  canShowLoanRequestApprovalControls,
+  isSelfLoanRequest,
   LOAN_REQUEST_UI,
+  requestActionsForParty,
 } from "@/lib/fire-lending/loan-request-approval";
-import { requestsVisibleToUser } from "@/lib/fire-lending/loan-request-delivery";
+import {
+  incomingPendingRequestsForUser,
+  requestsVisibleToUser,
+} from "@/lib/fire-lending/loan-request-delivery";
+import { partyDisplayName, resolveLoanPartyIds } from "@/lib/fire-lending/loan-party-identity";
 import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 import { FireLendingDashboardAnalytics } from "@/components/fire-lending/FireLendingDashboardAnalytics";
@@ -161,11 +166,152 @@ export function FireLendingRequestsPage() {
   };
 
   const visibleRequests = requestsVisibleToUser(store, store.currentUserId);
+  const incomingRequests = incomingPendingRequestsForUser(store, store.currentUserId);
+  const outgoingRequests = visibleRequests.filter((r) => r.fromPartyId === store.currentUserId);
 
   const approvalRequest = approvalRequestId
     ? visibleRequests.find((r) => r.id === approvalRequestId)
     : undefined;
   const approvalFrom = approvalRequest ? partyById(approvalRequest.fromPartyId) : undefined;
+
+  const renderRequestRow = (req: (typeof visibleRequests)[number]) => {
+    const from = partyById(req.fromPartyId);
+    const to = partyById(req.toPartyId);
+    const linkedLoan = req.loanId ? store.loans.find((l) => l.id === req.loanId) : undefined;
+    const actions = requestActionsForParty(req, store.currentUserId, linkedLoan, store.currentUserId);
+    const { lenderId, borrowerId } = linkedLoan
+      ? resolveLoanPartyIds(linkedLoan, store.currentUserId)
+      : { lenderId: req.toPartyId, borrowerId: req.fromPartyId };
+    const borrower = partyById(borrowerId) || from;
+    const lender = partyById(lenderId) || to;
+    const signaturesDone = linkedLoan ? bothPartiesSigned(linkedLoan) : !req.loanId;
+    const canAct =
+      actions.canAccept ||
+      (actions.isRecipient && req.status === "pending" && !req.loanId && !isSelfLoanRequest(req));
+
+    return (
+      <li
+        key={req.id}
+        data-testid={`loan-request-${req.id}`}
+        data-request-role={
+          actions.isSelfRequest
+            ? "self"
+            : actions.isRequester
+              ? "requester"
+              : actions.isRecipient
+                ? "recipient"
+                : "other"
+        }
+        data-borrower-id={borrowerId}
+        data-lender-id={lenderId}
+        data-request-status={req.status}
+        className={`rounded-xl border px-3 py-3 ${light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className={`text-sm font-black ${light ? "text-slate-900" : "text-emerald-50"}`}>
+              {partyDisplayName(from, "Member")} → {partyDisplayName(to, "Member")}
+            </p>
+            <p
+              data-testid={`loan-request-roles-${req.id}`}
+              className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}
+            >
+              Borrower: {partyDisplayName(borrower, "Member")} · Lender:{" "}
+              {partyDisplayName(lender, "Member")}
+            </p>
+            {actions.isRecipient && req.status === "pending" && !actions.isSelfRequest ? (
+              <p className={`mt-1 text-xs font-bold ${light ? "text-emerald-800" : "text-lime-200"}`}>
+                You have received a new loan request from {partyDisplayName(from, "a member")}.
+              </p>
+            ) : null}
+            {actions.isSelfRequest ? (
+              <p
+                data-testid="loan-request-self-warning"
+                className={`mt-1 text-xs font-bold ${light ? "text-rose-700" : "text-rose-300"}`}
+              >
+                Invalid self-request — lender and borrower must be different members.
+              </p>
+            ) : null}
+            <p className={`text-[11px] font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
+              {formatLendingMoney(req.amount, req.currency)} · {req.interestRate}% · {req.durationMonths} mo ·{" "}
+              {req.purpose}
+            </p>
+            {linkedLoan ? (
+              <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+                Agreement {linkedLoan.agreementNumber}
+                {linkedLoan.guarantor ? ` · Guarantor: ${linkedLoan.guarantor}` : ""}
+                {linkedLoan.collateral ? ` · Collateral: ${linkedLoan.collateral}` : ""}
+                {linkedLoan.notes ? ` · Notes: ${linkedLoan.notes}` : ""}
+              </p>
+            ) : null}
+            {req.message ? (
+              <p className={`mt-1 text-xs ${light ? "text-slate-500" : "text-emerald-200/55"}`}>{req.message}</p>
+            ) : null}
+            {req.changeRequest ? (
+              <p className={`mt-1 text-xs font-bold text-amber-500`}>{req.changeRequest}</p>
+            ) : null}
+            {actions.isRequester && req.status === "pending" && !actions.isSelfRequest ? (
+              <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
+                Waiting for the lender to respond. You cannot Accept or Reject your own request.
+              </p>
+            ) : null}
+            {actions.isRecipient && req.status === "pending" && linkedLoan && !signaturesDone ? (
+              <p
+                data-testid="approval-blocked-awaiting-signatures"
+                className={`mt-1 text-[11px] font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}
+              >
+                {LOAN_REQUEST_UI.signaturesRequiredBeforeApproval}
+              </p>
+            ) : null}
+            {actions.isRecipient && req.status === "pending" && linkedLoan && signaturesDone ? (
+              <p
+                data-testid="approval-ready-both-signed"
+                className={`mt-1 text-[11px] font-semibold ${light ? "text-emerald-700" : "text-lime-300"}`}
+              >
+                {LOAN_REQUEST_UI.readyForApproval}
+              </p>
+            ) : null}
+          </div>
+          <LendingStatusPill status={req.status} />
+        </div>
+        {canAct ? (
+          <div className="mt-2 flex flex-wrap gap-2" data-testid="loan-request-approval-controls">
+            <LendingPrimaryButton
+              disabled={busyId === req.id}
+              onClick={() => {
+                setActionError(null);
+                setApprovalRequestId(req.id);
+              }}
+            >
+              Accept
+            </LendingPrimaryButton>
+            <LendingSecondaryButton
+              disabled={busyId === req.id}
+              onClick={() => {
+                setActionError(null);
+                setApprovalRequestId(req.id);
+              }}
+            >
+              Reject
+            </LendingSecondaryButton>
+            <LendingSecondaryButton
+              disabled={busyId === req.id}
+              onClick={() => onRespond(req.id, "changes_requested", "Please adjust rate/tenure.")}
+            >
+              Request changes
+            </LendingSecondaryButton>
+          </div>
+        ) : null}
+        {linkedLoan ? (
+          <div className="mt-2">
+            <LendingPrimaryLink href={`/fire-lending/loans/${linkedLoan.id}`}>
+              Review loan details
+            </LendingPrimaryLink>
+          </div>
+        ) : null}
+      </li>
+    );
+  };
 
   return (
     <LendingMobileScreen>
@@ -174,121 +320,27 @@ export function FireLendingRequestsPage() {
         title="Incoming & outgoing"
         subtitle="Accept or Reject only after both parties have signed. You cannot approve your own request."
       />
-      <LendingGlassCard title="Requests" icon={Inbox}>
-        {visibleRequests.length === 0 ? (
+      <LendingGlassCard title="Incoming Requests" icon={Inbox}>
+        {incomingRequests.length === 0 ? (
           <LendingEmptyState
-            title="No loan requests"
-            message="When someone sends a loan request, it will show up here for review."
+            title="No incoming loan requests"
+            message="When someone sends you a loan request, it will show up here for review."
           />
         ) : (
-          <ul className="space-y-2">
-            {visibleRequests.map((req) => {
-              const from = partyById(req.fromPartyId);
-              const to = partyById(req.toPartyId);
-              const linkedLoan = req.loanId ? store.loans.find((l) => l.id === req.loanId) : undefined;
-              const isRecipient = req.toPartyId === store.currentUserId;
-              const isRequester = req.fromPartyId === store.currentUserId;
-              const signaturesDone = linkedLoan ? bothPartiesSigned(linkedLoan) : !req.loanId;
-              const canAct = canShowLoanRequestApprovalControls(req, store.currentUserId, linkedLoan) ||
-                // Orphan seed requests without a linked loan keep prior counterparty-only Accept.
-                (isRecipient && req.status === "pending" && !req.loanId);
-              return (
-                <li
-                  key={req.id}
-                  data-testid={`loan-request-${req.id}`}
-                  data-request-role={isRequester ? "requester" : isRecipient ? "recipient" : "other"}
-                  className={`rounded-xl border px-3 py-3 ${light ? "border-emerald-200/60 bg-white/80" : "border-emerald-400/10 bg-black/20"}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className={`text-sm font-black ${light ? "text-slate-900" : "text-emerald-50"}`}>
-                        {from?.name} → {to?.name}
-                      </p>
-                      {isRecipient && req.status === "pending" ? (
-                        <p className={`mt-1 text-xs font-bold ${light ? "text-emerald-800" : "text-lime-200"}`}>
-                          You have received a new loan request from {from?.name ?? "a member"}.
-                        </p>
-                      ) : null}
-                      <p className={`text-[11px] font-semibold ${light ? "text-slate-600" : "text-emerald-200/65"}`}>
-                        {formatLendingMoney(req.amount, req.currency)} · {req.interestRate}% · {req.durationMonths} mo ·{" "}
-                        {req.purpose}
-                      </p>
-                      {linkedLoan ? (
-                        <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
-                          Agreement {linkedLoan.agreementNumber}
-                          {linkedLoan.guarantor ? ` · Guarantor: ${linkedLoan.guarantor}` : ""}
-                          {linkedLoan.collateral ? ` · Collateral: ${linkedLoan.collateral}` : ""}
-                          {linkedLoan.notes ? ` · Notes: ${linkedLoan.notes}` : ""}
-                        </p>
-                      ) : null}
-                      {req.message ? (
-                        <p className={`mt-1 text-xs ${light ? "text-slate-500" : "text-emerald-200/55"}`}>{req.message}</p>
-                      ) : null}
-                      {req.changeRequest ? (
-                        <p className={`mt-1 text-xs font-bold text-amber-500`}>{req.changeRequest}</p>
-                      ) : null}
-                      {isRequester && req.status === "pending" ? (
-                        <p className={`mt-1 text-[11px] font-semibold ${light ? "text-slate-500" : "text-emerald-200/55"}`}>
-                          Waiting for the borrower to respond. You cannot Accept or Reject your own request.
-                        </p>
-                      ) : null}
-                      {isRecipient && req.status === "pending" && linkedLoan && !signaturesDone ? (
-                        <p
-                          data-testid="approval-blocked-awaiting-signatures"
-                          className={`mt-1 text-[11px] font-semibold ${light ? "text-amber-700" : "text-amber-300"}`}
-                        >
-                          {LOAN_REQUEST_UI.signaturesRequiredBeforeApproval}
-                        </p>
-                      ) : null}
-                      {isRecipient && req.status === "pending" && linkedLoan && signaturesDone ? (
-                        <p
-                          data-testid="approval-ready-both-signed"
-                          className={`mt-1 text-[11px] font-semibold ${light ? "text-emerald-700" : "text-lime-300"}`}
-                        >
-                          {LOAN_REQUEST_UI.readyForApproval}
-                        </p>
-                      ) : null}
-                    </div>
-                    <LendingStatusPill status={req.status} />
-                  </div>
-                  {canAct ? (
-                    <div className="mt-2 flex flex-wrap gap-2" data-testid="loan-request-approval-controls">
-                      <LendingPrimaryButton
-                        disabled={busyId === req.id}
-                        onClick={() => {
-                          setActionError(null);
-                          setApprovalRequestId(req.id);
-                        }}
-                      >
-                        Accept
-                      </LendingPrimaryButton>
-                      <LendingSecondaryButton
-                        disabled={busyId === req.id}
-                        onClick={() => {
-                          setActionError(null);
-                          setApprovalRequestId(req.id);
-                        }}
-                      >
-                        Reject
-                      </LendingSecondaryButton>
-                      <LendingSecondaryButton
-                        disabled={busyId === req.id}
-                        onClick={() => onRespond(req.id, "changes_requested", "Please adjust rate/tenure.")}
-                      >
-                        Request changes
-                      </LendingSecondaryButton>
-                    </div>
-                  ) : null}
-                  {linkedLoan ? (
-                    <div className="mt-2">
-                      <LendingPrimaryLink href={`/fire-lending/loans/${linkedLoan.id}`}>
-                        Review loan details
-                      </LendingPrimaryLink>
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
+          <ul className="space-y-2" data-testid="incoming-loan-requests">
+            {incomingRequests.map(renderRequestRow)}
+          </ul>
+        )}
+      </LendingGlassCard>
+      <LendingGlassCard title="Outgoing Requests" icon={Inbox}>
+        {outgoingRequests.length === 0 ? (
+          <LendingEmptyState
+            title="No outgoing loan requests"
+            message="Loan requests you send will appear here while you wait for the lender."
+          />
+        ) : (
+          <ul className="space-y-2" data-testid="outgoing-loan-requests">
+            {outgoingRequests.map(renderRequestRow)}
           </ul>
         )}
         {actionError ? (
@@ -304,7 +356,7 @@ export function FireLendingRequestsPage() {
         title={LOAN_REQUEST_UI.title}
         description={
           approvalFrom
-            ? `${approvalFrom.name} sent you a loan request. ${LOAN_REQUEST_UI.approvalPrompt}`
+            ? `${partyDisplayName(approvalFrom, "A member")} sent you a loan request. ${LOAN_REQUEST_UI.approvalPrompt}`
             : LOAN_REQUEST_UI.approvalPrompt
         }
         cancelLabel={LOAN_REQUEST_UI.confirmCancel}

@@ -124,7 +124,7 @@ describe("wizard borrower selection", () => {
 
     ({ step, error } = advanceWizardStep({ step, requestSent: true, approval: "pending" }));
     assert.equal(step, 3);
-    assert.match(error ?? "", /Waiting for the borrower/);
+    assert.match(error ?? "", /Waiting for the lender/);
 
     ({ step, error } = advanceWizardStep({ step, requestSent: true, approval: "accepted" }));
     assert.equal(error, null);

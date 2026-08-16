@@ -21,6 +21,7 @@ import {
 import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
+import { buildLenderBorrowerIds } from "@/lib/fire-lending/loan-party-identity";
 import {
   clearFireLendingLocalCache,
   createEmptyLendingStore,
@@ -191,12 +192,23 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     const installments = Math.max(1, Number(draft.installmentCount) || months);
     const agrNo = agreementNumber();
     const counterpartyId = draft.counterpartyId || store.parties.find((p) => p.id !== store.currentUserId)?.id || store.parties[1]?.id;
+    const partyIds = buildLenderBorrowerIds({
+      creatorPartyId: store.currentUserId,
+      counterpartyId,
+      creatorRole: draft.role,
+    });
+    if (!partyIds.ok) {
+      appToast.error(partyIds.error, { id: "fire-lending-create-loan" });
+      return "";
+    }
 
     const loan: FireLendingLoan = {
       id: loanId,
       agreementNumber: agrNo,
       role: draft.role,
       counterpartyId,
+      lenderId: partyIds.lenderId,
+      borrowerId: partyIds.borrowerId,
       amount,
       currency: draft.currency,
       interestRate: rate,
@@ -346,7 +358,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
           appToast.error(error, { id: "fire-lending-send-request" });
           return error;
         }
-        appToast.success("Loan request sent successfully. Waiting for the borrower’s response.", {
+        appToast.success("Loan request sent successfully. Waiting for the lender’s response.", {
           id: "fire-lending-send-request",
         });
         void fetch("/api/fire-lending/requests/notify-email", {
@@ -381,7 +393,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
             return;
           }
           setStore(json.store);
-          appToast.success("Loan request sent successfully. Waiting for the borrower’s response.", {
+          appToast.success("Loan request sent successfully. Waiting for the lender’s response.", {
             id: "fire-lending-send-request",
           });
         } catch {

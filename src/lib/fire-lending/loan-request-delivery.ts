@@ -191,16 +191,34 @@ export function deliverLoanRequestToRecipientStore(
 
   const existing = recipientStore.requests.find((r) => r.id === request.id);
   if (existing) {
-    // Already delivered — ensure visibility filters still match session user.
-    if (existing.toPartyId === recipientStore.currentUserId) {
+    const alreadyOk =
+      existing.toPartyId === recipientStore.currentUserId &&
+      existing.fromPartyId !== existing.toPartyId &&
+      existing.fromPartyId !== recipientStore.currentUserId;
+    if (alreadyOk) {
       return { ok: true, store: recipientStore, request: existing, alreadyPresent: true };
     }
+    // Fall through and repair mis-delivered / self-request rows.
   }
 
-  const senderRequester = senderStore.parties.find((p) => p.id === request.fromPartyId);
+  let senderRequester = senderStore.parties.find((p) => p.id === request.fromPartyId);
   const senderRecipient = senderStore.parties.find((p) => p.id === request.toPartyId);
+  // Auth stores often omit a self party until first profile sync — synthesize so delivery
+  // still remaps away from shared party_me ids.
   if (!senderRequester) {
-    return { ok: false, error: "Requester party not found in sender store." };
+    senderRequester = {
+      id: request.fromPartyId,
+      fireNepalId: "",
+      name: "FIRE Nepal member",
+      mobile: "",
+      trustScore: 0,
+      verified: false,
+      rolePreference: "both",
+      onTimePayments: 0,
+      latePayments: 0,
+      loansCompleted: 0,
+      identityVerified: false,
+    };
   }
   if (!senderRecipient) {
     return { ok: false, error: "Recipient party not found in sender store." };
@@ -245,6 +263,9 @@ export function deliverLoanRequestToRecipientStore(
       ...linkedLoan,
       role: recipientRole,
       counterpartyId: fromPartyId,
+      // Remap durable ids into the recipient namespace.
+      lenderId: recipientRole === "lender" ? toPartyId : fromPartyId,
+      borrowerId: recipientRole === "borrower" ? toPartyId : fromPartyId,
     };
     loans = recipientStore.loans.some((l) => l.id === deliveredLoan.id)
       ? recipientStore.loans.map((l) => (l.id === deliveredLoan.id ? deliveredLoan : l))

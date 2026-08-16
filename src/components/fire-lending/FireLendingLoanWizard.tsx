@@ -561,18 +561,18 @@ export function FireLendingLoanWizard() {
           title={requestSent ? LOAN_REQUEST_UI.waitingTitle : LOAN_REQUEST_UI.title}
           subtitle={
             borrowerAccepted
-              ? "Borrower accepted — continue to signatures"
+              ? "Lender accepted — continue to signatures"
               : borrowerRejected
-                ? "Borrower rejected this loan request"
+                ? "Lender rejected this loan request"
                 : requestPending
-                  ? "Waiting for the borrower’s response"
+                  ? "Waiting for the lender’s response"
                   : LOAN_REQUEST_UI.prompt
           }
           icon={FileSignature}
         >
           <p className={`mb-3 text-sm font-semibold ${light ? "text-slate-700" : "text-emerald-100"}`}>
             {requestSent
-              ? `${createdLoan.agreementNumber} · Counterparty: ${selected?.name ?? "Borrower"}`
+              ? `${createdLoan.agreementNumber} · Counterparty: ${selected?.name ?? "Lender"}`
               : LOAN_REQUEST_UI.prompt}
           </p>
 

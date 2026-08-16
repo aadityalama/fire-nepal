@@ -5,6 +5,7 @@ import {
   buildLoanRequestEmail,
   loanRequestReviewUrl,
 } from "@/lib/fire-lending/loan-request-email";
+import { partyDisplayName, resolveLoanPartyIds } from "@/lib/fire-lending/loan-party-identity";
 import { resolveApprovalEmailLogoUrl } from "@/lib/membership-approval-email/email-templates";
 import { formatLendingMoney } from "@/lib/fire-lending/format";
 import type { FireLendingLoan, FireLendingParty, FireLendingStore } from "@/lib/fire-lending/types";
@@ -23,6 +24,7 @@ export type SendLoanRequestEmailInput = {
 /**
  * Best-effort professional email to the counterparty when a loan request is sent.
  * Looks up the recipient by FIRE Nepal ID → user_profiles → verified auth email.
+ * Payload names the real borrower/lender — never the placeholder "You".
  */
 export async function sendLoanRequestNotificationEmail(
   input: SendLoanRequestEmailInput,
@@ -64,25 +66,42 @@ export async function sendLoanRequestNotificationEmail(
     return { ok: true, skipped: "email_not_verified" };
   }
 
-  const siteOrigin = getSiteOrigin();
-  const requesterIsLender = input.loan.role === "lender";
+  const { lenderId, borrowerId } = resolveLoanPartyIds(input.loan, input.store.currentUserId);
+  const borrowerParty =
+    input.store.parties.find((p) => p.id === borrowerId) ||
+    (input.loan.role === "borrower" ? input.requester : input.recipient);
+  const lenderParty =
+    input.store.parties.find((p) => p.id === lenderId) ||
+    (input.loan.role === "lender" ? input.requester : input.recipient);
+
+  const borrowerName = partyDisplayName(borrowerParty, "a FIRE Nepal member");
+  const lenderName =
+    profile.full_name?.trim() ||
+    profile.display_name?.trim() ||
+    partyDisplayName(lenderParty, "Member");
+
+  // Primary request flow emails the lender about the borrower requester.
+  const requesterIsBorrower = input.loan.role === "borrower" || input.requester.id === borrowerId;
   const tpl = buildLoanRequestEmail({
-    recipientName:
-      profile.full_name?.trim() ||
-      profile.display_name?.trim() ||
-      input.recipient.name ||
-      "Member",
-    requesterName: input.requester.name,
-    requesterRoleLabel: requesterIsLender ? "Lender" : "Borrower",
-    counterpartyRoleLabel: requesterIsLender ? "Borrower" : "Lender",
+    recipientName: requesterIsBorrower ? lenderName : partyDisplayName(input.recipient, "Member"),
+    requesterName: requesterIsBorrower
+      ? borrowerName
+      : partyDisplayName(input.requester, "a FIRE Nepal member"),
+    requesterRoleLabel: requesterIsBorrower ? "Borrower" : "Lender",
+    counterpartyRoleLabel: requesterIsBorrower ? "Lender" : "Borrower",
     loanReference: input.loan.agreementNumber,
     amountLabel: formatLendingMoney(input.loan.amount, input.loan.currency),
     interestRate: input.loan.interestRate,
     durationMonths: input.loan.durationMonths,
     requestDateIso: new Date().toISOString(),
-    reviewUrl: loanRequestReviewUrl(input.loan.id, siteOrigin),
-    logoUrl: resolveApprovalEmailLogoUrl(siteOrigin),
+    reviewUrl: loanRequestReviewUrl(input.loan.id, getSiteOrigin()),
+    logoUrl: resolveApprovalEmailLogoUrl(getSiteOrigin()),
   });
+
+  if (/^you has sent you/i.test(tpl.text) || /You has sent you/i.test(tpl.html)) {
+    console.error(LOG_PREFIX, "refusing self-referential email copy");
+    return { ok: false, error: "Invalid personalized email content." };
+  }
 
   const sendRes = await sendEmailViaResend({
     from: resolveResendFromAddress(),
@@ -97,6 +116,11 @@ export async function sendLoanRequestNotificationEmail(
     return { ok: false, error: sendRes.message };
   }
 
-  console.info(LOG_PREFIX, "sent", { loanId: input.loan.id, id: sendRes.id ?? null });
+  console.info(LOG_PREFIX, "sent", {
+    loanId: input.loan.id,
+    lenderId,
+    borrowerId,
+    id: sendRes.id ?? null,
+  });
   return { ok: true };
 }

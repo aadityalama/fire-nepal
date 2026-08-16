@@ -1,4 +1,8 @@
 import { todayIso, uid } from "@/lib/fire-lending/format";
+import {
+  resolveLoanPartyIds as resolveStoredLoanPartyIds,
+  type LoanPartyIds,
+} from "@/lib/fire-lending/loan-party-identity";
 import type {
   FireLendingLoan,
   FireLendingNotification,
@@ -21,15 +25,12 @@ export type SignAgreementResult =
   | { ok: true; store: FireLendingStore; loan: FireLendingLoan }
   | { ok: false; error: string; store: FireLendingStore; status?: number };
 
-/** Resolve durable lender / borrower party ids from loan.role + counterparty. */
+/** Resolve durable lender / borrower party ids (stored ids preferred). */
 export function resolveLoanPartyIds(
   loan: FireLendingLoan,
   storeCurrentUserId: string,
-): { lenderId: string; borrowerId: string } {
-  if (loan.role === "lender") {
-    return { lenderId: storeCurrentUserId, borrowerId: loan.counterpartyId };
-  }
-  return { lenderId: loan.counterpartyId, borrowerId: storeCurrentUserId };
+): LoanPartyIds {
+  return resolveStoredLoanPartyIds(loan, storeCurrentUserId);
 }
 
 /**
