@@ -1201,7 +1201,7 @@ export function NepalCostOfLivingDashboard() {
                   <button
                     type="button"
                     onClick={() => setResetConfirmOpen(true)}
-                    disabled={resetBusy || !hydrated}
+                    disabled={resetBusy}
                     aria-haspopup="dialog"
                     data-col-reset-all
                     className="mt-2 inline-flex min-h-11 w-full max-w-full items-center justify-center gap-2 rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-2.5 text-center text-[12px] font-black leading-snug text-rose-50 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50 sm:text-[13px]"
