@@ -376,7 +376,7 @@ function DesktopSidebar() {
   ];
 
   return (
-    <aside className="hidden w-[150px] shrink-0 border-r border-emerald-500/15 bg-[#02140f] px-2 py-3 min-[1000px]:flex min-[1000px]:flex-col">
+    <aside className="hidden w-[150px] shrink-0 border-r border-emerald-500/15 bg-[#02140f] px-2 py-3 min-[1000px]:sticky min-[1000px]:top-0 min-[1000px]:flex min-[1000px]:h-[100dvh] min-[1000px]:flex-col min-[1000px]:self-start">
       <div className="mb-5 flex items-center gap-2 px-1">
         <Image src="/logo.png" alt="FIRE Nepal" width={21} height={21} className="rounded-md" />
         <span className="whitespace-nowrap text-[14px] font-black tracking-tight text-white">FIRE Nepal</span>
@@ -987,35 +987,35 @@ export function NepalCostOfLivingDashboard() {
       <div
         ref={reportRef}
         data-col-report-frame
-        className={`mx-auto flex min-h-[100dvh] w-full max-w-[1440px] overflow-x-hidden border-x border-transparent min-[1000px]:h-[100dvh] min-[1000px]:border ${frameBorder}`}
+        className={`mx-auto flex min-h-[100dvh] w-full max-w-[1440px] overflow-x-hidden border-x border-transparent min-[1000px]:border ${frameBorder}`}
       >
         <DesktopSidebar />
         <div data-col-report-expand className="flex min-w-0 flex-1 flex-col">
           <header className="z-30 shrink-0 border-b border-emerald-500/10 bg-[#021510]/94 px-4 py-3 backdrop-blur-xl max-[389px]:px-3 md:px-6 min-[1000px]:hidden">
-            <div className="mx-auto flex max-w-[1180px] items-center justify-between">
+            <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-2">
               <button
                 type="button"
                 aria-label="Open menu"
                 onClick={() => setMenuOpen(true)}
-                className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
               >
                 <SolidIcon icon={Menu} size={16} />
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <Image src="/logo.png" alt="FIRE Nepal" width={28} height={28} className="rounded-md" />
-                <span className="text-[clamp(0.85rem,2vw,1rem)] font-black tracking-tight text-white">FIRE Nepal</span>
+                <span className="truncate text-[clamp(0.85rem,2vw,1rem)] font-black tracking-tight text-white">FIRE Nepal</span>
               </div>
               <button
                 type="button"
                 aria-label="Notifications"
-                className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/6 transition hover:bg-white/10 active:scale-95 md:h-11 md:w-11"
               >
                 <SolidIcon icon={Bell} size={15} />
               </button>
             </div>
           </header>
 
-          <main data-col-report-main className="flex min-h-0 flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-4 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-2 min-[1000px]:px-3 min-[1000px]:pb-2 min-[1000px]:pt-6">
+          <main data-col-report-main className="flex flex-1 flex-col gap-3 bg-[#00120d] px-3 pb-8 pt-4 sm:px-4 md:px-5 min-[1000px]:gap-3 min-[1000px]:px-3 min-[1000px]:pb-6 min-[1000px]:pt-6">
             <div className="flex shrink-0 flex-col gap-3 min-[1000px]:flex-row min-[1000px]:items-start min-[1000px]:justify-between min-[1000px]:gap-4">
               <div className="min-w-0 min-[1000px]:min-w-[230px]">
                 <h1 className="text-[28px] font-black leading-none tracking-[-0.04em] text-white min-[1000px]:whitespace-nowrap">
@@ -1119,7 +1119,7 @@ export function NepalCostOfLivingDashboard() {
               />
             </div>
 
-            <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
+            <div data-col-report-section className="grid grid-cols-1 gap-3 min-[1000px]:grid-cols-12 min-[1000px]:items-start">
               <GlassCard className="min-h-0 overflow-hidden rounded-lg p-0 min-[1000px]:col-span-7" delay={0.08}>
                 <div className="flex min-h-10 flex-col items-start gap-2 border-b border-emerald-500/12 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                   <h2 className="text-[15px] font-black uppercase tracking-wide text-white">Monthly Expense Breakdown</h2>
@@ -1169,8 +1169,73 @@ export function NepalCostOfLivingDashboard() {
                 </p>
               </GlassCard>
 
-              <div className="grid min-h-0 gap-3 min-[1000px]:col-span-5 min-[1000px]:grid-rows-[1fr_1fr]">
-                <GlassCard className="overflow-hidden rounded-lg p-4" delay={0.1}>
+              <div className="grid min-h-0 gap-3 min-[1000px]:col-span-5">
+                <GlassCard className="rounded-lg p-3" delay={0.1}>
+                  <h2 className="text-[14px] font-black text-white">Quick Actions</h2>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditOpen(true)}
+                      className="grid min-h-11 place-items-center gap-1 rounded-lg bg-emerald-950/55 px-2 py-2 text-center text-[9px] font-semibold leading-tight text-emerald-50/80"
+                    >
+                      <Pencil size={16} className="shrink-0" />
+                      <span className="text-[9px] leading-tight">
+                        Edit
+                        <br />
+                        Expenses
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSavePlan}
+                      className="grid min-h-11 place-items-center gap-1 rounded-lg bg-emerald-950/55 px-2 py-2 text-center text-[9px] font-semibold leading-tight text-emerald-50/80"
+                    >
+                      <Save size={16} className="shrink-0" />
+                      <span className="text-[9px] leading-tight">
+                        Save
+                        <br />
+                        Plan
+                      </span>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setResetConfirmOpen(true)}
+                    disabled={resetBusy || !hydrated}
+                    aria-haspopup="dialog"
+                    data-col-reset-all
+                    className="mt-2 inline-flex min-h-11 w-full max-w-full items-center justify-center gap-2 rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-2.5 text-center text-[12px] font-black leading-snug text-rose-50 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50 sm:text-[13px]"
+                  >
+                    <RotateCcw size={15} className="shrink-0 opacity-90" />
+                    <span className="min-w-0 whitespace-normal break-words">Reset All Cost of Living Data</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportReport()}
+                    disabled={reportExportStatus === "loading"}
+                    className="mt-2 flex min-h-[42px] w-full flex-col items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-green-400 px-2 py-2 text-[14px] font-black text-white shadow-[0_16px_32px_-22px_rgba(34,197,94,0.9)] transition disabled:cursor-wait disabled:opacity-70"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Upload size={16} />
+                      <span data-col-export-label>{reportExportStatus === "loading" ? "Preparing Report" : "Download Report"}</span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-950/70">PDF & PNG</span>
+                  </button>
+                  {savedToast ? <p className="mt-2 text-center text-[11px] font-bold text-emerald-300">Plan saved{userId ? " to your account" : " locally"}.</p> : null}
+                  {reportExportMessage ? (
+                    <p
+                      aria-live="polite"
+                      data-html2canvas-ignore="true"
+                      className={`mt-2 text-center text-[11px] font-bold ${
+                        reportExportStatus === "error" ? "text-red-300" : "text-emerald-300"
+                      }`}
+                    >
+                      {reportExportMessage}
+                    </p>
+                  ) : null}
+                </GlassCard>
+
+                <GlassCard className="overflow-hidden rounded-lg p-4" delay={0.12}>
                   <h2 className="text-[14px] font-black uppercase tracking-wide text-white">FIRE Readiness Score</h2>
                   <div className="mt-3 flex flex-col gap-4 min-[390px]:flex-row min-[390px]:items-center min-[1000px]:gap-6">
                     <div
@@ -1197,7 +1262,7 @@ export function NepalCostOfLivingDashboard() {
                   </div>
                 </GlassCard>
 
-                <GlassCard className="overflow-hidden rounded-lg p-4" delay={0.12}>
+                <GlassCard className="overflow-hidden rounded-lg p-4" delay={0.14}>
                   <h2 className="text-[14px] font-black uppercase tracking-wide text-white">Expense Insights</h2>
                   <div className="mt-3 space-y-2">
                     <div className="flex gap-3">
@@ -1232,10 +1297,10 @@ export function NepalCostOfLivingDashboard() {
               </div>
             </div>
 
-            <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[158px] min-[1000px]:grid-cols-12">
-              <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-7" delay={0.14}>
+            <div data-col-report-section className="grid grid-cols-1 gap-3 pb-2">
+              <GlassCard className="overflow-hidden rounded-lg p-3" delay={0.16}>
                 <h2 className="text-[14px] font-black uppercase tracking-wide text-white">Expense Analytics</h2>
-                <div className="mt-1 grid gap-3 md:grid-cols-[150px_150px_1fr] min-[1000px]:h-[120px]">
+                <div className="mt-1 grid gap-3 md:grid-cols-[150px_150px_1fr] min-[1000px]:min-h-[120px]">
                   <div>
                     <p className="text-[11px] font-semibold text-emerald-50/75">Category Distribution</p>
                     <div data-col-report-chart className="relative mt-1 h-[150px] md:h-[100px]">
@@ -1283,71 +1348,6 @@ export function NepalCostOfLivingDashboard() {
                     </div>
                   </div>
                 </div>
-              </GlassCard>
-
-              <GlassCard className="h-full overflow-hidden rounded-lg p-3 min-[1000px]:col-span-5" delay={0.16}>
-                <h2 className="text-[14px] font-black text-white">Quick Actions</h2>
-                <div className="mt-2 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setEditOpen(true)}
-                    className="grid h-11 place-items-center rounded-lg bg-emerald-950/55 text-center text-[9px] font-semibold leading-tight text-emerald-50/80"
-                  >
-                    <Pencil size={16} />
-                    <span className="text-[9px] leading-tight">
-                      Edit
-                      <br />
-                      Expenses
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSavePlan}
-                    className="grid h-11 place-items-center rounded-lg bg-emerald-950/55 text-center text-[9px] font-semibold leading-tight text-emerald-50/80"
-                  >
-                    <Save size={16} />
-                    <span className="text-[9px] leading-tight">
-                      Save
-                      <br />
-                      Plan
-                    </span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleExportReport()}
-                  disabled={reportExportStatus === "loading"}
-                  className="mt-1 flex h-[42px] w-full flex-col items-center justify-center rounded-lg bg-gradient-to-r from-emerald-500 to-green-400 text-[14px] font-black text-white shadow-[0_16px_32px_-22px_rgba(34,197,94,0.9)] transition disabled:cursor-wait disabled:opacity-70"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Upload size={16} />
-                    <span data-col-export-label>{reportExportStatus === "loading" ? "Preparing Report" : "Download Report"}</span>
-                  </span>
-                  <span className="text-[10px] font-semibold text-emerald-950/70">PDF & PNG</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResetConfirmOpen(true)}
-                  disabled={resetBusy || !hydrated}
-                  aria-haspopup="dialog"
-                  data-col-reset-all
-                  className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 text-[11px] font-black text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RotateCcw size={14} className="shrink-0 opacity-90" />
-                  Reset All Cost of Living Data
-                </button>
-                {savedToast ? <p className="mt-2 text-center text-[11px] font-bold text-emerald-300">Plan saved{userId ? " to your account" : " locally"}.</p> : null}
-                {reportExportMessage ? (
-                  <p
-                    aria-live="polite"
-                    data-html2canvas-ignore="true"
-                    className={`mt-2 text-center text-[11px] font-bold ${
-                      reportExportStatus === "error" ? "text-red-300" : "text-emerald-300"
-                    }`}
-                  >
-                    {reportExportMessage}
-                  </p>
-                ) : null}
               </GlassCard>
             </div>
             {!hydrated ? (
