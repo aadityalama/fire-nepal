@@ -2,7 +2,12 @@
 
 import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { defaultColPlan, sanitizeColPlan, type ColPlanState } from "@/lib/nepal-col-dashboard";
+import {
+  defaultColPlan,
+  resetColPlanData,
+  sanitizeColPlan,
+  type ColPlanState,
+} from "@/lib/nepal-col-dashboard";
 import {
   clearColPlanLocalCache,
   loadColPlanDocument,
@@ -29,6 +34,8 @@ export function useColPlanState(): {
   setPlan: Dispatch<SetStateAction<ColPlanState>>;
   hydrated: boolean;
   persistPlan: (next?: ColPlanState) => Promise<ColPlanPersistedDocument>;
+  /** Reset CoL plan to defaults and persist immediately (cloud or guest local). */
+  resetPlan: () => Promise<ColPlanPersistedDocument>;
   userId: string | undefined;
 } {
   const { user } = useProductAuth();
@@ -63,8 +70,12 @@ export function useColPlanState(): {
     [persistNow],
   );
 
+  const resetPlan = useCallback(async () => {
+    return persistPlan(resetColPlanData());
+  }, [persistPlan]);
+
   return useMemo(
-    () => ({ plan, setPlan, hydrated, persistPlan, userId }),
-    [plan, setPlan, hydrated, persistPlan, userId],
+    () => ({ plan, setPlan, hydrated, persistPlan, resetPlan, userId }),
+    [plan, setPlan, hydrated, persistPlan, resetPlan, userId],
   );
 }

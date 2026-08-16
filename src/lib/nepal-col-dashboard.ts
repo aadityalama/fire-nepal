@@ -144,6 +144,14 @@ export function defaultColPlan(): ColPlanState {
   };
 }
 
+/**
+ * Reset Cost of Living plan to the module's initial default.
+ * Scoped to `nepal_col` only — does not touch other FIRE Nepal modules.
+ */
+export function resetColPlanData(_current?: ColPlanState): ColPlanState {
+  return defaultColPlan();
+}
+
 export function sanitizeColPlan(raw: unknown): ColPlanState {
   const base = defaultColPlan();
   if (!raw || typeof raw !== "object") return base;
