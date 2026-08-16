@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireCronSecretIfConfigured } from "@/lib/api/require-cron-secret";
 import { CASHFLOW_FIRE_GOALS_MARKER } from "@/services/cashflow-supabase";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { getSupabaseAnonKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/config";
@@ -44,6 +45,9 @@ type ModuleCheck = {
  * and check RLS isolation between two users.
  */
 export async function GET(req: Request) {
+  const denied = requireCronSecretIfConfigured(req);
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured", meta: getFinanceSotMeta() }, { status: 503 });
   }

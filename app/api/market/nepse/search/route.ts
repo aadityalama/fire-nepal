@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/lib/api/rate-limit";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { listCompanyMasterMap } from "@/services/market/nepse-company-master";
 import { getCachedNepseYonepseBundle } from "@/services/market/nepse-bundle-cache";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
@@ -13,13 +13,8 @@ const HEADERS = {
 } as const;
 
 export async function GET(req: NextRequest) {
-  const rl = checkRateLimit(req, { windowMs: 60_000, max: 90, keyPrefix: "nepse-search" });
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "Too many requests", retryAfterSec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
-    );
-  }
+  const blocked = guardPublicApi(req, { keyPrefix: "nepse-search", max: 60, botMax: 10 });
+  if (blocked) return blocked;
 
   const q = req.nextUrl.searchParams.get("q") ?? "";
   const limitRaw = Number(req.nextUrl.searchParams.get("limit") ?? "24");

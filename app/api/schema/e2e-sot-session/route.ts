@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { requireCronSecretIfConfigured } from "@/lib/api/require-cron-secret";
 import { MODULE_SNAPSHOT_KEYS, type ModuleSnapshotKey } from "@/lib/module-snapshots/keys";
 import { tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
@@ -695,6 +696,9 @@ async function cleanupPhase(admin: AdminClient, userId: string) {
  *   GET ?phase=cleanup&userId=<uuid>
  */
 export async function GET(req: Request) {
+  const denied = requireCronSecretIfConfigured(req);
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return bad("Supabase is not configured", 503);
   }

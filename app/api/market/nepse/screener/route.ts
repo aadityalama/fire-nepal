@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { runAdvancedScreener, type ScreenerFilters } from "@/services/market/nepse-screener-engine";
 
 function numParam(value: string | null): number | undefined {
@@ -13,9 +14,12 @@ function boolParam(value: string | null): boolean | undefined {
 }
 
 /** Advanced stock screener with fundamental + optional technical filters. */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const blocked = guardPublicApi(request, { keyPrefix: "nepse-screener", max: 30, botMax: 6 });
+  if (blocked) return blocked;
+
   try {
-    const url = new URL(request.url);
+    const url = request.nextUrl;
     const filters: ScreenerFilters = {
       sector: url.searchParams.get("sector") ?? undefined,
       minPrice: numParam(url.searchParams.get("minPrice")),
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
       near52wHigh: boolParam(url.searchParams.get("near52wHigh")),
       near52wLow: boolParam(url.searchParams.get("near52wLow")),
       includeTechnicals: url.searchParams.get("technicals") === "1",
-      limit: numParam(url.searchParams.get("limit")) ?? 100,
+      limit: Math.min(numParam(url.searchParams.get("limit")) ?? 100, 100),
     };
     const payload = await runAdvancedScreener(filters);
     return NextResponse.json(payload, {

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecretIfConfigured } from "@/lib/api/require-cron-secret";
 import { formatInTimeZone } from "date-fns-tz";
 import { runScheduledRemindersCron } from "@/lib/scheduled-reminders/cron-dispatch";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
@@ -39,6 +40,9 @@ function resolveDeliverableInbox(stamp: number): string {
  * DELETE /api/schema/e2e-reminder-email?reminderId=&userId= — cleanup after hold
  */
 export async function GET(request: NextRequest) {
+  const denied = requireCronSecretIfConfigured(request);
+  if (denied) return denied;
+
   const hold = request.nextUrl.searchParams.get("hold") === "1";
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured" }, { status: 503 });
@@ -567,6 +571,9 @@ export async function GET(request: NextRequest) {
 
 /** Cleanup after hold=1 UI verification. */
 export async function DELETE(request: NextRequest) {
+  const denied = requireCronSecretIfConfigured(request);
+  if (denied) return denied;
+
   const admin = createSupabaseServiceRoleClient();
   if (!admin) {
     return NextResponse.json({ ok: false, error: "Missing service role client" }, { status: 503 });

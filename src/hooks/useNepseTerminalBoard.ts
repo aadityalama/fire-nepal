@@ -5,7 +5,7 @@ import { useVisibilityPoll } from "@/hooks/live-data/use-visibility-poll";
 import type { NepseTerminalBoardPayload } from "@/types/market/nepse-professional-terminal";
 
 /** Match CDN s-maxage on /api/market/nepse/terminal; avoid sub-cache hammering. */
-const DEFAULT_REFRESH_MS = 60_000;
+const DEFAULT_REFRESH_MS = 120_000;
 
 export function useNepseTerminalBoard(refreshMs = DEFAULT_REFRESH_MS) {
   const [data, setData] = useState<NepseTerminalBoardPayload | null>(null);

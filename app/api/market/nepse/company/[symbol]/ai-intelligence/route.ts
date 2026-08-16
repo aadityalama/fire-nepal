@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { loadAiCompanyIntelligence } from "@/services/market/nepse-ai-intelligence";
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -8,7 +9,10 @@ type Params = { params: Promise<{ symbol: string }> };
  * Scores, fair value, risk, growth narrative, recommendation and checklist
  * from real filings + EOD technicals only — no LLM, no fabricated projections.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
+  const blocked = guardPublicApi(request, { keyPrefix: "nepse-ai-intel", max: 30, botMax: 6 });
+  if (blocked) return blocked;
+
   const { symbol } = await params;
   if (!symbol?.trim()) {
     return NextResponse.json({ error: "symbol required" }, { status: 400 });

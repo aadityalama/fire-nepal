@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/lib/api/rate-limit";
 import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { buildMarketSnapshot } from "@/services/market/build-snapshot";
 import type {
@@ -138,10 +138,8 @@ function buildFearGreed(market: Awaited<ReturnType<typeof buildMarketSnapshot>>)
 }
 
 export async function GET(req: NextRequest) {
-  const rl = checkRateLimit(req, { windowMs: 60_000, max: 35, keyPrefix: "global-financial-intelligence" });
-  if (!rl.ok) {
-    return NextResponse.json({ error: "Too many requests", retryAfterSec: rl.retryAfterSec }, { status: 429 });
-  }
+  const blocked = guardPublicApi(req, { keyPrefix: "global-financial-intelligence", max: 30, botMax: 6 });
+  if (blocked) return blocked;
 
   const cached = intelCache.get<GlobalFinancialIntelligenceSnapshot>(INTEL_CACHE_KEY);
   if (cached) {

@@ -37,7 +37,7 @@ const cache = createMemoryTtlCache();
 
 /** Full board assembly is expensive (chunked 52W EOD scans) — reuse across serverless invocations on the same instance. */
 const BOARD_CACHE_KEY = "terminal-board-v1";
-const BOARD_TTL_MS = 25_000;
+const BOARD_TTL_MS = 60_000;
 const RANGES_52W_CACHE_KEY = "terminal-52w-ranges-v1";
 const RANGES_52W_TTL_MS = 10 * 60_000;
 
@@ -63,7 +63,7 @@ function buildHeatCompanies(bySymbol: Record<string, NepseSecurityTick>): Termin
   return Object.values(bySymbol)
     .filter((tick) => tick.ltpNpr > 0)
     .sort((a, b) => (b.turnoverNpr ?? 0) - (a.turnoverNpr ?? 0))
-    .slice(0, 160)
+    .slice(0, 80)
     .map((tick) => ({
       symbol: tick.symbol,
       companyName: tick.companyName ?? null,

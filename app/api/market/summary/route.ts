@@ -1,61 +1,77 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit } from "@/lib/api/rate-limit";
 import { createMemoryTtlCache } from "@/lib/api/memory-ttl-cache";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { buildMarketSnapshot } from "@/services/market/build-snapshot";
+import { projectMarketSnapshot } from "@/services/market/project-market-snapshot";
+import type { MarketSnapshot } from "@/types/market";
 
 export const runtime = "nodejs";
 
 const snapshotCache = createMemoryTtlCache();
-const SNAPSHOT_TTL_MS = 25_000;
-const inflight = new Map<string, Promise<Awaited<ReturnType<typeof buildMarketSnapshot>>>>();
+const SNAPSHOT_TTL_MS = 45_000;
+const inflight = new Map<string, Promise<MarketSnapshot>>();
 
-const CACHE_HEADERS = {
-  "Cache-Control": "public, max-age=15, s-maxage=25, stale-while-revalidate=60",
+/** Shared hub board — safe for CDN (no per-user symbol lists). */
+const CACHE_HEADERS_PUBLIC_FULL = {
+  "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=180",
 } as const;
 
-function cacheKey(symbols: string[], crypto: string[]): string {
-  return `market-summary:${symbols.slice().sort().join(",")}|${crypto.slice().sort().join(",")}`;
+/**
+ * Lite / personalized responses encode holdings in the query string.
+ * Keep private so CDN does not store or share portfolio-shaped URLs.
+ */
+const CACHE_HEADERS_PRIVATE = {
+  "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
+} as const;
+
+const CORE_BUILD_KEY = "market-summary:board-full-core";
+
+function parseList(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function getOrBuildSnapshot(buildKey: string, symbols: string[], crypto: string[]): Promise<MarketSnapshot> {
+  const hit = snapshotCache.get<MarketSnapshot>(buildKey);
+  if (hit) return hit;
+
+  let pending = inflight.get(buildKey);
+  if (!pending) {
+    pending = buildMarketSnapshot({ extraSymbols: symbols, cryptoIds: crypto }).finally(() => {
+      inflight.delete(buildKey);
+    });
+    inflight.set(buildKey, pending);
+  }
+  const snapshot = await pending;
+  snapshotCache.set(buildKey, snapshot, SNAPSHOT_TTL_MS);
+  return snapshot;
 }
 
 export async function GET(req: NextRequest) {
-  const rl = checkRateLimit(req, { windowMs: 60_000, max: 45, keyPrefix: "market-summary" });
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: "Too many requests", retryAfterSec: rl.retryAfterSec } satisfies { error: string; retryAfterSec: number },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
-    );
-  }
+  const blocked = guardPublicApi(req, { keyPrefix: "market-summary", max: 60, botMax: 8 });
+  if (blocked) return blocked;
 
-  const symbols =
-    req.nextUrl.searchParams
-      .get("symbols")
-      ?.split(/[,\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean) ?? [];
-  const crypto =
-    req.nextUrl.searchParams
-      .get("crypto")
-      ?.split(/[,\s]+/)
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean) ?? [];
+  const boardParam = req.nextUrl.searchParams.get("board");
+  const board: "full" | "lite" = boardParam === "0" || boardParam === "lite" ? "lite" : "full";
+  const symbols = parseList(req.nextUrl.searchParams.get("symbols")).map((s) => s.toUpperCase());
+  const crypto = parseList(req.nextUrl.searchParams.get("crypto")).map((s) => s.toLowerCase());
+  const nepse = parseList(req.nextUrl.searchParams.get("nepse")).map((s) => s.toUpperCase());
 
-  const key = cacheKey(symbols, crypto);
-  const hit = snapshotCache.get<Awaited<ReturnType<typeof buildMarketSnapshot>>>(key);
-  if (hit) {
-    return NextResponse.json(hit, { headers: CACHE_HEADERS });
-  }
+  const hasPersonal = symbols.length > 0 || crypto.length > 0;
+  const canUseSharedPublicFull = board === "full" && !hasPersonal;
 
-  let pending = inflight.get(key);
-  if (!pending) {
-    pending = buildMarketSnapshot({ extraSymbols: symbols, cryptoIds: crypto }).finally(() => {
-      inflight.delete(key);
-    });
-    inflight.set(key, pending);
-  }
-  const snapshot = await pending;
-  snapshotCache.set(key, snapshot, SNAPSHOT_TTL_MS);
+  const buildKey = canUseSharedPublicFull
+    ? CORE_BUILD_KEY
+    : hasPersonal
+      ? `market-summary:personal:${symbols.slice().sort().join(",")}|${crypto.slice().sort().join(",")}`
+      : CORE_BUILD_KEY;
 
-  return NextResponse.json(snapshot, {
-    headers: CACHE_HEADERS,
-  });
+  const snapshot = await getOrBuildSnapshot(buildKey, symbols, crypto);
+  const body = projectMarketSnapshot(snapshot, { board, nepseSymbols: nepse });
+  const headers = canUseSharedPublicFull ? CACHE_HEADERS_PUBLIC_FULL : CACHE_HEADERS_PRIVATE;
+
+  return NextResponse.json(body, { headers });
 }

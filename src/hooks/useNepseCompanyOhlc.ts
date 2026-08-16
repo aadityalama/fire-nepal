@@ -13,7 +13,7 @@ type State = {
 const REFRESH_MS = 10 * 60_000;
 
 /** Client hook for real EOD OHLC bars from `nepse_eod_prices`. */
-export function useNepseCompanyOhlc(symbol: string, limit = 400): State {
+export function useNepseCompanyOhlc(symbol: string, limit = 260): State {
   const normalized = decodeURIComponent(symbol).trim().toUpperCase();
   const [state, setState] = useState<State>({ data: null, loaded: false, error: null });
 

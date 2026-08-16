@@ -5,7 +5,7 @@ import { RealtimeMarketProvider } from "@/providers/realtime-provider";
 export default function MarketLayout({ children }: { children: React.ReactNode }) {
   return (
     <WealthPortfolioProvider>
-      <RealtimeMarketProvider>
+      <RealtimeMarketProvider board="full">
         <NepseMarketShell>{children}</NepseMarketShell>
       </RealtimeMarketProvider>
     </WealthPortfolioProvider>

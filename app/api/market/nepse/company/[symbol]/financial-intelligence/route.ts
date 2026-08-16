@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { guardPublicApi } from "@/lib/api/public-api-guard";
 import { loadFinancialIntelligence } from "@/services/market/nepse-financial-intelligence";
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -8,7 +9,10 @@ type Params = { params: Promise<{ symbol: string }> };
  * analytics, shareholding, peer comparison and growth CAGRs — real data only.
  * Provider datasets are memory-cached for 6h; CDN caches the response for 30m.
  */
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
+  const blocked = guardPublicApi(request, { keyPrefix: "nepse-fin-intel", max: 30, botMax: 6 });
+  if (blocked) return blocked;
+
   const { symbol } = await params;
   if (!symbol?.trim()) {
     return NextResponse.json({ error: "symbol required" }, { status: 400 });

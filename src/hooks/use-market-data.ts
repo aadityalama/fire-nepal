@@ -6,12 +6,21 @@ import type { MarketSnapshot } from "@/types/market";
 
 export type MarketDataStatus = "idle" | "loading" | "ready" | "error";
 
-/** Aligned with short server TTL on /api/market/summary — was 20–22.5s with cache-busting. */
-const DEFAULT_POLL_MS = 60_000;
+/** Open-market cadence — aligned with CDN s-maxage on /api/market/summary. */
+const OPEN_POLL_MS = 90_000;
+/** Closed / weekend — official sync is cron-backed; no need to hammer origin. */
+const CLOSED_POLL_MS = 5 * 60_000;
 
 export function useMarketData(opts: {
   symbolsCsv: string;
   cryptoCsv: string;
+  /** Comma-separated NEPSE tickers when `board` is lite. */
+  nepseCsv?: string;
+  /**
+   * `full` = hub board (large). `lite` = portfolio holdings only (small).
+   * Defaults to full for backward compatibility.
+   */
+  board?: "full" | "lite";
   pollMs?: number;
   enabled?: boolean;
 }) {
@@ -20,14 +29,21 @@ export function useMarketData(opts: {
   const [error, setError] = useState<string | null>(null);
   const retryUntilRef = useRef<number>(0);
   const hasDataRef = useRef(false);
+  const board = opts.board ?? "full";
 
   const fetchUrl = useMemo(() => {
     if (typeof window === "undefined") return null;
     const u = new URL("/api/market/summary", window.location.origin);
+    u.searchParams.set("board", board === "lite" ? "0" : "1");
     if (opts.symbolsCsv) u.searchParams.set("symbols", opts.symbolsCsv);
     if (opts.cryptoCsv) u.searchParams.set("crypto", opts.cryptoCsv);
+    if (board === "lite" && opts.nepseCsv) u.searchParams.set("nepse", opts.nepseCsv);
     return u.toString();
-  }, [opts.symbolsCsv, opts.cryptoCsv]);
+  }, [opts.symbolsCsv, opts.cryptoCsv, opts.nepseCsv, board]);
+
+  const marketOpen = snapshot?.nepseSync?.marketIsOpen === true;
+  const adaptivePollMs =
+    opts.pollMs ?? (snapshot ? (marketOpen ? OPEN_POLL_MS : CLOSED_POLL_MS) : OPEN_POLL_MS);
 
   const load = useCallback(async () => {
     if (opts.enabled === false || !fetchUrl) return;
@@ -65,7 +81,7 @@ export function useMarketData(opts: {
     return () => window.clearTimeout(t);
   }, [load]);
 
-  useLiveInterval(() => void load(), opts.pollMs ?? DEFAULT_POLL_MS, opts.enabled !== false && Boolean(fetchUrl));
+  useLiveInterval(() => void load(), adaptivePollMs, opts.enabled !== false && Boolean(fetchUrl));
 
   return { snapshot, status, error, reload: load };
 }

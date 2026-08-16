@@ -85,7 +85,12 @@ function launchEngine(name) {
 }
 
 async function seedSession() {
-  const res = await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=seed`, { cache: "no-store" });
+  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
+  const headers = cronSecret ? { Authorization: `Bearer ${cronSecret}` } : undefined;
+  const res = await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=seed`, {
+    cache: "no-store",
+    headers,
+  });
   const json = await res.json();
   if (!res.ok || !json.ok) throw new Error(`Seed failed: ${json.error ?? res.status}`);
   return json;
@@ -93,8 +98,11 @@ async function seedSession() {
 
 async function cleanup(userId) {
   if (!userId) return;
+  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
+  const headers = cronSecret ? { Authorization: `Bearer ${cronSecret}` } : undefined;
   await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=cleanup&userId=${encodeURIComponent(userId)}`, {
     cache: "no-store",
+    headers,
   }).catch(() => null);
 }
 

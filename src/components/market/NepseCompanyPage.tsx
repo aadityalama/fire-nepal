@@ -234,7 +234,7 @@ export function NepseCompanyPage({ symbol }: { symbol: string }) {
   const { data: fundamentals, loaded: fundamentalsLoaded } = useNepseCompanyFundamentals(symbol);
   const { data: intelligence, loaded: intelligenceLoaded } = useNepseFinancialIntelligence(symbol);
   const { data: aiIntelligence, loaded: aiLoaded } = useNepseAiIntelligence(symbol);
-  const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 400);
+  const { data: ohlc, loaded: ohlcLoaded } = useNepseCompanyOhlc(symbol, 260);
   const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("overview");
   useEffect(() => {
     track(normalized);

@@ -24,26 +24,45 @@ export type RealtimeMarketContextValue = {
 
 const RealtimeMarketContext = createContext<RealtimeMarketContextValue | null>(null);
 
+export type RealtimeMarketProviderProps = {
+  children: ReactNode;
+  /**
+   * `full` for NEPSE hub (entire board). `lite` for portfolio (holdings + FX only).
+   * Lite cuts Fast Origin Transfer dramatically on authenticated portfolio traffic.
+   */
+  board?: "full" | "lite";
+};
+
 /**
  * Portfolio-scoped realtime market polling + derived live overlays.
  * Uses public proxies only — no secrets. Supabase row sync remains in `WealthPortfolioCloudSync`.
  */
-export function RealtimeMarketProvider({ children }: { children: ReactNode }) {
+export function RealtimeMarketProvider({ children, board = "lite" }: RealtimeMarketProviderProps) {
   const { state, hydrated, krwPerNpr, usdPerNpr, bullionGramRatesNpr } = useWealthPortfolio();
 
-  const { symbolsCsv, cryptoCsv } = useMemo(() => {
+  const { symbolsCsv, cryptoCsv, nepseCsv } = useMemo(() => {
     const pack = collectMarketSymbolsFromPortfolio(state);
+    if (board === "full") {
+      // Full NEPSE board stays shared server-side; still request personal Yahoo/crypto for overlay marks.
+      return {
+        symbolsCsv: pack.yahoo.join(","),
+        cryptoCsv: pack.cryptoIds.join(","),
+        nepseCsv: "",
+      };
+    }
     return {
       symbolsCsv: pack.yahoo.join(","),
       cryptoCsv: pack.cryptoIds.join(","),
+      nepseCsv: pack.nepse.join(","),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- symbol list only depends on `state.investments`
-  }, [state.investments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- symbol list only depends on `state.investments` + board mode
+  }, [state.investments, board]);
 
   const { snapshot, status, error, reload } = useMarketData({
     symbolsCsv,
     cryptoCsv,
-    pollMs: 60_000,
+    nepseCsv,
+    board,
     enabled: hydrated,
   });
 

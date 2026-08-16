@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
@@ -8,10 +9,19 @@ import { loadFireLendingSnapshotForUser } from "@/lib/fire-lending/loan-document
 /**
  * Refresh a short-lived signed URL for a private loan document.
  * Requires auth + storage path ownership (`{userId}/…`) + loan/document association in the caller's snapshot.
+ * Returns a URL — never proxies file bytes through Vercel (avoids Fast Origin Transfer spikes).
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured" }, { status: 503 });
+  }
+
+  const rl = checkRateLimit(req, { windowMs: 60_000, max: 40, keyPrefix: "fire-lending-signed-url" });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
   }
 
   const supabase = await createServerSupabaseClient();

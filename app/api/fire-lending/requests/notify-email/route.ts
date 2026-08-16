@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { loadFireLendingStoreForUser } from "@/lib/fire-lending/fire-lending-snapshot-server";
 import { sendLoanRequestNotificationEmail } from "@/lib/fire-lending/send-loan-request-email";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -10,9 +11,17 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * Sends the professional FIRE Nepal loan-request email to the counterparty.
  * Does not mutate lending state (in-app notification is created by sendLoanRequest).
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured" }, { status: 503 });
+  }
+
+  const rl = checkRateLimit(req, { windowMs: 60_000, max: 12, keyPrefix: "fire-lending-notify-email" });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many requests", retryAfterSec: rl.retryAfterSec },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+    );
   }
 
   const supabase = await createServerSupabaseClient();

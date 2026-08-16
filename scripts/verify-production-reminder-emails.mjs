@@ -50,7 +50,10 @@ async function sb(path, init = {}) {
 }
 
 async function seedUser() {
-  const res = await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=seed`, { cache: "no-store" });
+  const res = await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=seed`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
   const json = await res.json();
   if (!json?.ok) throw new Error(`seed failed: ${JSON.stringify(json)}`);
   return json;
@@ -60,6 +63,7 @@ async function cleanupUser(userId) {
   if (!userId) return;
   await fetch(`${baseUrl}/api/schema/e2e-sot-session?phase=cleanup&userId=${encodeURIComponent(userId)}`, {
     cache: "no-store",
+    headers: { Authorization: `Bearer ${cronSecret}` },
   }).catch(() => {});
 }
 

@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PremiumGlassCard } from "@/components/portfolio/premium/PremiumGlassCard";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
-import { useMarketData } from "@/hooks/use-market-data";
+import { useRealtimeMarket } from "@/providers/realtime-provider";
 
 const quickAdds = [
   { label: "Add Bank", href: "/portfolio/banking", icon: Landmark },
@@ -44,11 +44,8 @@ function accordionChevron(open: boolean) {
 
 export function InsightsSidebar() {
   const { intelModel, totals, hydrated } = useWealthPortfolio();
-  const { snapshot, status } = useMarketData({
-    symbolsCsv: "NEPSE",
-    cryptoCsv: "",
-    enabled: true,
-  });
+  // Reuse layout RealtimeMarketProvider — do not open a second /api/market/summary poll.
+  const { snapshot, status } = useRealtimeMarket();
 
   const [coachOpen, setCoachOpen] = useState(false);
   const [marketsOpen, setMarketsOpen] = useState(false);

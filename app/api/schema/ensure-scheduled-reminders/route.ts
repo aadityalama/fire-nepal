@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronSecretIfConfigured } from "@/lib/api/require-cron-secret";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { ensureScheduledRemindersEmailLifecycleSchema } from "@/services/ensure-scheduled-reminders-schema";
@@ -11,7 +12,10 @@ export const maxDuration = 60;
  * Idempotent: apply email lifecycle columns + preferences table on production.
  * Uses server-side SUPABASE_DB_URL / SUPABASE_ACCESS_TOKEN (same pattern as finance SoT ensure).
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireCronSecretIfConfigured(req);
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured" }, { status: 503 });
   }

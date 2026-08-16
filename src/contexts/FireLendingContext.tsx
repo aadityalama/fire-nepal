@@ -351,6 +351,7 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
       void fetch("/api/fire-lending/requests/notify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ loanId }),
       }).catch(() => {
         /* guest / offline */
