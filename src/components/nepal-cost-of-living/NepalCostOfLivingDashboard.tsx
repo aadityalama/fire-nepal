@@ -16,6 +16,7 @@ import {
   Home,
   Menu,
   Pencil,
+  RotateCcw,
   Save,
   Settings,
   Shirt,
@@ -32,7 +33,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   Cell,
   Line,
@@ -44,6 +46,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmModal";
 import { formatKrwInteger, formatNprInteger } from "@/components/savings-tracker/savings-currency";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import { useColPlanState } from "@/hooks/useColPlanState";
@@ -290,7 +293,7 @@ function EditPlanSheet({
                 </span>
                 <input
                   type="number"
-                  min={40_000}
+                  min={0}
                   max={800_000}
                   step={1000}
                   value={draft.monthlyKoreaSpendNpr}
@@ -881,12 +884,14 @@ async function downloadDashboardReport(element: HTMLElement, filenameBase: strin
 export function NepalCostOfLivingDashboard() {
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
-  const { plan, setPlan, hydrated, persistPlan, userId } = useColPlanState();
+  const { plan, setPlan, hydrated, persistPlan, resetPlan, userId } = useColPlanState();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [reportExportStatus, setReportExportStatus] = useState<ReportExportStatus>("idle");
   const [reportExportMessage, setReportExportMessage] = useState("");
   const reportStatusTimerRef = useRef<number | null>(null);
@@ -924,6 +929,23 @@ export function NepalCostOfLivingDashboard() {
     setSavedToast(true);
     window.setTimeout(() => setSavedToast(false), 2200);
   };
+
+  const handleConfirmReset = useCallback(async () => {
+    if (resetBusy) return;
+    setResetBusy(true);
+    try {
+      await resetPlan();
+      setResetConfirmOpen(false);
+      toast.success("Cost of Living data cleared.", { id: "nepal-col-reset-all-data" });
+    } catch (error) {
+      console.error("Cost of living reset failed", error);
+      toast.error("Could not reset Cost of Living data. Please try again.", {
+        id: "nepal-col-reset-all-data-error",
+      });
+    } finally {
+      setResetBusy(false);
+    }
+  }, [resetBusy, resetPlan]);
 
   const handleExportReport = async () => {
     if (!reportRef.current || reportExportStatus === "loading") return;
@@ -1303,6 +1325,17 @@ export function NepalCostOfLivingDashboard() {
                   </span>
                   <span className="text-[10px] font-semibold text-emerald-950/70">PDF & PNG</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setResetConfirmOpen(true)}
+                  disabled={resetBusy || !hydrated}
+                  aria-haspopup="dialog"
+                  data-col-reset-all
+                  className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 text-[11px] font-black text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcw size={14} className="shrink-0 opacity-90" />
+                  Reset All Cost of Living Data
+                </button>
                 {savedToast ? <p className="mt-2 text-center text-[11px] font-bold text-emerald-300">Plan saved{userId ? " to your account" : " locally"}.</p> : null}
                 {reportExportMessage ? (
                   <p
@@ -1340,6 +1373,21 @@ export function NepalCostOfLivingDashboard() {
             }),
           )
         }
+      />
+      <DataResetConfirmModal
+        open={resetConfirmOpen}
+        title="Reset All Cost of Living Data?"
+        body="This will permanently clear all Cost of Living data for this dashboard — monthly and yearly expenses, category amounts and totals, income and savings inputs, trends, averages, FIRE readiness, insights, and snapshots. Your other FIRE Nepal modules and account data will not be affected."
+        irreversibleNote="This action cannot be undone. All Cost of Living data will be permanently cleared."
+        confirmLabel="Reset All Cost of Living Data"
+        cancelLabel="Cancel"
+        busy={resetBusy}
+        onCancel={() => {
+          if (!resetBusy) setResetConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          void handleConfirmReset();
+        }}
       />
     </div>
   );

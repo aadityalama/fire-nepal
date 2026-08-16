@@ -1,6 +1,9 @@
 import {
+  COL_EXPENSE_META,
   COL_PLAN_STORAGE_KEY,
   defaultColPlan,
+  emptyColPlan,
+  resetColPlanData,
   sanitizeColPlan,
   type ColPlanState,
 } from "@/lib/nepal-col-dashboard";
@@ -75,6 +78,28 @@ export function clearColPlanLocalCache(userId: string): void {
   } catch {
     /* private mode */
   }
+}
+
+/**
+ * Persist a fully cleared Cost of Living plan for the guest/local slot (or user cache).
+ * Only writes the `nepal_col` storage key — other module keys are untouched.
+ */
+export function persistResetColPlanData(userId?: string | null): ColPlanPersistedDocument {
+  return saveColPlanDocument(resetColPlanData(), userId ?? null);
+}
+
+/** True when the plan matches the empty reset slate (no user amounts / no suggested dataset). */
+export function isClearedColPlan(plan: ColPlanState): boolean {
+  const empty = emptyColPlan();
+  return (
+    plan.monthlyIncomeNpr === empty.monthlyIncomeNpr &&
+    plan.monthlyKoreaSpendNpr === empty.monthlyKoreaSpendNpr &&
+    plan.lifestyle === empty.lifestyle &&
+    plan.family.adults === empty.family.adults &&
+    plan.family.children === empty.family.children &&
+    plan.family.parents === empty.family.parents &&
+    COL_EXPENSE_META.every((meta) => plan.expenses[meta.id] === 0)
+  );
 }
 
 /** Copy anonymous plan into the signed-in user's storage slot on first login (guest-only migration). */

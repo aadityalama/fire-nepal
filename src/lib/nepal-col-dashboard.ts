@@ -144,6 +144,31 @@ export function defaultColPlan(): ColPlanState {
   };
 }
 
+/**
+ * Clean empty Cost of Living plan — no user-entered amounts and no suggested
+ * baseline expense dataset. Used by Reset All so the dashboard returns to a blank slate.
+ */
+export function emptyColPlan(): ColPlanState {
+  return {
+    cityId: NATIONAL_LOCATION_ID,
+    province: NATIONAL_PROVINCE,
+    lifestyle: "standard",
+    family: { adults: 1, children: 0, parents: 0 },
+    monthlyIncomeNpr: null,
+    monthlyKoreaSpendNpr: 0,
+    expenses: emptyExpenseAmounts(),
+  };
+}
+
+/**
+ * Clear all persisted Cost of Living plan inputs to the empty initial state.
+ * Scoped to `nepal_col` only — does not touch other FIRE Nepal modules.
+ * Does not restore suggested/default expense amounts.
+ */
+export function resetColPlanData(_current?: ColPlanState): ColPlanState {
+  return emptyColPlan();
+}
+
 export function sanitizeColPlan(raw: unknown): ColPlanState {
   const base = defaultColPlan();
   if (!raw || typeof raw !== "object") return base;
@@ -178,7 +203,8 @@ export function sanitizeColPlan(raw: unknown): ColPlanState {
     lifestyle,
     family,
     monthlyIncomeNpr: sanitizeOptionalMoney(input.monthlyIncomeNpr),
-    monthlyKoreaSpendNpr: clampNumber(input.monthlyKoreaSpendNpr, 40_000, 800_000, base.monthlyKoreaSpendNpr),
+    // Allow 0 so a full reset can persist a cleared savings-comparison input.
+    monthlyKoreaSpendNpr: clampNumber(input.monthlyKoreaSpendNpr, 0, 800_000, base.monthlyKoreaSpendNpr),
     expenses,
   };
 }
