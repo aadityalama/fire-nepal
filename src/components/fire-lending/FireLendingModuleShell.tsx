@@ -29,6 +29,7 @@ import { SmartRemindersHeaderBell } from "@/components/smart-reminders/SmartRemi
 import { UserMenuDropdown } from "@/components/product/auth/UserMenuDropdown";
 import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
+import { incomingPendingRequestsForUser } from "@/lib/fire-lending/loan-request-delivery";
 
 type NavItem = {
   href: string;
@@ -175,9 +176,7 @@ export function FireLendingModuleShell({ children }: { children: ReactNode }) {
   const close = useCallback(() => setDrawerOpen(false), []);
 
   const badges = {
-    requests: store.requests.filter(
-      (r) => r.status === "pending" && r.toPartyId === store.currentUserId,
-    ).length,
+    requests: incomingPendingRequestsForUser(store, store.currentUserId).length,
     payments: store.installments.filter((i) => i.status === "due" || i.status === "overdue").length,
     agreements: agreementCenter.pendingSignature + agreementCenter.waitingApproval,
     notifications: store.notifications.filter(

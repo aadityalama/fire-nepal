@@ -40,6 +40,7 @@ import {
   canShowLoanRequestApprovalControls,
   LOAN_REQUEST_UI,
 } from "@/lib/fire-lending/loan-request-approval";
+import { requestsVisibleToUser } from "@/lib/fire-lending/loan-request-delivery";
 import { bothPartiesSigned } from "@/lib/fire-lending/agreement-signatures";
 import { trustLabel } from "@/lib/fire-lending/trust-score";
 import { FireLendingDashboardAnalytics } from "@/components/fire-lending/FireLendingDashboardAnalytics";
@@ -159,8 +160,10 @@ export function FireLendingRequestsPage() {
     else setApprovalRequestId(null);
   };
 
+  const visibleRequests = requestsVisibleToUser(store, store.currentUserId);
+
   const approvalRequest = approvalRequestId
-    ? store.requests.find((r) => r.id === approvalRequestId)
+    ? visibleRequests.find((r) => r.id === approvalRequestId)
     : undefined;
   const approvalFrom = approvalRequest ? partyById(approvalRequest.fromPartyId) : undefined;
 
@@ -172,14 +175,14 @@ export function FireLendingRequestsPage() {
         subtitle="Accept or Reject only after both parties have signed. You cannot approve your own request."
       />
       <LendingGlassCard title="Requests" icon={Inbox}>
-        {store.requests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <LendingEmptyState
             title="No loan requests"
             message="When someone sends a loan request, it will show up here for review."
           />
         ) : (
           <ul className="space-y-2">
-            {store.requests.map((req) => {
+            {visibleRequests.map((req) => {
               const from = partyById(req.fromPartyId);
               const to = partyById(req.toPartyId);
               const linkedLoan = req.loanId ? store.loans.find((l) => l.id === req.loanId) : undefined;
