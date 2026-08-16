@@ -34,7 +34,7 @@ export function useColPlanState(): {
   setPlan: Dispatch<SetStateAction<ColPlanState>>;
   hydrated: boolean;
   persistPlan: (next?: ColPlanState) => Promise<ColPlanPersistedDocument>;
-  /** Reset CoL plan to defaults and persist immediately (cloud or guest local). */
+  /** Reset CoL plan to the empty cleared state and persist immediately (cloud or guest local). */
   resetPlan: () => Promise<ColPlanPersistedDocument>;
   userId: string | undefined;
 } {

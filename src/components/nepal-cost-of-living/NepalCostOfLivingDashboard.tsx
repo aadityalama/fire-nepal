@@ -293,7 +293,7 @@ function EditPlanSheet({
                 </span>
                 <input
                   type="number"
-                  min={40_000}
+                  min={0}
                   max={800_000}
                   step={1000}
                   value={draft.monthlyKoreaSpendNpr}
@@ -936,7 +936,7 @@ export function NepalCostOfLivingDashboard() {
     try {
       await resetPlan();
       setResetConfirmOpen(false);
-      toast.success("Cost of Living data reset to defaults.", { id: "nepal-col-reset-all-data" });
+      toast.success("Cost of Living data cleared.", { id: "nepal-col-reset-all-data" });
     } catch (error) {
       console.error("Cost of living reset failed", error);
       toast.error("Could not reset Cost of Living data. Please try again.", {
@@ -1377,8 +1377,8 @@ export function NepalCostOfLivingDashboard() {
       <DataResetConfirmModal
         open={resetConfirmOpen}
         title="Reset All Cost of Living Data?"
-        body="This will permanently clear your Cost of Living expense history, including monthly expenses, category totals, trends, and readiness calculations. Your other FIRE Nepal modules and account data will not be affected."
-        irreversibleNote="This action cannot be undone. Cost of Living expense history will be permanently cleared."
+        body="This will permanently clear all Cost of Living data for this dashboard — monthly and yearly expenses, category amounts and totals, income and savings inputs, trends, averages, FIRE readiness, insights, and snapshots. Your other FIRE Nepal modules and account data will not be affected."
+        irreversibleNote="This action cannot be undone. All Cost of Living data will be permanently cleared."
         confirmLabel="Reset All Cost of Living Data"
         cancelLabel="Cancel"
         busy={resetBusy}

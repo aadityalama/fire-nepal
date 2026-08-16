@@ -1,14 +1,26 @@
 /**
- * Cost of Living plan reset — scoped to nepal_col module only.
+ * Cost of Living full reset — clears entire nepal_col plan to empty state.
+ * Must not restore suggested default expenses and must not touch other modules.
  */
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, before, after, beforeEach } from "node:test";
 import {
   COL_EXPENSE_META,
+  COL_PLAN_STORAGE_KEY,
   computeColSnapshot,
   defaultColPlan,
+  emptyColPlan,
   resetColPlanData,
+  sanitizeColPlan,
 } from "../src/lib/nepal-col-dashboard.ts";
+import {
+  isClearedColPlan,
+  loadColPlanDocument,
+  persistResetColPlanData,
+  saveColPlanDocument,
+} from "../src/lib/nepal-col-storage.ts";
+import { FIRE_LENDING_STORAGE_KEY, saveLendingStore, loadLendingStore } from "../src/lib/fire-lending/storage.ts";
+import { createSeedStore } from "../src/lib/fire-lending/seed.ts";
 
 function customizedColPlan() {
   const base = defaultColPlan();
@@ -33,58 +45,95 @@ function customizedColPlan() {
   };
 }
 
+function installMemoryLocalStorage() {
+  /** @type {Map<string, string>} */
+  const map = new Map();
+  const localStorage = {
+    getItem(key) {
+      return map.has(key) ? map.get(key) : null;
+    },
+    setItem(key, value) {
+      map.set(String(key), String(value));
+    },
+    removeItem(key) {
+      map.delete(String(key));
+    },
+    clear() {
+      map.clear();
+    },
+  };
+  const previousWindow = globalThis.window;
+  globalThis.window = { localStorage };
+  return {
+    map,
+    restore() {
+      if (previousWindow === undefined) {
+        delete globalThis.window;
+      } else {
+        globalThis.window = previousWindow;
+      }
+    },
+  };
+}
+
 describe("resetColPlanData", () => {
-  it("returns the initial default Cost of Living plan", () => {
+  it("returns the clean empty Cost of Living plan, not the suggested default dataset", () => {
     const customized = customizedColPlan();
     const next = resetColPlanData(customized);
-    const expected = defaultColPlan();
+    const empty = emptyColPlan();
+    const suggested = defaultColPlan();
 
-    assert.deepEqual(next, expected);
+    assert.deepEqual(next, empty);
     assert.notDeepEqual(next, customized);
-  });
-
-  it("clears customized monthly expenses back to suggested defaults", () => {
-    const customized = customizedColPlan();
-    assert.equal(customized.expenses.home, 80_000);
-
-    const next = resetColPlanData(customized);
+    assert.notDeepEqual(next.expenses, suggested.expenses);
     for (const meta of COL_EXPENSE_META) {
-      assert.equal(next.expenses[meta.id], defaultColPlan().expenses[meta.id]);
-      assert.ok(Number.isFinite(next.expenses[meta.id]));
-      assert.ok(next.expenses[meta.id] >= 0);
+      assert.equal(next.expenses[meta.id], 0);
+      assert.notEqual(next.expenses[meta.id], suggested.expenses[meta.id]);
     }
   });
 
-  it("resets income, korea spend, lifestyle, and family to defaults", () => {
+  it("clears income, korea spend, lifestyle, family, and every category amount", () => {
     const next = resetColPlanData(customizedColPlan());
-    const expected = defaultColPlan();
-
     assert.equal(next.monthlyIncomeNpr, null);
-    assert.equal(next.monthlyKoreaSpendNpr, expected.monthlyKoreaSpendNpr);
-    assert.equal(next.lifestyle, expected.lifestyle);
-    assert.deepEqual(next.family, expected.family);
-    assert.equal(next.cityId, expected.cityId);
-    assert.equal(next.province, expected.province);
+    assert.equal(next.monthlyKoreaSpendNpr, 0);
+    assert.equal(next.lifestyle, "standard");
+    assert.deepEqual(next.family, { adults: 1, children: 0, parents: 0 });
+    assert.ok(isClearedColPlan(next));
   });
 
-  it("refreshes category totals, trends, and readiness from the reset plan", () => {
+  it("clears derived totals, yearly cost, trends, savings, and readiness inputs", () => {
     const customized = customizedColPlan();
     const before = computeColSnapshot(customized);
-    const afterPlan = resetColPlanData(customized);
-    const after = computeColSnapshot(afterPlan);
-    const expected = computeColSnapshot(defaultColPlan());
+    assert.ok(before.total > 0);
+    assert.ok(before.monthlySavings !== null);
 
-    assert.notEqual(before.total, after.total);
-    assert.equal(after.total, expected.total);
+    const after = computeColSnapshot(resetColPlanData(customized));
+    const expected = computeColSnapshot(emptyColPlan());
+
+    assert.equal(after.total, 0);
+    assert.equal(after.total * 12, 0);
     assert.equal(after.monthlySavings, null);
     assert.equal(after.savingsPct, null);
+    assert.equal(after.koreaSpend, 0);
     assert.equal(after.readiness, expected.readiness);
     assert.deepEqual(
-      after.items.map((item) => ({ id: item.id, amount: item.amount, pct: item.pct })),
-      expected.items.map((item) => ({ id: item.id, amount: item.amount, pct: item.pct })),
+      after.items.map((item) => item.amount),
+      COL_EXPENSE_META.map(() => 0),
     );
-    assert.deepEqual(after.trend, expected.trend);
-    assert.equal(after.trend.length, 8);
+    assert.ok(after.items.every((item) => item.pct === 0));
+    assert.deepEqual(
+      after.trend.map((point) => point.value),
+      expected.trend.map((point) => point.value),
+    );
+    assert.ok(after.trend.every((point) => point.value === 0));
+    assert.deepEqual(after.donutData, []);
+  });
+
+  it("sanitize preserves a cleared empty plan without reintroducing suggested expenses", () => {
+    const cleared = resetColPlanData(customizedColPlan());
+    const roundTrip = sanitizeColPlan(cleared);
+    assert.deepEqual(roundTrip, emptyColPlan());
+    assert.notDeepEqual(roundTrip.expenses, defaultColPlan().expenses);
   });
 
   it("is idempotent and only returns ColPlanState shape keys", () => {
@@ -105,6 +154,62 @@ describe("resetColPlanData", () => {
   });
 
   it("does not require a current plan argument", () => {
-    assert.deepEqual(resetColPlanData(), defaultColPlan());
+    assert.deepEqual(resetColPlanData(), emptyColPlan());
+  });
+});
+
+describe("persistResetColPlanData module isolation", () => {
+  /** @type {{ map: Map<string, string>, restore: () => void } | null} */
+  let memory = null;
+
+  before(() => {
+    memory = installMemoryLocalStorage();
+  });
+
+  after(() => {
+    memory?.restore();
+    memory = null;
+  });
+
+  beforeEach(() => {
+    memory?.map.clear();
+  });
+
+  it("persists a fully cleared nepal_col plan immediately", () => {
+    saveColPlanDocument(customizedColPlan(), null);
+    const before = loadColPlanDocument(null).plan;
+    assert.equal(before.expenses.home, 80_000);
+
+    const persisted = persistResetColPlanData(null);
+    assert.ok(isClearedColPlan(persisted.plan));
+    assert.deepEqual(persisted.plan, emptyColPlan());
+
+    const reloaded = loadColPlanDocument(null).plan;
+    assert.deepEqual(reloaded, emptyColPlan());
+    assert.equal(reloaded.expenses.home, 0);
+    assert.equal(reloaded.monthlyIncomeNpr, null);
+    assert.equal(reloaded.monthlyKoreaSpendNpr, 0);
+  });
+
+  it("clears Cost of Living storage while leaving another module's data unchanged", () => {
+    const lendingSeed = createSeedStore();
+    assert.ok(lendingSeed.loans.length > 0);
+    saveLendingStore(lendingSeed);
+    saveColPlanDocument(customizedColPlan(), null);
+
+    const lendingRawBefore = globalThis.window.localStorage.getItem(FIRE_LENDING_STORAGE_KEY);
+    assert.ok(lendingRawBefore);
+    assert.ok(globalThis.window.localStorage.getItem(COL_PLAN_STORAGE_KEY));
+
+    persistResetColPlanData(null);
+
+    const lendingRawAfter = globalThis.window.localStorage.getItem(FIRE_LENDING_STORAGE_KEY);
+    assert.equal(lendingRawAfter, lendingRawBefore);
+    assert.deepEqual(loadLendingStore(), lendingSeed);
+
+    const colAfter = loadColPlanDocument(null).plan;
+    assert.ok(isClearedColPlan(colAfter));
+    assert.deepEqual(colAfter, emptyColPlan());
+    assert.notDeepEqual(colAfter.expenses, defaultColPlan().expenses);
   });
 });
