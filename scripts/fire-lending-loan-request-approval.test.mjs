@@ -107,11 +107,11 @@ describe("loan request approval — requester side", () => {
   it("2. requester UI uses Request (not Accept) copy", () => {
     assert.equal(LOAN_REQUEST_UI.requestButton, "Request");
     assert.equal(LOAN_REQUEST_UI.title, "Loan Request");
-    assert.equal(LOAN_REQUEST_UI.prompt, "Do you want to send this loan request to the borrower?");
+    assert.equal(LOAN_REQUEST_UI.prompt, "Do you want to send this loan request to the lender?");
     assert.equal(LOAN_REQUEST_UI.confirmSend, "Send Request");
     assert.equal(LOAN_REQUEST_UI.confirmCancel, "Cancel");
-    assert.equal(LOAN_REQUEST_UI.waitingTitle, "Request Sent — Waiting for Borrower");
-    assert.match(LOAN_REQUEST_UI.successMessage, /Waiting for the borrower/);
+    assert.equal(LOAN_REQUEST_UI.waitingTitle, "Request Sent — Waiting for Lender");
+    assert.match(LOAN_REQUEST_UI.successMessage, /Waiting for the lender/);
     assert.notEqual(LOAN_REQUEST_UI.requestButton, "Accept");
   });
 
@@ -153,7 +153,7 @@ describe("loan request approval — requester side", () => {
   });
 
   it("5. confirmation dialog copy appears before sending", () => {
-    assert.equal(LOAN_REQUEST_UI.prompt, "Do you want to send this loan request to the borrower?");
+    assert.equal(LOAN_REQUEST_UI.prompt, "Do you want to send this loan request to the lender?");
     assert.equal(LOAN_REQUEST_UI.confirmSend, "Send Request");
     assert.equal(LOAN_REQUEST_UI.confirmCancel, "Cancel");
   });
@@ -170,7 +170,10 @@ describe("loan request approval — borrower side", () => {
     assert.equal(ntf.kind, "loan_request");
     assert.equal(ntf.title, borrowerNotificationTitle());
     assert.equal(ntf.forPartyId, "party_anjali");
-    assert.match(ntf.body, new RegExp(borrowerNotificationBody(me?.name ?? "You").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    // Seed "You" is never emitted as a third-person requester name.
+    assert.match(ntf.body, /a FIRE Nepal member has sent you a loan request/);
+    assert.doesNotMatch(ntf.body, /You has sent you/i);
+    void me;
   });
 
   it("7. borrower can view the linked loan details via request.loanId", () => {
@@ -319,7 +322,7 @@ describe("loan request approval — borrower side", () => {
     });
     assert.equal(stranger.ok, false);
     if (stranger.ok) return;
-    assert.match(stranger.error, /Only the borrower\/counterparty/i);
+    assert.match(stranger.error, /Only the lender\/counterparty/i);
   });
 
   it("16. existing loan creation flow continues to work (seed + new pending_approval loan)", () => {

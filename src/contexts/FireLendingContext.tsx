@@ -21,6 +21,7 @@ import {
 import { downloadAgreementPdf } from "@/lib/fire-lending/agreement-pdf";
 import { buildInstallmentSchedule, refreshInstallmentStatuses } from "@/lib/fire-lending/emi";
 import { agreementNumber, todayIso, uid } from "@/lib/fire-lending/format";
+import { buildLenderBorrowerIds } from "@/lib/fire-lending/loan-party-identity";
 import {
   clearFireLendingLocalCache,
   createEmptyLendingStore,
@@ -191,12 +192,23 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
     const installments = Math.max(1, Number(draft.installmentCount) || months);
     const agrNo = agreementNumber();
     const counterpartyId = draft.counterpartyId || store.parties.find((p) => p.id !== store.currentUserId)?.id || store.parties[1]?.id;
+    const partyIds = buildLenderBorrowerIds({
+      creatorPartyId: store.currentUserId,
+      counterpartyId,
+      creatorRole: draft.role,
+    });
+    if (!partyIds.ok) {
+      appToast.error(partyIds.error, { id: "fire-lending-create-loan" });
+      return "";
+    }
 
     const loan: FireLendingLoan = {
       id: loanId,
       agreementNumber: agrNo,
       role: draft.role,
       counterpartyId,
+      lenderId: partyIds.lenderId,
+      borrowerId: partyIds.borrowerId,
       amount,
       currency: draft.currency,
       interestRate: rate,
@@ -327,37 +339,70 @@ export function FireLendingProvider({ children }: { children: ReactNode }) {
 
   const sendLoanRequestForLoan = useCallback(
     (loanId: string, message?: string) => {
-      let error: string | null = null;
-      setStore((prev) => {
-        const result = sendLoanRequest(prev, {
-          loanId,
-          actorPartyId: prev.currentUserId,
-          message,
+      // Guest / offline demo: mutate the shared local store only.
+      if (!cloudReady) {
+        let error: string | null = null;
+        setStore((prev) => {
+          const result = sendLoanRequest(prev, {
+            loanId,
+            actorPartyId: prev.currentUserId,
+            message,
+          });
+          if (!result.ok) {
+            error = result.error;
+            return prev;
+          }
+          return result.store;
         });
-        if (!result.ok) {
-          error = result.error;
-          return prev;
+        if (error) {
+          appToast.error(error, { id: "fire-lending-send-request" });
+          return error;
         }
-        return result.store;
-      });
-      if (error) {
-        appToast.error(error, { id: "fire-lending-send-request" });
-        return error;
+        appToast.success("Loan request sent successfully. Waiting for the lender’s response.", {
+          id: "fire-lending-send-request",
+        });
+        void fetch("/api/fire-lending/requests/notify-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ loanId }),
+        }).catch(() => {
+          /* guest / offline */
+        });
+        return null;
       }
-      appToast.success("Loan request sent successfully. Waiting for the borrower’s response.", {
-        id: "fire-lending-send-request",
-      });
-      // Best-effort email to counterparty (no-op when Resend/auth email unavailable).
-      void fetch("/api/fire-lending/requests/notify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ loanId }),
-      }).catch(() => {
-        /* guest / offline */
-      });
+
+      // Authenticated: server creates (or reuses) the pending request, saves the
+      // sender snapshot, and delivers into the recipient's fire_lending snapshot
+      // so their Requests UI (toPartyId === session currentUserId) can see it.
+      void (async () => {
+        try {
+          const res = await fetch("/api/fire-lending/requests/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ loanId, message }),
+          });
+          const json = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            error?: string;
+            store?: FireLendingStore;
+          } | null;
+          if (!res.ok || !json?.ok || !json.store) {
+            const msg = json?.error || "Could not send loan request.";
+            appToast.error(msg, { id: "fire-lending-send-request" });
+            return;
+          }
+          setStore(json.store);
+          appToast.success("Loan request sent successfully. Waiting for the lender’s response.", {
+            id: "fire-lending-send-request",
+          });
+        } catch {
+          appToast.error("Could not send loan request.", { id: "fire-lending-send-request" });
+        }
+      })();
       return null;
     },
-    [setStore],
+    [cloudReady, setStore],
   );
 
   const respondToRequest = useCallback(

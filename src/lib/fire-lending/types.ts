@@ -68,6 +68,10 @@ export type FireLendingLoan = {
   agreementNumber: string;
   role: LoanRole;
   counterpartyId: string;
+  /** Durable lender party id (preferred over deriving from role alone). */
+  lenderId?: string;
+  /** Durable borrower party id (preferred over deriving from role alone). */
+  borrowerId?: string;
   amount: number;
   currency: CurrencyCode;
   interestRate: number;

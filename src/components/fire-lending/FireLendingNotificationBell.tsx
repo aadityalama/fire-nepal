@@ -9,6 +9,7 @@ import { useFireLending } from "@/contexts/FireLendingContext";
 import { useFireTheme } from "@/contexts/FireThemeContext";
 import type { FireLendingNotification } from "@/lib/fire-lending/types";
 import { formatCompactDate } from "@/lib/fire-lending/format";
+import { incomingPendingRequestsForUser } from "@/lib/fire-lending/loan-request-delivery";
 
 function notificationHref(n: FireLendingNotification): string {
   if (n.href) return n.href;
@@ -39,11 +40,8 @@ export function FireLendingNotificationBell() {
   const unread = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
   const preview = notifications.slice(0, 8);
   const pendingLoanRequests = useMemo(
-    () =>
-      store.requests.filter(
-        (r) => r.status === "pending" && r.toPartyId === store.currentUserId,
-      ).length,
-    [store.requests, store.currentUserId],
+    () => incomingPendingRequestsForUser(store, store.currentUserId).length,
+    [store],
   );
 
   useEffect(() => {

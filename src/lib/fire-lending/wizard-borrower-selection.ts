@@ -53,7 +53,7 @@ export function resolveBorrowerContinue(opts: {
  * Steps: 0 Borrower, 1 Details, 2 Agreement, 3 Approval, 4 Signatures
  *
  * Approval is counterparty-driven: requester must send the request, then wait
- * until the borrower accepts before signatures.
+ * until the lender accepts before signatures.
  */
 export function advanceWizardStep(opts: {
   step: number;
@@ -84,13 +84,13 @@ export function advanceWizardStep(opts: {
   }
   if (step === 3) {
     if (!opts.requestSent) {
-      return { step: 3, error: "Send the loan request to the borrower first." };
+      return { step: 3, error: "Send the loan request to the lender first." };
     }
     if (opts.approval === "rejected") {
-      return { step: 3, error: "Borrower rejected the loan request." };
+      return { step: 3, error: "Lender rejected the loan request." };
     }
     if (opts.approval !== "accepted") {
-      return { step: 3, error: "Waiting for the borrower to accept the loan request." };
+      return { step: 3, error: "Waiting for the lender to accept the loan request." };
     }
     return { step: 4, error: null };
   }

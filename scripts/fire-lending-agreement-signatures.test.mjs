@@ -314,7 +314,6 @@ describe("approval requires both signatures", () => {
 describe("loan request notifications", () => {
   it("9. counterparty receives the request notification", () => {
     const store = storeWithLoan();
-    const me = store.parties.find((p) => p.id === store.currentUserId);
     const result = sendLoanRequest(store, { loanId: "loan_sig_1", actorPartyId: store.currentUserId });
     assert.equal(result.ok, true);
     if (!result.ok) return;
@@ -323,7 +322,9 @@ describe("loan request notifications", () => {
     assert.equal(ntf.title, borrowerNotificationTitle());
     assert.equal(ntf.forPartyId, "party_anjali");
     assert.equal(ntf.read, false);
-    assert.match(ntf.body, new RegExp(borrowerNotificationBody(me?.name ?? "You").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    // Seed "You" is never emitted as a third-person requester name.
+    assert.match(ntf.body, /a FIRE Nepal member has sent you a loan request/);
+    assert.doesNotMatch(ntf.body, /You has sent you/i);
     assert.match(ntf.body, /FL-SIG-001/);
     assert.equal(ntf.href, "/fire-lending/loans/loan_sig_1");
   });
