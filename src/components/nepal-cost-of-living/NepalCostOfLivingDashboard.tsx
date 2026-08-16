@@ -453,21 +453,10 @@ function DesktopKpiCard({
   );
 }
 
-function DesktopExpenseRow({
-  item,
-  icon: Icon,
-  total,
-  onAmountChange,
-}: {
-  item: ColExpenseItem;
-  icon: LucideIcon;
-  total: number;
-  onAmountChange: (amount: number) => void;
-}) {
+function useExpenseAmountDraft(item: ColExpenseItem, onAmountChange: (amount: number) => void) {
   const [draftState, setDraftState] = useState({ amount: item.amount, value: String(item.amount) });
   const draft = draftState.amount === item.amount ? draftState.value : String(item.amount);
   const setDraft = (value: string, amount = item.amount) => setDraftState({ amount, value });
-  const pct = total > 0 ? (item.amount / total) * 100 : 0;
 
   const commit = (raw: string) => {
     const parsed = raw.trim() === "" ? 0 : Number(raw);
@@ -495,15 +484,42 @@ function DesktopExpenseRow({
     }
   };
 
+  return { draft, commit, handleChange };
+}
+
+function scrollAmountFieldIntoView(el: HTMLElement) {
+  const reveal = () => {
+    el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  };
+  window.requestAnimationFrame(reveal);
+  // Retry after the mobile keyboard opens and the visual viewport settles.
+  window.setTimeout(reveal, 280);
+  window.setTimeout(reveal, 520);
+}
+
+function DesktopExpenseRow({
+  item,
+  icon: Icon,
+  total,
+  onAmountChange,
+}: {
+  item: ColExpenseItem;
+  icon: LucideIcon;
+  total: number;
+  onAmountChange: (amount: number) => void;
+}) {
+  const { draft, commit, handleChange } = useExpenseAmountDraft(item, onAmountChange);
+  const pct = total > 0 ? (item.amount / total) * 100 : 0;
+
   return (
-    <div data-col-report-table-row className="grid h-[22px] min-w-[350px] grid-cols-[minmax(112px,1fr)_minmax(120px,120px)_42px_32px] items-center gap-1.5 border-t border-emerald-500/10 px-2 text-[10px] text-emerald-50/85 md:min-w-0 md:grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] md:gap-3 md:px-3 md:text-[11px]">
+    <div data-col-report-table-row className="grid h-[22px] min-w-0 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/10 px-3 text-[11px] text-emerald-50/85">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-emerald-500">
           <Icon size={10} className="text-white" fill="currentColor" strokeWidth={1.6} />
         </span>
         <span className="truncate font-semibold">{item.label}</span>
       </div>
-      <label className="flex min-w-[120px] items-center justify-end gap-1 text-right md:min-w-0 md:justify-start md:gap-1.5 md:text-left">
+      <label className="flex min-w-0 items-center justify-start gap-1.5 text-left">
         <Pencil size={9} className="shrink-0 text-emerald-100/65" />
         <span className="sr-only">{item.label} monthly amount in NPR</span>
         <input
@@ -517,14 +533,84 @@ function DesktopExpenseRow({
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
           }}
-          className="w-full min-w-0 bg-transparent text-right text-[12px] font-semibold tabular-nums text-white outline-none [appearance:textfield] [font-variant-numeric:tabular-nums] md:text-left md:text-[11px] md:font-bold [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="w-full min-w-0 bg-transparent text-left text-[11px] font-bold tabular-nums text-white outline-none [appearance:textfield] [font-variant-numeric:tabular-nums] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       </label>
-      <NumericText className="justify-self-end text-right font-semibold text-emerald-50/80 md:justify-self-auto md:text-left">{pct.toFixed(1)}%</NumericText>
-      <div className="h-1 w-8 justify-self-end overflow-hidden rounded-full bg-emerald-950 md:w-auto md:justify-self-auto">
+      <NumericText className="font-semibold text-emerald-50/80">{pct.toFixed(1)}%</NumericText>
+      <div className="h-1 w-auto overflow-hidden rounded-full bg-emerald-950">
         <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
     </div>
+  );
+}
+
+function MobileExpenseCard({
+  item,
+  icon: Icon,
+  total,
+  onAmountChange,
+}: {
+  item: ColExpenseItem;
+  icon: LucideIcon;
+  total: number;
+  onAmountChange: (amount: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const { draft, commit, handleChange } = useExpenseAmountDraft(item, onAmountChange);
+  const pct = total > 0 ? (item.amount / total) * 100 : 0;
+
+  return (
+    <article className="col-mobile-expense-card rounded-xl border border-emerald-500/14 bg-emerald-950/35 px-4 py-4">
+      {/* Row 1: icon + name + edit — never shares space with amount */}
+      <div className="flex w-full items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-500">
+          <Icon size={20} className="text-white" fill="currentColor" strokeWidth={1.6} />
+        </span>
+        <h3 className="min-w-0 flex-1 break-words pr-1 text-[18px] font-black leading-snug text-white">{item.label}</h3>
+        <button
+          type="button"
+          aria-label={`Edit ${item.label} monthly cost`}
+          onClick={() => {
+            inputRef.current?.focus();
+            if (inputRef.current) scrollAmountFieldIntoView(inputRef.current);
+          }}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/16 bg-white/5 text-emerald-100/80"
+        >
+          <Pencil size={17} />
+        </button>
+      </div>
+
+      {/* Row 2: labeled full-width amount — sole primary value */}
+      <label className="mt-4 block w-full">
+        <span className="mb-2 block text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Monthly Cost</span>
+        <input
+          ref={inputRef}
+          type="number"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          enterKeyHint="done"
+          min={0}
+          step={500}
+          value={draft}
+          aria-label={`${item.label} monthly amount in NPR`}
+          onChange={(event) => handleChange(event.target.value)}
+          onFocus={(event) => scrollAmountFieldIntoView(event.currentTarget)}
+          onBlur={() => commit(draft)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className="col-mobile-amount-input w-full border border-emerald-500/18 bg-black/25 text-white outline-none tabular-nums [appearance:textfield] [font-variant-numeric:tabular-nums] focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+      </label>
+
+      {/* Row 3: secondary % — own row, never beside amount */}
+      <p className="mt-3 text-[11px] font-semibold leading-none text-emerald-50/60">{pct.toFixed(1)}% of total</p>
+
+      {/* Row 4: secondary progress — own row */}
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-emerald-950" aria-hidden>
+        <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </article>
   );
 }
 
@@ -1120,7 +1206,7 @@ export function NepalCostOfLivingDashboard() {
             </div>
 
             <div data-col-report-section className="grid shrink-0 grid-cols-1 gap-3 min-[1000px]:h-[326px] min-[1000px]:grid-cols-12">
-              <GlassCard className="min-h-0 overflow-hidden rounded-lg p-0 min-[1000px]:col-span-7" delay={0.08}>
+              <GlassCard className="min-h-0 overflow-visible rounded-lg p-0 max-md:overflow-visible min-[1000px]:col-span-7 min-[1000px]:overflow-hidden" delay={0.08}>
                 <div className="flex min-h-10 flex-col items-start gap-2 border-b border-emerald-500/12 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                   <h2 className="text-[15px] font-black uppercase tracking-wide text-white">Monthly Expense Breakdown</h2>
                   <button
@@ -1132,12 +1218,43 @@ export function NepalCostOfLivingDashboard() {
                     Edit Expenses
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <div data-col-report-table-header className="grid h-6 min-w-[350px] grid-cols-[minmax(112px,1fr)_minmax(120px,120px)_42px_32px] items-center gap-1.5 px-2 text-[9px] font-semibold text-emerald-50/70 md:min-w-0 md:grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] md:gap-3 md:px-3 md:text-[10px]">
+                {/* Mobile: stacked expense cards (<=767px / max-md) */}
+                <div className="flex flex-col gap-4 px-3 py-4 md:hidden">
+                  {snapshot.items.map((item) => (
+                    <MobileExpenseCard
+                      key={item.id}
+                      item={item}
+                      icon={EXPENSE_ICONS[item.id]}
+                      total={snapshot.total}
+                      onAmountChange={(amount) => patchExpense(item.id, amount)}
+                    />
+                  ))}
+
+                  {/* Completely separate total section below all categories */}
+                  <section
+                    aria-label="Total monthly cost summary"
+                    className="mt-2 flex w-full flex-col gap-2 border-t border-emerald-400/25 pt-4"
+                  >
+                    <div className="rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/18 via-emerald-950/50 to-[#021510]/90 px-4 py-4">
+                      <p className="text-[12px] font-semibold uppercase tracking-wide text-emerald-50/70">Total Monthly Cost</p>
+                      <p className="mt-2 break-words text-[26px] font-black leading-none tracking-tight text-white tabular-nums">
+                        {formatNprInteger(snapshot.total)}
+                      </p>
+                      <p className="mt-2 text-[11px] font-semibold text-emerald-300/90">100% of total</p>
+                    </div>
+                    <p className="px-0.5 text-[11px] font-semibold text-emerald-50/55">
+                      Tap any amount to edit. Changes are saved automatically.
+                    </p>
+                  </section>
+                </div>
+
+                {/* Desktop: existing table layout (md+) */}
+                <div className="hidden overflow-x-auto md:block">
+                  <div data-col-report-table-header className="grid h-6 min-w-0 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 px-3 text-[10px] font-semibold text-emerald-50/70">
                     <span>Category</span>
-                    <span className="min-w-[120px] text-right whitespace-nowrap md:min-w-0 md:text-left">Monthly Cost (₹)</span>
-                    <span className="text-right md:text-left">% of Total</span>
-                    <span className="text-right md:text-left">Progress</span>
+                    <span className="text-left whitespace-nowrap">Monthly Cost (₹)</span>
+                    <span className="text-left">% of Total</span>
+                    <span className="text-left">Progress</span>
                   </div>
                   <div>
                     {snapshot.items.map((item) => (
@@ -1150,23 +1267,23 @@ export function NepalCostOfLivingDashboard() {
                       />
                     ))}
                   </div>
-                  <div data-col-report-table-row className="grid h-6 min-w-[350px] grid-cols-[minmax(112px,1fr)_minmax(120px,120px)_42px_32px] items-center gap-1.5 border-t border-emerald-500/18 px-2 text-[10px] font-black uppercase text-emerald-50 md:min-w-0 md:grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] md:gap-3 md:px-3">
+                  <div data-col-report-table-row className="grid h-6 min-w-0 grid-cols-[1.45fr_0.72fr_0.45fr_0.72fr] items-center gap-3 border-t border-emerald-500/18 px-3 text-[10px] font-black uppercase text-emerald-50">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-500">
                         <BarChart3 size={10} className="text-white" />
                       </span>
                       <span className="truncate">Total Monthly Cost</span>
                     </div>
-                    <span className="min-w-[120px] justify-self-end whitespace-nowrap text-right text-[12px] font-semibold tabular-nums text-emerald-400 [font-variant-numeric:tabular-nums] md:min-w-0 md:justify-self-auto md:text-left md:text-[10px] md:font-black">
+                    <span className="whitespace-nowrap text-left text-[10px] font-black tabular-nums text-emerald-400 [font-variant-numeric:tabular-nums]">
                       {formatNprInteger(snapshot.total)}
                     </span>
-                    <span className="justify-self-end text-right md:justify-self-auto md:text-left">100%</span>
+                    <span className="text-left">100%</span>
                     <span />
                   </div>
+                  <p className="border-t border-emerald-500/10 px-4 py-1 text-[10px] font-semibold text-emerald-50/55">
+                    Click on any amount to edit. Changes are saved automatically.
+                  </p>
                 </div>
-                <p className="border-t border-emerald-500/10 px-4 py-1 text-[10px] font-semibold text-emerald-50/55">
-                  Click on any amount to edit. Changes are saved automatically.
-                </p>
               </GlassCard>
 
               <div className="grid min-h-0 gap-3 min-[1000px]:col-span-5 min-[1000px]:grid-rows-[1fr_1fr]">
