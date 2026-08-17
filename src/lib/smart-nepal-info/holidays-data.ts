@@ -18,7 +18,13 @@ export type AdCalendarEvent = {
   specialDay?: boolean;
 };
 
-/** Fixed Bikram Sambat festival & public-holiday calendar (approximate lunar dates). */
+/**
+ * Fixed Bikram Sambat festival & public-holiday calendar (approximate lunar dates).
+ * Solar sankranti dates (e.g. Bhadra 1 / Singha Sankranti) are stable; lunar festivals
+ * such as Dashain/Tihar drift by a few days year to year around these anchors.
+ *
+ * Dashain begins in late Ashoj (not Bhadra). Ghatasthapana is ~Ashoj 25.
+ */
 export const BS_CALENDAR_EVENTS: BsCalendarEvent[] = [
   { month: 1, day: 1, festival: { en: "Nepali New Year (Navavarsha)", np: "नेपाली नयाँ वर्ष (नववर्ष)" }, publicHoliday: true },
   { month: 1, day: 11, festival: { en: "Buddha Jayanti", np: "बुद्ध जयन्ती" }, publicHoliday: true },
@@ -26,22 +32,32 @@ export const BS_CALENDAR_EVENTS: BsCalendarEvent[] = [
   { month: 3, day: 15, festival: { en: "Janai Purnima / Rakshya Bandhan", np: "जनै पूर्णिमा / रक्ष्याबन्धन" }, publicHoliday: true },
   { month: 4, day: 4, festival: { en: "Krishna Janmashtami", np: "श्रीकृष्ण जन्माष्टमी" }, publicHoliday: true },
   { month: 4, day: 15, festival: { en: "Teej (Haritalika)", np: "तीज (हरितालिका)" }, publicHoliday: true },
-  { month: 5, day: 1, festival: { en: "Ghatasthapana (Dashain begins)", np: "घटस्थापना (विजया दशमी सुरु)" }, publicHoliday: true },
-  { month: 5, day: 7, festival: { en: "Fulpati", np: "फूलपाती" }, publicHoliday: true },
-  { month: 5, day: 8, festival: { en: "Maha Astami", np: "महाअष्टमी" }, publicHoliday: true },
-  { month: 5, day: 9, festival: { en: "Maha Nawami", np: "महानवमी" }, publicHoliday: true },
-  { month: 5, day: 10, festival: { en: "Vijaya Dashami (Dashain)", np: "विजया दशमी (दशैं)" }, publicHoliday: true },
-  { month: 5, day: 11, festival: { en: "Dashain (Day 2)", np: "दशैं (दोस्रो दिन)" }, publicHoliday: true },
-  { month: 5, day: 12, festival: { en: "Dashain (Day 3)", np: "दशैं (तेस्रो दिन)" }, publicHoliday: true },
-  { month: 5, day: 13, festival: { en: "Dashain (Day 4)", np: "दशैं (चौथो दिन)" }, publicHoliday: true },
-  { month: 5, day: 14, festival: { en: "Dashain (Day 5)", np: "दशैं (पाँचौं दिन)" }, publicHoliday: true },
-  { month: 5, day: 15, festival: { en: "Dashain (Day 6)", np: "दशैं (छैटौं दिन)" }, publicHoliday: true },
-  { month: 6, day: 1, festival: { en: "Laxmi Puja (Tihar)", np: "लक्ष्मी पूजा (तिहार)" }, publicHoliday: true },
-  { month: 6, day: 2, festival: { en: "Gai Puja / Govardhan Puja", np: "गाई पूजा / गोवर्धन पूजा" }, publicHoliday: true },
-  { month: 6, day: 3, festival: { en: "Bhai Tika (Tihar)", np: "भाई टीका (तिहार)" }, publicHoliday: true },
-  { month: 6, day: 4, festival: { en: "Tihar (Day 4)", np: "तिहार (चौथो दिन)" }, publicHoliday: true },
-  { month: 6, day: 15, festival: { en: "Chhath Parva", np: "छठ पर्व" }, publicHoliday: true },
-  { month: 7, day: 1, festival: { en: "Guru Nanak Jayanti", np: "गुरु नानक जयन्ती" }, publicHoliday: true },
+  // Bhadra 1 = Singha Sankranti (solar). In 2083 this coincides with Nag Panchami / Tharu Guriya Parva.
+  {
+    month: 5,
+    day: 1,
+    festival: {
+      en: "Nag Panchami / Singha Sankranti / Tharu Guriya Parva",
+      np: "नाग पञ्चमी व्रत / सिंह संक्रान्ति / थारू गुरिया पर्व",
+    },
+    publicHoliday: true,
+  },
+  // Dashain — late Ashoj into Kartik (not Bhadra)
+  { month: 6, day: 25, festival: { en: "Ghatasthapana (Dashain begins)", np: "घटस्थापना (विजया दशमी सुरु)" }, publicHoliday: true },
+  { month: 6, day: 31, festival: { en: "Fulpati", np: "फूलपाती" }, publicHoliday: true },
+  { month: 7, day: 1, festival: { en: "Maha Astami", np: "महाअष्टमी" }, publicHoliday: true },
+  { month: 7, day: 3, festival: { en: "Maha Nawami", np: "महानवमी" }, publicHoliday: true },
+  { month: 7, day: 4, festival: { en: "Vijaya Dashami (Dashain)", np: "विजया दशमी (दशैं)" }, publicHoliday: true },
+  { month: 7, day: 5, festival: { en: "Dashain (Day 2)", np: "दशैं (दोस्रो दिन)" }, publicHoliday: true },
+  { month: 7, day: 6, festival: { en: "Dashain (Day 3)", np: "दशैं (तेस्रो दिन)" }, publicHoliday: true },
+  { month: 7, day: 7, festival: { en: "Dashain (Day 4)", np: "दशैं (चौथो दिन)" }, publicHoliday: true },
+  { month: 7, day: 8, festival: { en: "Dashain (Day 5)", np: "दशैं (पाँचौं दिन)" }, publicHoliday: true },
+  { month: 7, day: 9, festival: { en: "Dashain (Day 6)", np: "दशैं (छैटौं दिन)" }, publicHoliday: true },
+  // Tihar — mid/late Kartik (after Dashain)
+  { month: 7, day: 22, festival: { en: "Laxmi Puja (Tihar)", np: "लक्ष्मी पूजा (तिहार)" }, publicHoliday: true },
+  { month: 7, day: 24, festival: { en: "Gai Puja / Govardhan Puja", np: "गाई पूजा / गोवर्धन पूजा" }, publicHoliday: true },
+  { month: 7, day: 25, festival: { en: "Bhai Tika (Tihar)", np: "भाई टीका (तिहार)" }, publicHoliday: true },
+  { month: 7, day: 28, festival: { en: "Chhath Parva", np: "छठ पर्व" }, publicHoliday: true },
   { month: 8, day: 1, festival: { en: "Maghe Sankranti", np: "माघे सङ्क्रान्ति" }, publicHoliday: true },
   { month: 8, day: 16, festival: { en: "Martyrs' Day (Shahid Diwas)", np: "शहीद दिवस" }, publicHoliday: true },
   { month: 9, day: 7, festival: { en: "Democracy Day (Prajatantra Diwas)", np: "प्रजातन्त्र दिवस" }, publicHoliday: true },
