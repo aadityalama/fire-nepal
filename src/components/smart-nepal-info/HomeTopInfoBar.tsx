@@ -6,7 +6,7 @@ import {
   formatBsDateCompact,
   formatBsDateParts,
   getMsUntilNextNepalMidnight,
-  getSmartNepalDayInfo,
+  getSmartNepalDayInfoSync,
   getSmartNepalInfoBarCopy,
   nepalTimeFormatter,
   nepalTimeZoneLabel,
@@ -23,14 +23,27 @@ const STATUS_CLASS: Record<BarStatusKind, string> = {
 };
 
 function useNepalDayInfo() {
-  const [dayInfo, setDayInfo] = useState<SmartNepalDayInfo>(() => getSmartNepalDayInfo());
+  const [dayInfo, setDayInfo] = useState<SmartNepalDayInfo>(() => getSmartNepalDayInfoSync());
 
-  const refresh = useCallback(() => {
-    setDayInfo(getSmartNepalDayInfo());
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch("/api/smart-nepal-info", { cache: "no-store" });
+      if (!response.ok) {
+        setDayInfo(getSmartNepalDayInfoSync());
+        return;
+      }
+      const payload = (await response.json()) as SmartNepalDayInfo;
+      setDayInfo(payload);
+    } catch {
+      setDayInfo(getSmartNepalDayInfoSync());
+    }
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(refresh, getMsUntilNextNepalMidnight());
+    void refresh();
+    const timeout = window.setTimeout(() => {
+      void refresh();
+    }, getMsUntilNextNepalMidnight());
     return () => window.clearTimeout(timeout);
   }, [dayInfo.dateKey, refresh]);
 

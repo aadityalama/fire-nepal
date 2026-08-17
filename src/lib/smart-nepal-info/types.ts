@@ -3,6 +3,8 @@ export type LocalizedLabel = {
   np: string;
 };
 
+export type FestivalSource = "hamro-patro" | "ad-observance" | null;
+
 export type SmartNepalDayInfo = {
   /** Nepal-local AD date key (YYYY-MM-DD). */
   dateKey: string;
@@ -14,6 +16,10 @@ export type SmartNepalDayInfo = {
   };
   /** Primary festival for the day, if any. */
   festival: LocalizedLabel | null;
+  /** Where the festival label came from (Hamro Patro is authoritative for Nepali festivals). */
+  festivalSource: FestivalSource;
+  /** Hamro Patro public date page used for the festival, when applicable. */
+  festivalSourceUrl: string | null;
   publicHoliday: boolean;
   /** National or international observance (may overlap with festival). */
   specialDay: LocalizedLabel | null;
