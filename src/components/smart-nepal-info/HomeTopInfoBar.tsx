@@ -6,7 +6,7 @@ import {
   formatBsDateCompact,
   formatBsDateParts,
   getMsUntilNextNepalMidnight,
-  getSmartNepalDayInfo,
+  getSmartNepalDayInfoSync,
   getSmartNepalInfoBarCopy,
   nepalTimeFormatter,
   nepalTimeZoneLabel,
@@ -22,15 +22,65 @@ const STATUS_CLASS: Record<BarStatusKind, string> = {
   "public-holiday": "text-red-600",
 };
 
-function useNepalDayInfo() {
-  const [dayInfo, setDayInfo] = useState<SmartNepalDayInfo>(() => getSmartNepalDayInfo());
+function isSmartNepalDayInfo(value: unknown): value is SmartNepalDayInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const bsDate = record.bsDate as Record<string, unknown> | undefined;
+  return (
+    typeof record.dateKey === "string" &&
+    !!bsDate &&
+    typeof bsDate.year === "number" &&
+    typeof bsDate.month === "number" &&
+    typeof bsDate.day === "number"
+  );
+}
 
-  const refresh = useCallback(() => {
-    setDayInfo(getSmartNepalDayInfo());
+function useNepalDayInfo() {
+  const [dayInfo, setDayInfo] = useState<SmartNepalDayInfo>(() => getSmartNepalDayInfoSync());
+
+  const refresh = useCallback(async () => {
+    const safeFallback = () => {
+      try {
+        return getSmartNepalDayInfoSync();
+      } catch {
+        // Extremely defensive: keep previous state if even sync BS conversion fails.
+        return null;
+      }
+    };
+
+    try {
+      const response = await fetch("/api/smart-nepal-info", { cache: "no-store" });
+      if (!response.ok) {
+        const fallback = safeFallback();
+        if (fallback) {
+          setDayInfo(fallback);
+        }
+        return;
+      }
+      const payload: unknown = await response.json();
+      if (isSmartNepalDayInfo(payload)) {
+        setDayInfo(payload);
+        return;
+      }
+      const fallback = safeFallback();
+      if (fallback) {
+        setDayInfo(fallback);
+      }
+    } catch {
+      const fallback = safeFallback();
+      if (fallback) {
+        setDayInfo(fallback);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(refresh, getMsUntilNextNepalMidnight());
+    void refresh();
+    const timeout = window.setTimeout(() => {
+      void refresh();
+    }, getMsUntilNextNepalMidnight());
     return () => window.clearTimeout(timeout);
   }, [dayInfo.dateKey, refresh]);
 
