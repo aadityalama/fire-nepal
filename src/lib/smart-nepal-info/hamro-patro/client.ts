@@ -10,6 +10,9 @@ export const HAMRO_PATRO_ORIGIN = "https://www.hamropatro.com";
  */
 export const HAMRO_PATRO_WIDGETS_PAGE = `${HAMRO_PATRO_ORIGIN}/widgets/`;
 
+/** Default network budget so homepage/API never hang on Hamro Patro. */
+export const HAMRO_PATRO_FETCH_TIMEOUT_MS = 4_000;
+
 /** Stable public date page (schema.org Event JSON-LD). Allowed by robots.txt. */
 export function buildHamroPatroDateUrl(
   bsYear: number,
@@ -124,6 +127,11 @@ export function parseHamroPatroTitleLabels(html: string): LocalizedLabel | null 
     return null;
   }
 
+  // Ordinary day titles often start with the BS date, not a festival name.
+  if (/^\d{4}/.test(en) || /^[०१२३४५६७८९]{4}/.test(en)) {
+    return null;
+  }
+
   return { en, np };
 }
 
@@ -136,32 +144,34 @@ export function parseHamroPatroIsHoliday(html: string): boolean | null {
 }
 
 export function buildFestivalLabelFromHamroPatroPages(params: {
-  enHtml: string;
+  enHtml?: string | null;
   npHtml?: string | null;
 }): { festival: LocalizedLabel; startDate: string | null; publicHoliday: boolean } | null {
-  const enEvents = parseHamroPatroEventJsonLd(params.enHtml);
-  const primary = enEvents[0];
+  const enHtml = params.enHtml ?? "";
+  const npHtml = params.npHtml ?? "";
+  const enEvents = enHtml ? parseHamroPatroEventJsonLd(enHtml) : [];
+  const npEvents = npHtml ? parseHamroPatroEventJsonLd(npHtml) : [];
+  const primary = enEvents[0] ?? npEvents[0];
   if (!primary?.name) {
     return null;
   }
 
   const titleLabels =
-    parseHamroPatroTitleLabels(params.enHtml) ??
-    (params.npHtml ? parseHamroPatroTitleLabels(params.npHtml) : null);
-  const npEvents = params.npHtml ? parseHamroPatroEventJsonLd(params.npHtml) : [];
+    (enHtml ? parseHamroPatroTitleLabels(enHtml) : null) ??
+    (npHtml ? parseHamroPatroTitleLabels(npHtml) : null);
   const npEventName = npEvents[0]?.name;
   // Prefer Devanagari labels: some Hamro Patro NP pages still emit Latin Event names.
   const npFromEvent =
     npEventName && /[\u0900-\u097F]/.test(npEventName) ? npEventName : null;
 
   const festival: LocalizedLabel = {
-    en: primary.name,
+    en: enEvents[0]?.name || titleLabels?.en || primary.name,
     np: npFromEvent || titleLabels?.np || primary.name,
   };
 
   const holidayFlag =
-    parseHamroPatroIsHoliday(params.enHtml) ??
-    (params.npHtml ? parseHamroPatroIsHoliday(params.npHtml) : null);
+    (enHtml ? parseHamroPatroIsHoliday(enHtml) : null) ??
+    (npHtml ? parseHamroPatroIsHoliday(npHtml) : null);
 
   return {
     festival,
@@ -177,9 +187,30 @@ const DEFAULT_HEADERS = {
   "User-Agent": "FIRE-Nepal/1.0 (+https://firenepal.com; hamro-patro-schema.org-jsonld)",
 };
 
+async function fetchHtmlOrNull(
+  url: string,
+  fetchImpl: HamroPatroFetch,
+  signal: AbortSignal,
+): Promise<string | null> {
+  try {
+    const response = await fetchImpl(url, {
+      headers: DEFAULT_HEADERS,
+      redirect: "follow",
+      signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Load today's (or a BS day's) festival from Hamro Patro public date pages.
  * Uses schema.org Event JSON-LD on `/en/date/{y}-{m}-{d}` and `/date/{y}-{m}-{d}`.
+ * Never throws: network/parse failures return null (neutral fallback upstream).
  * Does not call undocumented private APIs or `/widgets/` (robots Disallow).
  */
 export async function fetchHamroPatroDayFestival(
@@ -187,30 +218,44 @@ export async function fetchHamroPatroDayFestival(
   bsMonth: number,
   bsDay: number,
   fetchImpl: HamroPatroFetch = fetch,
+  timeoutMs: number = HAMRO_PATRO_FETCH_TIMEOUT_MS,
 ): Promise<HamroPatroDayFestival | null> {
+  if (!Number.isFinite(bsYear) || !Number.isFinite(bsMonth) || !Number.isFinite(bsDay)) {
+    return null;
+  }
+  if (bsMonth < 1 || bsMonth > 12 || bsDay < 1 || bsDay > 32) {
+    return null;
+  }
+
   const enUrl = buildHamroPatroDateUrl(bsYear, bsMonth, bsDay, "en");
   const npUrl = buildHamroPatroDateUrl(bsYear, bsMonth, bsDay, "np");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(250, timeoutMs));
 
-  const [enRes, npRes] = await Promise.all([
-    fetchImpl(enUrl, { headers: DEFAULT_HEADERS, redirect: "follow" }),
-    fetchImpl(npUrl, { headers: DEFAULT_HEADERS, redirect: "follow" }),
-  ]);
+  try {
+    const [enHtml, npHtml] = await Promise.all([
+      fetchHtmlOrNull(enUrl, fetchImpl, controller.signal),
+      fetchHtmlOrNull(npUrl, fetchImpl, controller.signal),
+    ]);
 
-  if (!enRes.ok) {
+    if (!enHtml && !npHtml) {
+      return null;
+    }
+
+    const parsed = buildFestivalLabelFromHamroPatroPages({ enHtml, npHtml });
+    if (!parsed) {
+      return null;
+    }
+
+    return {
+      festival: parsed.festival,
+      startDate: parsed.startDate,
+      sourceUrl: enHtml ? enUrl : npUrl,
+      publicHoliday: parsed.publicHoliday,
+    };
+  } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const enHtml = await enRes.text();
-  const npHtml = npRes.ok ? await npRes.text() : null;
-  const parsed = buildFestivalLabelFromHamroPatroPages({ enHtml, npHtml });
-  if (!parsed) {
-    return null;
-  }
-
-  return {
-    festival: parsed.festival,
-    startDate: parsed.startDate,
-    sourceUrl: enUrl,
-    publicHoliday: parsed.publicHoliday,
-  };
 }

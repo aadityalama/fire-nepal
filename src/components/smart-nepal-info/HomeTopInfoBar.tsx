@@ -22,20 +22,57 @@ const STATUS_CLASS: Record<BarStatusKind, string> = {
   "public-holiday": "text-red-600",
 };
 
+function isSmartNepalDayInfo(value: unknown): value is SmartNepalDayInfo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const bsDate = record.bsDate as Record<string, unknown> | undefined;
+  return (
+    typeof record.dateKey === "string" &&
+    !!bsDate &&
+    typeof bsDate.year === "number" &&
+    typeof bsDate.month === "number" &&
+    typeof bsDate.day === "number"
+  );
+}
+
 function useNepalDayInfo() {
   const [dayInfo, setDayInfo] = useState<SmartNepalDayInfo>(() => getSmartNepalDayInfoSync());
 
   const refresh = useCallback(async () => {
+    const safeFallback = () => {
+      try {
+        return getSmartNepalDayInfoSync();
+      } catch {
+        // Extremely defensive: keep previous state if even sync BS conversion fails.
+        return null;
+      }
+    };
+
     try {
       const response = await fetch("/api/smart-nepal-info", { cache: "no-store" });
       if (!response.ok) {
-        setDayInfo(getSmartNepalDayInfoSync());
+        const fallback = safeFallback();
+        if (fallback) {
+          setDayInfo(fallback);
+        }
         return;
       }
-      const payload = (await response.json()) as SmartNepalDayInfo;
-      setDayInfo(payload);
+      const payload: unknown = await response.json();
+      if (isSmartNepalDayInfo(payload)) {
+        setDayInfo(payload);
+        return;
+      }
+      const fallback = safeFallback();
+      if (fallback) {
+        setDayInfo(fallback);
+      }
     } catch {
-      setDayInfo(getSmartNepalDayInfoSync());
+      const fallback = safeFallback();
+      if (fallback) {
+        setDayInfo(fallback);
+      }
     }
   }, []);
 

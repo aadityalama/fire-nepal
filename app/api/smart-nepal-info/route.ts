@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSmartNepalDayInfo, getNepalDateKey, getNepalReferenceDate } from "@/lib/smart-nepal-info";
+import {
+  getSmartNepalDayInfo,
+  getNepalDateKey,
+  getNepalReferenceDate,
+  resolveSmartNepalDayInfoBase,
+} from "@/lib/smart-nepal-info";
 
 export const runtime = "nodejs";
 
@@ -23,14 +28,26 @@ function parseReferenceDate(raw: string | null): Date {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const referenceDate = parseReferenceDate(searchParams.get("date"));
-  const dayInfo = await getSmartNepalDayInfo(referenceDate);
   const dateKey = getNepalDateKey(referenceDate);
 
-  return NextResponse.json(dayInfo, {
-    headers: {
-      "Cache-Control": `public, s-maxage=3600, stale-while-revalidate=3600`,
-      "X-Smart-Nepal-Date-Key": dateKey,
-      "X-Smart-Nepal-Festival-Source": dayInfo.festivalSource ?? "none",
-    },
-  });
+  try {
+    const dayInfo = await getSmartNepalDayInfo(referenceDate);
+    return NextResponse.json(dayInfo, {
+      headers: {
+        "Cache-Control": `public, s-maxage=3600, stale-while-revalidate=3600`,
+        "X-Smart-Nepal-Date-Key": dateKey,
+        "X-Smart-Nepal-Festival-Source": dayInfo.festivalSource ?? "none",
+      },
+    });
+  } catch {
+    // Absolute last resort: never 500 the homepage bar if enrichment blows up.
+    const fallback = resolveSmartNepalDayInfoBase(referenceDate);
+    return NextResponse.json(fallback, {
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Smart-Nepal-Date-Key": dateKey,
+        "X-Smart-Nepal-Festival-Source": "fallback",
+      },
+    });
+  }
 }

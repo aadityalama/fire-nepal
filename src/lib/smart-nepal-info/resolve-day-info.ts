@@ -54,11 +54,14 @@ export type ResolveSmartNepalDayInfoOptions = {
   fetchImpl?: HamroPatroFetch;
   /** Skip Hamro Patro enrichment (tests / offline). */
   skipHamroPatro?: boolean;
+  /** Override Hamro Patro network timeout (ms). */
+  hamroPatroTimeoutMs?: number;
 };
 
 /**
  * Resolve Nepal-local day info. Festival/holiday labels for Nepali events come from
  * Hamro Patro public date pages (schema.org Event JSON-LD), not hardcoded BS maps.
+ * On any Hamro Patro failure, returns the safe base payload (BS date + optional AD observances).
  */
 export async function resolveSmartNepalDayInfo(
   referenceDate: Date = new Date(),
@@ -75,6 +78,7 @@ export async function resolveSmartNepalDayInfo(
       base.bsDate.month,
       base.bsDate.day,
       options.fetchImpl,
+      options.hamroPatroTimeoutMs,
     );
     if (!hamro?.festival) {
       return base;
@@ -88,6 +92,7 @@ export async function resolveSmartNepalDayInfo(
       publicHoliday: base.publicHoliday || hamro.publicHoliday,
     };
   } catch {
+    // Never break callers: empty/neutral festival is preferable to a wrong hardcoded date.
     return base;
   }
 }

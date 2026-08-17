@@ -32,6 +32,7 @@ export { getSmartNepalInfoBarCopy, resolveBarLocale } from "./i18n";
 export {
   HAMRO_PATRO_ORIGIN,
   HAMRO_PATRO_WIDGETS_PAGE,
+  HAMRO_PATRO_FETCH_TIMEOUT_MS,
   buildHamroPatroDateUrl,
   fetchHamroPatroDayFestival,
   parseHamroPatroEventJsonLd,
