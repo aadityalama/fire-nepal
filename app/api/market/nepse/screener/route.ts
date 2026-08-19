@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  NEPSE_HUB_TEMPORARILY_DISABLED,
+  nepseHubMaintenanceResponse,
+} from "@/lib/market/nepse-hub-maintenance";
 import { runAdvancedScreener, type ScreenerFilters } from "@/services/market/nepse-screener-engine";
 
 function numParam(value: string | null): number | undefined {
@@ -12,8 +16,9 @@ function boolParam(value: string | null): boolean | undefined {
   return value === "1" || value === "true";
 }
 
-/** Advanced stock screener with fundamental + optional technical filters. */
+/** Advanced stock screener with fundamental + optional technical filters. Hub-only. */
 export async function GET(request: Request) {
+  if (NEPSE_HUB_TEMPORARILY_DISABLED) return nepseHubMaintenanceResponse();
   try {
     const url = new URL(request.url);
     const filters: ScreenerFilters = {

@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
+import {
+  NEPSE_HUB_TEMPORARILY_DISABLED,
+  nepseHubMaintenanceResponse,
+} from "@/lib/market/nepse-hub-maintenance";
 import { loadFinancialIntelligence } from "@/services/market/nepse-financial-intelligence";
 
 type Params = { params: Promise<{ symbol: string }> };
 
 /**
- * Premium Financial Intelligence: quarterly/annual statements, ratios, dividend
- * analytics, shareholding, peer comparison and growth CAGRs — real data only.
- * Provider datasets are memory-cached for 6h; CDN caches the response for 30m.
+ * Premium Financial Intelligence — Hub Company Details only.
+ * Not used by NEPSE Portfolio / My NEPSE Holdings.
  */
 export async function GET(_request: Request, { params }: Params) {
+  if (NEPSE_HUB_TEMPORARILY_DISABLED) return nepseHubMaintenanceResponse();
   const { symbol } = await params;
   if (!symbol?.trim()) {
     return NextResponse.json({ error: "symbol required" }, { status: 400 });

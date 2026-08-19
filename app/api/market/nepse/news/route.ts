@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  NEPSE_HUB_TEMPORARILY_DISABLED,
+  nepseHubMaintenanceResponse,
+} from "@/lib/market/nepse-hub-maintenance";
 import { createMarketDataServiceClient } from "@/services/market/nepse-market-data-engine";
 
 export type NepseNewsResponseItem = {
@@ -13,8 +17,9 @@ export type NepseNewsResponseItem = {
   isCorporateAction: boolean;
 };
 
-/** Public read of aggregated market headlines (stored metadata only, no article bodies). */
+/** Public read of aggregated market headlines. Hub-only (not used by NEPSE Portfolio). */
 export async function GET(request: Request) {
+  if (NEPSE_HUB_TEMPORARILY_DISABLED) return nepseHubMaintenanceResponse();
   const sb = createMarketDataServiceClient();
   if (!sb) {
     return NextResponse.json({ items: [], corporateActions: [] }, { headers: { "cache-control": "public, max-age=60" } });

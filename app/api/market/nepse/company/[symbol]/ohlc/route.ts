@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import {
+  NEPSE_HUB_TEMPORARILY_DISABLED,
+  nepseHubMaintenanceResponse,
+} from "@/lib/market/nepse-hub-maintenance";
 import { loadCompanyOhlc } from "@/services/market/nepse-company-ohlc";
 
 type Params = { params: Promise<{ symbol: string }> };
 
-/** Public EOD OHLC history for Company Details technical analysis. */
+/** Public EOD OHLC history for Hub Company Details technical analysis. */
 export async function GET(request: Request, { params }: Params) {
+  if (NEPSE_HUB_TEMPORARILY_DISABLED) return nepseHubMaintenanceResponse();
   const { symbol } = await params;
   if (!symbol?.trim()) {
     return NextResponse.json({ error: "symbol required" }, { status: 400 });

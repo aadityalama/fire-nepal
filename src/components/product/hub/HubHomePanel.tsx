@@ -319,10 +319,10 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
       {
         href: "/market",
         title: "NEPSE Hub",
-        body: "Live market, charts, screener, watchlist & AI research",
+        body: "We are working on it",
         icon: CandlestickChart,
         accent: "from-emerald-500/40 to-teal-300/15",
-        badge: "FLAGSHIP",
+        badge: "WORKING ON IT",
         testId: "hub-nepse-hub-card",
         plan: "elite",
       },
