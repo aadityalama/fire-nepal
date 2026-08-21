@@ -110,5 +110,21 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     assert.match(metrics, /buildNepsePortfolioSummary/);
     assert.match(metrics, /NepseTransactionsPanel/);
     assert.match(metrics, /NepseCorporateActionsPanel/);
+    assert.match(metrics, /NepseBuySellForm/);
+    assert.match(metrics, /onBuy/);
+    assert.match(metrics, /onSell/);
+
+    const detail = read("src/components/portfolio/nepse-portfolio/NepseStockDetail.tsx");
+    assert.match(detail, /onBuy/);
+    assert.match(detail, /onSell/);
+    assert.match(detail, /NepseTxnFilter/);
+    assert.match(detail, />BUY</);
+    assert.match(detail, />SELL</);
+
+    const form = read("src/components/portfolio/nepse-portfolio/NepseBuySellForm.tsx");
+    assert.match(form, /Portfolio tracking only/);
+    assert.match(form, /recordInvestmentBuy/);
+    assert.match(form, /recordInvestmentSell/);
+    assert.match(form, /Cannot sell more than available/);
   });
 });

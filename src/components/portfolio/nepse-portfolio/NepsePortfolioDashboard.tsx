@@ -22,6 +22,7 @@ import {
   NepseWorkspaceHeader,
   type NepseTabId,
 } from "./NepsePortfolioUi";
+import { NepseBuySellForm, type NepseTradeMode } from "./NepseBuySellForm";
 import {
   NepseCorporateActionsPanel,
   NepseStockDetail,
@@ -30,6 +31,7 @@ import {
 import { InstitutionalAnalyticsPanel, useInstitutionalAnalytics } from "./InstitutionalAnalyticsPanel";
 
 type View = { kind: "tabs"; tab: NepseTabId } | { kind: "detail"; id: string };
+type TradeSheet = { mode: NepseTradeMode; holdingId: string } | null;
 
 export function NepsePortfolioDashboard({
   rows,
@@ -54,6 +56,7 @@ export function NepsePortfolioDashboard({
 }) {
   const [view, setView] = useState<View>({ kind: "tabs", tab: "overview" });
   const [addOpen, setAddOpen] = useState(false);
+  const [tradeSheet, setTradeSheet] = useState<TradeSheet>(null);
   const [range, setRange] = useState<NepseChartRange>("1M");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<NepseHoldingFilter>("all");
@@ -81,6 +84,7 @@ export function NepsePortfolioDashboard({
   );
 
   const detailHolding = view.kind === "detail" ? holdingsById.get(view.id) : undefined;
+  const tradeHolding = tradeSheet ? holdingsById.get(tradeSheet.holdingId) : undefined;
   const activeTab = view.kind === "tabs" ? view.tab : "overview";
   const isDetail = view.kind === "detail" && detailHolding != null;
   const showFab = !isDetail && (activeTab === "overview" || activeTab === "holdings");
@@ -109,6 +113,8 @@ export function NepsePortfolioDashboard({
             onRemove(id);
             setView({ kind: "tabs", tab: "holdings" });
           }}
+          onBuy={() => setTradeSheet({ mode: "buy", holdingId: detailHolding.row.id })}
+          onSell={() => setTradeSheet({ mode: "sell", holdingId: detailHolding.row.id })}
         />
       ) : (
         <div className="space-y-6">
@@ -181,6 +187,23 @@ export function NepsePortfolioDashboard({
           compact
           onComplete={() => setAddOpen(false)}
         />
+      </NepseSheet>
+
+      <NepseSheet
+        open={tradeSheet != null && tradeHolding != null}
+        title={tradeSheet?.mode === "sell" ? `Sell ${tradeHolding?.symbol ?? ""}` : `Buy ${tradeHolding?.symbol ?? ""}`}
+        onClose={() => setTradeSheet(null)}
+      >
+        {tradeSheet && tradeHolding ? (
+          <NepseBuySellForm
+            key={`${tradeSheet.mode}-${tradeHolding.row.id}`}
+            mode={tradeSheet.mode}
+            holding={tradeHolding}
+            ledgerFx={ledgerFx}
+            onMutate={onMutate}
+            onComplete={() => setTradeSheet(null)}
+          />
+        ) : null}
       </NepseSheet>
     </div>
   );

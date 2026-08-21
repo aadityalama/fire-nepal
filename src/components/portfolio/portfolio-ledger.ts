@@ -28,6 +28,14 @@ export type InvestmentTradePayload = {
   notes?: string;
   /** Distinguishes IPO, rights, and secondary-market buys in the ledger. */
   ledgerFlow?: "market_buy" | "ipo" | "right_share";
+  /** Optional fee split for display; summed `fees` remains the calculation input. */
+  brokerage?: number;
+  otherCharges?: number;
+  /**
+   * Marks ledger rows as portfolio tracking only (no live broker order).
+   * Kept for future broker/API integration without changing mutation semantics.
+   */
+  portfolioTrackingOnly?: boolean;
 };
 
 export type CashDividendPayload = {
@@ -120,6 +128,45 @@ function appendEntry(state: WealthPortfolioStateV2, entry: PortfolioLedgerEntry)
   return { ...state, ledger: next.length > MAX_LEDGER ? next.slice(-MAX_LEDGER) : next };
 }
 
+/**
+ * Preview FIFO sell P/L without mutating portfolio state.
+ * Returns null when quantity exceeds available holdings or inputs are invalid.
+ */
+export function estimateInvestmentSellRealized(
+  row: InvestmentRow,
+  input: Pick<InvestmentTradePayload, "quantity" | "unitPrice" | "currency" | "fees">,
+  fx: LedgerFx,
+): { availableQty: number; costNpr: number; proceedsNpr: number; feesNpr: number; realizedGainNpr: number } | null {
+  if (input.quantity <= 0 || !Number.isFinite(input.quantity)) return null;
+  if (input.unitPrice < 0 || !Number.isFinite(input.unitPrice)) return null;
+
+  const lots = cloneLots(row);
+  const availableQty = lots.reduce((a, l) => a + l.quantity, 0);
+  if (input.quantity > availableQty + 1e-9) {
+    return { availableQty, costNpr: 0, proceedsNpr: 0, feesNpr: 0, realizedGainNpr: 0 };
+  }
+
+  let remaining = input.quantity;
+  let costNpr = 0;
+  for (const lot of sortLotsFifo(lots)) {
+    if (remaining <= 0) break;
+    const take = Math.min(lot.quantity, remaining);
+    const unitCostNpr = lineToNpr(lot.unitCost, lot.currency, fx.krwPerNpr, fx.usdPerNpr);
+    costNpr += take * unitCostNpr;
+    remaining -= take;
+  }
+
+  const proceedsNpr = lineToNpr(input.quantity * input.unitPrice, input.currency, fx.krwPerNpr, fx.usdPerNpr);
+  const feesNpr = lineToNpr(input.fees ?? 0, input.currency, fx.krwPerNpr, fx.usdPerNpr);
+  return {
+    availableQty,
+    costNpr,
+    proceedsNpr,
+    feesNpr,
+    realizedGainNpr: proceedsNpr - costNpr - feesNpr,
+  };
+}
+
 /** FIFO sell against `fifoLots` (or legacy qty/buyPrice → single lot). */
 export function recordInvestmentSell(
   state: WealthPortfolioStateV2,
@@ -186,6 +233,9 @@ export function recordInvestmentSell(
       proceedsNpr,
       costNpr,
       feesNpr,
+      ...(input.brokerage != null ? { brokerage: input.brokerage } : {}),
+      ...(input.otherCharges != null ? { otherCharges: input.otherCharges } : {}),
+      ...(input.portfolioTrackingOnly ? { portfolioTrackingOnly: true } : {}),
     },
   };
 
@@ -259,7 +309,14 @@ export function recordInvestmentBuy(
     fees: input.fees,
     notes: input.notes?.trim() || undefined,
     realizedGainNpr: null,
-    meta: { fifoVersion: 1, fifoMethod: "FIFO", ledgerFlow: flow },
+    meta: {
+      fifoVersion: 1,
+      fifoMethod: "FIFO",
+      ledgerFlow: flow,
+      ...(input.brokerage != null ? { brokerage: input.brokerage } : {}),
+      ...(input.otherCharges != null ? { otherCharges: input.otherCharges } : {}),
+      ...(input.portfolioTrackingOnly ? { portfolioTrackingOnly: true } : {}),
+    },
   };
 
   const updatedRow: InvestmentRow = {
