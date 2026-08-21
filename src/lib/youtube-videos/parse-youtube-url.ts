@@ -43,6 +43,29 @@ export function normalizeYoutubeWatchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
+/** Official YouTube iframe embed URL for a validated 11-char video id. */
+export function youtubeEmbedUrl(videoId: string, options?: { autoplay?: boolean }): string | null {
+  if (!isValidYoutubeVideoId(videoId)) return null;
+  const params = new URLSearchParams();
+  if (options?.autoplay) params.set("autoplay", "1");
+  const query = params.toString();
+  return `https://www.youtube.com/embed/${videoId}${query ? `?${query}` : ""}`;
+}
+
+/**
+ * Prefer a stored video id; otherwise parse common YouTube URL shapes.
+ * Returns null when neither yields a valid id (e.g. channel-only links).
+ */
+export function resolveYoutubeVideoId(
+  videoId: string | null | undefined,
+  youtubeUrl?: string | null,
+): string | null {
+  const stored = (videoId ?? "").trim();
+  if (isValidYoutubeVideoId(stored)) return stored;
+  if (youtubeUrl) return extractYoutubeVideoId(youtubeUrl);
+  return null;
+}
+
 /** Normalize duration display (e.g. "9:05", "1:02:18"). Empty string allowed. */
 export function normalizeDuration(raw: string | undefined | null): string {
   const value = (raw ?? "").trim();
