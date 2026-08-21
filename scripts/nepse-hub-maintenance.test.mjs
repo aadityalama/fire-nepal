@@ -111,8 +111,11 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     assert.match(metrics, /NepseTransactionsPanel/);
     assert.match(metrics, /NepseCorporateActionsPanel/);
     assert.match(metrics, /NepseBuySellForm/);
+    assert.match(metrics, /NepseAddStockPicker/);
     assert.match(metrics, /onBuy/);
     assert.match(metrics, /onSell/);
+    assert.match(metrics, /emptyActionLabel/);
+    assert.match(metrics, /NepseAddStockFab/);
 
     const detail = read("src/components/portfolio/nepse-portfolio/NepseStockDetail.tsx");
     assert.match(detail, /onBuy/);
@@ -127,5 +130,18 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     assert.match(form, /recordInvestmentBuy/);
     assert.match(form, /recordInvestmentSell/);
     assert.match(form, /Cannot sell more than available/);
+
+    const picker = read("src/components/portfolio/nepse-portfolio/NepseAddStockPicker.tsx");
+    assert.match(picker, /ensureNepseHoldingRow/);
+    assert.match(picker, /filterMasterInstruments/);
+    assert.match(picker, /\/api\/market\/nepse\/search/);
+    assert.match(picker, /onSelected/);
+
+    const ensure = read("src/components/portfolio/nepse-portfolio/ensure-nepse-holding.ts");
+    assert.match(ensure, /export function ensureNepseHoldingRow/);
+
+    const fab = read("src/components/portfolio/nepse-portfolio/NepsePortfolioUi.tsx");
+    assert.match(fab, /bottom-\[calc\(5\.75rem/);
+    assert.match(fab, /z-\[55\]/);
   });
 });

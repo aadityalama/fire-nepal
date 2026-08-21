@@ -10,8 +10,10 @@ import {
   recordInvestmentBuy,
   recordInvestmentSell,
 } from "../src/components/portfolio/portfolio-ledger.ts";
+import { ensureNepseHoldingRow } from "../src/components/portfolio/nepse-portfolio/ensure-nepse-holding.ts";
 import { buildNepsePortfolioSummary } from "../src/components/portfolio/nepse-portfolio/nepse-portfolio-metrics.ts";
 import { resolveInvestmentQuantity } from "../src/services/portfolio/investment-aggregation.ts";
+import { filterMasterInstruments } from "../src/lib/investment-market/registry.ts";
 
 const FX = { krwPerNpr: 10, usdPerNpr: 0.0075 };
 
@@ -34,6 +36,54 @@ function seedHolding(name = "STC") {
 }
 
 describe("NEPSE portfolio buy/sell tracking", () => {
+  it("exposes real NEPSE companies in the master registry for Add Stock search", () => {
+    const hits = filterMasterInstruments("nepse", "STC");
+    assert.ok(hits.length > 0);
+    assert.ok(hits.some((h) => h.universe === "nepse" && "symbol" in h && String(h.symbol).includes("STC")));
+  });
+
+  it("ensureNepseHoldingRow creates a zero-qty watch row then buy populates holdings", () => {
+    const state = defaultWealthState();
+    const ensured = ensureNepseHoldingRow(state, {
+      instrumentKey: "nepse:NABIL",
+      name: "Nabil Bank Limited",
+      currency: "NPR",
+    });
+    assert.ok(ensured);
+    assert.equal(resolveInvestmentQuantity(ensured.next.investments[0]), 0);
+
+    const afterBuy = recordInvestmentBuy(
+      ensured.next,
+      ensured.rowId,
+      { quantity: 10, unitPrice: 900, currency: "NPR", tradeDate: "2024-02-01" },
+      FX,
+    );
+    assert.ok(afterBuy);
+    const summary = buildNepsePortfolioSummary(
+      afterBuy.investments,
+      afterBuy.ledger,
+      FX.krwPerNpr,
+      FX.usdPerNpr,
+      null,
+      null,
+    );
+    const open = summary.holdings.filter((h) => h.currentUnits > 0);
+    assert.equal(open.length, 1);
+    assert.equal(open[0].currentUnits, 10);
+  });
+
+  it("ensureNepseHoldingRow reuses an existing holding by instrument key", () => {
+    const { state, rowId } = seedHolding("STC");
+    const again = ensureNepseHoldingRow(state, {
+      instrumentKey: "nepse:STC",
+      name: "STC",
+      currency: "NPR",
+    });
+    assert.ok(again);
+    assert.equal(again.rowId, rowId);
+    assert.equal(again.next.investments.length, 1);
+  });
+
   it("buy updates quantity, average cost, invested amount, and ledger", () => {
     const { state, rowId } = seedHolding();
     const after = recordInvestmentBuy(
