@@ -452,13 +452,19 @@ export function NepseHoldingsList({
   holdings,
   onOpen,
   emptyLabel = "No holdings yet. Tap + Add Stock to begin.",
+  emptyActionLabel,
+  onEmptyAction,
 }: {
   holdings: NepseHoldingRow[];
   onOpen: (id: string) => void;
   emptyLabel?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: () => void;
 }) {
   if (holdings.length === 0) {
-    return <NepseEmptyState text={emptyLabel} />;
+    return (
+      <NepseEmptyState text={emptyLabel} actionLabel={emptyActionLabel} onAction={onEmptyAction} />
+    );
   }
 
   return (
@@ -513,7 +519,7 @@ export function NepseAddStockFab({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-40 inline-flex min-h-[3.25rem] items-center gap-2 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-500 px-5 text-sm font-semibold tracking-tight text-slate-950 shadow-[0_14px_36px_-14px_rgba(16,185,129,0.65)] ring-1 ring-white/15 transition duration-300 hover:brightness-[1.04] active:scale-[0.97] sm:bottom-8 sm:right-8"
+      className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[55] inline-flex min-h-[3.25rem] items-center gap-2 rounded-full bg-gradient-to-b from-emerald-400 to-emerald-500 px-5 text-sm font-semibold tracking-tight text-slate-950 shadow-[0_14px_36px_-14px_rgba(16,185,129,0.65)] ring-1 ring-white/15 transition duration-300 hover:brightness-[1.04] active:scale-[0.97] lg:bottom-8 lg:right-8"
       aria-label="Add stock"
     >
       <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
@@ -587,10 +593,28 @@ export function NepseSectionTitle({ children }: { children: ReactNode }) {
   return <h2 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] ${TONE_LABEL}`}>{children}</h2>;
 }
 
-export function NepseEmptyState({ text }: { text: string }) {
+export function NepseEmptyState({
+  text,
+  actionLabel,
+  onAction,
+}: {
+  text: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
-    <div className="rounded-[1.25rem] border border-dashed border-white/[0.1] bg-white/[0.02] px-5 py-12 text-center text-sm font-medium text-zinc-500">
-      {text}
+    <div className="rounded-[1.25rem] border border-dashed border-white/[0.1] bg-white/[0.02] px-5 py-12 text-center">
+      <p className="text-sm font-medium text-zinc-500">{text}</p>
+      {actionLabel && onAction ? (
+        <button
+          type="button"
+          onClick={onAction}
+          className="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 px-6 text-sm font-black text-slate-950 shadow-[0_14px_32px_-14px_rgba(16,185,129,0.55)] transition active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
