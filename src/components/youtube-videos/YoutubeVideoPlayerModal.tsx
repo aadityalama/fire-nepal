@@ -28,7 +28,7 @@ export function YoutubeVideoPlayerModal({ open, videoId, title, onClose }: Youtu
   useFocusTrap(open && mounted && Boolean(embedSrc), panelRef);
 
   useEffect(() => {
-    queueMicrotask(() => setMounted(true));
+    setMounted(true);
   }, []);
 
   useEffect(() => {

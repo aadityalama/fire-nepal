@@ -32,39 +32,38 @@ function VideoCard({
   const playable = Boolean(resolveYoutubeVideoId(video.youtube_video_id, video.youtube_url));
 
   return (
-    <button
-      type="button"
-      onClick={() => onPlay(video)}
-      aria-label={playable ? `Play ${video.title}` : `${video.title} (video unavailable)`}
-      className="group block w-full overflow-hidden rounded-2xl border border-white/60 bg-white/70 text-left shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-md active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-    >
-      <article>
-        <div className={`relative grid h-28 place-items-center overflow-hidden bg-gradient-to-br ${gradient}`}>
-          {hasThumb ? (
-            <Image
-              src={video.thumbnail_url}
-              alt=""
-              fill
-              className="object-cover transition duration-300 group-hover:scale-[1.03]"
-              sizes="(max-width: 640px) 100vw, 33vw"
-              unoptimized
-            />
-          ) : null}
-          <span
-            className="relative z-[1] grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition group-hover:scale-110"
-            aria-hidden
-          >
-            <Play size={18} fill="currentColor" />
-          </span>
-        </div>
-        <div className="p-3">
-          <p className="text-sm font-black text-emerald-950">{video.title}</p>
-          <p className="mt-2 text-xs font-bold text-slate-500">
-            FIRE Nepal{video.duration ? ` - ${video.duration}` : ""}
-          </p>
-        </div>
-      </article>
-    </button>
+    <article className="group relative overflow-hidden rounded-2xl border border-white/60 bg-white/70 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-md active:scale-[0.99]">
+      <button
+        type="button"
+        onClick={() => onPlay(video)}
+        aria-label={playable ? `Play ${video.title}` : `${video.title} (video unavailable)`}
+        className="absolute inset-0 z-[2] rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+      />
+      <div className={`relative grid h-28 place-items-center overflow-hidden bg-gradient-to-br ${gradient}`}>
+        {hasThumb ? (
+          <Image
+            src={video.thumbnail_url}
+            alt=""
+            fill
+            className="object-cover transition duration-300 group-hover:scale-[1.03]"
+            sizes="(max-width: 640px) 100vw, 33vw"
+            unoptimized
+          />
+        ) : null}
+        <span
+          className="relative z-[1] grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition group-hover:scale-110"
+          aria-hidden
+        >
+          <Play size={18} fill="currentColor" />
+        </span>
+      </div>
+      <div className="p-3">
+        <p className="text-sm font-black text-emerald-950">{video.title}</p>
+        <p className="mt-2 text-xs font-bold text-slate-500">
+          FIRE Nepal{video.duration ? ` - ${video.duration}` : ""}
+        </p>
+      </div>
+    </article>
   );
 }
 
