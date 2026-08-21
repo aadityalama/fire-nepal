@@ -130,6 +130,8 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     assert.match(form, /recordInvestmentBuy/);
     assert.match(form, /recordInvestmentSell/);
     assert.match(form, /Cannot sell more than available/);
+    assert.match(form, /NepseBuySellSubmitButton/);
+    assert.match(form, /NEPSE_BUY_SELL_FORM_ID/);
 
     const picker = read("src/components/portfolio/nepse-portfolio/NepseAddStockPicker.tsx");
     assert.match(picker, /ensureNepseHoldingRow/);
@@ -143,5 +145,8 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     const fab = read("src/components/portfolio/nepse-portfolio/NepsePortfolioUi.tsx");
     assert.match(fab, /bottom-\[calc\(5\.75rem/);
     assert.match(fab, /z-\[55\]/);
+    assert.match(fab, /--nepse-sheet-bottom/);
+    assert.match(fab, /FIRE_NEPAL_MAIN_BOTTOM_NAV_CLEARANCE/);
+    assert.match(fab, /useKeyboardBottomInset/);
   });
 });

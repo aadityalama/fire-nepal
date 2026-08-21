@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FocusEvent } from "react";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
 import type { LedgerFx } from "@/components/portfolio/portfolio-ledger";
 import {
@@ -16,6 +16,8 @@ import { NepseSymbolLogo } from "./NepsePortfolioUi";
 
 export type NepseTradeMode = "buy" | "sell";
 
+export const NEPSE_BUY_SELL_FORM_ID = "nepse-buy-sell-form";
+
 function numericFromDraft(value: string): number {
   const n = Number(value.replace(/,/g, ""));
   return Number.isFinite(n) ? n : Number.NaN;
@@ -29,18 +31,51 @@ function optionalNonNeg(value: string): number | undefined {
   return n;
 }
 
+function scrollFieldIntoView(e: FocusEvent<HTMLElement>) {
+  // Keep focused fields visible above the sticky Save CTA / keyboard on iPhone Safari.
+  window.requestAnimationFrame(() => {
+    e.target.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+}
+
+export function NepseBuySellSubmitButton({
+  mode,
+  formId = NEPSE_BUY_SELL_FORM_ID,
+}: {
+  mode: NepseTradeMode;
+  formId?: string;
+}) {
+  const isSell = mode === "sell";
+  const submitLabel = isSell ? "Save Sell Transaction" : "Save Buy Transaction";
+  const submitTone = isSell
+    ? "from-rose-500 via-red-500 to-rose-700 text-white shadow-rose-950/35"
+    : "from-emerald-400 via-emerald-500 to-teal-500 text-slate-950 shadow-emerald-950/35";
+
+  return (
+    <button
+      type="submit"
+      form={formId}
+      className={`min-h-14 w-full rounded-2xl bg-gradient-to-r px-5 text-base font-black shadow-[0_18px_42px_rgba(0,0,0,0.32)] transition active:scale-[0.99] ${submitTone}`}
+    >
+      {submitLabel}
+    </button>
+  );
+}
+
 export function NepseBuySellForm({
   mode,
   holding,
   ledgerFx,
   onMutate,
   onComplete,
+  formId = NEPSE_BUY_SELL_FORM_ID,
 }: {
   mode: NepseTradeMode;
   holding: NepseHoldingRow;
   ledgerFx: LedgerFx;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
   onComplete?: () => void;
+  formId?: string;
 }) {
   const isSell = mode === "sell";
   const currency = holding.row.currency;
@@ -87,11 +122,6 @@ export function NepseBuySellForm({
       ledgerFx,
     );
   }, [isSell, quantity, unitPrice, currency, fees, holding.row, ledgerFx]);
-
-  const submitLabel = isSell ? "Save Sell Transaction" : "Save Buy Transaction";
-  const submitTone = isSell
-    ? "from-rose-500 via-red-500 to-rose-700 text-white shadow-rose-950/35"
-    : "from-emerald-400 via-emerald-500 to-teal-500 text-slate-950 shadow-emerald-950/35";
 
   const submit = () => {
     setErr(null);
@@ -165,7 +195,14 @@ export function NepseBuySellForm({
   };
 
   return (
-    <div className="relative space-y-4">
+    <form
+      id={formId}
+      className="relative space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <div className="flex items-center gap-3 rounded-[1.1rem] border border-white/[0.08] bg-white/[0.035] p-3.5">
         <NepseSymbolLogo symbol={holding.symbol} />
         <div className="min-w-0 flex-1">
@@ -198,14 +235,16 @@ export function NepseBuySellForm({
         />
       </label>
 
-      <PortfolioIsoDateField
-        label={isSell ? "Sell date" : "Buy date"}
-        value={tradeDate}
-        onChange={(next) => setTradeDate(next ?? portfolioTxnTodayIso())}
-        className="max-w-none sm:max-w-none"
-      />
+      <div onFocusCapture={scrollFieldIntoView}>
+        <PortfolioIsoDateField
+          label={isSell ? "Sell date" : "Buy date"}
+          value={tradeDate}
+          onChange={(next) => setTradeDate(next ?? portfolioTxnTodayIso())}
+          className="max-w-none sm:max-w-none"
+        />
+      </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" onFocusCapture={scrollFieldIntoView}>
         <label className="block">
           <span className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-emerald-100/70">
             Quantity
@@ -243,7 +282,7 @@ export function NepseBuySellForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" onFocusCapture={scrollFieldIntoView}>
         <label className="block">
           <span className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-emerald-100/70">
             Brokerage / commission
@@ -300,16 +339,6 @@ export function NepseBuySellForm({
           {err}
         </p>
       ) : null}
-
-      <div className="sticky bottom-0 z-20 border-t border-emerald-300/10 bg-slate-950/90 pt-3 backdrop-blur-xl">
-        <button
-          type="button"
-          onClick={submit}
-          className={`min-h-14 w-full rounded-2xl bg-gradient-to-r px-5 text-base font-black shadow-[0_18px_42px_rgba(0,0,0,0.32)] transition active:scale-[0.99] ${submitTone}`}
-        >
-          {submitLabel}
-        </button>
-      </div>
-    </div>
+    </form>
   );
 }

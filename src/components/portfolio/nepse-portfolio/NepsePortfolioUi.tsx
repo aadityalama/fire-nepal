@@ -2,10 +2,12 @@
 
 import { Bell, ChevronRight, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { useCountUpNumber } from "@/hooks/useCountUpNumber";
+import { useKeyboardBottomInset } from "@/hooks/useKeyboardBottomInset";
 import { formatMoney } from "@/lib/expense-utils";
+import { FIRE_NEPAL_MAIN_BOTTOM_NAV_CLEARANCE } from "@/components/navigation/fire-nepal-main-bottom-nav-clearance";
 import {
   buildNepsePerformanceSeriesFromCurve,
   formatSignedPct,
@@ -533,16 +535,46 @@ export function NepseSheet({
   title,
   onClose,
   children,
+  footer,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Optional sticky footer (e.g. Save CTA) kept above the main bottom nav on mobile. */
+  footer?: ReactNode;
 }) {
+  const keyboardInset = useKeyboardBottomInset();
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!open) return null;
+
+  /**
+   * Mobile: sit above FireNepalMainBottomNav (5.75rem + safe-area).
+   * When the keyboard is open, use the larger of nav clearance vs keyboard inset.
+   * Desktop (lg+): Tailwind `lg:pb-6` wins — nav is hidden.
+   */
+  const overlayStyle = {
+    ["--nepse-sheet-bottom" as string]: `max(calc(${FIRE_NEPAL_MAIN_BOTTOM_NAV_CLEARANCE} + env(safe-area-inset-bottom, 0px)), ${keyboardInset}px)`,
+  } satisfies CSSProperties;
+
+  const panelStyle: CSSProperties | undefined =
+    keyboardInset > 40
+      ? { maxHeight: `min(92dvh, calc(100dvh - ${keyboardInset}px - 0.75rem))` }
+      : undefined;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center px-0 pt-3 pb-[var(--nepse-sheet-bottom)] sm:items-center sm:px-6 sm:pt-6 lg:pb-6"
+      style={overlayStyle}
       role="dialog"
       aria-modal
       aria-label={title}
@@ -553,8 +585,11 @@ export function NepseSheet({
         aria-label="Close"
         onClick={onClose}
       />
-      <div className="animate-fade-up relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[1.5rem] border border-white/[0.1] bg-slate-950/96 p-4 shadow-[0_-16px_48px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:rounded-[1.5rem] sm:p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div
+        className="animate-fade-up relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-t-[1.5rem] border border-white/[0.1] bg-slate-950/96 shadow-[0_-16px_48px_-20px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:rounded-[1.5rem] max-h-[min(92dvh,calc(100dvh-6.75rem-env(safe-area-inset-bottom,0px)))] sm:max-h-[min(92vh,920px)] lg:max-h-[min(92vh,920px)]"
+        style={panelStyle}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3.5 sm:px-5">
           <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
           <button
             type="button"
@@ -565,7 +600,14 @@ export function NepseSheet({
             <X size={16} />
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 [-webkit-overflow-scrolling:touch]">
+          {children}
+        </div>
+        {footer ? (
+          <div className="shrink-0 border-t border-white/[0.08] bg-slate-950/98 px-4 py-3 sm:px-5 sm:py-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
