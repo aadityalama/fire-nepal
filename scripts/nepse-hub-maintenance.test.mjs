@@ -118,8 +118,9 @@ describe("Premium NEPSE Hub maintenance (portfolio stays live)", () => {
     assert.match(detail, /onBuy/);
     assert.match(detail, /onSell/);
     assert.match(detail, /NepseTxnFilter/);
-    assert.match(detail, />BUY</);
-    assert.match(detail, />SELL</);
+    assert.match(detail, /\bBUY\b/);
+    assert.match(detail, /\bSELL\b/);
+    assert.match(detail, /Transaction filter/);
 
     const form = read("src/components/portfolio/nepse-portfolio/NepseBuySellForm.tsx");
     assert.match(form, /Portfolio tracking only/);
