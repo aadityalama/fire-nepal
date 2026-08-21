@@ -8,6 +8,8 @@ import {
   extractYoutubeVideoId,
   normalizeDuration,
   normalizeYoutubeWatchUrl,
+  resolveYoutubeVideoId,
+  youtubeEmbedUrl,
   youtubeThumbnailUrl,
 } from "../src/lib/youtube-videos/parse-youtube-url.ts";
 import {
@@ -37,6 +39,20 @@ describe("youtube helpers", () => {
     assert.equal(youtubeThumbnailUrl("dQw4w9WgXcQ"), "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg");
     assert.equal(normalizeYoutubeWatchUrl("dQw4w9WgXcQ"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     assert.equal(normalizeDuration(" 9:05 "), "9:05");
+  });
+
+  it("builds embed URLs and resolves video ids without crashing on bad input", () => {
+    assert.equal(youtubeEmbedUrl("dQw4w9WgXcQ"), "https://www.youtube.com/embed/dQw4w9WgXcQ");
+    assert.equal(
+      youtubeEmbedUrl("dQw4w9WgXcQ", { autoplay: true }),
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1",
+    );
+    assert.equal(youtubeEmbedUrl(""), null);
+    assert.equal(youtubeEmbedUrl("short"), null);
+    assert.equal(resolveYoutubeVideoId("dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+    assert.equal(resolveYoutubeVideoId("", "https://youtu.be/dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+    assert.equal(resolveYoutubeVideoId("", "https://www.youtube.com/@Firenepal853"), null);
+    assert.equal(resolveYoutubeVideoId(null, null), null);
   });
 });
 
