@@ -405,7 +405,11 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (error) return { ok: false as const, error: error.message };
-        if (data.user) {
+        // Notify admin only for a newly created auth user. Supabase may return an
+        // existing account on repeated sign-up with an empty identities array.
+        const identities = data.user?.identities;
+        const isExistingUserSignupAttempt = Array.isArray(identities) && identities.length === 0;
+        if (data.user && !isExistingUserSignupAttempt) {
           const origin = getPublicSiteOrigin() || (typeof window !== "undefined" ? window.location.origin : "");
           if (origin) {
             void fetch(`${origin}/api/admin-notifications/new-user`, {
@@ -415,6 +419,8 @@ export function ProductAuthProvider({ children }: { children: ReactNode }) {
               body: JSON.stringify({ userId: data.user.id }),
             }).catch((e) => console.error("[auth] admin new-user notify:", e));
           }
+        } else if (data.user && isExistingUserSignupAttempt) {
+          console.info("[auth] skip admin new-user notify: existing user sign-up attempt");
         }
         if (data.user && !data.session) {
           return {
