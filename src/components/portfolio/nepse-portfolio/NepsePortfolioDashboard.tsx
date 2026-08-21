@@ -23,7 +23,7 @@ import {
   type NepseTabId,
 } from "./NepsePortfolioUi";
 import { NepseAddStockPicker } from "./NepseAddStockPicker";
-import { NepseBuySellForm, type NepseTradeMode } from "./NepseBuySellForm";
+import { NepseBuySellForm, NepseBuySellSubmitButton, type NepseTradeMode } from "./NepseBuySellForm";
 import {
   NepseCorporateActionsPanel,
   NepseStockDetail,
@@ -234,6 +234,9 @@ export function NepsePortfolioDashboard({
         open={tradeSheet != null && tradeHolding != null}
         title={tradeSheet?.mode === "sell" ? `Sell ${tradeHolding?.symbol ?? ""}` : `Buy ${tradeHolding?.symbol ?? ""}`}
         onClose={() => setTradeSheet(null)}
+        footer={
+          tradeSheet ? <NepseBuySellSubmitButton mode={tradeSheet.mode} /> : null
+        }
       >
         {tradeSheet && tradeHolding ? (
           <NepseBuySellForm
