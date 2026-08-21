@@ -150,7 +150,7 @@ export function NepseStockDetail({
   const canSell = holding.currentUnits > 0;
 
   return (
-    <div className="space-y-5 pb-28 sm:pb-10">
+    <div className="space-y-5 pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))] sm:pb-10">
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -332,7 +332,7 @@ export function NepseStockDetail({
         <LedgerList entries={corporate} empty="No corporate actions yet" />
       </Section>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-slate-950/92 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:hidden">
+      <div className="fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] z-40 border-t border-white/[0.08] bg-slate-950/92 px-4 py-3 backdrop-blur-xl sm:hidden">
         <div className="mx-auto flex max-w-lg gap-2.5">
           <button
             type="button"
