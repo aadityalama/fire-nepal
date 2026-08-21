@@ -743,6 +743,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      admin_new_user_emails: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string;
+          sent_at: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject: string | null;
+          provider_message: string | null;
+          resend_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email: string;
+          sent_at?: string;
+          delivery_status: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          email?: string;
+          sent_at?: string;
+          delivery_status?: "sent" | "failed" | "skipped";
+          subject?: string | null;
+          provider_message?: string | null;
+          resend_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       membership_approval_emails: {
         Row: {
           id: string;

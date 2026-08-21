@@ -8,7 +8,7 @@
 ## Prerequisites
 
 1. **Supabase** — `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and server-only `SUPABASE_SERVICE_ROLE_KEY` (used for Auth Admin list, aggregates, CSV exports, and cron health writes).
-2. **Admin email alerts (optional)** — Set server-only `ADMIN_NOTIFICATION_EMAIL` in the deployment environment (never `NEXT_PUBLIC_*`; never commit the value). That inbox receives **new user** and **new membership payment request** notifications via Resend (`RESEND_API_KEY` / `RESEND_FROM_EMAIL`). If unset, the app skips these emails and logs a generic skip reason (no recipient address in logs).
+2. **Admin email alerts (optional)** — Set server-only `ADMIN_NOTIFICATION_EMAIL` in the deployment environment (Vercel → Project → Settings → Environment Variables, or `.env.local` for local). Never use `NEXT_PUBLIC_*`; never commit the value. That inbox receives **new user registration** and **new membership payment request** notifications via Resend (`RESEND_API_KEY` / `RESEND_FROM_EMAIL` or `EMAIL_FROM`). If unset, the app skips these emails and logs a generic skip reason (no recipient address in logs). New-user emails use a branded template (subject: `🔥 New FIRE Nepal User Registration`) with an **Open Admin Panel** CTA to `/admin`. Delivery is idempotent per user (`admin_new_user_emails` migration + process dedupe) so one signup does not send duplicates. Apply migration `supabase/migrations/20260821120000_admin_new_user_emails.sql` for durable dedupe across instances.
 3. **Grant admin** — After migration, insert your auth user id:
 
 ```sql
