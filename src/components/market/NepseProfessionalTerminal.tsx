@@ -501,26 +501,62 @@ export function NepseProfessionalTerminal({ initialTab = "dashboard" }: { initia
             <section className={`${card} p-4 sm:p-5`}>
               <p className={eyebrow}>Indices · Sensitive · Float · sectors</p>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {data.indices.map((index) => (
-                  <div key={index.id} className="rounded-2xl border border-slate-200/70 p-3 transition hover:-translate-y-0.5 dark:border-white/[0.06]">
-                    <p className="truncate text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{index.name}</p>
-                    <p className="mt-1 text-lg font-black tabular-nums">{fmtNum(index.value)}</p>
-                    <div className="mt-1 text-xs">
-                      {index.source === "index_feed" ? (
-                        <Delta value={index.changePct} />
-                      ) : index.source === "sector_pulse" ? (
-                        <span className="font-bold">
-                          Sector pulse <Delta value={index.sectorChangePct} />
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">{DATA_UNAVAILABLE}</span>
-                      )}
+                {data.indices.map((index) => {
+                  // Best-effort deep-link into Index Explorer when the board row maps to an official key.
+                  const hrefCandidates = [
+                    index.name.match(/sensitive\s*float/i) ? "SENSITIVE_FLOAT" : null,
+                    /sensitive/i.test(index.name) && !/float/i.test(index.name) ? "SENSITIVE" : null,
+                    /float/i.test(index.name) && !/sensitive/i.test(index.name) ? "FLOAT" : null,
+                    /nepse/i.test(index.name) && !/sensitive|float/i.test(index.name) ? "NEPSE" : null,
+                    /bank/i.test(index.name) && !/development/i.test(index.name) ? "COMMERCIAL_BANKS" : null,
+                    /development/i.test(index.name) ? "DEVELOPMENT_BANKS" : null,
+                    /finance/i.test(index.name) ? "FINANCE" : null,
+                    /hotel|tourism/i.test(index.name) ? "HOTELS_AND_TOURISM" : null,
+                    /hydro/i.test(index.name) ? "HYDRO_POWER" : null,
+                    /investment/i.test(index.name) ? "INVESTMENT" : null,
+                    /life\s*insurance/i.test(index.name) ? "LIFE_INSURANCE" : null,
+                    /manufactur/i.test(index.name) ? "MANUFACTURING_AND_PROCESSING" : null,
+                    /microfinance/i.test(index.name) ? "MICROFINANCE" : null,
+                    /mutual/i.test(index.name) ? "MUTUAL_FUND" : null,
+                    /non[\s-]*life/i.test(index.name) ? "NON_LIFE_INSURANCE" : null,
+                    /others/i.test(index.name) ? "OTHERS" : null,
+                    /trading/i.test(index.name) ? "TRADING" : null,
+                  ].filter(Boolean) as string[];
+                  const hrefKey = hrefCandidates[0] ?? null;
+                  const inner = (
+                    <>
+                      <p className="truncate text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-zinc-500">{index.name}</p>
+                      <p className="mt-1 text-lg font-black tabular-nums">{fmtNum(index.value)}</p>
+                      <div className="mt-1 text-xs">
+                        {index.source === "index_feed" ? (
+                          <Delta value={index.changePct} />
+                        ) : index.source === "sector_pulse" ? (
+                          <span className="font-bold">
+                            Sector pulse <Delta value={index.sectorChangePct} />
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">{DATA_UNAVAILABLE}</span>
+                        )}
+                      </div>
+                      {index.source === "sector_pulse" ? (
+                        <p className="mt-1 text-[9px] font-semibold text-slate-400">Official index level not published — showing live sector average</p>
+                      ) : null}
+                    </>
+                  );
+                  return hrefKey ? (
+                    <Link
+                      key={index.id}
+                      href={`/market/indices/${encodeURIComponent(hrefKey)}`}
+                      className="rounded-2xl border border-slate-200/70 p-3 transition hover:-translate-y-0.5 hover:border-emerald-300/60 dark:border-white/[0.06] dark:hover:border-emerald-400/25"
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={index.id} className="rounded-2xl border border-slate-200/70 p-3 transition hover:-translate-y-0.5 dark:border-white/[0.06]">
+                      {inner}
                     </div>
-                    {index.source === "sector_pulse" ? (
-                      <p className="mt-1 text-[9px] font-semibold text-slate-400">Official index level not published — showing live sector average</p>
-                    ) : null}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
