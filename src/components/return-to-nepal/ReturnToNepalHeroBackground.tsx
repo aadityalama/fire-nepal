@@ -18,13 +18,13 @@ export function ReturnToNepalHeroBackground() {
         className="absolute inset-0 h-full w-full scale-[1.02] object-cover object-[68%_40%] brightness-[1.1] saturate-[1.05] sm:object-[72%_38%]"
       />
 
-      {/* Dark overlay lives on the background (not the glass card) — light enough to keep peaks visible */}
+      {/* Subtle dark gradient for text readability — keeps airplane & peaks visible */}
       <div
         className="absolute inset-0"
         style={{
           background: `
-            linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.30) 100%),
-            linear-gradient(105deg, rgba(6,18,14,0.22) 0%, rgba(8,22,18,0.08) 40%, transparent 60%)
+            linear-gradient(to bottom, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.34) 100%),
+            linear-gradient(105deg, rgba(2,10,8,0.42) 0%, rgba(6,18,14,0.18) 38%, transparent 62%)
           `,
         }}
       />
