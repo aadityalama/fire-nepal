@@ -306,7 +306,7 @@ export function AdminReviewsClient() {
           onClick={openCreate}
           className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-emerald-950 transition hover:bg-emerald-400"
         >
-          <Plus size={16} />
+          <Plus size={20} />
           Add review
         </button>
       </div>
@@ -352,7 +352,7 @@ export function AdminReviewsClient() {
 
         <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-100/40" />
+            <Search size={20} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-100/40" />
             <input
               value={search}
               onChange={(e) => {
@@ -421,7 +421,7 @@ export function AdminReviewsClient() {
       <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-sm">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm font-bold text-emerald-100/70">
-            <Loader2 size={18} className="animate-spin" />
+            <Loader2 size={22.5} className="animate-spin" />
             Loading reviews…
           </div>
         ) : reviews.length === 0 ? (
@@ -482,7 +482,7 @@ export function AdminReviewsClient() {
                             <div className="mt-1 flex flex-wrap gap-1">
                               {row.verified ? (
                                 <span className="inline-flex items-center gap-0.5 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-200">
-                                  <BadgeCheck size={10} /> Verified
+                                  <BadgeCheck size={12.5} /> Verified
                                 </span>
                               ) : null}
                               {row.is_demo ? (
@@ -501,7 +501,7 @@ export function AdminReviewsClient() {
                       <td className="max-w-xs px-3 py-4">
                         <div className="mb-1 flex gap-0.5 text-amber-300">
                           {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} size={12} fill={i < row.rating ? "currentColor" : "none"} />
+                            <Star key={i} size={15} fill={i < row.rating ? "currentColor" : "none"} />
                           ))}
                         </div>
                         <p className="font-bold text-emerald-50">{row.review_title}</p>
@@ -533,7 +533,7 @@ export function AdminReviewsClient() {
                               onClick={() => void runAction(row.id, "approve")}
                               className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-100"
                             >
-                              {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                              {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
                               Approve
                             </button>
                           ) : null}
@@ -554,7 +554,7 @@ export function AdminReviewsClient() {
                               onClick={() => void runAction(row.id, "reject")}
                               className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 px-2 py-1 text-[11px] font-bold text-rose-100"
                             >
-                              <XCircle size={12} /> Reject
+                              <XCircle size={15} /> Reject
                             </button>
                           ) : null}
                           {deleted ? (
@@ -564,7 +564,7 @@ export function AdminReviewsClient() {
                               onClick={() => void runAction(row.id, "restore")}
                               className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 px-2 py-1 text-[11px] font-bold text-sky-100"
                             >
-                              <RotateCcw size={12} /> Restore
+                              <RotateCcw size={15} /> Restore
                             </button>
                           ) : (
                             <button
@@ -577,14 +577,14 @@ export function AdminReviewsClient() {
                               }}
                               className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 px-2 py-1 text-[11px] font-bold text-rose-100"
                             >
-                              <Trash2 size={12} /> Delete
+                              <Trash2 size={15} /> Delete
                             </button>
                           )}
                           <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] font-bold text-emerald-100 hover:bg-white/[0.06]">
                             {avatarUploadId === row.id ? (
-                              <Loader2 size={12} className="animate-spin" />
+                              <Loader2 size={15} className="animate-spin" />
                             ) : (
-                              <Upload size={12} />
+                              <Upload size={15} />
                             )}
                             Avatar
                             <input
@@ -620,7 +620,7 @@ export function AdminReviewsClient() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             className="inline-flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
           >
-            <ChevronLeft size={14} /> Prev
+            <ChevronLeft size={17.5} /> Prev
           </button>
           <button
             type="button"
@@ -628,7 +628,7 @@ export function AdminReviewsClient() {
             onClick={() => setPage((p) => p + 1)}
             className="inline-flex items-center gap-1 rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-emerald-100 disabled:opacity-40"
           >
-            Next <ChevronRight size={14} />
+            Next <ChevronRight size={17.5} />
           </button>
         </div>
       </div>
