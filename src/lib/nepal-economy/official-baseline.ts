@@ -1,3 +1,8 @@
+/**
+ * DEPRECATED for production metric values.
+ * Retained only as historical reference / non-numeric news fallback seeds.
+ * The Economic Data Engine must never use these figures as current card values.
+ */
 /** Curated official figures when live feeds are unavailable. Sources cited in metadata. */
 export type OfficialMetric = {
   value: number;

@@ -1,4 +1,3 @@
-import { OFFICIAL_NEWS } from "@/lib/nepal-economy/official-baseline";
 import type { NepalEconomyNewsItem } from "@/types/nepal-economy";
 
 const RSS_URL =
@@ -71,10 +70,8 @@ export async function fetchEconomicNews(): Promise<{ items: NepalEconomyNewsItem
     if (items.length === 0) throw new Error("RSS returned no items");
     return { items, mode: "live" };
   } catch {
-    return {
-      items: OFFICIAL_NEWS.map((item) => ({ ...item })),
-      mode: "official",
-    };
+    // Prefer empty over inventing headlines that embed hard-coded macro figures.
+    return { items: [], mode: "official" };
   } finally {
     clearTimeout(timeout);
   }

@@ -154,8 +154,28 @@ function MetricTile({ card }: { card: NepalEconomyCard }) {
         <span className={toneClasses(card.tone)}>{card.change ?? card.detail}</span>
       </div>
       <div className="mt-auto space-y-1 border-t border-white/6 pt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100/35">
-        <p>Source: {card.source}</p>
+        {card.period ? <p>Period: {card.period}</p> : null}
+        <p>
+          Source:{" "}
+          {card.sourceUrl ? (
+            <a
+              href={card.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-emerald-400/30 underline-offset-2 transition hover:text-emerald-200"
+            >
+              {card.source}
+            </a>
+          ) : (
+            card.source
+          )}
+        </p>
         <p>Updated: {formatDate(card.updatedAt)}</p>
+        {card.stale ? (
+          <p className="normal-case tracking-normal text-amber-200/80">
+            {card.staleReason ?? "May be outdated — awaiting a fresher official publication."}
+          </p>
+        ) : null}
       </div>
     </article>
   );
@@ -399,7 +419,7 @@ export function NepalEconomyDashboard() {
             </div>
           </Panel>
 
-          <Panel title="Commercial Bank FD Rates" subtitle="NRB / BFIs">
+          <Panel title="Deposit & Policy Rates" subtitle="NRB weighted averages">
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data?.charts.fdRates ?? []} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>

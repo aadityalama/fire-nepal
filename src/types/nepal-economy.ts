@@ -24,6 +24,14 @@ export type NepalEconomyCard = {
   sourceUrl: string;
   updatedAt: string;
   dataMode: NepalEconomyDataMode;
+  /** Official data period (e.g. mid-June 2026, CY 2025). Distinct from updatedAt. */
+  period?: string | null;
+  /** Source publication timestamp when known. */
+  publishedAt?: string | null;
+  /** True when verification window exceeded or fallback cache is shown. */
+  stale?: boolean;
+  staleReason?: string | null;
+  numericValue?: number | null;
 };
 
 export type NepalEconomyMover = {
@@ -62,4 +70,5 @@ export type NepalEconomyDashboardData = {
   };
   news: NepalEconomyNewsItem[];
   newsMode: "live" | "official" | "cached";
+  engineSource?: "database" | "live" | "mixed" | "empty";
 };
