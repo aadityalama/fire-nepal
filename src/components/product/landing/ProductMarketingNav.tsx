@@ -37,8 +37,8 @@ export function ProductMarketingNav() {
       <nav className="product-nav-in sticky top-0 z-50 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6 lg:px-8">
           <Link href="/#home" className="group flex min-w-0 shrink-0 items-center gap-2 sm:gap-3" aria-label="FIRE Nepal home">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7CFFB3] via-[#39E58C] to-[#149B5F] shadow-[0_0_25px_rgba(57,229,140,0.45)] sm:h-14 sm:w-14">
-              <Flame className="h-5 w-5 fill-white text-white sm:h-7 sm:w-7" strokeWidth={2.6} aria-hidden />
+            <span className="flex h-[3.575rem] w-[3.575rem] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7CFFB3] via-[#39E58C] to-[#149B5F] shadow-[0_0_25px_rgba(57,229,140,0.45)] sm:h-[4.55rem] sm:w-[4.55rem]">
+              <Flame className="h-[1.625rem] w-[1.625rem] fill-white text-white sm:h-[2.275rem] sm:w-[2.275rem]" strokeWidth={2.6} aria-hidden />
             </span>
             <div className="min-w-0 leading-none">
               <p className="whitespace-nowrap text-base font-black uppercase tracking-[-0.035em] text-black sm:text-2xl">
