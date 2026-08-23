@@ -1,0 +1,95 @@
+# FIRE Nepal — Nepal Economy data refresh (non-Vercel scheduler).
+#
+# Required repository secrets:
+#   ECONOMY_CRON_TARGET_URL — e.g. https://www.firenepal.com/api/cron/nepal-economy-refresh
+#   CRON_SECRET — same value as Vercel/project CRON_SECRET
+#
+# Prefer www host so Authorization is not dropped on apex→www redirects.
+
+name: Nepal economy refresh cron
+
+on:
+  schedule:
+    # Every 6 hours — metric-specific intervals are enforced inside the handler.
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nepal-economy-refresh-cron
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call /api/cron/nepal-economy-refresh
+        env:
+          URL: ${{ secrets.ECONOMY_CRON_TARGET_URL }}
+          TOKEN: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from __future__ import annotations
+          import hashlib, json, os, re, sys, urllib.error, urllib.request
+          from urllib.parse import urlparse
+
+          def normalize(raw: str) -> str:
+              s = raw.encode("utf-8").decode("utf-8-sig")
+              s = s.replace("\r", "").replace("\n", "")
+              s = s.strip().strip("\u00a0\u200b\ufeff")
+              if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+                  s = s[1:-1].strip()
+              s = re.sub(r"^[Bb]earer\s+", "", s).strip()
+              return s
+
+          def canonicalize_url(url: str) -> str:
+              if url.startswith("https://firenepal.com/") or url == "https://firenepal.com":
+                  return "https://www.firenepal.com" + url[len("https://firenepal.com") :]
+              if url.startswith("http://firenepal.com/") or url == "http://firenepal.com":
+                  return "https://www.firenepal.com" + url[len("http://firenepal.com") :]
+              return url
+
+          url = canonicalize_url(normalize(os.environ.get("URL") or ""))
+          token = normalize(os.environ.get("TOKEN") or "")
+          if not url or not token:
+              print("::error::ECONOMY_CRON_TARGET_URL or CRON_SECRET empty")
+              sys.exit(1)
+          parsed = urlparse(url)
+          if parsed.scheme != "https" or not parsed.netloc or not parsed.path:
+              print(f"::error::Invalid ECONOMY_CRON_TARGET_URL: {url!r}")
+              sys.exit(1)
+
+          print(f"Target: {parsed.netloc}{parsed.path}")
+          print(f"CRON_SECRET sha256: {hashlib.sha256(token.encode()).hexdigest()}")
+
+          req = urllib.request.Request(
+              url,
+              method="GET",
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/json",
+                  "User-Agent": "fire-nepal-economy-cron/1.0",
+              },
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=240) as resp:
+                  body = resp.read().decode("utf-8", errors="replace")
+                  code = resp.getcode()
+          except urllib.error.HTTPError as e:
+              body = e.read().decode("utf-8", errors="replace")
+              code = e.code
+          except Exception as e:
+              print(f"Request failed: {e}")
+              sys.exit(1)
+
+          print(f"HTTP {code}")
+          print(body[:2500])
+          if code != 200:
+              sys.exit(1)
+          payload = json.loads(body)
+          if payload.get("ok") is not True:
+              print("::error::Response ok!=true")
+              sys.exit(1)
+          print("Nepal economy refresh OK")
+          PY

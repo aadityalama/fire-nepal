@@ -1044,6 +1044,116 @@ export type Database = {
         };
         Relationships: [];
       };
+      economic_indicators: {
+        Row: {
+          id: string;
+          metric_key: string;
+          metric_name: string;
+          value: number;
+          display_value: string;
+          unit: string;
+          currency: string | null;
+          source: string;
+          source_url: string;
+          period: string | null;
+          published_at: string | null;
+          observed_at: string;
+          frequency: string;
+          status: string;
+          value_kind: string;
+          change_value: number | null;
+          change_percent: number | null;
+          change_label: string | null;
+          tone: string;
+          raw_data: Json | null;
+          fetch_error: string | null;
+          last_attempt_at: string | null;
+          last_success_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          metric_key: string;
+          metric_name: string;
+          value: number;
+          display_value: string;
+          unit: string;
+          currency?: string | null;
+          source: string;
+          source_url: string;
+          period?: string | null;
+          published_at?: string | null;
+          observed_at?: string;
+          frequency: string;
+          status: string;
+          value_kind?: string;
+          change_value?: number | null;
+          change_percent?: number | null;
+          change_label?: string | null;
+          tone?: string;
+          raw_data?: Json | null;
+          fetch_error?: string | null;
+          last_attempt_at?: string | null;
+          last_success_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          metric_key?: string;
+          metric_name?: string;
+          value?: number;
+          display_value?: string;
+          unit?: string;
+          currency?: string | null;
+          source?: string;
+          source_url?: string;
+          period?: string | null;
+          published_at?: string | null;
+          observed_at?: string;
+          frequency?: string;
+          status?: string;
+          value_kind?: string;
+          change_value?: number | null;
+          change_percent?: number | null;
+          change_label?: string | null;
+          tone?: string;
+          raw_data?: Json | null;
+          fetch_error?: string | null;
+          last_attempt_at?: string | null;
+          last_success_at?: string | null;
+        };
+        Relationships: [];
+      };
+      economic_refresh_runs: {
+        Row: {
+          id: string;
+          status: string;
+          items: number;
+          message: string | null;
+          started_at: string;
+          finished_at: string;
+          details: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          status: string;
+          items?: number;
+          message?: string | null;
+          started_at: string;
+          finished_at?: string;
+          details?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: string;
+          items?: number;
+          message?: string | null;
+          started_at?: string;
+          finished_at?: string;
+          details?: Json | null;
+        };
+        Relationships: [];
+      };
       system_health: {
         Row: {
           id: string;
