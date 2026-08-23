@@ -57,7 +57,7 @@ const tools: Array<[string, string, string, LucideIcon]> = [
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],
   ["Family Wealth + Child Education", "Plan your family's future, child education, savings and long-term wealth goals.", "/family", GraduationCap],
   ["Remittance Calculator", "Compare fees and timing", "/remittance-calculator", CreditCard],
-  ["SIP Calculator", "Monthly investing growth", "/sip-calculator", BarChart3],
+  ["SIP Calculator Nepal", "Estimate mutual fund SIP returns in NPR", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Safe withdrawal & retirement drawdown", "/swp-calculator", LineChart],
   ["Cashflow Dashboard", "Income, savings rate & emergency runway", "/cashflow-dashboard", Banknote],
   ["FIRE Summary", "Net worth, cashflow & 25× progress in one view", "/fire-summary", LayoutDashboard],
@@ -74,13 +74,13 @@ const fireTools: Array<[string, string, string, LucideIcon]> = [
   ["Expense Tracker", "Track personal daily expenses", "/expense-dashboard?finance=personal", ReceiptText],
   ["Saving Goals", "Monthly KRW/NPR savings growth", "#dashboard", PiggyBank],
   ["Reminder Planner", "Bills, visa, SIP, insurance reminders", "#learn", CalendarCheck],
-  ["SIP Calculator", "Long term investment growth calculator", "/sip-calculator", BarChart3],
+  ["SIP Calculator Nepal", "SIP investment calculator with step-up & NPR charts", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Inflation-aware withdrawal & runway", "/swp-calculator", LineChart],
   ["Korea Pension + Severance", "OCR payslips, 국민연금 & 퇴직금", "/korea-pension-dashboard", Building2],
   ["Currency Converter", "KRW to NPR live conversion", "/currency-converter", CircleDollarSign],
   ["Return Planner", "Nepal return target planning", "#investments", Plane],
   ["Emergency Fund", "Safety fund progress tracker", "#investments", ShieldCheck],
-  ["Investment Planner", "Stocks, SIP, mutual fund planning", "#investments", Coins],
+  ["SIP Guides for Nepal", "Beginner guides that link back to the SIP calculator", "/learn/sip", Coins],
 ];
 
 const operatingSystemCards: Array<[string, string, string, LucideIcon]> = [
@@ -361,23 +361,23 @@ export default function HomePage() {
             <SmartFinancialToolCta>Calculate Now</SmartFinancialToolCta>
           </SmartFinancialToolCard>
 
-          <SmartFinancialToolCard href="/investment-planner">
+          <SmartFinancialToolCard href="/sip-calculator">
             <Coins className="mb-4 h-6 w-6 text-amber-600" />
-            <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">Investment Planner</h3>
+            <h3 className="text-lg font-black leading-snug text-emerald-950 sm:text-xl">SIP Calculator Nepal</h3>
             <div className="mt-4 flex flex-1 flex-col justify-start gap-3 text-sm">
               {[
-                ["Mutual Funds", "12-15%"],
-                ["Stock Market", "15-20%"],
-                ["Real Estate", "8-12%"],
-                ["Fixed Deposit", "6-8%"],
+                ["Rs 5,000 / mo · 10 yrs", "Illustrative growth"],
+                ["Step-up SIP", "Model salary increases"],
+                ["Year-by-year table", "NPR maturity value"],
+                ["Educational only", "Returns not guaranteed"],
               ].map(([label, value]) => (
-                <div key={label} className="flex justify-between">
+                <div key={label} className="flex justify-between gap-3">
                   <span className="font-bold text-slate-600">{label}</span>
-                  <span className="font-black text-emerald-900">{value}</span>
+                  <span className="text-right font-black text-emerald-900">{value}</span>
                 </div>
               ))}
             </div>
-            <SmartFinancialToolCta>Compare All</SmartFinancialToolCta>
+            <SmartFinancialToolCta>Calculate SIP returns</SmartFinancialToolCta>
           </SmartFinancialToolCard>
 
           <SmartFinancialToolCard href="/savings-tracker">

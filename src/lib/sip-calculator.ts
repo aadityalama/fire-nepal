@@ -22,6 +22,8 @@ export interface SipInputs {
   years: number;
   inflationPct: number;
   currency: SipCurrency;
+  /** Optional annual increase in monthly SIP (percent). Defaults to 0. */
+  annualStepUpPct?: number;
   /** Optional storytelling age; defaults to 30 when omitted. */
   currentAge?: number;
 }
@@ -34,6 +36,18 @@ export interface SipYearPoint {
   realValue: number;
   valueNpr: number;
   fireProgress: number;
+  /** Monthly SIP amount used during this completed year (after prior step-ups). */
+  monthlySip?: number;
+}
+
+export interface SipMonthPoint {
+  month: number;
+  year: number;
+  monthInYear: number;
+  invested: number;
+  profit: number;
+  nominalValue: number;
+  monthlySip: number;
 }
 
 export interface SipProjectionResult {
@@ -41,6 +55,7 @@ export interface SipProjectionResult {
   annualReturn: number;
   years: number;
   inflation: number;
+  annualStepUpPct: number;
   futureValue: number;
   totalInvested: number;
   totalProfit: number;
@@ -57,6 +72,7 @@ export interface SipProjectionResult {
   coastFireYear: number | null;
   retirementYearsCovered: number;
   yearlyRows: SipYearPoint[];
+  monthlyRows: SipMonthPoint[];
   cagrPct: number;
   realReturnPct: number;
 }
@@ -201,7 +217,8 @@ function riskEmoji(level: SipRiskLevel): string {
 }
 
 export function formatSipCurrency(value: number, currency: SipCurrency): string {
-  const locale = currency === "KRW" ? "ko-KR" : currency === "NPR" ? "en-NP" : "en-US";
+  // Nepalese/Indian digit grouping (lakhs/crores) for NPR; ko-KR / en-US otherwise.
+  const locale = currency === "KRW" ? "ko-KR" : currency === "NPR" ? "en-IN" : "en-US";
   return new Intl.NumberFormat(locale, {
     currency,
     maximumFractionDigits: 0,
@@ -213,13 +230,81 @@ export function formatSipNpr(value: number): string {
   return formatSipCurrency(value, "NPR");
 }
 
-/** End-of-period SIP future value — same formula as SipCalculatorDashboard. */
-export function sipFutureValue(monthlyInvestment: number, annualReturnPct: number, years: number): number {
+/**
+ * End-of-period / beginning-of-month SIP future value (annuity-due style).
+ * When step-up is 0 this matches the classic closed-form SIP formula.
+ */
+export function sipFutureValue(
+  monthlyInvestment: number,
+  annualReturnPct: number,
+  years: number,
+  annualStepUpPct = 0,
+): number {
+  return simulateSipCashflows(monthlyInvestment, annualReturnPct, years, annualStepUpPct).futureValue;
+}
+
+function simulateSipCashflows(
+  monthlyInvestment: number,
+  annualReturnPct: number,
+  years: number,
+  annualStepUpPct = 0,
+): {
+  futureValue: number;
+  totalInvested: number;
+  yearlyRows: Omit<SipYearPoint, "valueNpr" | "fireProgress" | "realValue">[];
+  monthlyRows: SipMonthPoint[];
+} {
   const monthlyReturn = annualReturnPct / 100 / 12;
-  const months = years * 12;
-  if (months <= 0 || monthlyInvestment <= 0) return 0;
-  if (monthlyReturn <= 0) return monthlyInvestment * months;
-  return monthlyInvestment * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn);
+  const stepUp = Math.max(0, annualStepUpPct) / 100;
+  const safeYears = Math.max(0, Math.floor(years));
+  const yearlyRows: Omit<SipYearPoint, "valueNpr" | "fireProgress" | "realValue">[] = [
+    { year: 0, nominalValue: 0, invested: 0, profit: 0, monthlySip: monthlyInvestment },
+  ];
+  const monthlyRows: SipMonthPoint[] = [];
+
+  if (safeYears <= 0 || monthlyInvestment <= 0) {
+    return { futureValue: 0, totalInvested: 0, yearlyRows, monthlyRows };
+  }
+
+  let value = 0;
+  let invested = 0;
+  let currentMonthly = monthlyInvestment;
+  let monthIndex = 0;
+
+  for (let year = 1; year <= safeYears; year += 1) {
+    const yearStartMonthly = currentMonthly;
+    for (let m = 1; m <= 12; m += 1) {
+      monthIndex += 1;
+      if (monthlyReturn > 0) {
+        value = (value + currentMonthly) * (1 + monthlyReturn);
+      } else {
+        value += currentMonthly;
+      }
+      invested += currentMonthly;
+      // Keep monthly rows practical for UI (cap long horizons at last 24 months + year ends handled separately).
+      if (safeYears <= 5 || monthIndex % 3 === 0 || m === 12) {
+        monthlyRows.push({
+          month: monthIndex,
+          year,
+          monthInYear: m,
+          invested,
+          profit: Math.max(0, value - invested),
+          nominalValue: value,
+          monthlySip: currentMonthly,
+        });
+      }
+    }
+    yearlyRows.push({
+      year,
+      nominalValue: value,
+      invested,
+      profit: Math.max(0, value - invested),
+      monthlySip: yearStartMonthly,
+    });
+    currentMonthly *= 1 + stepUp;
+  }
+
+  return { futureValue: value, totalInvested: invested, yearlyRows, monthlyRows };
 }
 
 /**
@@ -230,11 +315,12 @@ export function runSipProjection(inputs: SipInputs): SipProjectionResult {
   const annualReturn = clamp(inputs.annualReturnPct, 0, 60);
   const years = clamp(Math.floor(inputs.years), 0, 60);
   const inflation = clamp(inputs.inflationPct, 0, 40);
+  const annualStepUpPct = clamp(inputs.annualStepUpPct ?? 0, 0, 50);
   const currency = inputs.currency;
-  const months = years * 12;
 
-  const futureValue = sipFutureValue(monthlyInvestment, annualReturn, years);
-  const totalInvested = monthlyInvestment * months;
+  const simulated = simulateSipCashflows(monthlyInvestment, annualReturn, years, annualStepUpPct);
+  const futureValue = simulated.futureValue;
+  const totalInvested = simulated.totalInvested;
   const totalProfit = Math.max(0, futureValue - totalInvested);
   const inflationFactor = Math.pow(1 + inflation / 100, years);
   const inflationAdjustedValue = inflationFactor > 0 ? futureValue / inflationFactor : futureValue;
@@ -252,18 +338,11 @@ export function runSipProjection(inputs: SipInputs): SipProjectionResult {
       ? (Math.pow(futureValue / totalInvested, 1 / years) - 1) * 100
       : 0;
 
-  const yearlyRows: SipYearPoint[] = Array.from({ length: years + 1 }, (_, year) => {
-    const yearMonths = year * 12;
-    const nominalValue = sipFutureValue(monthlyInvestment, annualReturn, year);
-    const invested = monthlyInvestment * yearMonths;
-    const profit = Math.max(0, nominalValue - invested);
-    const realValue = year === 0 ? 0 : nominalValue / Math.pow(1 + inflation / 100, year);
-    const valueNpr = toNpr(nominalValue, currency);
+  const yearlyRows: SipYearPoint[] = simulated.yearlyRows.map((row) => {
+    const realValue = row.year === 0 ? 0 : row.nominalValue / Math.pow(1 + inflation / 100, row.year);
+    const valueNpr = toNpr(row.nominalValue, currency);
     return {
-      year,
-      nominalValue,
-      invested,
-      profit,
+      ...row,
       realValue,
       valueNpr,
       fireProgress: Math.min(100, (valueNpr / SIP_FIRE_TARGET_NPR) * 100),
@@ -275,6 +354,7 @@ export function runSipProjection(inputs: SipInputs): SipProjectionResult {
     annualReturn,
     years,
     inflation,
+    annualStepUpPct,
     futureValue,
     totalInvested,
     totalProfit,
@@ -292,6 +372,7 @@ export function runSipProjection(inputs: SipInputs): SipProjectionResult {
     retirementYearsCovered:
       SIP_NEPAL_MONTHLY_EXPENSE_NPR > 0 ? futureValueNpr / (SIP_NEPAL_MONTHLY_EXPENSE_NPR * 12) : 0,
     yearlyRows,
+    monthlyRows: simulated.monthlyRows,
     cagrPct,
     realReturnPct,
   };

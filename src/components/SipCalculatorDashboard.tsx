@@ -50,10 +50,10 @@ const FULL_FIRE_NPR = SIP_FIRE_TARGET_NPR;
 const NPR_PREFIX = "रु";
 
 const quickPresets: Array<{ label: string; amount: number; helper: string }> = [
-  { label: "NPR 10k", amount: 10_000, helper: "Starter habit" },
-  { label: "NPR 25k", amount: 25_000, helper: "Steady habit" },
-  { label: "NPR 50k", amount: 50_000, helper: "Nepal investing" },
-  { label: "NPR 100k", amount: 100_000, helper: "Premium SIP" },
+  { label: "Rs 1,000", amount: 1_000, helper: "Starter SIP" },
+  { label: "Rs 5,000", amount: 5_000, helper: "Common habit" },
+  { label: "Rs 10,000", amount: 10_000, helper: "Steady growth" },
+  { label: "Rs 20,000", amount: 20_000, helper: "Aggressive habit" },
 ];
 
 const milestoneTimeline = [
@@ -211,17 +211,20 @@ function SliderField({
 
 export function SipCalculatorDashboard() {
   const { user } = useProductAuth();
-  const [monthlyRaw, setMonthlyRaw] = useState("");
-  const [returnRaw, setReturnRaw] = useState("");
-  const [yearsRaw, setYearsRaw] = useState("");
-  const [inflationRaw, setInflationRaw] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  // Sensible NPR defaults so first paint shows an educational projection (user can edit).
+  const [monthlyRaw, setMonthlyRaw] = useState("5000");
+  const [returnRaw, setReturnRaw] = useState("12");
+  const [yearsRaw, setYearsRaw] = useState("10");
+  const [inflationRaw, setInflationRaw] = useState("5.5");
+  const [stepUpRaw, setStepUpRaw] = useState("0");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      if (!user?.id) return;
+      setIsLoading(true);
       try {
-        if (!user?.id) return;
         const row = await fetchUserProfile(getSupabaseBrowserClient(), user.id);
         if (cancelled || !row) return;
         const profile = mapUserProfileToPremiumFields(row);
@@ -245,9 +248,10 @@ export function SipCalculatorDashboard() {
         annualReturnPct: Number(returnRaw || 0),
         years: Number(yearsRaw || 0),
         inflationPct: Number(inflationRaw || 0),
+        annualStepUpPct: Number(stepUpRaw || 0),
         currency: "NPR",
       }),
-    [inflationRaw, monthlyRaw, returnRaw, yearsRaw],
+    [inflationRaw, monthlyRaw, returnRaw, stepUpRaw, yearsRaw],
   );
 
   const sipAiInputs = useMemo(
@@ -256,10 +260,17 @@ export function SipCalculatorDashboard() {
       annualReturnPct: projection.annualReturn,
       years: projection.years,
       inflationPct: projection.inflation,
+      annualStepUpPct: projection.annualStepUpPct,
       currency: "NPR" as const,
       currentAge: 30,
     }),
-    [projection.annualReturn, projection.inflation, projection.monthlyInvestment, projection.years],
+    [
+      projection.annualReturn,
+      projection.annualStepUpPct,
+      projection.inflation,
+      projection.monthlyInvestment,
+      projection.years,
+    ],
   );
 
   const isEmpty = projection.monthlyInvestment <= 0 || projection.years <= 0;
@@ -273,24 +284,26 @@ export function SipCalculatorDashboard() {
   ];
   const scenarioMonthly = projection.monthlyInvestment;
   const scenarioYears = projection.years;
-  const scenarioFutureNpr =
-    scenarioMonthly > 0 && scenarioYears > 0
-      ? (() => {
-          const monthlyReturn = projection.annualReturn / 100 / 12;
-          const months = scenarioYears * 12;
-          return monthlyReturn > 0
-            ? scenarioMonthly * ((Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn) * (1 + monthlyReturn)
-            : scenarioMonthly * months;
-        })()
-      : 0;
+  const scenarioFutureNpr = projection.futureValueNpr;
 
   function applyPreset(preset: (typeof quickPresets)[number]) {
     setMonthlyRaw(String(preset.amount));
   }
 
   return (
-    <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-28 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
+    <div className="premium-shell overflow-hidden bg-[#f4fbf6] px-4 pb-28 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
       <section className="mx-auto max-w-7xl">
+        <nav aria-label="Breadcrumb" className="mb-4 text-xs font-bold text-slate-500">
+          <ol className="flex flex-wrap items-center gap-1.5">
+            <li>
+              <Link href="/" className="hover:text-emerald-800">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li className="text-emerald-800">SIP Calculator Nepal</li>
+          </ol>
+        </nav>
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href="/"
@@ -300,7 +313,7 @@ export function SipCalculatorDashboard() {
             Back to Homepage
           </Link>
           <div className="inline-flex w-fit items-center rounded-full border border-emerald-100 bg-white/80 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-emerald-800 shadow-sm backdrop-blur">
-            NPR only
+            NPR · Free SIP tool
           </div>
         </div>
 
@@ -317,17 +330,20 @@ export function SipCalculatorDashboard() {
             <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
               <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
                 <Sparkles size={14} />
-                FIRE Nepal Wealth OS
+                FIRE Nepal · Mutual fund SIP
               </p>
-              <h1 className="mt-4 text-5xl font-black leading-[0.92] tracking-[-0.06em] sm:text-6xl lg:text-7xl">
-                SIP Calculator
+              <h1 className="mt-4 text-4xl font-black leading-[0.95] tracking-[-0.05em] sm:text-5xl lg:text-6xl">
+                SIP Calculator Nepal
               </h1>
-              <p className="font-nepali mt-3 text-xl font-semibold leading-snug text-emerald-50/72 sm:text-2xl">
+              <p className="mt-4 max-w-2xl text-lg font-semibold leading-snug text-emerald-50/90 sm:text-xl">
+                Calculate your estimated SIP returns in NPR.
+              </p>
+              <p className="font-nepali mt-2 text-base font-semibold leading-snug text-emerald-50/65 sm:text-lg">
                 नियमित लगानी वृद्धि योजना
               </p>
-              <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
-                A premium long-term wealth growth dashboard for Nepali investors, built to connect monthly NPR investing,
-                inflation, and FIRE readiness.
+              <p className="mt-4 max-w-2xl text-sm font-medium leading-relaxed text-emerald-50/80 sm:text-base">
+                Estimate maturity value from monthly investment, period, expected annual return, and optional annual
+                step-up — then review total invested, wealth gain, and year-by-year growth.
               </p>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
@@ -404,7 +420,9 @@ export function SipCalculatorDashboard() {
                 <div className="mb-5 flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-black tracking-tight text-emerald-950">SIP Engine</h2>
-                    <p className="text-sm font-bold text-slate-500">Monthly investing model with inflation and FIRE target logic.</p>
+                    <p className="text-sm font-bold text-slate-500">
+                      Monthly NPR SIP with optional step-up, inflation, and FIRE target logic.
+                    </p>
                   </div>
                   <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Live</span>
                 </div>
@@ -428,6 +446,12 @@ export function SipCalculatorDashboard() {
                     onChange={(next) => setYearsRaw(sanitizeDecimalInput(next))}
                   />
                   <InputField
+                    label="Annual Step-Up"
+                    value={stepUpRaw}
+                    suffix="%"
+                    onChange={(next) => setStepUpRaw(sanitizeDecimalInput(next))}
+                  />
+                  <InputField
                     label="Inflation"
                     value={inflationRaw}
                     suffix="%"
@@ -435,6 +459,7 @@ export function SipCalculatorDashboard() {
                   />
                   <SliderField label="Return slider" value={projection.annualReturn} min={0} max={24} step={0.5} suffix="%" onChange={setReturnRaw} />
                   <SliderField label="Year slider" value={projection.years} min={0} max={40} step={1} suffix="Y" onChange={setYearsRaw} />
+                  <SliderField label="Step-up slider" value={projection.annualStepUpPct} min={0} max={25} step={1} suffix="%" onChange={setStepUpRaw} />
                 </div>
               </div>
 
@@ -635,8 +660,11 @@ export function SipCalculatorDashboard() {
                       <p className="mt-3 text-sm font-bold leading-relaxed text-emerald-50/80">
                         {scenarioMonthly > 0 && scenarioYears > 0 ? (
                           <>
-                            At your selected {formatPct(projection.annualReturn)} annual return, this scenario projects a future
-                            value of {formatNpr(scenarioFutureNpr)} in Nepal terms.
+                            At your selected {formatPct(projection.annualReturn)} annual return
+                            {projection.annualStepUpPct > 0
+                              ? ` with ${formatPct(projection.annualStepUpPct)} annual step-up`
+                              : ""}
+                            , this scenario projects a future value of {formatNpr(scenarioFutureNpr)} in Nepal terms.
                           </>
                         ) : (
                           <>
@@ -649,7 +677,7 @@ export function SipCalculatorDashboard() {
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
                           <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Contributed (scenario)</p>
                           <p className="mt-2 text-2xl font-black">
-                            {formatNpr(scenarioMonthly * Math.max(0, scenarioYears) * 12)}
+                            {formatNpr(projection.totalInvested)}
                           </p>
                         </div>
                         <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
@@ -694,6 +722,7 @@ export function SipCalculatorDashboard() {
                       <thead className="sticky top-0 bg-emerald-950 text-xs uppercase tracking-[0.14em] text-emerald-50">
                         <tr>
                           <th className="px-4 py-3 font-black">Year</th>
+                          <th className="px-4 py-3 font-black">Monthly SIP</th>
                           <th className="px-4 py-3 font-black">Invested</th>
                           <th className="px-4 py-3 font-black">Profit</th>
                           <th className="px-4 py-3 font-black">Future Value</th>
@@ -704,6 +733,9 @@ export function SipCalculatorDashboard() {
                         {projection.yearlyRows.map((row) => (
                           <tr key={row.year} className="transition hover:bg-emerald-50/75">
                             <td className="whitespace-nowrap px-4 py-3 font-black text-emerald-950">{row.year}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">
+                              {row.year === 0 ? "—" : formatNpr(row.monthlySip ?? projection.monthlyInvestment)}
+                            </td>
                             <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatNpr(row.invested)}</td>
                             <td className="whitespace-nowrap px-4 py-3 font-bold text-emerald-700">{formatNpr(row.profit)}</td>
                             <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">{formatNpr(row.nominalValue)}</td>
@@ -715,7 +747,71 @@ export function SipCalculatorDashboard() {
                   </div>
                 </section>
 
+                {projection.years > 0 && projection.years <= 5 && projection.monthlyRows.length > 0 ? (
+                  <section className="mt-6 glass-card soft-gradient-border rounded-[2rem] p-5 sm:p-6">
+                    <div className="mb-5">
+                      <h2 className="text-2xl font-black tracking-tight text-emerald-950">Monthly Breakdown</h2>
+                      <p className="text-sm font-bold text-slate-500">
+                        Shown for horizons up to 5 years so the table stays practical on mobile.
+                      </p>
+                    </div>
+                    <div className="max-h-[24rem] overflow-auto rounded-3xl border border-emerald-100/80 bg-white/75">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="sticky top-0 bg-emerald-950 text-xs uppercase tracking-[0.14em] text-emerald-50">
+                          <tr>
+                            <th className="px-4 py-3 font-black">Month</th>
+                            <th className="px-4 py-3 font-black">SIP</th>
+                            <th className="px-4 py-3 font-black">Invested</th>
+                            <th className="px-4 py-3 font-black">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-100/80">
+                          {projection.monthlyRows.map((row) => (
+                            <tr key={row.month} className="transition hover:bg-emerald-50/75">
+                              <td className="whitespace-nowrap px-4 py-3 font-black text-emerald-950">
+                                Y{row.year}·M{row.monthInYear}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">
+                                {formatNpr(row.monthlySip)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-700">
+                                {formatNpr(row.invested)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 font-bold text-emerald-700">
+                                {formatNpr(row.nominalValue)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
+
                 <SipAiWealthProjection result={projection} inputs={sipAiInputs} />
+
+                <section className="mt-6 rounded-[2rem] border border-emerald-100 bg-white/75 p-5 text-sm font-bold leading-relaxed text-slate-600 shadow-sm backdrop-blur sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Disclaimer</p>
+                  <p className="mt-3 text-emerald-950">
+                    Results are illustrative estimates based on the assumptions entered. Mutual fund returns are not
+                    guaranteed. Actual returns may vary. This calculator is for educational and financial planning
+                    purposes only.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3 text-sm">
+                    <Link href="/swp-calculator" className="font-black text-emerald-800 underline-offset-2 hover:underline">
+                      SWP Calculator
+                    </Link>
+                    <Link href="/lumpsum-calculator" className="font-black text-emerald-800 underline-offset-2 hover:underline">
+                      Lumpsum Calculator
+                    </Link>
+                    <Link href="/fire-summary" className="font-black text-emerald-800 underline-offset-2 hover:underline">
+                      FIRE Summary
+                    </Link>
+                    <Link href="/learn/sip" className="font-black text-emerald-800 underline-offset-2 hover:underline">
+                      SIP Guides for Nepal
+                    </Link>
+                  </div>
+                </section>
               </>
             )}
           </>
@@ -733,6 +829,6 @@ export function SipCalculatorDashboard() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

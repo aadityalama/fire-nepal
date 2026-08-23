@@ -148,8 +148,8 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
       },
       {
         href: "/sip-calculator",
-        title: "SIP Calculator",
-        body: "Monthly investing growth calculator",
+        title: "SIP Calculator Nepal",
+        body: "Estimate mutual fund SIP returns in NPR",
         icon: BarChart3,
         accent: "from-emerald-500/20 to-lime-400/10",
         plan: "free",

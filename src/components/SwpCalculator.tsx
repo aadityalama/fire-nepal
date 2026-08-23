@@ -27,6 +27,7 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { Bar, Line } from "react-chartjs-2";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
+import { CalculatorRelatedTools } from "@/components/sip-calculator/CalculatorRelatedTools";
 import { SwpAiRetirementAnalysis } from "@/components/SwpAiRetirementAnalysis";
 import { SwpDashboardV2 } from "@/components/SwpDashboardV2";
 import {
@@ -522,6 +523,11 @@ export function SwpCalculator() {
         <SwpAiRetirementAnalysis result={result} inputs={parsed} />
 
         <SwpDashboardV2 result={result} inputs={parsed} />
+
+        <CalculatorRelatedTools
+          highlight="/swp-calculator"
+          lead="Build the corpus first"
+        />
       </div>
     </main>
   );

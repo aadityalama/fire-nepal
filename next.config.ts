@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_APP_BUILD_ID ||
       "dev",
   },
+  async redirects() {
+    return [
+      {
+        source: "/investment-planner",
+        destination: "/sip-calculator",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

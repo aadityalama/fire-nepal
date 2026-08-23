@@ -117,9 +117,17 @@ export function UnifiedFireDashboard() {
         >
           <ArrowLeft size={15} /> Back to FIRE Nepal
         </Link>
-        <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-200/70 sm:text-xs">
-          <LayoutDashboard size={14} className="text-cyan-300" />
-          Unified FIRE summary
+        <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold text-emerald-200/70 sm:text-xs">
+          <span className="inline-flex items-center gap-2">
+            <LayoutDashboard size={14} className="text-cyan-300" />
+            Unified FIRE summary
+          </span>
+          <Link
+            href="/sip-calculator"
+            className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-emerald-100 transition hover:border-cyan-300/40 hover:bg-cyan-400/10"
+          >
+            Plan your monthly SIP
+          </Link>
         </div>
       </div>
 
