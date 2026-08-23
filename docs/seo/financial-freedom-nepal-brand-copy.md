@@ -16,6 +16,13 @@ Optional short variant:
 
 > Financial Freedom Nepal — tools and education for Nepalis worldwide.
 
+### Platform About fields (optional extras)
+
+- **Website:** `https://www.firenepal.com`
+- **Hub:** `https://www.firenepal.com/financial-freedom-nepal`
+- **Location:** Nepal / Nepalis worldwide
+- **Category:** Education / Personal finance
+
 ## YouTube video ideas (link naturally in descriptions)
 
 1. Financial Freedom Nepal — what it really means
@@ -39,6 +46,13 @@ Educational only — investment returns are not guaranteed.
 ```
 
 Include at most 2–4 links per description. Prefer the hub + one relevant calculator.
+
+### Pinned comment template (optional)
+
+```
+Start here: Financial Freedom Nepal hub → https://www.firenepal.com/financial-freedom-nepal
+Questions about SIP, FIRE number, or return planning? Comment below — educational discussion only, not personalized advice.
+```
 
 ## Homepage / About entity signal
 

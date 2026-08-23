@@ -53,6 +53,9 @@ describe("Financial Freedom Nepal SEO foundation", () => {
       assert.match(blob, /\/financial-freedom-nepal/);
       assert.ok(article.description.length >= 140 && article.description.length <= 170);
       assert.doesNotMatch(blob.toLowerCase(), /returns are guaranteed|guaranteed return of/);
+      for (const tool of article.relatedTools) {
+        assert.doesNotMatch(tool.href, /remittance-calculator|loan-calculator/);
+      }
     }
   });
 });

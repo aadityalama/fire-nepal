@@ -51,7 +51,7 @@ export type HomepageFireAiCopy = {
 
 const TOOL_LINKS = [
   { label: "Currency Converter", href: "/currency-converter" },
-  { label: "Remittance Calculator", href: "/remittance-calculator" },
+  { label: "Remittance planning", href: "/currency-converter" },
   { label: "FIRE Calculator", href: "/#dashboard" },
   { label: "Saving Goals", href: "/savings-tracker" },
   { label: "FIRE Summary", href: "/fire-summary" },
@@ -182,7 +182,7 @@ const nepali: HomepageFireAiCopy = {
   ],
   toolLinks: [
     { label: "मुद्रा कन्भर्टर", href: "/currency-converter" },
-    { label: "रेमिटेन्स क्याल्कुलेटर", href: "/remittance-calculator" },
+    { label: "रेमिटेन्स क्याल्कुलेटर", href: "/currency-converter" },
     { label: "FIRE क्याल्कुलेटर", href: "/#dashboard" },
     { label: "बचत लक्ष्य", href: "/savings-tracker" },
     { label: "FIRE सारांश", href: "/fire-summary" },
@@ -251,7 +251,7 @@ const korean: HomepageFireAiCopy = {
   ],
   toolLinks: [
     { label: "환율 변환기", href: "/currency-converter" },
-    { label: "송금 계산기", href: "/remittance-calculator" },
+    { label: "송금 계산기", href: "/currency-converter" },
     { label: "FIRE 계산기", href: "/#dashboard" },
     { label: "저축 목표", href: "/savings-tracker" },
     { label: "FIRE 요약", href: "/fire-summary" },

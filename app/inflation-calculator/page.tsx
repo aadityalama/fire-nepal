@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { InflationCalculatorDashboard } from "@/components/InflationCalculatorDashboard";
+import { FinancialFreedomRelatedLink } from "@/components/financial-freedom/FinancialFreedomRelatedLink";
 import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 
 export const metadata: Metadata = {
@@ -10,5 +11,17 @@ export const metadata: Metadata = {
 };
 
 export default function InflationCalculatorPage() {
-  return <InflationCalculatorDashboard />;
+  return (
+    <>
+      <InflationCalculatorDashboard />
+      <div className="bg-[#f4fbf6] px-4 pb-16">
+        <div className="mx-auto max-w-6xl">
+          <FinancialFreedomRelatedLink
+            anchor="financial freedom planning"
+            note="Stress-test independence targets against rising Nepal costs."
+          />
+        </div>
+      </div>
+    </>
+  );
 }

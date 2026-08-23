@@ -21,12 +21,18 @@ export default function SipGuidesHubPage() {
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700/60">Learn · SIP Nepal</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">{SIP_GUIDE_HUB.title}</h1>
         <p className="mt-3 text-base font-medium leading-relaxed text-slate-600">{SIP_GUIDE_HUB.description}</p>
-        <p className="mt-4">
+        <p className="mt-4 flex flex-wrap gap-3">
           <Link
             href="/sip-calculator"
             className="inline-flex rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800"
           >
             Open SIP Calculator Nepal
+          </Link>
+          <Link
+            href="/financial-freedom-nepal"
+            className="inline-flex rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-black text-emerald-800 shadow-sm transition hover:bg-emerald-50"
+          >
+            Financial freedom planning
           </Link>
         </p>
 

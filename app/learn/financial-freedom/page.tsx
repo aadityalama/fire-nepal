@@ -52,6 +52,12 @@ export default function FinancialFreedomGuidesIndexPage() {
             </li>
           ))}
         </ul>
+
+        <p className="mt-10 text-xs font-medium leading-relaxed text-slate-500">
+          Educational content only. Mutual fund and market returns are not guaranteed. Confirm scheme details with
+          your fund manager and review SEBON investor resources where relevant. Calculators on FIRE Nepal use
+          assumptions you enter for planning illustration.
+        </p>
       </article>
     </main>
   );

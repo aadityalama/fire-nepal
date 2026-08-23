@@ -6,7 +6,11 @@ import {
   getAllFinancialFreedomGuideSlugs,
   getFinancialFreedomGuideBySlug,
 } from "@/data/financial-freedom-guides/articles";
-import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
+import {
+  FIRE_NEPAL_CANONICAL_ORIGIN,
+  FIRE_NEPAL_FOUNDER,
+  buildCanonicalAlternates,
+} from "@/lib/brand/site-seo";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -39,16 +43,31 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const article = getFinancialFreedomGuideBySlug(slug);
   if (!article) return {};
 
+  const title = `${article.title} | FIRE Nepal`;
   return {
-    title: { absolute: `${article.title} | FIRE Nepal` },
+    title: { absolute: title },
     description: article.description,
     keywords: article.keywords,
     alternates: buildCanonicalAlternates(`/learn/financial-freedom/${article.slug}`),
     openGraph: {
-      title: `${article.title} | FIRE Nepal`,
+      title,
       description: article.description,
       url: `https://www.firenepal.com/learn/financial-freedom/${article.slug}`,
       type: "article",
+      images: [
+        {
+          url: `${FIRE_NEPAL_CANONICAL_ORIGIN}/logo.png`,
+          width: 512,
+          height: 512,
+          alt: article.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: article.description,
+      images: [`${FIRE_NEPAL_CANONICAL_ORIGIN}/logo.png`],
     },
   };
 }
@@ -59,9 +78,37 @@ export default async function FinancialFreedomGuideArticlePage({ params }: PageP
   if (!article) notFound();
 
   const related = FINANCIAL_FREEDOM_GUIDE_ARTICLES.filter((item) => item.slug !== article.slug).slice(0, 5);
+  const canonical = `${FIRE_NEPAL_CANONICAL_ORIGIN}/learn/financial-freedom/${article.slug}`;
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.title,
+    description: article.description,
+    dateModified: article.lastUpdated,
+    author: {
+      "@type": "Organization",
+      name: "FIRE Nepal",
+      url: FIRE_NEPAL_CANONICAL_ORIGIN,
+    },
+    reviewedBy: {
+      "@type": "Person",
+      name: FIRE_NEPAL_FOUNDER.name,
+      jobTitle: FIRE_NEPAL_FOUNDER.jobTitle,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "FIRE Nepal",
+      logo: {
+        "@type": "ImageObject",
+        url: `${FIRE_NEPAL_CANONICAL_ORIGIN}/logo.png`,
+      },
+    },
+    mainEntityOfPage: canonical,
+  };
 
   return (
     <main className="min-h-screen bg-[#f4fbf6] px-4 py-10 text-emerald-950 sm:px-6 sm:py-14">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <article className="mx-auto max-w-2xl">
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700/60">
           <Link href="/learn/financial-freedom" className="hover:underline">
@@ -75,7 +122,10 @@ export default async function FinancialFreedomGuideArticlePage({ params }: PageP
         <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">{article.title}</h1>
         <p className="mt-3 text-base font-medium leading-relaxed text-slate-600">{article.description}</p>
         <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-          {article.readingTime} · Updated {article.lastUpdated}
+          {article.readingTime} · Updated {article.lastUpdated} · By FIRE Nepal · Reviewed by{" "}
+          <Link href="/founder" className="normal-case tracking-normal text-emerald-800 underline-offset-2 hover:underline">
+            {FIRE_NEPAL_FOUNDER.name}
+          </Link>
         </p>
         <p className="mt-5">
           <Link
@@ -114,13 +164,23 @@ export default async function FinancialFreedomGuideArticlePage({ params }: PageP
         <section className="mt-12 rounded-2xl border border-emerald-100 bg-white/80 p-5">
           <h2 className="text-lg font-black text-emerald-950">Related FIRE Nepal tools</h2>
           <ul className="mt-3 flex flex-wrap gap-3">
-            {article.relatedTools.map((tool) => (
-              <li key={`${tool.href}-${tool.label}`}>
-                <Link href={tool.href} className="font-black text-emerald-800 underline-offset-2 hover:underline">
-                  {tool.label}
-                </Link>
-              </li>
-            ))}
+            <li>
+              <Link
+                href="/financial-freedom-nepal"
+                className="font-black text-emerald-800 underline-offset-2 hover:underline"
+              >
+                Financial Freedom Nepal
+              </Link>
+            </li>
+            {article.relatedTools
+              .filter((tool) => tool.href !== "/financial-freedom-nepal")
+              .map((tool) => (
+                <li key={`${tool.href}-${tool.label}`}>
+                  <Link href={tool.href} className="font-black text-emerald-800 underline-offset-2 hover:underline">
+                    {tool.label}
+                  </Link>
+                </li>
+              ))}
           </ul>
         </section>
 

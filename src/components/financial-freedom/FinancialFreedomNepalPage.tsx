@@ -73,8 +73,11 @@ export function FinancialFreedomNepalPage() {
             </Link>
           </div>
           <p className="mt-6 text-xs font-bold text-emerald-100/55">
-            Last updated {FINANCIAL_FREEDOM_LAST_UPDATED} · Educational review by {FIRE_NEPAL_FOUNDER.name},{" "}
-            {FIRE_NEPAL_FOUNDER.jobTitle}
+            Last updated {FINANCIAL_FREEDOM_LAST_UPDATED} · Educational review by{" "}
+            <Link href="/founder" className="underline underline-offset-2 hover:text-white">
+              {FIRE_NEPAL_FOUNDER.name}
+            </Link>
+            , {FIRE_NEPAL_FOUNDER.jobTitle} of FIRE Nepal
           </p>
         </div>
       </header>
@@ -195,6 +198,30 @@ export function FinancialFreedomNepalPage() {
             <li>FIRE targets often use teaching rules such as 25× annual expenses (about 4% withdrawal).</li>
             <li>SIP/SWP models compound at your assumed rates; real NAVs fluctuate.</li>
             <li>Nepal cost-of-living and remittance FX can change the rupee target dramatically.</li>
+          </ul>
+        </section>
+
+        <section className="mt-14 max-w-3xl">
+          <h2 className="text-2xl font-black tracking-tight sm:text-3xl">Sources & references</h2>
+          <p className="mt-4 text-[15px] font-medium leading-relaxed text-slate-700">
+            FIRE Nepal educational content references public market frameworks and official channels. Always verify
+            current rules with the primary source:
+          </p>
+          <ul className="mt-4 list-disc space-y-2 pl-5 text-[15px] font-medium text-slate-700">
+            <li>
+              Securities Board of Nepal (SEBON) — investor education and mutual fund / capital market oversight.
+            </li>
+            <li>
+              Your fund house Key Information Memorandum (KIM) and scheme documents for fees, risks, and SIP rules.
+            </li>
+            <li>
+              Nepal Rastra Bank publications for remittance and macroeconomic context (use the latest official
+              releases).
+            </li>
+            <li>
+              Classic FIRE planning literature for the 25× / ~4% teaching rule — adapt carefully to Nepal costs and
+              personal risk.
+            </li>
           </ul>
         </section>
 

@@ -108,7 +108,7 @@ Your exact percentages will differ. A nurse in Qatar, a student-worker in Austra
 
 Automate or calendar the transfer. Label each remittance: *emergency*, *home deposit*, *SIP*, *family support*, *return buffer*. Mystery money is how plans quietly fail.
 
-Use the [Remittance Calculator](/remittance-calculator) to compare fee and timing before you lock a monthly channel. Use [Saving Goals](/savings-tracker) to attach each transfer to a named Nepal target.
+Use the [Currency Converter](/currency-converter) to translate overseas salary into NPR before you lock a monthly remittance channel. Use [Saving Goals](/savings-tracker) to attach each transfer to a named Nepal target.
 
 ---
 

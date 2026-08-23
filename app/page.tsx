@@ -56,13 +56,13 @@ const tools: Array<[string, string, string, LucideIcon]> = [
   ["FIRE Biz", "Sales, inventory, customers, and credit reminders for your shop", "/fire-biz", LayoutGrid],
   ["Currency Converter", "KRW to NPR live planning", "/currency-converter", CircleDollarSign],
   ["Family Wealth + Child Education", "Plan your family's future, child education, savings and long-term wealth goals.", "/family", GraduationCap],
-  ["Remittance Calculator", "Compare fees and timing", "/remittance-calculator", CreditCard],
+  ["Remittance planning", "Convert salary to NPR for remit vs invest", "/currency-converter", CreditCard],
   ["SIP Calculator Nepal", "Estimate mutual fund SIP returns in NPR", "/sip-calculator", BarChart3],
   ["SWP Calculator", "Safe withdrawal & retirement drawdown", "/swp-calculator", LineChart],
   ["Cashflow Dashboard", "Income, savings rate & emergency runway", "/cashflow-dashboard", Banknote],
   ["FIRE Summary", "Net worth, cashflow & 25× progress in one view", "/fire-summary", LayoutDashboard],
   ["Korea Pension + Severance", "Salary slip OCR, pension & severance", "/korea-pension-dashboard", Building2],
-  ["Loan Calculator", "EMI for Nepal return", "/loan-calculator", Landmark],
+  ["Loan / EMI Planner", "EMI for Nepal return", "/smart-loan-os", Landmark],
   ["Inflation Calculator", "Future value in NPR", "/inflation-calculator", TrendingUp],
   ["खर्च हिसाब खाता", "Shared group expense settlement", "/expense-dashboard", Calculator],
 ];
@@ -100,19 +100,19 @@ const footerSections = [
   {
     heading: "Tools",
     links: [
-      { label: "FIRE Calculator", href: "#dashboard" },
+      { label: "FIRE Calculator", href: "/#calculator" },
+      { label: "SIP Calculator Nepal", href: "/sip-calculator" },
       { label: "Saving Goals", href: "/savings-tracker" },
-      { label: "Investment Planner", href: "#investments" },
-      { label: "AI Calculator", href: "/dashboard/ai-coach" },
+      { label: "FIRE Summary", href: "/fire-summary" },
     ],
   },
   {
     heading: "Learn",
     links: [
+      { label: "Financial Freedom Nepal", href: "/financial-freedom-nepal" },
       { label: "Blog", href: "/blog" },
-      { label: "YouTube Videos", href: "#learn" },
-      { label: "FIRE Guide", href: "#learn" },
-      { label: "🇳🇵 Nepal Economy", href: "/learn/nepal-economy" },
+      { label: "SIP Guides", href: "/learn/sip" },
+      { label: "Nepal Economy", href: "/learn/nepal-economy" },
     ],
   },
   {
@@ -120,8 +120,8 @@ const footerSections = [
     links: [
       { label: "About Us", href: "/about" },
       { label: "Contact Us", href: "/contact" },
-      { label: "Privacy Policy", href: "/privacy-policy" },
-      { label: "Terms of Service", href: "/terms-of-service" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
     ],
   },
 ];
@@ -579,13 +579,21 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="text-lg font-black">FIRE NEPAL</p>
-                  <p className="text-xs text-emerald-100">Financial Platform for Nepalis Worldwide</p>
+                  <p className="text-xs text-emerald-100">
+                    Financial freedom & independence for Nepalis worldwide
+                  </p>
                 </div>
               </div>
               <p className="mt-4 max-w-sm text-sm leading-6 text-emerald-50/70">
-                Multi-currency planning, savings tracking, investment education, and return-home readiness
-                in one premium dashboard.
+                Plan savings, investments, retirement readiness, and Nepal return goals — with practical tools for
+                Nepalis at home and abroad.
               </p>
+              <Link
+                href="/financial-freedom-nepal"
+                className="mt-4 inline-flex text-sm font-black text-lime-200 underline-offset-2 hover:underline"
+              >
+                Explore Financial Freedom Nepal
+              </Link>
             </div>
             {footerSections.map(({ heading, links }) => (
               <div key={heading}>

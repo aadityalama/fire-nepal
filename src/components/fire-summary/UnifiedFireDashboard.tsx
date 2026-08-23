@@ -123,6 +123,12 @@ export function UnifiedFireDashboard() {
             Unified FIRE summary
           </span>
           <Link
+            href="/financial-freedom-nepal"
+            className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-emerald-100 transition hover:border-cyan-300/40 hover:bg-cyan-400/10"
+          >
+            Build financial independence
+          </Link>
+          <Link
             href="/sip-calculator"
             className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-emerald-100 transition hover:border-cyan-300/40 hover:bg-cyan-400/10"
           >

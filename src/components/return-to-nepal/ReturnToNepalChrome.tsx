@@ -59,6 +59,16 @@ export function ReturnToNepalChrome({
           <ArrowLeft size={15} /> Wealth dashboard
         </Link>
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/financial-freedom-nepal"
+            className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black transition active:scale-[0.98] sm:text-sm ${
+              light
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                : "border-teal-300/30 bg-teal-400/10 text-teal-100 hover:bg-teal-400/15"
+            }`}
+          >
+            Financial independence in Nepal
+          </Link>
           <div
             className={`flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] sm:text-[11px] ${
               light ? "text-emerald-800/75" : "fn-txt-muted"
