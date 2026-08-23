@@ -3,18 +3,26 @@ import type { Metadata } from "next";
 export const FIRE_NEPAL_BRAND = {
   name: "FIRE Nepal",
   tagline: "Financial Independence for Nepalis Abroad",
-  platformLine: "Financial Platform for Nepalis Worldwide",
+  platformLine: "Your Financial Freedom Platform for Nepal and Nepalis Worldwide",
   audienceLine: "Built for Nepalis living, working and studying abroad.",
   description:
-    "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide. Achieve Financial Independence, Retire Early (FIRE) and confidently plan your return to Nepal.",
+    "FIRE Nepal is the financial independence and financial freedom platform for Nepalis worldwide — helping you plan savings, investments, retirement readiness, and a confident return to Nepal.",
   keywords: [
     "FIRE Nepal",
+    "Financial Freedom Nepal",
+    "financial freedom in Nepal",
+    "financial independence Nepal",
     "Nepalis abroad",
     "Nepalis worldwide",
     "financial independence",
     "Financial Independence Retire Early",
+    "FIRE movement Nepal",
     "Nepal return planning",
-    "personal finance",
+    "personal finance Nepal",
+    "financial planning Nepal",
+    "investment planning Nepal",
+    "retirement planning Nepal",
+    "wealth building Nepal",
     "budgeting",
     "savings tracking",
     "investment planning",
@@ -26,13 +34,15 @@ export const FIRE_NEPAL_BRAND = {
     "FIRE Biz",
     "NPR",
     "FIRE calculator",
+    "SIP calculator Nepal",
     "diaspora finance",
   ],
 } as const;
 
 export const FIRE_NEPAL_CANONICAL_ORIGIN = "https://www.firenepal.com";
 const HOMEPAGE_CANONICAL_URL = FIRE_NEPAL_CANONICAL_ORIGIN;
-const HOMEPAGE_TITLE = "FIRE Nepal | Financial Independence, Retire Early for Nepalis Worldwide";
+const HOMEPAGE_TITLE =
+  "FIRE Nepal | Financial Freedom & Independence for Nepalis Worldwide";
 export const FIRE_NEPAL_THEME_COLOR = "#059669";
 export const FIRE_NEPAL_FOUNDER = {
   name: "Raj Kumar Ghalan",
@@ -40,10 +50,11 @@ export const FIRE_NEPAL_FOUNDER = {
   description: "Founder of FIRE Nepal.",
 } as const;
 const STRUCTURED_DATA_DESCRIPTION =
-  "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide, helping users achieve Financial Independence, Retire Early (FIRE) and confidently plan their return to Nepal.";
+  "FIRE Nepal is a financial independence and financial freedom platform for Nepalis worldwide, helping users plan savings, investments, retirement readiness, and a confident return to Nepal.";
 const WEB_APPLICATION_DESCRIPTION =
-  "FIRE Nepal is the all-in-one financial platform for Nepalis worldwide helping users achieve Financial Independence, Retire Early (FIRE).";
+  "FIRE Nepal helps Nepalis worldwide build financial freedom through FIRE planning, savings, investing education, retirement tools, and Nepal return planning.";
 const FIRE_NEPAL_CORE_FEATURES = [
+  "Financial Freedom Nepal planning",
   "Financial Independence (FIRE)",
   "Expense Tracking",
   "Budget Management",
@@ -52,6 +63,7 @@ const FIRE_NEPAL_CORE_FEATURES = [
   "Portfolio Tracking",
   "Wealth Analytics",
   "FIRE Progress Tracking",
+  "SIP and SWP Calculators",
   "Nepal Return Planning",
   "Remittance Management",
   "FIRE Biz",
@@ -60,6 +72,7 @@ const FIRE_NEPAL_CORE_FEATURES = [
 ] as const;
 const FIRE_NEPAL_AI_TOPICS = [
   "FIRE Nepal",
+  "Financial Freedom Nepal",
   "Financial Independence, Retire Early (FIRE)",
   "Nepalis Worldwide",
   "Personal Finance",

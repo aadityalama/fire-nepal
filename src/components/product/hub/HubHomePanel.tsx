@@ -14,6 +14,7 @@ import {
   CreditCard,
   Crown,
   FileText,
+  Flame,
   Gem,
   HandCoins,
   Handshake,
@@ -136,6 +137,14 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         icon: HandCoins,
         accent: "from-emerald-500/35 to-lime-300/15",
         badge: "NEW",
+        plan: "free",
+      },
+      {
+        href: "/financial-freedom-nepal",
+        title: "Financial Freedom Nepal",
+        body: "Hub for independence, FIRE math & Nepal planning tools",
+        icon: Flame,
+        accent: "from-lime-400/30 to-emerald-500/15",
         plan: "free",
       },
       {

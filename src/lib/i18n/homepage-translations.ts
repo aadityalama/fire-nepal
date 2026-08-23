@@ -167,6 +167,7 @@ const english: HomepageCopy = {
     securePagesNote: "Secure pages · optional quick modal from hub",
     links: [
       { href: "#home", label: "Home" },
+      { href: "/financial-freedom-nepal", label: "Financial Freedom" },
       { href: "#calculator", label: "FIRE Calculator" },
       { href: "#dashboard", label: "Dashboard" },
       { href: "/portfolio", label: "Portfolio" },
@@ -183,9 +184,10 @@ const english: HomepageCopy = {
   hero: {
     liveNpt: "Live NPT",
     kathmanduNepal: "Kathmandu, Nepal",
-    badge: "Premium financial platform — built for Nepalis living, working and studying abroad.",
+    badge: "Your financial freedom platform for Nepal and Nepalis worldwide.",
     headline: ["Plan today,", "achieve financial independence,", "and return to Nepal with dignity."],
-    description: "The complete financial operating system for Nepalis — bringing budgeting, investing, wealth tracking, AI-powered guidance, family financial planning, child education savings, and retirement planning together in one secure platform.",
+    description:
+      "FIRE Nepal helps you build financial freedom through budgeting, investing education, SIP/SWP planning, wealth tracking, family finance, and Nepal return readiness — in one secure platform.",
     startDashboard: "Start dashboard",
     runSimulation: "Run FIRE simulation",
     importPayslip: "Import Korean payslip",
@@ -362,8 +364,8 @@ const english: HomepageCopy = {
     subscribe: "Subscribe Now",
     footerBrandBody: "Multi-currency planning, savings tracking, investment education, and return-home readiness in one premium dashboard.",
     footerColumns: [
-      { heading: "Tools", links: ["FIRE Calculator", "Saving Goals", "Investment Planner", "AI Calculator"] },
-      { heading: "Learn", links: ["Blog", "YouTube Videos", "FIRE Guide", "🇳🇵 Nepal Economy"] },
+      { heading: "Tools", links: ["FIRE Calculator", "Saving Goals", "SIP Calculator Nepal", "AI Calculator"] },
+      { heading: "Learn", links: ["Financial Freedom Nepal", "Blog", "YouTube Videos", "FIRE Guide"] },
       { heading: "Company", links: ["About Us", "Contact Us", "Privacy Policy", "Terms of Service"] },
     ],
     copyright: "© 2026 FIRE Nepal. All rights reserved.",
@@ -414,6 +416,7 @@ export const homepageTranslations: Record<LanguageCode, HomepageCopy> = {
       securePagesNote: "보안 페이지 · 허브에서 빠른 모달 사용 가능",
       links: [
         { href: "#home", label: "홈" },
+        { href: "/financial-freedom-nepal", label: "경제적 자유" },
         { href: "#calculator", label: "FIRE 계산기" },
         { href: "#dashboard", label: "대시보드" },
         { href: "/portfolio", label: "포트폴리오" },
@@ -643,6 +646,7 @@ export const homepageTranslations: Record<LanguageCode, HomepageCopy> = {
       securePagesNote: "安全なページ · ハブからクイックアクセス",
       links: [
         { href: "#home", label: "ホーム" },
+        { href: "/financial-freedom-nepal", label: "経済的自由" },
         { href: "#calculator", label: "FIRE計算機" },
         { href: "#dashboard", label: "ダッシュボード" },
         { href: "/portfolio", label: "ポートフォリオ" },
@@ -801,6 +805,7 @@ export const homepageTranslations: Record<LanguageCode, HomepageCopy> = {
       securePagesNote: "सुरक्षित पृष्ठहरू · केन्द्रबाट छिटो पहुँच",
       links: [
         { href: "#home", label: "मुख्य पृष्ठ" },
+        { href: "/financial-freedom-nepal", label: "आर्थिक स्वतन्त्रता" },
         { href: "#calculator", label: "FIRE क्याल्कुलेटर" },
         { href: "#dashboard", label: "ड्यासबोर्ड" },
         { href: "/portfolio", label: "सम्पत्ति पोर्टफोलियो" },

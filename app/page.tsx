@@ -290,7 +290,43 @@ export default function HomePage() {
 
       <FireHomeTrustSection />
 
-      <section className="relative mx-auto -mt-6 max-w-7xl px-4 pb-12 sm:px-6 sm:pb-14 lg:px-8">
+      <section
+        id="financial-freedom"
+        className="relative mx-auto max-w-7xl px-4 pb-10 pt-4 sm:px-6 sm:pb-12 lg:px-8"
+        aria-labelledby="financial-freedom-heading"
+      >
+        <div className="overflow-hidden rounded-[2rem] border border-emerald-100/90 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-900 p-6 text-white shadow-[0_30px_80px_-40px_rgba(6,78,59,0.55)] sm:p-8 lg:p-10">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-200/75">
+            Financial Freedom with FIRE Nepal
+          </p>
+          <h2
+            id="financial-freedom-heading"
+            className="mt-3 max-w-3xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl"
+          >
+            Your Financial Freedom Platform for Nepal and Nepalis Worldwide
+          </h2>
+          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
+            From your first savings goal to retirement, FIRE Nepal gives you the tools to understand, track and plan
+            your journey toward financial independence.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link
+              href="/financial-freedom-nepal"
+              className="inline-flex items-center gap-2 rounded-full bg-lime-300 px-5 py-3 text-sm font-black text-emerald-950 transition hover:bg-lime-200"
+            >
+              Explore Financial Freedom <ArrowRight size={15} />
+            </Link>
+            <Link
+              href="/#calculator"
+              className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/15"
+            >
+              Nepal FIRE calculator
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative mx-auto -mt-2 max-w-7xl px-4 pb-12 sm:px-6 sm:pb-14 lg:px-8">
         <div className="glass-card soft-gradient-border rounded-[2rem] p-5 sm:p-6 lg:p-7">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>

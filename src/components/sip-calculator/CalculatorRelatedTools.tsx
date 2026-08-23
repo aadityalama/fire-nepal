@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const LINKS: Array<{ href: string; label: string }> = [
+  { href: "/financial-freedom-nepal", label: "Financial Freedom Nepal" },
   { href: "/sip-calculator", label: "SIP Calculator Nepal" },
   { href: "/swp-calculator", label: "SWP Calculator" },
   { href: "/lumpsum-calculator", label: "Lumpsum Calculator" },
