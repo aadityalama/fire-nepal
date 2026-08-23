@@ -311,6 +311,15 @@ M = estimated maturity value`}
               Build topical understanding with FIRE Nepal’s SIP cluster — each guide links back to this calculator.
             </p>
             <ul className="mt-4 space-y-3">
+              <li>
+                <Link
+                  href="/financial-freedom-nepal"
+                  className="font-black text-emerald-800 underline-offset-2 hover:underline"
+                >
+                  Financial Freedom Nepal
+                </Link>
+                <span className="text-sm text-slate-500"> · Hub for independence planning</span>
+              </li>
               {SIP_GUIDE_ARTICLES.map((article) => (
                 <li key={article.slug}>
                   <Link

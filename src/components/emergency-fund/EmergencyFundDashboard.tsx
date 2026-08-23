@@ -401,6 +401,12 @@ export function EmergencyFundDashboard() {
             <ArrowLeft size={16} />
             Back to Finance
           </Link>
+          <Link
+            href="/financial-freedom-nepal"
+            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+          >
+            Financial freedom planning
+          </Link>
           {!showSetup ? (
             <button
               type="button"

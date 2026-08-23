@@ -810,6 +810,12 @@ export function SipCalculatorDashboard() {
                     <Link href="/learn/sip" className="font-black text-emerald-800 underline-offset-2 hover:underline">
                       SIP Guides for Nepal
                     </Link>
+                    <Link
+                      href="/financial-freedom-nepal"
+                      className="font-black text-emerald-800 underline-offset-2 hover:underline"
+                    >
+                      Financial Freedom Nepal
+                    </Link>
                   </div>
                 </section>
               </>

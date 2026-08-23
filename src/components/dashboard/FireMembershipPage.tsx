@@ -163,8 +163,8 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
         badge: "NEW",
       },
       {
-        href: "/loan-calculator",
-        title: "Loan EMI Calculator",
+        href: "/smart-loan-os",
+        title: "Loan / EMI Planner",
         body: "EMI for Nepal return",
         icon: Landmark,
         accent: "from-sky-500/15 to-emerald-500/10",
@@ -177,9 +177,9 @@ const MEMBERSHIP_APP_SHOWCASE: MembershipPlanAppSection[] = [
         accent: "from-orange-500/15 to-emerald-500/10",
       },
       {
-        href: "/remittance-calculator",
-        title: "Remittance Calculator",
-        body: "Compare fees and timing",
+        href: "/currency-converter",
+        title: "Remittance planning",
+        body: "Convert salary to NPR for remit vs invest",
         icon: CreditCard,
         accent: "from-emerald-500/20 to-cyan-400/10",
       },

@@ -96,9 +96,9 @@ describe("homepage seed", () => {
     assert.ok(post.content.includes("Illustrative example only"));
     assert.ok(post.content.includes("turn overseas income into lasting financial freedom"));
     assert.ok(post.content.includes("/currency-converter"));
-    assert.ok(post.content.includes("/remittance-calculator"));
     assert.ok(post.content.includes("/savings-tracker"));
     assert.ok(post.content.includes("/fire-summary"));
+    assert.ok(post.content.includes("/financial-freedom-nepal"));
   });
 });
 

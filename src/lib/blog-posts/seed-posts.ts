@@ -36,7 +36,7 @@ Use one repeatable system every month:
 
 If you only remember one idea from this article, remember this: **income abroad creates opportunity; systems create freedom.**
 
-FIRE Nepal tools such as the [Currency Converter](/currency-converter), [SIP Calculator Nepal](/sip-calculator), [Saving Goals](/savings-tracker), [FIRE Calculator](/#dashboard), and [FIRE Summary](/fire-summary) can sit inside this workflow — not as a replacement for judgment, but as a way to keep the numbers visible.
+FIRE Nepal tools such as the [Currency Converter](/currency-converter), [SIP Calculator Nepal](/sip-calculator), [Saving Goals](/savings-tracker), [FIRE Calculator](/#dashboard), [FIRE Summary](/fire-summary), and the [Financial Freedom Nepal](/financial-freedom-nepal) hub can sit inside this workflow — not as a replacement for judgment, but as a way to keep the numbers visible.
 
 ---
 
@@ -108,7 +108,7 @@ Your exact percentages will differ. A nurse in Qatar, a student-worker in Austra
 
 Automate or calendar the transfer. Label each remittance: *emergency*, *home deposit*, *SIP*, *family support*, *return buffer*. Mystery money is how plans quietly fail.
 
-Use the [Remittance Calculator](/remittance-calculator) to compare fee and timing before you lock a monthly channel. Use [Saving Goals](/savings-tracker) to attach each transfer to a named Nepal target.
+Use the [Currency Converter](/currency-converter) to translate overseas salary into NPR before you lock a monthly remittance channel. Use [Saving Goals](/savings-tracker) to attach each transfer to a named Nepal target.
 
 ---
 
@@ -335,7 +335,7 @@ A foreign salary is leverage. It is not, by itself, a wealth plan.
 
 The workers who build durable Nepal-based independence usually do ordinary things with unusual consistency: they protect cash, transfer with intent, invest by horizon, respect inflation, and review progress in both currencies.
 
-**The objective is not simply to send more money home. The objective is to turn overseas income into lasting financial freedom.**
+**The objective is not simply to send more money home. The objective is to turn overseas income into lasting financial freedom.** Read the [Financial Freedom Nepal](/financial-freedom-nepal) hub for the full planning map.
 
 Start with the framework. Fund the emergency buffer. Fix the monthly Nepal allocation. Measure all-in NPR received. Match risk to time. Then let years of disciplined overseas work compound into a life that feels secure when you return — or when you choose not to need a paycheck at all.`,
     cover_image_url: null,

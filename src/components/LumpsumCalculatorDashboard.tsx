@@ -22,6 +22,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalculatorRelatedTools } from "@/components/sip-calculator/CalculatorRelatedTools";
+import { FinancialFreedomRelatedLink } from "@/components/financial-freedom/FinancialFreedomRelatedLink";
 import {
   Area,
   AreaChart,
@@ -642,6 +643,10 @@ export function LumpsumCalculatorDashboard() {
 
       <div className="mx-auto max-w-7xl px-0 pb-8">
         <CalculatorRelatedTools highlight="/lumpsum-calculator" lead="Compare monthly investing" />
+        <FinancialFreedomRelatedLink
+          anchor="financial independence calculator paths"
+          note="Compare lumpsum math with the broader Financial Freedom Nepal plan."
+        />
       </div>
     </main>
   );

@@ -330,8 +330,13 @@ function ContactInput({
 export const aboutSections: InfoSection[] = [
   {
     title: "Our Mission",
-    body: "FIRE Nepal helps Nepali workers abroad turn overseas income into a clear path toward financial independence, family security, and a confident return home.",
+    body: "FIRE Nepal helps Nepalis in Nepal and abroad build financial freedom — turning income into savings systems, investment education, retirement readiness, family security, and a confident return home.",
     icon: Flame,
+  },
+  {
+    title: "Financial Freedom Nepal",
+    body: "We publish practical education and tools under Financial Freedom Nepal: FIRE math in NPR, emergency funds, SIP/SWP planning, remittance-to-wealth frameworks, and return planning — without promising guaranteed returns.",
+    icon: Coins,
   },
   {
     title: "Why FIRE Nepal Exists",
