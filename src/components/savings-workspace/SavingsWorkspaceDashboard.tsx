@@ -291,6 +291,14 @@ export function SavingsWorkspaceDashboard() {
             </Link>
             <h1 className="mt-3 text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.35rem] lg:text-5xl">Saving Goals</h1>
             <p className="mt-1 text-sm font-semibold text-emerald-100/58">Premium savings goals built for FIRE Nepal.</p>
+            <p className="mt-3">
+              <Link
+                href="/sip-calculator"
+                className="inline-flex text-xs font-black text-lime-200/90 underline-offset-2 hover:underline"
+              >
+                Calculate SIP returns with your monthly surplus →
+              </Link>
+            </p>
           </div>
         </header>
 

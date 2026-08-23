@@ -36,7 +36,7 @@ Use one repeatable system every month:
 
 If you only remember one idea from this article, remember this: **income abroad creates opportunity; systems create freedom.**
 
-FIRE Nepal tools such as the [Currency Converter](/currency-converter), [Remittance Calculator](/remittance-calculator), [Saving Goals](/savings-tracker), [FIRE Calculator](/#dashboard), and [FIRE Summary](/fire-summary) can sit inside this workflow — not as a replacement for judgment, but as a way to keep the numbers visible.
+FIRE Nepal tools such as the [Currency Converter](/currency-converter), [SIP Calculator Nepal](/sip-calculator), [Saving Goals](/savings-tracker), [FIRE Calculator](/#dashboard), and [FIRE Summary](/fire-summary) can sit inside this workflow — not as a replacement for judgment, but as a way to keep the numbers visible.
 
 ---
 
@@ -364,7 +364,7 @@ Sending money home ad hoc can erase years of discipline. Plan transfers when spr
 A higher KRW salary often expands rent, gadgets, and dining. Lock a savings rate first; let lifestyle grow only after goals are funded.
 
 ### 4. All cash, no growth assets
-Parking everything in a bank account feels safe but loses to inflation. Pair safety cash with long-term SIPs sized to your FIRE date.
+Parking everything in a bank account feels safe but loses to inflation. Pair safety cash with long-term SIPs sized to your FIRE date. Use the [SIP investment calculator](/sip-calculator) to stress-test monthly NPR amounts before you commit.
 
 ### 5. Skipping insurance and emergency funds
 One medical or visa shock can force early withdrawals. Keep 6–12 months of expenses liquid before aggressive investing.

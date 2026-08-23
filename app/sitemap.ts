@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { FIRE_NEPAL_CANONICAL_ORIGIN } from "@/lib/brand/site-seo";
+import { getAllSipGuideSlugs } from "@/data/sip-guides/articles";
 
 type SitemapEntry = {
   path: string;
@@ -15,19 +16,19 @@ const PUBLIC_SITEMAP_ROUTES: SitemapEntry[] = [
   { path: "/security", changeFrequency: "monthly", priority: 0.6 },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.4 },
   { path: "/terms", changeFrequency: "yearly", priority: 0.4 },
+  { path: "/blog", changeFrequency: "weekly", priority: 0.7 },
   { path: "/learn/fire-lifestyle", changeFrequency: "monthly", priority: 0.7 },
   { path: "/learn/nepal-economy", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/learn/sip", changeFrequency: "weekly", priority: 0.85 },
   { path: "/tools/nepal-cost-of-living", changeFrequency: "monthly", priority: 0.7 },
   { path: "/return-to-nepal", changeFrequency: "monthly", priority: 0.8 },
   { path: "/fire-summary", changeFrequency: "monthly", priority: 0.8 },
   { path: "/cashflow-dashboard", changeFrequency: "monthly", priority: 0.7 },
   { path: "/expense-dashboard", changeFrequency: "monthly", priority: 0.7 },
   { path: "/savings-tracker", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/investment-planner", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/emergency-fund", changeFrequency: "monthly", priority: 0.6 },
-  { path: "/sip-calculator", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/swp-calculator", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/lumpsum-calculator", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/sip-calculator", changeFrequency: "weekly", priority: 0.95 },
+  { path: "/swp-calculator", changeFrequency: "monthly", priority: 0.75 },
+  { path: "/lumpsum-calculator", changeFrequency: "monthly", priority: 0.7 },
   { path: "/inflation-calculator", changeFrequency: "monthly", priority: 0.6 },
   { path: "/currency-converter", changeFrequency: "weekly", priority: 0.7 },
   { path: "/global-financial-intelligence", changeFrequency: "monthly", priority: 0.6 },
@@ -39,10 +40,19 @@ const PUBLIC_SITEMAP_ROUTES: SitemapEntry[] = [
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
-  return PUBLIC_SITEMAP_ROUTES.map(({ path, changeFrequency, priority }) => ({
+  const sipGuides: MetadataRoute.Sitemap = getAllSipGuideSlugs().map((slug) => ({
+    url: `${FIRE_NEPAL_CANONICAL_ORIGIN}/learn/sip/${slug}`,
+    lastModified,
+    changeFrequency: "monthly" as const,
+    priority: 0.75,
+  }));
+
+  const staticRoutes = PUBLIC_SITEMAP_ROUTES.map(({ path, changeFrequency, priority }) => ({
     url: path === "/" ? FIRE_NEPAL_CANONICAL_ORIGIN : `${FIRE_NEPAL_CANONICAL_ORIGIN}${path}`,
     lastModified,
     changeFrequency,
     priority,
   }));
+
+  return [...staticRoutes, ...sipGuides];
 }

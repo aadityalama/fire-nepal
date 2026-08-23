@@ -8,7 +8,7 @@ const INVESTMENT_ITEMS: EcosystemWorkspaceItem[] = [
   { href: "/portfolio", label: "Portfolio", description: "Net worth, assets, and wealth analytics.", icon: Target },
   { href: "/market", label: "NEPSE Hub", description: "We are working on it.", icon: BarChart3 },
   { href: "/portfolio/investments", label: "My Holdings", description: "Track your NEPSE positions, P/L, and trades.", icon: LineChart },
-  { href: "/sip-calculator", label: "SIP", description: "Monthly investing projection and growth path.", icon: TrendingUp },
+  { href: "/sip-calculator", label: "SIP Calculator Nepal", description: "Calculate SIP returns and step-up growth in NPR.", icon: TrendingUp },
   { href: "/swp-calculator", label: "SWP", description: "Withdrawal planning and passive income runway.", icon: LineChart },
   { href: "/portfolio/gold", label: "Gold", description: "Gold and silver holdings inside portfolio.", icon: Gem },
   { href: "/portfolio/real-estate", label: "Real Estate", description: "Property assets and real estate wealth view.", icon: Home },

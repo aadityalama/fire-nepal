@@ -21,6 +21,7 @@ import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { CalculatorRelatedTools } from "@/components/sip-calculator/CalculatorRelatedTools";
 import {
   Area,
   AreaChart,
@@ -638,6 +639,10 @@ export function LumpsumCalculatorDashboard() {
           </>
         )}
       </section>
+
+      <div className="mx-auto max-w-7xl px-0 pb-8">
+        <CalculatorRelatedTools highlight="/lumpsum-calculator" lead="Compare monthly investing" />
+      </div>
     </main>
   );
 }
