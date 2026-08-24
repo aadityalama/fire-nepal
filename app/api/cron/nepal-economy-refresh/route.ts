@@ -9,12 +9,15 @@ export const maxDuration = 300;
  * Nepal Economy refresh job.
  * Auth: Authorization: Bearer <CRON_SECRET> when CRON_SECRET is set.
  *
- * Do NOT register this in vercel.json — use Supabase pg_cron / GitHub Actions /
- * or another non-Vercel scheduler.
+ * Do NOT register this in vercel.json (avoid Vercel Cron usage/limits).
+ * Schedule via GitHub Actions only:
+ *   .github/workflows/nepal-economy-refresh-cron.yml
  *
  * Manual:
  *   curl -H "Authorization: Bearer $CRON_SECRET" \
  *     "https://www.firenepal.com/api/cron/nepal-economy-refresh?force=1"
+ *
+ * Or: Actions → "Nepal economy refresh cron" → Run workflow (optional force).
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
