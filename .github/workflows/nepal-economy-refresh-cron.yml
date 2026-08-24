@@ -1,18 +1,39 @@
-# FIRE Nepal — Nepal Economy data refresh (non-Vercel scheduler).
+# FIRE Nepal — Nepal Economy data refresh via GitHub Actions ONLY.
 #
-# Required repository secrets:
-#   ECONOMY_CRON_TARGET_URL — e.g. https://www.firenepal.com/api/cron/nepal-economy-refresh
-#   CRON_SECRET — same value as Vercel/project CRON_SECRET
+# Do NOT add /api/cron/nepal-economy-refresh to vercel.json crons.
+# This workflow is the only scheduled refresh mechanism for the economy engine
+# (avoids extra Vercel Cron usage / limits).
 #
-# Prefer www host so Authorization is not dropped on apex→www redirects.
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   ECONOMY_CRON_TARGET_URL — full production URL to the final host (prefer www), e.g.
+#                             https://www.firenepal.com/api/cron/nepal-economy-refresh
+#                             Apex https://firenepal.com/… may 307 to www; this workflow
+#                             canonicalizes that so Authorization is not dropped on redirect.
+#   CRON_SECRET             — exact same value as Vercel project env CRON_SECRET
+#                             (no quotes, no Bearer prefix, no leading/trailing whitespace).
+#                             Endpoint checks: Authorization: Bearer <CRON_SECRET>
+#
+# After rotating CRON_SECRET on Vercel, update the GitHub Actions secret in the same change.
+#
+# Manual run: Actions → "Nepal economy refresh cron" → Run workflow
+#   Optional input force=true appends ?force=1 (bypasses in-handler refresh intervals).
 
 name: Nepal economy refresh cron
 
 on:
   schedule:
-    # Every 6 hours — metric-specific intervals are enforced inside the handler.
+    # Every 6 hours (UTC). Metric-specific refresh intervals are enforced in the handler.
     - cron: "15 */6 * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force refresh all eligible metrics (?force=1)"
+        required: false
+        type: boolean
+        default: false
+
+# No repo contents / packages needed — HTTP ping only (no checkout, no install, no deploy).
+permissions: {}
 
 concurrency:
   group: nepal-economy-refresh-cron
@@ -27,12 +48,21 @@ jobs:
         env:
           URL: ${{ secrets.ECONOMY_CRON_TARGET_URL }}
           TOKEN: ${{ secrets.CRON_SECRET }}
+          # Boolean workflow_dispatch inputs arrive as the strings "true" / "false".
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true' }}
         run: |
           set -euo pipefail
           python3 <<'PY'
           from __future__ import annotations
-          import hashlib, json, os, re, sys, urllib.error, urllib.request
-          from urllib.parse import urlparse
+
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+          from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
           def normalize(raw: str) -> str:
               s = raw.encode("utf-8").decode("utf-8-sig")
@@ -44,24 +74,55 @@ jobs:
               return s
 
           def canonicalize_url(url: str) -> str:
+              # Prefer www so Authorization is not dropped on apex→www 307.
               if url.startswith("https://firenepal.com/") or url == "https://firenepal.com":
+                  print("Canonicalized ECONOMY_CRON_TARGET_URL host to www.firenepal.com")
                   return "https://www.firenepal.com" + url[len("https://firenepal.com") :]
               if url.startswith("http://firenepal.com/") or url == "http://firenepal.com":
+                  print("Canonicalized ECONOMY_CRON_TARGET_URL host to www.firenepal.com (https)")
                   return "https://www.firenepal.com" + url[len("http://firenepal.com") :]
               return url
 
+          def with_force(url: str, force: bool) -> str:
+              if not force:
+                  return url
+              parsed = urlparse(url)
+              query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+              query["force"] = "1"
+              return urlunparse(parsed._replace(query=urlencode(query)))
+
           url = canonicalize_url(normalize(os.environ.get("URL") or ""))
           token = normalize(os.environ.get("TOKEN") or "")
+          force = str(os.environ.get("FORCE") or "").strip().lower() in {"1", "true", "yes"}
+
           if not url or not token:
-              print("::error::ECONOMY_CRON_TARGET_URL or CRON_SECRET empty")
-              sys.exit(1)
-          parsed = urlparse(url)
-          if parsed.scheme != "https" or not parsed.netloc or not parsed.path:
-              print(f"::error::Invalid ECONOMY_CRON_TARGET_URL: {url!r}")
+              print(
+                  "::error::ECONOMY_CRON_TARGET_URL or CRON_SECRET is empty after trimming "
+                  "whitespace/newlines. Set both in repo Actions secrets."
+              )
               sys.exit(1)
 
-          print(f"Target: {parsed.netloc}{parsed.path}")
-          print(f"CRON_SECRET sha256: {hashlib.sha256(token.encode()).hexdigest()}")
+          url = with_force(url, force)
+          parsed = urlparse(url)
+          if parsed.scheme != "https" or not parsed.netloc or not parsed.path:
+              print(
+                  f"::error::ECONOMY_CRON_TARGET_URL must be an https URL with a path, "
+                  f"got host={parsed.netloc!r} path={parsed.path!r}"
+              )
+              sys.exit(1)
+
+          if "/api/cron/nepal-economy-refresh" not in parsed.path:
+              print(
+                  "::error::ECONOMY_CRON_TARGET_URL path must include "
+                  "/api/cron/nepal-economy-refresh"
+              )
+              sys.exit(1)
+
+          print(f"Target URL host: {parsed.netloc}")
+          print(f"Target URL path: {parsed.path}")
+          print(f"Force refresh: {force}")
+          print(f"CRON_SECRET length (chars): {len(token)}")
+          print(f"CRON_SECRET sha256: {hashlib.sha256(token.encode('utf-8')).hexdigest()}")
 
           req = urllib.request.Request(
               url,
@@ -69,27 +130,50 @@ jobs:
               headers={
                   "Authorization": f"Bearer {token}",
                   "Accept": "application/json",
-                  "User-Agent": "fire-nepal-economy-cron/1.0",
+                  "User-Agent": "fire-nepal-economy-cron/1.1",
               },
           )
+
           try:
               with urllib.request.urlopen(req, timeout=240) as resp:
                   body = resp.read().decode("utf-8", errors="replace")
-                  code = resp.getcode()
+                  code = int(resp.getcode())
           except urllib.error.HTTPError as e:
               body = e.read().decode("utf-8", errors="replace")
-              code = e.code
+              code = int(e.code)
           except Exception as e:
-              print(f"Request failed: {e}")
+              print(f"::error::Request failed: {e}")
               sys.exit(1)
 
           print(f"HTTP {code}")
           print(body[:2500])
-          if code != 200:
+
+          if code == 401:
+              print(
+                  "::error::Unauthorized — GitHub secret CRON_SECRET is out of sync with "
+                  "Vercel project env CRON_SECRET. Re-copy the Vercel value into the repo "
+                  "secret (no quotes / Bearer / newlines). Prefer "
+                  "ECONOMY_CRON_TARGET_URL=https://www.firenepal.com/api/cron/nepal-economy-refresh. "
+                  "Compare sha256 above with: printf %s \"$CRON_SECRET\" | sha256sum"
+              )
               sys.exit(1)
-          payload = json.loads(body)
+
+          if code < 200 or code >= 300:
+              print(
+                  f"::error::Nepal economy refresh failed with non-2xx HTTP {code}. "
+                  "Inspect the response body above."
+              )
+              sys.exit(1)
+
+          try:
+              payload = json.loads(body)
+          except json.JSONDecodeError:
+              print("::error::HTTP 2xx but response was not JSON")
+              sys.exit(1)
+
           if payload.get("ok") is not True:
-              print("::error::Response ok!=true")
+              print("::error::HTTP 2xx but response body was not ok:true")
               sys.exit(1)
-          print("Nepal economy refresh OK")
+
+          print("Nepal economy refresh OK (GitHub Actions scheduler)")
           PY
