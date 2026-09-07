@@ -204,6 +204,14 @@ const MEMBERSHIP_APP_SECTIONS: Array<{
         plan: "free",
       },
       {
+        href: "/smart-reminders",
+        title: "ReminderHub",
+        body: "Scheduled reminders and financial nudges",
+        icon: Bell,
+        accent: "from-violet-500/15 to-teal-400/10",
+        plan: "free",
+      },
+      {
         href: "/#learn",
         title: "Blogs",
         body: "Money guides for Nepalis abroad",
@@ -448,12 +456,6 @@ const ACCOUNT_TOOLS: ToolLauncherItem[] = [
     title: "Security",
     icon: Lock,
     accent: "from-sky-500/15 to-emerald-500/10",
-  },
-  {
-    href: "/smart-reminders",
-    title: "Reminders",
-    icon: Bell,
-    accent: "from-violet-500/15 to-teal-400/10",
   },
   {
     href: "/dashboard/settings",
