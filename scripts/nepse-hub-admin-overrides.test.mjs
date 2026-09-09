@@ -1,5 +1,5 @@
 /**
- * Static + unit verification for NEPSE Hub Admin override persistence.
+ * Static + unit verification for NEPSE Hub Admin override persistence + visual CMS.
  * Run: node --test scripts/nepse-hub-admin-overrides.test.mjs
  */
 import assert from "node:assert/strict";
@@ -12,6 +12,7 @@ const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 
 const ENSURE = "20260728030400_nepse_hub_admin_overrides_ensure.sql";
 const BASE = "20260727140000_nepse_hub_admin_overrides.sql";
+const CMS_AUDIT = "20260728140000_nepse_hub_admin_cms_audit_actions.sql";
 
 const REQUIRED_DOMAINS = [
   "Company Profile",
@@ -25,6 +26,19 @@ const REQUIRED_DOMAINS = [
   "News",
   "Market Data",
   "Custom",
+];
+
+const REQUIRED_CMS_TABS = [
+  "Overview",
+  "Price & Chart",
+  "Key Metrics",
+  "Intelligence",
+  "Financials",
+  "Dividends",
+  "Actions",
+  "Ownership",
+  "News",
+  "AI Analysis",
 ];
 
 describe("nepse_hub_admin_overrides migration", () => {
@@ -81,6 +95,17 @@ describe("nepse_hub_admin_overrides migration", () => {
   });
 });
 
+describe("CMS audit action migration", () => {
+  const sql = readFileSync(join(root, "supabase", "migrations", CMS_AUDIT), "utf8");
+
+  it("expands audit action check for CMS ops", () => {
+    assert.match(sql, /create_record/);
+    assert.match(sql, /delete_record/);
+    assert.match(sql, /restore_record/);
+    assert.match(sql, /undo/);
+  });
+});
+
 describe("Admin UI domain coverage", () => {
   const fieldsSrc = readFileSync(join(root, "src/lib/market/nepse-hub-admin-fields.ts"), "utf8");
   const clientSrc = readFileSync(join(root, "src/components/admin/NepseHubAdminClient.tsx"), "utf8");
@@ -91,14 +116,21 @@ describe("Admin UI domain coverage", () => {
     }
   });
 
-  it("client renders domain tabs and save/restore actions", () => {
-    assert.match(clientSrc, /NEPSE_HUB_ADMIN_DOMAIN_LABELS/);
-    assert.match(clientSrc, /Save override/);
-    assert.match(clientSrc, /Restore Official Data \(Field\)/);
+  it("catalog includes company-page CMS tabs", () => {
+    for (const label of REQUIRED_CMS_TABS) {
+      assert.ok(fieldsSrc.includes(label), `missing CMS tab: ${label}`);
+    }
+  });
+
+  it("client is a visual CMS without manual Record Key forms", () => {
+    assert.match(clientSrc, /NEPSE_HUB_CMS_TABS/);
+    assert.match(clientSrc, /Add Row/);
+    assert.match(clientSrc, /Restore Official/);
     assert.match(clientSrc, /Restore Official Data \(Company\)/);
-    assert.match(clientSrc, /mutate\("set"\)/);
-    assert.match(clientSrc, /mutate\("restore_field"\)/);
-    assert.match(clientSrc, /mutate\("restore_company"\)/);
+    assert.match(clientSrc, /appToast/);
+    assert.match(clientSrc, /Undo/);
+    assert.doesNotMatch(clientSrc, /Record key/);
+    assert.doesNotMatch(clientSrc, /setRecordKey/);
   });
 });
 
@@ -121,6 +153,19 @@ describe("Save Override / Restore Official Data service contract", () => {
     assert.match(service, /action:\s*"restore_company"/);
     assert.match(route, /restoreFieldOverride/);
     assert.match(route, /restoreCompanyOverrides/);
+  });
+
+  it("supports CMS record CRUD + undo", () => {
+    assert.match(service, /createCmsRecord/);
+    assert.match(service, /deleteCmsRecord/);
+    assert.match(service, /restoreCmsRecord/);
+    assert.match(service, /undoLastCmsChange/);
+    assert.match(service, /mergeCmsRows/);
+    assert.match(route, /create_record/);
+    assert.match(route, /delete_record/);
+    assert.match(route, /restore_record/);
+    assert.match(route, /set_fields/);
+    assert.match(route, /undo/);
   });
 
   it("apply script targets both base + ensure migrations", () => {

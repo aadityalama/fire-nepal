@@ -14,7 +14,11 @@ export type NepseCorporateActionType =
   | "book_close"
   | "fpo"
   | "ipo"
-  | "merger";
+  | "merger"
+  | "split"
+  | "listing"
+  | "delisting"
+  | "acquisition";
 
 export type NepseCompanyProfile = {
   symbol: string;

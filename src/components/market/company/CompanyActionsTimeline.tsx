@@ -12,6 +12,10 @@ const ACTION_LABEL: Record<NepseCompanyActionRow["actionType"], string> = {
   fpo: "FPO",
   ipo: "IPO",
   merger: "Merger",
+  split: "Split",
+  listing: "Listing",
+  delisting: "Delisting",
+  acquisition: "Acquisition",
 };
 
 export function CompanyActionsTimeline({

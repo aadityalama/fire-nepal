@@ -39,6 +39,10 @@ const ACTION_TYPES = new Set<NepseCorporateActionType>([
   "fpo",
   "ipo",
   "merger",
+  "split",
+  "listing",
+  "delisting",
+  "acquisition",
 ]);
 
 function num(value: unknown): number | null {
@@ -409,10 +413,13 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     .map(mapAction)
     .filter((row): row is NepseCompanyActionRow => Boolean(row));
 
-  // Manual NEPSE Hub Admin overrides (field-level). Official cron data remains in DB.
-  const { applyFieldOverrides, indexOverrides, listOverridesForSymbol } = await import(
-    "@/services/market/nepse-hub-admin-overrides"
-  );
+  // Manual NEPSE Hub Admin overrides (field-level + CMS rows). Official cron data remains in DB.
+  const {
+    applyFieldOverrides,
+    indexOverrides,
+    listOverridesForSymbol,
+    mergeCmsRows,
+  } = await import("@/services/market/nepse-hub-admin-overrides");
   const overrideIndex = indexOverrides(await listOverridesForSymbol(symbol, sb));
 
   const profileOverridden = applyFieldOverrides(
@@ -429,29 +436,96 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     "ratios",
   ) as typeof valuation;
 
-  const financialsOverridden = financials.map((row) =>
-    applyFieldOverrides({ ...row } as Record<string, unknown>, overrideIndex, "statements", row.fiscalYear),
-  ) as typeof financials;
+  const financialsOverridden = mergeCmsRows({
+    official: financials as unknown as Array<Record<string, unknown>>,
+    overrides: overrideIndex,
+    domain: "statements",
+    recordKeyOf: (row) => String(row.fiscalYear ?? ""),
+    buildCmsRow: (recordKey, payload) =>
+      ({
+        symbol,
+        fiscalYear: String(payload.fiscalYear ?? recordKey.replace(/^cms:/, "")),
+        periodLabel: (payload.periodLabel as string | null) ?? null,
+        revenueNpr: (payload.revenueNpr as number | null) ?? null,
+        operatingProfitNpr: (payload.operatingProfitNpr as number | null) ?? null,
+        netProfitNpr: (payload.netProfitNpr as number | null) ?? null,
+        reservesNpr: (payload.reservesNpr as number | null) ?? null,
+        cashNpr: (payload.cashNpr as number | null) ?? null,
+        borrowingsNpr: (payload.borrowingsNpr as number | null) ?? null,
+        assetsNpr: (payload.assetsNpr as number | null) ?? (payload.totalAssetsNpr as number | null) ?? null,
+        liabilitiesNpr:
+          (payload.liabilitiesNpr as number | null) ?? (payload.totalLiabilitiesNpr as number | null) ?? null,
+        source: "cms",
+      }) as unknown as Record<string, unknown>,
+  }) as typeof financials;
 
-  const dividendsOverridden = dividends.map((row) =>
-    applyFieldOverrides(
-      { ...row } as Record<string, unknown>,
-      overrideIndex,
-      "dividends",
-      row.fiscalYear || row.id,
-    ),
-  ) as typeof dividends;
+  const dividendsOverridden = mergeCmsRows({
+    official: dividends as unknown as Array<Record<string, unknown>>,
+    overrides: overrideIndex,
+    domain: "dividends",
+    recordKeyOf: (row) => String(row.fiscalYear || row.id || ""),
+    buildCmsRow: (recordKey, payload) =>
+      ({
+        id: recordKey,
+        symbol,
+        fiscalYear: String(payload.fiscalYear ?? recordKey.replace(/^cms:/, "")),
+        bonusPct: (payload.bonusPct as number | null) ?? null,
+        cashPct: (payload.cashPct as number | null) ?? null,
+        bookCloseDate: (payload.bookCloseDate as string | null) ?? null,
+        agmDate: (payload.agmDate as string | null) ?? null,
+        source: "cms",
+      }) as unknown as Record<string, unknown>,
+  }) as typeof dividends;
 
-  const actionsOverridden = actions.map((row) =>
-    applyFieldOverrides({ ...row } as Record<string, unknown>, overrideIndex, "actions", row.id),
-  ) as typeof actions;
+  const actionsOverridden = mergeCmsRows({
+    official: actions as unknown as Array<Record<string, unknown>>,
+    overrides: overrideIndex,
+    domain: "actions",
+    recordKeyOf: (row) => String(row.id ?? ""),
+    buildCmsRow: (recordKey, payload) =>
+      ({
+        id: recordKey,
+        symbol,
+        actionType: ACTION_TYPES.has(payload.actionType as NepseCorporateActionType)
+          ? (payload.actionType as NepseCorporateActionType)
+          : "bonus",
+        title: String(payload.title ?? "Untitled action"),
+        actionDate: (payload.actionDate as string | null) ?? null,
+        details: (payload.details as string | null) ?? null,
+        sourceUrl: (payload.sourceUrl as string | null) ?? null,
+        source: "cms",
+      }) as unknown as Record<string, unknown>,
+  }) as typeof actions;
 
   let session = sessionFromTick(tick);
   session = applyFieldOverrides({ ...session } as Record<string, unknown>, overrideIndex, "technical", "_") as typeof session;
+  // Map legacy technical keys (open/high/low/close) onto session NPR fields.
+  const legacyMap: Array<[string, keyof typeof session]> = [
+    ["open", "openNpr"],
+    ["high", "highNpr"],
+    ["low", "lowNpr"],
+    ["close", "closeNpr"],
+  ];
+  for (const [legacy, modern] of legacyMap) {
+    const value = overrideIndex.get(`technical|_|${legacy}`);
+    if (typeof value === "number" && Number.isFinite(value)) {
+      session = { ...session, [modern]: value };
+    }
+  }
   // Also map market LTP into session close when overridden.
   const ltpOverride = overrideIndex.get("market|_|ltpNpr");
   if (typeof ltpOverride === "number" && Number.isFinite(ltpOverride)) {
     session = { ...session, closeNpr: ltpOverride };
+  }
+  // 52W high/low technical overrides
+  let range52wFinal = { ...range52w };
+  const high52 = overrideIndex.get("technical|_|high52wNpr");
+  const low52 = overrideIndex.get("technical|_|low52wNpr");
+  if (typeof high52 === "number" && Number.isFinite(high52)) {
+    range52wFinal = { ...range52wFinal, highNpr: high52 };
+  }
+  if (typeof low52 === "number" && Number.isFinite(low52)) {
+    range52wFinal = { ...range52wFinal, lowNpr: low52 };
   }
 
   return {
@@ -462,7 +536,7 @@ export async function loadCompanyFundamentals(symbolRaw: string): Promise<NepseC
     dividends: dividendsOverridden,
     actions: actionsOverridden,
     session,
-    range52w,
+    range52w: range52wFinal,
     shareholding: shareholdingFromProfile(marketOverridden),
     loadedAt: new Date().toISOString(),
   };

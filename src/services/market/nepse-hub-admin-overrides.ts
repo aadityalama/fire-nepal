@@ -322,3 +322,449 @@ export async function restoreCompanyOverrides(input: {
 
   return { ok: true, restored: existing.length };
 }
+
+/** Reserved field keys for record-level CMS operations. */
+export const CMS_DELETED_FIELD = "__deleted__";
+export const CMS_ROW_PAYLOAD_FIELD = "__row__";
+export const CMS_RECORD_PREFIX = "cms:";
+
+export function isCmsCreatedRecordKey(recordKey: string): boolean {
+  return recordKey.startsWith(CMS_RECORD_PREFIX);
+}
+
+export function newCmsRecordKey(): string {
+  return `${CMS_RECORD_PREFIX}${crypto.randomUUID()}`;
+}
+
+export function isRecordDeleted(overrides: Map<string, unknown>, domain: string, recordKey: string): boolean {
+  return overrides.get(overrideMapKey(domain, recordKey, CMS_DELETED_FIELD)) === true;
+}
+
+export function getCmsRowPayload(
+  overrides: Map<string, unknown>,
+  domain: string,
+  recordKey: string,
+): Record<string, unknown> | null {
+  const payload = overrides.get(overrideMapKey(domain, recordKey, CMS_ROW_PAYLOAD_FIELD));
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** Collect CMS-created record keys for a domain (excluding deleted). */
+export function listCmsCreatedRecordKeys(overrides: Map<string, unknown>, domain: string): string[] {
+  const keys = new Set<string>();
+  const prefix = `${domain}|${CMS_RECORD_PREFIX}`;
+  for (const key of overrides.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const rest = key.slice(`${domain}|`.length);
+    const recordKey = rest.slice(0, rest.lastIndexOf("|"));
+    if (!isCmsCreatedRecordKey(recordKey)) continue;
+    if (isRecordDeleted(overrides, domain, recordKey)) continue;
+    keys.add(recordKey);
+  }
+  return [...keys];
+}
+
+/**
+ * Merge official rows with field overrides, hide deleted official rows,
+ * and append CMS-created rows. Backend resolves record keys — UI never asks for them.
+ */
+export function mergeCmsRows<T extends Record<string, unknown>>(input: {
+  official: T[];
+  overrides: Map<string, unknown>;
+  domain: string;
+  recordKeyOf: (row: T) => string;
+  buildCmsRow?: (recordKey: string, payload: Record<string, unknown>) => T;
+}): T[] {
+  const { official, overrides, domain, recordKeyOf, buildCmsRow } = input;
+  const next: T[] = [];
+
+  for (const row of official) {
+    const recordKey = recordKeyOf(row);
+    if (!recordKey || isRecordDeleted(overrides, domain, recordKey)) continue;
+    next.push(applyFieldOverrides({ ...row } as T, overrides, domain, recordKey));
+  }
+
+  for (const recordKey of listCmsCreatedRecordKeys(overrides, domain)) {
+    const payload = getCmsRowPayload(overrides, domain, recordKey) ?? {};
+    const patched = applyFieldOverrides({ ...payload } as Record<string, unknown>, overrides, domain, recordKey);
+    if (buildCmsRow) {
+      next.push(buildCmsRow(recordKey, patched));
+    } else {
+      next.push({ id: recordKey, ...patched } as unknown as T);
+    }
+  }
+
+  return next;
+}
+
+export async function setRecordFields(input: {
+  symbol: string;
+  domain: string;
+  recordKey?: string;
+  fields: Record<string, unknown>;
+  officialSnapshots?: Record<string, unknown>;
+  note?: string | null;
+  actorUserId: string;
+  actorEmail: string;
+  sb?: SupabaseClient | null;
+}): Promise<{ ok: true; rows: NepseHubAdminOverrideRow[]; recordKey: string } | { ok: false; error: string }> {
+  const recordKey = (input.recordKey ?? "_").trim() || "_";
+  const entries = Object.entries(input.fields);
+  if (!entries.length) return { ok: false, error: "No fields to save" };
+
+  const saved: NepseHubAdminOverrideRow[] = [];
+  for (const [fieldKey, value] of entries) {
+    if (fieldKey === CMS_DELETED_FIELD || fieldKey === CMS_ROW_PAYLOAD_FIELD) continue;
+    const result = await setFieldOverride({
+      symbol: input.symbol,
+      domain: input.domain,
+      recordKey,
+      fieldKey,
+      value,
+      officialSnapshot: input.officialSnapshots?.[fieldKey],
+      note: input.note ?? null,
+      actorUserId: input.actorUserId,
+      actorEmail: input.actorEmail,
+      sb: input.sb,
+    });
+    if (!result.ok) return result;
+    saved.push(result.row);
+  }
+  return { ok: true, rows: saved, recordKey };
+}
+
+export async function createCmsRecord(input: {
+  symbol: string;
+  domain: string;
+  fields: Record<string, unknown>;
+  note?: string | null;
+  actorUserId: string;
+  actorEmail: string;
+  preferredRecordKey?: string | null;
+  sb?: SupabaseClient | null;
+}): Promise<{ ok: true; recordKey: string; rows: NepseHubAdminOverrideRow[] } | { ok: false; error: string }> {
+  const sb = input.sb ?? createMarketDataServiceClient();
+  if (!sb) return { ok: false, error: "Database not configured" };
+
+  const symbol = input.symbol.trim().toUpperCase();
+  const domain = input.domain.trim();
+  const fields = { ...input.fields };
+
+  // Prefer fiscal year / natural id when provided so restores stay stable.
+  let recordKey = (input.preferredRecordKey ?? "").trim();
+  if (!recordKey) {
+    const fy = typeof fields.fiscalYear === "string" ? fields.fiscalYear.trim() : "";
+    recordKey = fy && domain === "dividends" ? fy : newCmsRecordKey();
+  }
+
+  const payloadResult = await setFieldOverride({
+    symbol,
+    domain,
+    recordKey,
+    fieldKey: CMS_ROW_PAYLOAD_FIELD,
+    value: fields,
+    officialSnapshot: null,
+    note: input.note ?? "Create CMS row",
+    actorUserId: input.actorUserId,
+    actorEmail: input.actorEmail,
+    sb,
+  });
+  if (!payloadResult.ok) return payloadResult;
+
+  const fieldResult = await setRecordFields({
+    symbol,
+    domain,
+    recordKey,
+    fields,
+    note: input.note ?? "Create CMS row",
+    actorUserId: input.actorUserId,
+    actorEmail: input.actorEmail,
+    sb,
+  });
+  if (!fieldResult.ok) return fieldResult;
+
+  await sb.from("nepse_hub_admin_audit_log").insert({
+    symbol,
+    domain,
+    record_key: recordKey,
+    field_key: null,
+    action: "create_record",
+    old_value_json: null,
+    new_value_json: wrapValue(fields),
+    actor_user_id: input.actorUserId,
+    actor_email: input.actorEmail,
+    note: input.note ?? "Create CMS row",
+  });
+
+  return { ok: true, recordKey, rows: [payloadResult.row, ...fieldResult.rows] };
+}
+
+export async function deleteCmsRecord(input: {
+  symbol: string;
+  domain: string;
+  recordKey: string;
+  actorUserId: string;
+  actorEmail: string;
+  note?: string | null;
+  sb?: SupabaseClient | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sb = input.sb ?? createMarketDataServiceClient();
+  if (!sb) return { ok: false, error: "Database not configured" };
+
+  const symbol = input.symbol.trim().toUpperCase();
+  const domain = input.domain.trim();
+  const recordKey = input.recordKey.trim();
+  if (!recordKey) return { ok: false, error: "recordKey is required" };
+
+  if (isCmsCreatedRecordKey(recordKey)) {
+    // Hard-delete CMS-created overrides for this record.
+    const { data: existing } = await sb
+      .from("nepse_hub_admin_overrides")
+      .select("*")
+      .eq("symbol", symbol)
+      .eq("domain", domain)
+      .eq("record_key", recordKey);
+
+    const { error } = await sb
+      .from("nepse_hub_admin_overrides")
+      .delete()
+      .eq("symbol", symbol)
+      .eq("domain", domain)
+      .eq("record_key", recordKey);
+    if (error) {
+      if (isMissingOverridesRelation(error.message)) return { ok: false, error: MISSING_TABLE_HINT };
+      return { ok: false, error: error.message };
+    }
+
+    await sb.from("nepse_hub_admin_audit_log").insert({
+      symbol,
+      domain,
+      record_key: recordKey,
+      field_key: null,
+      action: "delete_record",
+      old_value_json: existing ?? null,
+      new_value_json: null,
+      actor_user_id: input.actorUserId,
+      actor_email: input.actorEmail,
+      note: input.note ?? "Delete CMS row",
+    });
+    return { ok: true };
+  }
+
+  // Soft-hide official rows so cron data remains intact.
+  const result = await setFieldOverride({
+    symbol,
+    domain,
+    recordKey,
+    fieldKey: CMS_DELETED_FIELD,
+    value: true,
+    officialSnapshot: false,
+    note: input.note ?? "Hide official row",
+    actorUserId: input.actorUserId,
+    actorEmail: input.actorEmail,
+    sb,
+  });
+  if (!result.ok) return result;
+
+  await sb.from("nepse_hub_admin_audit_log").insert({
+    symbol,
+    domain,
+    record_key: recordKey,
+    field_key: CMS_DELETED_FIELD,
+    action: "delete_record",
+    old_value_json: wrapValue(false),
+    new_value_json: wrapValue(true),
+    actor_user_id: input.actorUserId,
+    actor_email: input.actorEmail,
+    note: input.note ?? "Hide official row",
+  });
+
+  return { ok: true };
+}
+
+export async function restoreCmsRecord(input: {
+  symbol: string;
+  domain: string;
+  recordKey: string;
+  actorUserId: string;
+  actorEmail: string;
+  note?: string | null;
+  sb?: SupabaseClient | null;
+}): Promise<{ ok: true; restored: number } | { ok: false; error: string }> {
+  const sb = input.sb ?? createMarketDataServiceClient();
+  if (!sb) return { ok: false, error: "Database not configured" };
+
+  const symbol = input.symbol.trim().toUpperCase();
+  const domain = input.domain.trim();
+  const recordKey = input.recordKey.trim();
+
+  const { data: existing, error: listError } = await sb
+    .from("nepse_hub_admin_overrides")
+    .select("*")
+    .eq("symbol", symbol)
+    .eq("domain", domain)
+    .eq("record_key", recordKey);
+
+  if (listError) {
+    if (isMissingOverridesRelation(listError.message)) return { ok: false, error: MISSING_TABLE_HINT };
+    return { ok: false, error: listError.message };
+  }
+
+  const rows = (existing as NepseHubAdminOverrideRow[] | null) ?? [];
+  if (!rows.length) return { ok: false, error: "No overrides for this record" };
+
+  const { error } = await sb
+    .from("nepse_hub_admin_overrides")
+    .delete()
+    .eq("symbol", symbol)
+    .eq("domain", domain)
+    .eq("record_key", recordKey);
+
+  if (error) {
+    if (isMissingOverridesRelation(error.message)) return { ok: false, error: MISSING_TABLE_HINT };
+    return { ok: false, error: error.message };
+  }
+
+  await sb.from("nepse_hub_admin_audit_log").insert({
+    symbol,
+    domain,
+    record_key: recordKey,
+    field_key: null,
+    action: "restore_record",
+    old_value_json: { count: rows.length, fields: rows.map((r) => r.field_key) },
+    new_value_json: null,
+    actor_user_id: input.actorUserId,
+    actor_email: input.actorEmail,
+    note: input.note ?? "Restore official record",
+  });
+
+  return { ok: true, restored: rows.length };
+}
+
+/**
+ * Undo the most recent undoable audit event for a symbol.
+ * Reverses set / create_record / delete_record when possible.
+ */
+export async function undoLastCmsChange(input: {
+  symbol: string;
+  actorUserId: string;
+  actorEmail: string;
+  auditId?: string | null;
+  sb?: SupabaseClient | null;
+}): Promise<{ ok: true; undoneAction: string } | { ok: false; error: string }> {
+  const sb = input.sb ?? createMarketDataServiceClient();
+  if (!sb) return { ok: false, error: "Database not configured" };
+
+  const symbol = input.symbol.trim().toUpperCase();
+  const audit = await listAuditForSymbol(symbol, 40, sb);
+  const event = input.auditId
+    ? audit.find((row) => row.id === input.auditId)
+    : audit.find((row) => ["set", "create_record", "delete_record", "restore_field", "restore_record"].includes(row.action));
+
+  if (!event) return { ok: false, error: "Nothing to undo" };
+
+  if (event.action === "set") {
+    const oldValue = unwrapValue(event.old_value_json);
+    if (oldValue === null || oldValue === undefined) {
+      const restored = await restoreFieldOverride({
+        symbol,
+        domain: event.domain,
+        recordKey: event.record_key,
+        fieldKey: event.field_key ?? "",
+        actorUserId: input.actorUserId,
+        actorEmail: input.actorEmail,
+        note: `Undo ${event.id}`,
+        sb,
+      });
+      if (!restored.ok) return restored;
+    } else {
+      const set = await setFieldOverride({
+        symbol,
+        domain: event.domain,
+        recordKey: event.record_key,
+        fieldKey: event.field_key ?? "",
+        value: oldValue,
+        note: `Undo ${event.id}`,
+        actorUserId: input.actorUserId,
+        actorEmail: input.actorEmail,
+        sb,
+      });
+      if (!set.ok) return set;
+    }
+  } else if (event.action === "create_record") {
+    const deleted = await deleteCmsRecord({
+      symbol,
+      domain: event.domain,
+      recordKey: event.record_key,
+      actorUserId: input.actorUserId,
+      actorEmail: input.actorEmail,
+      note: `Undo create ${event.id}`,
+      sb,
+    });
+    if (!deleted.ok) return deleted;
+  } else if (event.action === "delete_record") {
+    if (isCmsCreatedRecordKey(event.record_key) && Array.isArray(event.old_value_json)) {
+      for (const row of event.old_value_json as NepseHubAdminOverrideRow[]) {
+        await setFieldOverride({
+          symbol,
+          domain: row.domain,
+          recordKey: row.record_key,
+          fieldKey: row.field_key,
+          value: unwrapValue(row.value_json),
+          officialSnapshot: unwrapValue(row.official_snapshot_json),
+          note: `Undo delete ${event.id}`,
+          actorUserId: input.actorUserId,
+          actorEmail: input.actorEmail,
+          sb,
+        });
+      }
+    } else {
+      const restored = await restoreCmsRecord({
+        symbol,
+        domain: event.domain,
+        recordKey: event.record_key,
+        actorUserId: input.actorUserId,
+        actorEmail: input.actorEmail,
+        note: `Undo delete ${event.id}`,
+        sb,
+      });
+      if (!restored.ok) return restored;
+    }
+  } else if (event.action === "restore_field" && event.field_key) {
+    const previous = unwrapValue(event.old_value_json);
+    if (previous !== null && previous !== undefined) {
+      const set = await setFieldOverride({
+        symbol,
+        domain: event.domain,
+        recordKey: event.record_key,
+        fieldKey: event.field_key,
+        value: previous,
+        note: `Undo restore ${event.id}`,
+        actorUserId: input.actorUserId,
+        actorEmail: input.actorEmail,
+        sb,
+      });
+      if (!set.ok) return set;
+    }
+  } else if (event.action === "restore_record") {
+    return { ok: false, error: "Cannot automatically undo a full record restore" };
+  }
+
+  await sb.from("nepse_hub_admin_audit_log").insert({
+    symbol,
+    domain: event.domain,
+    record_key: event.record_key,
+    field_key: event.field_key,
+    action: "undo",
+    old_value_json: wrapValue(event.id),
+    new_value_json: wrapValue(event.action),
+    actor_user_id: input.actorUserId,
+    actor_email: input.actorEmail,
+    note: `Undid ${event.action}`,
+  });
+
+  return { ok: true, undoneAction: event.action };
+}
