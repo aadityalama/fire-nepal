@@ -51,7 +51,7 @@ function KpiCard({ label, value, hint, icon: Icon, tone = "emerald" }: { label: 
           {hint ? <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-zinc-500">{hint}</p> : null}
         </div>
         <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${toneClass}`}>
-          <Icon size={17} />
+          <Icon size={21.25} />
         </div>
       </div>
     </div>
@@ -67,9 +67,9 @@ function ChartCard({ title, data, metric, type = "area" }: { title: string; data
           {type === "bar" ? (
             <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
               <CartesianGrid stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
-              <Tooltip contentStyle={{ background: "#06140f", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, fontSize: 12 }} />
+              <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12.5 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#64748b", fontSize: 12.5 }} axisLine={false} tickLine={false} width={36} />
+              <Tooltip contentStyle={{ background: "#06140f", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, fontSize: 15 }} />
               <Bar dataKey={metric} fill={chartFill} radius={[8, 8, 0, 0]} />
             </BarChart>
           ) : (
@@ -81,9 +81,9 @@ function ChartCard({ title, data, metric, type = "area" }: { title: string; data
                 </linearGradient>
               </defs>
               <CartesianGrid stroke={gridStroke} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
-              <Tooltip contentStyle={{ background: "#06140f", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, fontSize: 12 }} />
+              <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12.5 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#64748b", fontSize: 12.5 }} axisLine={false} tickLine={false} width={36} />
+              <Tooltip contentStyle={{ background: "#06140f", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, fontSize: 15 }} />
               <Area dataKey={metric} stroke={chartStroke} fill={`url(#ai-${title}-${metric})`} strokeWidth={2} />
             </AreaChart>
           )}
@@ -160,7 +160,7 @@ function BudgetPanel({ snapshot }: { snapshot: AdminAiAnalyticsSnapshot }) {
         </div>
         <div className="flex gap-2">
           <input value={budget} onChange={(e) => setBudget(Number(e.target.value) || 0)} type="number" min={0} step={1} className="h-11 w-28 rounded-xl border border-white/10 bg-black/20 px-3 text-sm font-bold text-white outline-none" />
-          <button onClick={() => void save()} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-50"><Save size={15} /> Save</button>
+          <button onClick={() => void save()} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-black text-white disabled:opacity-50"><Save size={18.75} /> Save</button>
         </div>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/25"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, pct)}%` }} /></div>
@@ -211,8 +211,8 @@ export function AdminAiAnalyticsClient({ snapshot }: { snapshot: AdminAiAnalytic
           <p className="mt-2 max-w-3xl text-sm font-medium leading-relaxed text-zinc-400">Monitor FIRE AI usage, OpenAI cost, quota pressure, feature adoption, and system health from one responsive dashboard.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/admin/ai-analytics/export/csv" className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-black text-emerald-100"><Download size={15} /> CSV Export</a>
-          <a href="/api/admin/ai-analytics/export/pdf" className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-black text-emerald-100"><FileText size={15} /> PDF Export</a>
+          <a href="/api/admin/ai-analytics/export/csv" className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-black text-emerald-100"><Download size={18.75} /> CSV Export</a>
+          <a href="/api/admin/ai-analytics/export/pdf" className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-black text-emerald-100"><FileText size={18.75} /> PDF Export</a>
         </div>
       </div>
 
@@ -278,5 +278,5 @@ function KpiMini({ label, value }: { label: string; value: string }) {
 }
 
 function HealthRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return <div className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2"><span className="text-zinc-400">{label}</span><span className={`inline-flex items-center gap-1 font-black ${ok ? "text-emerald-300" : "text-amber-300"}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}{value}</span></div>;
+  return <div className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3 py-2"><span className="text-zinc-400">{label}</span><span className={`inline-flex items-center gap-1 font-black ${ok ? "text-emerald-300" : "text-amber-300"}`}>{ok ? <CheckCircle2 size={17.5} /> : <AlertTriangle size={17.5} />}{value}</span></div>;
 }

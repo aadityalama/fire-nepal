@@ -12,5 +12,7 @@ export const metadata: Metadata = {
 
 export default async function NepseHubAdminLayout({ children }: { children: ReactNode }) {
   await requireNepseHubAdminUser();
-  return <div className="min-h-screen bg-[#020806] text-zinc-100 antialiased">{children}</div>;
+  return (
+    <div className="admin-panel-root min-h-screen bg-[#020806] text-zinc-100 antialiased">{children}</div>
+  );
 }
