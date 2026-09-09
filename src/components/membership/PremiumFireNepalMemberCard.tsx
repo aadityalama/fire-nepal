@@ -6,7 +6,6 @@ import {
   Clock3,
   Crown,
   Flag,
-  Gem,
   Globe2,
   Headphones,
   IdCard,
@@ -50,28 +49,37 @@ type PremiumFireNepalMemberCardProps = {
 
 const GOLD = "#D4AF37";
 const GOLD_SOFT = "rgba(212,175,55,0.85)";
+const GOLD_BRIGHT = "#F6E27A";
 const EMERALD = "#10b981";
 const EMERALD_SOFT = "#6ee7b7";
+
+/** Photo diameter — +20% from prior 142px. */
+const PHOTO_SIZE = 170;
+/** QR outer frame — +30% from prior 138px. */
+const QR_OUTER = 180;
+const QR_INNER = 160;
 
 function tierAccent(plan: FireMembershipTier) {
   if (plan === "elite") {
     return {
       label: tierBadgeLabel(plan),
-      color: "#F6E27A",
-      border: "rgba(246,226,122,0.85)",
-      bg: "linear-gradient(180deg, rgba(58,42,8,0.92), rgba(20,14,4,0.96))",
-      glow: "0 0 22px rgba(212,175,55,0.45)",
+      color: "#FFF6C8",
+      border: "rgba(246,226,122,0.95)",
+      bg: "linear-gradient(135deg, #5C4810 0%, #D4AF37 38%, #F6E27A 52%, #A67C1A 78%, #3A2A08 100%)",
+      glow: "0 0 28px rgba(212,175,55,0.65), 0 0 8px rgba(246,226,122,0.5), inset 0 1px 0 rgba(255,246,200,0.55)",
       icon: Crown,
+      iconSize: 22,
     };
   }
   if (plan === "premium") {
     return {
       label: tierBadgeLabel(plan),
-      color: "#A7F3D0",
-      border: "rgba(52,211,153,0.75)",
-      bg: "linear-gradient(180deg, rgba(6,78,59,0.92), rgba(2,30,22,0.96))",
-      glow: "0 0 22px rgba(16,185,129,0.4)",
-      icon: Gem,
+      color: "#FFF8D6",
+      border: "rgba(212,175,55,0.9)",
+      bg: "linear-gradient(135deg, #3F3210 0%, #B8942A 36%, #E8C547 52%, #8A6A1C 80%, #1F1808 100%)",
+      glow: "0 0 26px rgba(212,175,55,0.55), 0 0 8px rgba(232,197,71,0.4), inset 0 1px 0 rgba(255,248,214,0.45)",
+      icon: Crown,
+      iconSize: 20,
     };
   }
   return {
@@ -81,6 +89,7 @@ function tierAccent(plan: FireMembershipTier) {
     bg: "linear-gradient(180deg, rgba(39,39,42,0.92), rgba(9,9,11,0.96))",
     glow: "0 0 18px rgba(161,161,170,0.3)",
     icon: Sparkles,
+    iconSize: 18,
   };
 }
 
@@ -117,8 +126,8 @@ function FireEmblem() {
     <div
       style={{
         position: "relative",
-        width: 220,
-        height: 220,
+        width: 236,
+        height: 236,
         display: "grid",
         placeItems: "center",
       }}
@@ -126,22 +135,21 @@ function FireEmblem() {
       <div
         style={{
           position: "absolute",
-          inset: 8,
+          inset: 4,
           borderRadius: 999,
-          background: "radial-gradient(circle, rgba(16,185,129,0.45) 0%, rgba(5,5,5,0) 68%)",
-          filter: "blur(2px)",
+          background: "radial-gradient(circle, rgba(16,185,129,0.5) 0%, rgba(5,5,5,0) 68%)",
         }}
       />
       <div
         style={{
           position: "relative",
-          width: 196,
-          height: 196,
+          width: 210,
+          height: 210,
           borderRadius: 999,
-          border: `2px solid ${GOLD_SOFT}`,
-          boxShadow: `0 0 36px rgba(16,185,129,0.35), inset 0 0 28px rgba(16,185,129,0.2), 0 0 24px rgba(212,175,55,0.22)`,
+          border: `2.5px solid ${GOLD_SOFT}`,
+          boxShadow: `0 0 42px rgba(16,185,129,0.4), inset 0 0 32px rgba(16,185,129,0.22), 0 0 28px rgba(212,175,55,0.28)`,
           background:
-            "radial-gradient(circle at 35% 28%, rgba(52,211,153,0.4), rgba(2,12,9,0.96) 62%, rgba(0,0,0,0.98) 100%)",
+            "radial-gradient(circle at 35% 28%, rgba(52,211,153,0.45), rgba(2,12,9,0.96) 62%, rgba(0,0,0,0.98) 100%)",
           display: "grid",
           placeItems: "center",
         }}
@@ -151,17 +159,17 @@ function FireEmblem() {
             position: "absolute",
             inset: 10,
             borderRadius: 999,
-            border: "1px solid rgba(110,231,183,0.28)",
+            border: "1px solid rgba(110,231,183,0.32)",
           }}
         />
         <T
           style={{
             position: "absolute",
-            top: 16,
+            top: 18,
             left: 18,
             right: 18,
             textAlign: "center",
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 800,
             letterSpacing: "0.28em",
             textTransform: "uppercase",
@@ -174,24 +182,24 @@ function FireEmblem() {
         <img
           src="/logo.png"
           alt=""
-          width={86}
-          height={86}
+          width={92}
+          height={92}
           style={{
-            width: 86,
-            height: 86,
-            borderRadius: 22,
+            width: 92,
+            height: 92,
+            borderRadius: 24,
             display: "block",
-            boxShadow: "0 0 28px rgba(16,185,129,0.55)",
+            boxShadow: "0 0 32px rgba(16,185,129,0.6)",
           }}
         />
         <T
           style={{
             position: "absolute",
-            bottom: 16,
+            bottom: 18,
             left: 18,
             right: 18,
             textAlign: "center",
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 800,
             letterSpacing: "0.28em",
             textTransform: "uppercase",
@@ -223,7 +231,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
         try {
           const QRCode = (await import("qrcode")).default;
           const url = await QRCode.toDataURL(verifyUrl, {
-            width: 280,
+            width: 364,
             margin: 1,
             errorCorrectionLevel: "H",
             color: { dark: "#043227", light: "#ffffff" },
@@ -266,7 +274,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           color: "#ffffff",
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-          background: "#050806",
+          background: "#030806",
           border: `2px solid ${GOLD}`,
           boxShadow: `
             0 0 0 1px rgba(246,226,122,0.35),
@@ -275,7 +283,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           `,
         }}
       >
-        {/* Master artwork backdrop — realistic Himalaya + Nepal map + topo + pagodas */}
+        {/* Master artwork backdrop — Himalaya + Nepal atmosphere */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/membership/card-backdrop.jpg"
@@ -293,15 +301,18 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           }}
         />
 
-        {/* Depth / readability gradients — preserve premium lighting, do not flatten art */}
+        {/* Himalayan depth + emerald / gold lighting (export-safe: no CSS blur filters) */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
             background: `
-              linear-gradient(90deg, rgba(2,6,4,0.88) 0%, rgba(2,6,4,0.62) 34%, rgba(2,6,4,0.18) 62%, rgba(2,6,4,0.42) 100%),
-              linear-gradient(180deg, rgba(2,6,4,0.28) 0%, rgba(2,6,4,0.08) 38%, rgba(2,6,4,0.55) 72%, rgba(0,0,0,0.82) 100%)
+              radial-gradient(ellipse 70% 55% at 78% 28%, rgba(16,185,129,0.28) 0%, rgba(16,185,129,0) 62%),
+              radial-gradient(ellipse 55% 45% at 18% 70%, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0) 58%),
+              radial-gradient(ellipse 50% 40% at 55% 12%, rgba(110,231,183,0.16) 0%, rgba(2,6,4,0) 70%),
+              linear-gradient(90deg, rgba(2,8,5,0.9) 0%, rgba(2,8,5,0.58) 32%, rgba(2,10,7,0.22) 58%, rgba(2,8,5,0.48) 100%),
+              linear-gradient(180deg, rgba(2,10,7,0.34) 0%, rgba(2,8,5,0.1) 34%, rgba(2,8,5,0.48) 68%, rgba(0,0,0,0.88) 100%)
             `,
           }}
         />
@@ -310,9 +321,43 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            boxShadow: "inset 0 0 80px rgba(212,175,55,0.08)",
+            boxShadow: "inset 0 0 100px rgba(16,185,129,0.1), inset 0 0 70px rgba(212,175,55,0.1)",
           }}
         />
+
+        {/* Large glowing Nepal map watermark — low opacity luxury emboss */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "46%",
+            width: 620,
+            height: 340,
+            marginLeft: -310,
+            marginTop: -170,
+            opacity: 0.14,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/membership/nepal-map-glow.png"
+            alt=""
+            width={620}
+            height={340}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              display: "block",
+              opacity: 0.85,
+            }}
+          />
+          <div style={{ position: "absolute", inset: "8% 12%", opacity: 0.9 }}>
+            <NepalChucheMapOutline width={520} height={280} uid={`${reactId}-wm`} />
+          </div>
+        </div>
 
         {/* Inner gold hairline for double-border luxury feel */}
         <div
@@ -320,37 +365,49 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             position: "absolute",
             inset: 5,
             borderRadius: 22,
-            border: "1px solid rgba(246,226,122,0.38)",
+            border: "1px solid rgba(246,226,122,0.42)",
             pointerEvents: "none",
+            zIndex: 2,
+            boxShadow: "inset 0 0 40px rgba(212,175,55,0.06)",
           }}
         />
 
         {/* ─── Top brand row ─── */}
-        <div style={{ position: "absolute", left: 34, top: 26, display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: 30,
+            top: 22,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            zIndex: 3,
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png"
             alt=""
-            width={46}
-            height={46}
+            width={50}
+            height={50}
             style={{
-              width: 46,
-              height: 46,
-              borderRadius: 14,
+              width: 50,
+              height: 50,
+              borderRadius: 15,
               display: "block",
-              boxShadow: "0 0 22px rgba(16,185,129,0.45)",
+              boxShadow: "0 0 24px rgba(16,185,129,0.5)",
             }}
           />
           <div>
-            <T style={{ fontSize: 22, fontWeight: 900, letterSpacing: "0.1em", color: "#fff", lineHeight: "26px" }}>
+            <T style={{ fontSize: 24, fontWeight: 900, letterSpacing: "0.1em", color: "#fff", lineHeight: "28px" }}>
               FIRE NEPAL
             </T>
             <T
               style={{
                 marginTop: 2,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
-                letterSpacing: "0.34em",
+                letterSpacing: "0.32em",
                 textTransform: "uppercase",
                 color: GOLD_SOFT,
                 lineHeight: "14px",
@@ -365,59 +422,62 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           className="font-nepali"
           style={{
             position: "absolute",
-            left: 430,
-            top: 34,
-            width: 540,
+            left: 420,
+            top: 30,
+            width: 520,
             textAlign: "center",
-            fontSize: 18,
+            fontSize: 17,
             fontWeight: 800,
             color: "#f4f4f5",
-            lineHeight: "28px",
+            lineHeight: "26px",
             textShadow: "0 2px 16px rgba(0,0,0,0.65)",
+            zIndex: 3,
           }}
         >
           <span style={{ color: "#ffffff" }}>आजै योजना बनाऔं, </span>
           <span style={{ color: EMERALD_SOFT }}>आर्थिक स्वतन्त्रता हासिल गरौं।</span>
         </T>
 
+        {/* Elite / Premium luxury gold badge */}
         <div
           style={{
             position: "absolute",
-            right: 34,
-            top: 28,
+            right: 28,
+            top: 22,
             display: "inline-flex",
             alignItems: "center",
-            gap: 8,
-            padding: "9px 16px",
-            borderRadius: 10,
-            border: `1.5px solid ${accent.border}`,
+            gap: 10,
+            padding: "12px 22px",
+            borderRadius: 12,
+            border: `2px solid ${accent.border}`,
             background: accent.bg,
             color: accent.color,
             boxShadow: accent.glow,
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 900,
-            letterSpacing: "0.16em",
+            letterSpacing: "0.18em",
             textTransform: "uppercase",
-            lineHeight: "14px",
+            lineHeight: "18px",
+            zIndex: 3,
           }}
         >
-          <TierIcon size={15} strokeWidth={2.4} color={accent.color} />
+          <TierIcon size={accent.iconSize} strokeWidth={2.35} color={accent.color} />
           {accent.label}
         </div>
 
         {/* ─── Identity band ─── */}
-        {/* Photo */}
-        <div style={{ position: "absolute", left: 42, top: 112, width: 156 }}>
+        {/* Photo (+20%) */}
+        <div style={{ position: "absolute", left: 36, top: 96, width: PHOTO_SIZE + 20, zIndex: 3 }}>
           <div
             style={{
               position: "relative",
-              width: 142,
-              height: 142,
+              width: PHOTO_SIZE,
+              height: PHOTO_SIZE,
               borderRadius: 999,
               overflow: "hidden",
-              border: `3px solid ${GOLD}`,
+              border: `3.5px solid ${GOLD}`,
               background: "rgba(6,78,59,0.35)",
-              boxShadow: `0 0 0 1px rgba(246,226,122,0.35), 0 0 34px rgba(212,175,55,0.35)`,
+              boxShadow: `0 0 0 1px rgba(246,226,122,0.4), 0 0 42px rgba(212,175,55,0.42), 0 0 18px rgba(16,185,129,0.25)`,
             }}
           >
             {data.avatarUrl ? (
@@ -425,8 +485,8 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
               <img
                 src={data.avatarUrl}
                 alt=""
-                width={142}
-                height={142}
+                width={PHOTO_SIZE}
+                height={PHOTO_SIZE}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               />
             ) : (
@@ -437,7 +497,7 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
                   display: "grid",
                   placeItems: "center",
                   background: "linear-gradient(145deg, #059669, #064e3b)",
-                  fontSize: 34,
+                  fontSize: 40,
                   fontWeight: 900,
                   color: "#ecfdf5",
                 }}
@@ -449,53 +509,53 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           <span
             style={{
               position: "absolute",
-              left: 108,
-              top: 108,
-              width: 34,
-              height: 34,
+              left: PHOTO_SIZE - 36,
+              top: PHOTO_SIZE - 36,
+              width: 40,
+              height: 40,
               borderRadius: 999,
               display: "grid",
               placeItems: "center",
               background: EMERALD,
-              border: "2px solid rgba(236,253,245,0.9)",
+              border: "2.5px solid rgba(236,253,245,0.95)",
               color: "#022c22",
-              boxShadow: "0 6px 16px rgba(0,0,0,0.4)",
+              boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
             }}
           >
-            <ShieldCheck size={17} strokeWidth={2.6} />
+            <ShieldCheck size={20} strokeWidth={2.6} />
           </span>
           <div
             style={{
-              marginTop: 14,
+              marginTop: 12,
               display: "inline-flex",
               alignItems: "center",
-              gap: 6,
-              fontSize: 11,
+              gap: 7,
+              fontSize: 13,
               fontWeight: 800,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               color: "#d1fae5",
             }}
           >
-            <BadgeCheck size={14} color={EMERALD_SOFT} />
+            <BadgeCheck size={16} color={EMERALD_SOFT} />
             Verified Member
           </div>
         </div>
 
         {/* Name + ID + countdown */}
-        <div style={{ position: "absolute", left: 230, top: 118, width: 700 }}>
+        <div style={{ position: "absolute", left: 236, top: 92, width: 720, zIndex: 3 }}>
           <T
             style={{
-              fontSize: 34,
+              fontSize: 68,
               fontWeight: 900,
-              letterSpacing: "0.05em",
+              letterSpacing: "0.02em",
               textTransform: "uppercase",
               color: "#ffffff",
-              lineHeight: "40px",
+              lineHeight: "72px",
               whiteSpace: "normal",
               overflow: "visible",
               wordBreak: "break-word",
-              textShadow: "0 2px 18px rgba(0,0,0,0.55)",
+              textShadow: "0 3px 22px rgba(0,0,0,0.6), 0 0 40px rgba(16,185,129,0.15)",
             }}
           >
             {data.fullName}
@@ -503,10 +563,10 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
 
           <T
             style={{
-              marginTop: 14,
-              fontSize: 11,
+              marginTop: 10,
+              fontSize: 14,
               fontWeight: 800,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.2em",
               textTransform: "uppercase",
               color: EMERALD_SOFT,
             }}
@@ -515,16 +575,16 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
           </T>
           <div
             style={{
-              marginTop: 8,
+              marginTop: 7,
               display: "inline-flex",
               alignItems: "center",
-              padding: "10px 22px",
+              padding: "12px 26px",
               borderRadius: 999,
-              border: "1px solid rgba(52,211,153,0.55)",
-              background: "rgba(0,0,0,0.55)",
-              boxShadow: "0 0 18px rgba(16,185,129,0.28), inset 0 0 18px rgba(16,185,129,0.12)",
+              border: "1.5px solid rgba(52,211,153,0.6)",
+              background: "rgba(0,0,0,0.58)",
+              boxShadow: "0 0 22px rgba(16,185,129,0.32), inset 0 0 20px rgba(16,185,129,0.14)",
               fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-              fontSize: 18,
+              fontSize: 26,
               fontWeight: 800,
               letterSpacing: "0.06em",
               color: "#ffffff",
@@ -535,24 +595,24 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
 
           <div
             style={{
-              marginTop: 16,
-              width: 360,
+              marginTop: 12,
+              width: 400,
               borderRadius: 16,
-              border: `1px solid ${countdown.border}`,
+              border: `1.5px solid ${countdown.border}`,
               background: countdown.bg,
-              padding: "14px 16px",
-              boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+              padding: "14px 18px",
+              boxShadow: "0 10px 28px rgba(0,0,0,0.3)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <CalendarDays size={15} color={EMERALD_SOFT} />
+              <CalendarDays size={16} color={EMERALD_SOFT} />
               <T
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: 800,
                   letterSpacing: "0.16em",
                   textTransform: "uppercase",
-                  color: "rgba(236,253,245,0.9)",
+                  color: "rgba(236,253,245,0.92)",
                 }}
               >
                 Membership Countdown
@@ -560,61 +620,84 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             </div>
             <T
               style={{
-                marginTop: 8,
-                fontSize: 28,
+                marginTop: 6,
+                fontSize: 48,
                 fontWeight: 900,
-                letterSpacing: "-0.02em",
+                letterSpacing: "-0.025em",
                 color: countdown.valueColor,
-                lineHeight: "34px",
+                lineHeight: "52px",
               }}
             >
               {countdown.value}
             </T>
-            <T style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: EMERALD_SOFT }}>{countdown.sub}</T>
+            <T style={{ marginTop: 4, fontSize: 15, fontWeight: 600, color: EMERALD_SOFT }}>{countdown.sub}</T>
           </div>
         </div>
 
-        {/* QR cluster — map is a small Chuche accent beside QR (~25% of hero height) */}
-        <div style={{ position: "absolute", right: 38, top: 96, width: 250, display: "flex", justifyContent: "flex-end", alignItems: "flex-start", gap: 10 }}>
+        {/* QR cluster — 30% larger with premium gold glow */}
+        <div
+          style={{
+            position: "absolute",
+            right: 28,
+            top: 88,
+            width: 290,
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "flex-start",
+            gap: 10,
+            zIndex: 3,
+          }}
+        >
           <div
             style={{
-              width: 105,
-              height: 58,
-              marginTop: 48,
+              width: 110,
+              height: 62,
+              marginTop: 58,
               flexShrink: 0,
-              filter: "drop-shadow(0 0 12px rgba(16,185,129,0.5))",
             }}
           >
-            <NepalChucheMapOutline width={105} height={58} uid={`${reactId}-qr`} />
+            <NepalChucheMapOutline width={110} height={62} uid={`${reactId}-qr`} />
           </div>
-          <div style={{ width: 150, textAlign: "center" }}>
+          <div style={{ width: QR_OUTER + 16, textAlign: "center" }}>
             <div
               style={{
                 position: "relative",
-                width: 138,
-                height: 138,
+                width: QR_OUTER,
+                height: QR_OUTER,
                 margin: "0 auto",
-                borderRadius: 16,
-                padding: 8,
+                borderRadius: 18,
+                padding: 10,
                 boxSizing: "border-box",
                 background: "#ffffff",
-                border: `2px solid ${GOLD}`,
-                boxShadow: `0 0 0 1px rgba(246,226,122,0.35), 0 0 28px rgba(212,175,55,0.4), 0 0 22px rgba(16,185,129,0.22)`,
+                border: `2.5px solid ${GOLD}`,
+                boxShadow: `
+                  0 0 0 2px rgba(246,226,122,0.45),
+                  0 0 36px rgba(212,175,55,0.7),
+                  0 0 18px rgba(246,226,122,0.55),
+                  0 0 56px rgba(212,175,55,0.35),
+                  0 0 24px rgba(16,185,129,0.2)
+                `,
               }}
             >
               {qrDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={qrDataUrl} alt="" width={122} height={122} style={{ width: 122, height: 122, display: "block" }} />
+                <img
+                  src={qrDataUrl}
+                  alt=""
+                  width={QR_INNER}
+                  height={QR_INNER}
+                  style={{ width: QR_INNER, height: QR_INNER, display: "block" }}
+                />
               ) : (
                 <div
                   style={{
-                    width: 122,
-                    height: 122,
+                    width: QR_INNER,
+                    height: QR_INNER,
                     display: "grid",
                     placeItems: "center",
                     background: "#f4f4f5",
                     color: "#71717a",
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: 700,
                   }}
                 >
@@ -625,19 +708,19 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
               <img
                 src="/logo.png"
                 alt=""
-                width={34}
-                height={34}
+                width={40}
+                height={40}
                 style={{
                   position: "absolute",
                   left: "50%",
                   top: "50%",
-                  width: 34,
-                  height: 34,
-                  marginLeft: -17,
-                  marginTop: -17,
-                  borderRadius: 10,
+                  width: 40,
+                  height: 40,
+                  marginLeft: -20,
+                  marginTop: -20,
+                  borderRadius: 11,
                   border: "2px solid #ffffff",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.28)",
                   background: "#022c22",
                   display: "block",
                 }}
@@ -646,41 +729,54 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             <T
               style={{
                 marginTop: 10,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: 900,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
-                color: GOLD,
+                color: GOLD_BRIGHT,
+                textShadow: "0 0 16px rgba(212,175,55,0.55)",
               }}
             >
               Scan to verify
             </T>
-            <T style={{ marginTop: 4, fontSize: 10, fontWeight: 600, color: "rgba(244,244,245,0.82)", lineHeight: "14px" }}>
+            <T style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "rgba(244,244,245,0.85)", lineHeight: "16px" }}>
               Verify this membership at firenepal.com/verify
             </T>
           </div>
         </div>
 
-        {/* Gold section divider */}
+        {/* Gold section divider — tighter to fill lower half */}
         <div
           style={{
             position: "absolute",
-            left: 34,
-            right: 34,
-            top: 392,
+            left: 30,
+            right: 30,
+            top: 388,
             height: 1,
             background: `linear-gradient(90deg, transparent, ${GOLD_SOFT}, transparent)`,
-            boxShadow: "0 0 12px rgba(212,175,55,0.35)",
+            boxShadow: "0 0 14px rgba(212,175,55,0.4)",
+            zIndex: 3,
           }}
         />
 
-        {/* ─── Bottom left: member details ─── */}
-        <div style={{ position: "absolute", left: 42, top: 418, width: 360 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <BadgeCheck size={15} color={EMERALD_SOFT} />
+        {/* ─── Bottom left: member details (fills lower half) ─── */}
+        <div
+          style={{
+            position: "absolute",
+            left: 36,
+            top: 408,
+            bottom: 58,
+            width: 400,
+            zIndex: 3,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
+            <BadgeCheck size={18} color={EMERALD_SOFT} />
             <T
               style={{
-                fontSize: 12,
+                fontSize: 15,
                 fontWeight: 900,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
@@ -690,45 +786,58 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
               Member Details
             </T>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "14px 16px",
+              borderRadius: 18,
+              border: "1px solid rgba(212,175,55,0.22)",
+              background: "linear-gradient(180deg, rgba(0,0,0,0.42), rgba(2,12,9,0.55))",
+              boxShadow: "inset 0 0 28px rgba(16,185,129,0.06), 0 8px 24px rgba(0,0,0,0.25)",
+            }}
+          >
             {detailRows.map((row) => {
               const Icon = row.icon;
               return (
-                <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 34,
+                      height: 34,
                       borderRadius: 999,
                       display: "grid",
                       placeItems: "center",
-                      border: "1px solid rgba(52,211,153,0.35)",
-                      background: "rgba(6,78,59,0.35)",
+                      border: "1px solid rgba(52,211,153,0.4)",
+                      background: "rgba(6,78,59,0.4)",
                       color: EMERALD_SOFT,
                       flexShrink: 0,
                     }}
                   >
-                    <Icon size={13} />
+                    <Icon size={15} />
                   </span>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <T
                       style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 800,
                         letterSpacing: "0.14em",
                         textTransform: "uppercase",
-                        color: "rgba(161,161,170,0.95)",
+                        color: "rgba(161,161,170,0.98)",
                       }}
                     >
                       {row.label}
                     </T>
                     <T
                       style={{
-                        marginTop: 2,
-                        fontSize: 15,
+                        marginTop: 3,
+                        fontSize: 18,
                         fontWeight: 800,
                         color: row.gold ? GOLD : "#ffffff",
-                        lineHeight: "20px",
+                        lineHeight: "24px",
                       }}
                     >
                       {row.value}
@@ -741,85 +850,123 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
         </div>
 
         {/* Center emblem */}
-        <div style={{ position: "absolute", left: 590, top: 430, width: 220 }}>
+        <div style={{ position: "absolute", left: 582, top: 448, width: 236, zIndex: 3 }}>
           <FireEmblem />
         </div>
 
-        {/* Bottom right: empowerment */}
-        <div style={{ position: "absolute", right: 42, top: 418, width: 390 }}>
+        {/* Bottom right: benefits / empowerment (fills lower half) */}
+        <div
+          style={{
+            position: "absolute",
+            right: 36,
+            top: 408,
+            bottom: 58,
+            width: 420,
+            zIndex: 3,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <T
             style={{
-              fontSize: 12,
+              fontSize: 15,
               fontWeight: 900,
               letterSpacing: "0.16em",
               textTransform: "uppercase",
               color: EMERALD_SOFT,
-              marginBottom: 12,
+              marginBottom: 14,
             }}
           >
-            What We Empower You To Do
+            Membership Benefits
           </T>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {EMPOWERMENT.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: 999,
-                      display: "grid",
-                      placeItems: "center",
-                      background: "rgba(16,185,129,0.18)",
-                      border: "1px solid rgba(52,211,153,0.35)",
-                      color: EMERALD_SOFT,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Icon size={13} />
-                  </span>
-                  <T className="font-nepali" style={{ fontSize: 15, fontWeight: 700, color: "rgba(236,253,245,0.95)", lineHeight: "22px" }}>
-                    {item.text}
-                  </T>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ marginTop: 18, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <T
-                style={{
-                  fontFamily: 'var(--font-signature), "Great Vibes", "Segoe Script", cursive',
-                  fontSize: 34,
-                  fontWeight: 400,
-                  color: GOLD,
-                  lineHeight: "38px",
-                  textShadow: "0 0 18px rgba(212,175,55,0.35)",
-                }}
-              >
-                FIRE Nepal
-              </T>
-              <T style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: "rgba(244,244,245,0.78)", fontStyle: "italic" }}>
-                Thank you for being a part of our mission.
-              </T>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: 8,
+              padding: "14px 16px",
+              borderRadius: 18,
+              border: "1px solid rgba(212,175,55,0.22)",
+              background: "linear-gradient(180deg, rgba(0,0,0,0.42), rgba(2,12,9,0.55))",
+              boxShadow: "inset 0 0 28px rgba(16,185,129,0.06), 0 8px 24px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, justifyContent: "space-evenly" }}>
+              {EMPOWERMENT.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 999,
+                        display: "grid",
+                        placeItems: "center",
+                        background: "rgba(16,185,129,0.2)",
+                        border: "1px solid rgba(52,211,153,0.4)",
+                        color: EMERALD_SOFT,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={15} />
+                    </span>
+                    <T
+                      className="font-nepali"
+                      style={{ fontSize: 17, fontWeight: 700, color: "rgba(236,253,245,0.96)", lineHeight: "24px" }}
+                    >
+                      {item.text}
+                    </T>
+                  </div>
+                );
+              })}
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/membership/holo-seal.png"
-              alt=""
-              width={58}
-              height={58}
+
+            <div
               style={{
-                width: 58,
-                height: 58,
-                objectFit: "contain",
-                display: "block",
-                filter: "drop-shadow(0 0 10px rgba(16,185,129,0.45))",
-                flexShrink: 0,
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(212,175,55,0.22)",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                gap: 12,
               }}
-            />
+            >
+              <div>
+                <T
+                  style={{
+                    fontFamily: 'var(--font-signature), "Great Vibes", "Segoe Script", cursive',
+                    fontSize: 36,
+                    fontWeight: 400,
+                    color: GOLD,
+                    lineHeight: "40px",
+                    textShadow: "0 0 18px rgba(212,175,55,0.4)",
+                  }}
+                >
+                  FIRE Nepal
+                </T>
+                <T style={{ marginTop: 4, fontSize: 14, fontWeight: 600, color: "rgba(244,244,245,0.8)", fontStyle: "italic" }}>
+                  Thank you for being a part of our mission.
+                </T>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/membership/holo-seal.png"
+                alt=""
+                width={64}
+                height={64}
+                style={{
+                  width: 64,
+                  height: 64,
+                  objectFit: "contain",
+                  display: "block",
+                  flexShrink: 0,
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -830,28 +977,29 @@ export const PremiumFireNepalMemberCard = forwardRef<HTMLDivElement, PremiumFire
             left: 0,
             right: 0,
             bottom: 0,
-            height: 46,
+            height: 50,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 36px",
-            borderTop: "1px solid rgba(212,175,55,0.28)",
-            background: "rgba(0,0,0,0.72)",
-            fontSize: 12,
+            padding: "0 34px",
+            borderTop: "1px solid rgba(212,175,55,0.32)",
+            background: "rgba(0,0,0,0.78)",
+            fontSize: 13,
             fontWeight: 700,
-            color: "rgba(209,250,229,0.88)",
+            color: "rgba(209,250,229,0.9)",
+            zIndex: 4,
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <Globe2 size={13} />
+            <Globe2 size={14} />
             www.firenepal.com
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#ecfdf5" }}>
-            <Lock size={13} />
+            <Lock size={14} />
             Secure. Private. Trusted.
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <Headphones size={13} />
+            <Headphones size={14} />
             firenepal853@gmail.com
           </span>
         </div>
