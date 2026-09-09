@@ -25,7 +25,7 @@ export const NEPSE_SERVICE_ITEMS = [
   { slug: "heat-map", label: "Heat Map", description: "Visual breadth", icon: "Grid3X3" },
   { slug: "sector-performance", label: "Sector Performance", description: "Industry momentum", icon: "PieChart" },
   { slug: "live-trades", label: "Live Trades", description: "Latest executions", icon: "Zap" },
-  { slug: "market-indices", label: "Market Indices", description: "All benchmarks", icon: "Activity" },
+  { slug: "market-indices", label: "Market Indices", description: "Index Explorer", icon: "Activity" },
   { slug: "terminal", label: "Pro Terminal", description: "Full market board", icon: "Landmark" },
   { slug: "ipo-results", label: "IPO Results", description: "Issue outcomes", icon: "TicketCheck" },
   { slug: "corporate-actions", label: "Corporate Actions", description: "Dividend & rights", icon: "Landmark" },

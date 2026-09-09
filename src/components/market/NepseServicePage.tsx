@@ -3,6 +3,7 @@
 import { ArrowLeft, BarChart3, RefreshCw, Star } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { NepseIndexExplorerPage } from "@/components/market/NepseIndexExplorerPage";
 import { useNepseNews } from "@/hooks/useNepseNews";
 import { useNepseWatchlist } from "@/hooks/useNepseWatchlist";
 import { formatCompactNpr, NEPSE_SERVICE_ITEMS, type NepseServiceSlug } from "@/lib/market/nepse-hub";
@@ -49,6 +50,10 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
     if (slug === "ipo-results") return news.corporateActions.filter((item) => item.category === "IPO");
     return news.corporateActions;
   }, [newsDrivenPage, slug, news.corporateActions]);
+
+  if (indexPage) {
+    return <NepseIndexExplorerPage />;
+  }
 
   return (
     <main className="min-h-screen bg-[#f4f8f6] px-3 py-4 text-slate-950 dark:bg-[#030a08] dark:text-white sm:px-6 lg:px-8">
@@ -151,23 +156,6 @@ export function NepseServicePage({ slug }: { slug: NepseServiceSlug }) {
                 Waiting for live quotes to paint the heat map.
               </p>
             ) : null}
-          </div>
-        ) : indexPage ? (
-          <div className="space-y-4">
-            <div className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-50/80 p-4 text-sm font-semibold text-emerald-900 dark:border-emerald-400/15 dark:bg-emerald-400/10 dark:text-emerald-100">
-              Full multi-index board, sector pulse and breadth now live in the{" "}
-              <Link href="/market/terminal" className="font-black underline underline-offset-2">
-                Professional Market Terminal
-              </Link>
-              .
-            </div>
-            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">NEPSE Index</p>
-              <p className="mt-2 text-4xl font-black tabular-nums">{snapshot?.nepseIndex?.value.toLocaleString("en-IN", { minimumFractionDigits: 2 }) ?? "Data unavailable"}</p>
-              <p className={`mt-2 text-sm font-black ${(snapshot?.nepseIndex?.changePct ?? 0) >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                {snapshot?.nepseIndex?.changePct == null ? "Data unavailable" : `${snapshot.nepseIndex.changePct >= 0 ? "+" : ""}${snapshot.nepseIndex.changePct.toFixed(2)}%`}
-              </p>
-            </div>
           </div>
         ) : supportedTable ? (
           <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.035]">

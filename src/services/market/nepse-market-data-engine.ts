@@ -981,11 +981,25 @@ export async function ingestOfficialCompanyMaster(
   try {
     const { syncOfficialCompanyMaster } = await import("@/services/market/nepse-company-master");
     const sync = await syncOfficialCompanyMaster(sb, mode);
+    // When NEPSE changes listings/sectors, rebuild official index membership automatically.
+    let compositionMessage = "index composition skipped";
+    if (sync.status !== "error") {
+      try {
+        const { ingestIndexComposition } = await import("@/services/market/nepse-index-composition");
+        const composition = await ingestIndexComposition(sb);
+        compositionMessage = `index composition ${composition.status}: ${composition.message}`;
+      } catch (compositionError) {
+        compositionMessage =
+          compositionError instanceof Error
+            ? `index composition error: ${compositionError.message}`
+            : "index composition error";
+      }
+    }
     result = {
       kind: "fundamentals",
       status: sync.status,
       items: sync.totalSeen,
-      message: `${sync.message} · active=${sync.totalActive} listed=${sync.totalListed} new=${sync.newSymbols} changed=${sync.changedSymbols}`,
+      message: `${sync.message} · active=${sync.totalActive} listed=${sync.totalListed} new=${sync.newSymbols} changed=${sync.changedSymbols} · ${compositionMessage}`,
     };
   } catch (error) {
     result = {

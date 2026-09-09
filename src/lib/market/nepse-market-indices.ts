@@ -118,6 +118,11 @@ export function getMarketIndexOption(key: string): NepseMarketIndexOption | unde
   return NEPSE_MARKET_INDEX_OPTIONS.find((row) => row.key === key);
 }
 
+/** Official NEPSE indices only (no All Listed synthetic option). */
+export function listOfficialNepseMarketIndices(): NepseMarketIndexOption[] {
+  return NEPSE_MARKET_INDEX_OPTIONS.filter((row) => row.key !== "ALL_LISTED" && row.nepseId != null);
+}
+
 export function normalizeSectorLabel(value: string | null | undefined): string {
   return (value ?? "")
     .trim()
