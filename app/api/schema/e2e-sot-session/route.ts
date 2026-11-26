@@ -257,6 +257,7 @@ function moduleStates(args: {
     pension_slips: generic("pension_slips", "e2eSlipCount", stampUnit(stamp, 23, 1, 20)),
     payslip_history: generic("payslip_history", "e2eEntryCount", stampUnit(stamp, 24, 1, 30)),
     financial_intel_rollups: generic("financial_intel_rollups", "e2eNetWorth", stampUnit(stamp, 25, 1_000_000, 500_000)),
+    emergency_fund: generic("emergency_fund", "e2eProtectionMonths", stampUnit(stamp, 26, 3, 12)),
   };
 
   const modulesExpected: Record<string, unknown> = {
@@ -269,6 +270,7 @@ function moduleStates(args: {
     pension_slips: (states.pension_slips as { e2eSlipCount: number }).e2eSlipCount,
     payslip_history: (states.payslip_history as { e2eEntryCount: number }).e2eEntryCount,
     financial_intel_rollups: (states.financial_intel_rollups as { e2eNetWorth: number }).e2eNetWorth,
+    emergency_fund: (states.emergency_fund as { e2eProtectionMonths: number }).e2eProtectionMonths,
   };
 
   return { states, modulesExpected };

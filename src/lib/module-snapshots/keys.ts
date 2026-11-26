@@ -9,6 +9,7 @@ export const MODULE_SNAPSHOT_KEYS = [
   "payslip_history",
   "family_hub",
   "financial_intel_rollups",
+  "emergency_fund",
 ] as const;
 
 export type ModuleSnapshotKey = (typeof MODULE_SNAPSHOT_KEYS)[number];

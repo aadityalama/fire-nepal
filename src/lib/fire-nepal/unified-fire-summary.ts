@@ -26,20 +26,29 @@ export type UnifiedFireSummary = {
   monthlyExpenses: number;
   savingsRatePct: number | null;
   emergencyFundCoverageMonths: number | null;
-  /** Progress toward 6 months of expenses in liquid emergency reserve (0–100). */
+  /** Progress toward 6 months of budget protection in liquid emergency reserve (0–100+). */
   emergencyFundSixMoProgressPct: number | null;
-  /** Current emergency cash reserve (cashflow SoT — same as Emergency Fund). */
+  /** Current emergency cash reserve (same as Emergency Fund). */
   emergencyFundCurrentAmount: number;
-  /** 6× monthly burn target (same formula as Emergency Fund workspace). */
+  /** 6× monthly protection basis (Budget Planner SoT — same as Emergency Fund workspace). */
   emergencyFundTargetAmount: number;
   /** max(0, target − current). */
   emergencyFundRemainingAmount: number;
-  /** Whether cashflow burn is available to size the emergency target. */
+  /** Whether a Budget Planner monthly protection basis is available to size the target. */
   emergencyFundHasSufficientData: boolean;
   /** Progress toward classic 25× annual spend rule on net worth (0–100, clamped). */
   fireProgressPct: number | null;
   annualExpensesFromCashflowNpr: number;
   fireNumber25xAnnualSpendNpr: number;
+};
+
+export type ComputeUnifiedFireSummaryOptions = {
+  /**
+   * Budget-powered Emergency Fund monthly protection basis.
+   * When omitted or ≤0, emergency fund fields report insufficient data
+   * (no Income / Expense Tracker fallback).
+   */
+  monthlyProtectionBasisNpr?: number | null;
 };
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
@@ -53,6 +62,7 @@ export function computeUnifiedFireSummary(
   cashflow: CashflowDashboardState,
   krwPerNpr: number,
   usdPerNpr: number,
+  options: ComputeUnifiedFireSummaryOptions = {},
 ): UnifiedFireSummary {
   const wealthTotals = computeWealthTotals(portfolio, krwPerNpr, usdPerNpr);
   const monthlyIncome = sumIncome(cashflow);
@@ -60,6 +70,7 @@ export function computeUnifiedFireSummary(
   const savingsRatePct = cashflowSavingsRatePct(cashflow);
   const emergencyPlan = computeEmergencyFundPlan(cashflow, {
     recommendedMonths: DEFAULT_EMERGENCY_FUND_MONTHS,
+    monthlyProtectionBasisNpr: options.monthlyProtectionBasisNpr,
   });
   const emergencyFundCoverageMonths = emergencyPlan.coverageMonths;
 

@@ -25,6 +25,7 @@ const MODULE_KEYS = [
   "payslip_history",
   "family_hub",
   "financial_intel_rollups",
+  "emergency_fund",
 ];
 
 const browsers = [

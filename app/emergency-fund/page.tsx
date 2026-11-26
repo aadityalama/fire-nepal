@@ -6,7 +6,7 @@ import { buildCanonicalAlternates } from "@/lib/brand/site-seo";
 export const metadata: Metadata = {
   title: "Emergency Fund | FIRE Nepal",
   description:
-    "Emergency fund readiness, runway analytics, stress tests, and KRW/NPR safety planning for Nepalis abroad.",
+    "Budget-powered emergency fund planning — lifestyle protection, safety runway, funding plans, and stress simulations for Nepalis abroad.",
   alternates: buildCanonicalAlternates("/emergency-fund"),
 };
 
