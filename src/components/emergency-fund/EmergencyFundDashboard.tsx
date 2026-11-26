@@ -87,6 +87,14 @@ export function EmergencyFundDashboard() {
   const [dateRaw, setDateRaw] = useState(todayIso());
   const [customMonthsRaw, setCustomMonthsRaw] = useState("");
   const [showAi, setShowAi] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState({
+    openingBalanceNpr: "",
+    manualMonthlyExpenseNpr: "",
+    expenseBasisOverrideNpr: "",
+    employmentType: "" as "" | EmergencyFundSettingsEmployment,
+    dependents: "0",
+    incomeSources: "" as "" | "single" | "multiple",
+  });
 
   const shell = light
     ? "min-h-screen bg-[radial-gradient(ellipse_at_top,_#ecfdf5_0%,_#f8fafc_45%,_#f1f5f9_100%)] text-emerald-950"
@@ -127,6 +135,50 @@ export function EmergencyFundDashboard() {
     setNoteRaw("");
     setDateRaw(todayIso());
     setSheet(kind);
+  };
+
+  const openSettings = () => {
+    setSettingsDraft({
+      openingBalanceNpr: String(ledger.settings.openingBalanceNpr ?? 0),
+      manualMonthlyExpenseNpr:
+        ledger.settings.manualMonthlyExpenseNpr != null
+          ? String(ledger.settings.manualMonthlyExpenseNpr)
+          : "",
+      expenseBasisOverrideNpr:
+        ledger.settings.expenseBasisOverrideNpr != null
+          ? String(ledger.settings.expenseBasisOverrideNpr)
+          : "",
+      employmentType: (ledger.settings.employmentType ?? "") as
+        | ""
+        | EmergencyFundSettingsEmployment,
+      dependents: String(ledger.settings.dependents ?? 0),
+      incomeSources: (ledger.settings.incomeSources ?? "") as "" | "single" | "multiple",
+    });
+    setSheet("settings");
+  };
+
+  const saveSettings = () => {
+    const opening = Math.max(
+      0,
+      Math.round(Number(settingsDraft.openingBalanceNpr.replace(/,/g, "")) || 0),
+    );
+    const manualRaw = settingsDraft.manualMonthlyExpenseNpr.replace(/,/g, "").trim();
+    const overrideRaw = settingsDraft.expenseBasisOverrideNpr.replace(/,/g, "").trim();
+    const manual = manualRaw
+      ? Math.max(0, Math.round(Number(manualRaw) || 0)) || undefined
+      : undefined;
+    const override = overrideRaw
+      ? Math.max(0, Math.round(Number(overrideRaw) || 0)) || undefined
+      : undefined;
+    patchSettings({
+      openingBalanceNpr: opening,
+      manualMonthlyExpenseNpr: manual,
+      expenseBasisOverrideNpr: override,
+      employmentType: settingsDraft.employmentType || undefined,
+      dependents: Math.max(0, Math.round(Number(settingsDraft.dependents) || 0)),
+      incomeSources: settingsDraft.incomeSources || undefined,
+    });
+    setSheet(null);
   };
 
   const submitTx = () => {
@@ -608,7 +660,7 @@ export function EmergencyFundDashboard() {
             <ActionBtn label={copy.addContribution} icon={PlusCircle} onClick={() => openTx("contribute")} light={light} />
             <ActionBtn label={copy.recordWithdrawal} icon={MinusCircle} onClick={() => openTx("withdraw")} light={light} />
             <ActionBtn label={copy.linkSavingsGoal} icon={Link2} onClick={() => setSheet("link")} light={light} />
-            <ActionBtn label={copy.editSettings} icon={Settings2} onClick={() => setSheet("settings")} light={light} />
+            <ActionBtn label={copy.editSettings} icon={Settings2} onClick={openSettings} light={light} />
             <ActionBtn label={copy.reviewCalculation} icon={Calculator} onClick={() => setSheet("calc")} light={light} />
           </div>
         </section>
@@ -770,11 +822,13 @@ export function EmergencyFundDashboard() {
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
                       inputMode="numeric"
-                      defaultValue={ledger.settings.openingBalanceNpr}
-                      onBlur={(e) => {
-                        const n = Math.max(0, Math.round(Number(e.target.value.replace(/,/g, "")) || 0));
-                        patchSettings({ openingBalanceNpr: n });
-                      }}
+                      value={settingsDraft.openingBalanceNpr}
+                      onChange={(e) =>
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          openingBalanceNpr: e.target.value.replace(/[^\d.]/g, ""),
+                        }))
+                      }
                     />
                   </label>
                   <label className="mt-3 block text-xs font-bold uppercase">
@@ -784,17 +838,14 @@ export function EmergencyFundDashboard() {
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
                       inputMode="numeric"
-                      defaultValue={ledger.settings.manualMonthlyExpenseNpr ?? ""}
+                      value={settingsDraft.manualMonthlyExpenseNpr}
                       placeholder="Optional"
-                      onBlur={(e) => {
-                        const raw = e.target.value.replace(/,/g, "");
-                        if (!raw) {
-                          patchSettings({ manualMonthlyExpenseNpr: undefined });
-                          return;
-                        }
-                        const n = Math.max(0, Math.round(Number(raw) || 0));
-                        patchSettings({ manualMonthlyExpenseNpr: n || undefined });
-                      }}
+                      onChange={(e) =>
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          manualMonthlyExpenseNpr: e.target.value.replace(/[^\d.]/g, ""),
+                        }))
+                      }
                     />
                   </label>
                   <label className="mt-3 block text-xs font-bold uppercase">
@@ -804,17 +855,14 @@ export function EmergencyFundDashboard() {
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
                       inputMode="numeric"
-                      defaultValue={ledger.settings.expenseBasisOverrideNpr ?? ""}
+                      value={settingsDraft.expenseBasisOverrideNpr}
                       placeholder="Optional"
-                      onBlur={(e) => {
-                        const raw = e.target.value.replace(/,/g, "");
-                        if (!raw) {
-                          patchSettings({ expenseBasisOverrideNpr: undefined });
-                          return;
-                        }
-                        const n = Math.max(0, Math.round(Number(raw) || 0));
-                        patchSettings({ expenseBasisOverrideNpr: n || undefined });
-                      }}
+                      onChange={(e) =>
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          expenseBasisOverrideNpr: e.target.value.replace(/[^\d.]/g, ""),
+                        }))
+                      }
                     />
                   </label>
                   <label className="mt-3 block text-xs font-bold uppercase">
@@ -823,13 +871,12 @@ export function EmergencyFundDashboard() {
                       className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
-                      value={ledger.settings.employmentType ?? ""}
+                      value={settingsDraft.employmentType}
                       onChange={(e) =>
-                        patchSettings({
-                          employmentType: (e.target.value || undefined) as
-                            | EmergencyFundSettingsEmployment
-                            | undefined,
-                        })
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          employmentType: e.target.value as "" | EmergencyFundSettingsEmployment,
+                        }))
                       }
                     >
                       <option value="">—</option>
@@ -847,11 +894,12 @@ export function EmergencyFundDashboard() {
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
                       inputMode="numeric"
-                      defaultValue={ledger.settings.dependents ?? 0}
-                      onBlur={(e) =>
-                        patchSettings({
-                          dependents: Math.max(0, Math.round(Number(e.target.value) || 0)),
-                        })
+                      value={settingsDraft.dependents}
+                      onChange={(e) =>
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          dependents: e.target.value.replace(/[^\d]/g, ""),
+                        }))
                       }
                     />
                   </label>
@@ -861,14 +909,12 @@ export function EmergencyFundDashboard() {
                       className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${
                         light ? "border-emerald-100" : "border-white/15 bg-white/5"
                       }`}
-                      value={ledger.settings.incomeSources ?? ""}
+                      value={settingsDraft.incomeSources}
                       onChange={(e) =>
-                        patchSettings({
-                          incomeSources: (e.target.value || undefined) as
-                            | "single"
-                            | "multiple"
-                            | undefined,
-                        })
+                        setSettingsDraft((d) => ({
+                          ...d,
+                          incomeSources: e.target.value as "" | "single" | "multiple",
+                        }))
                       }
                     >
                       <option value="">—</option>
@@ -878,7 +924,7 @@ export function EmergencyFundDashboard() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setSheet(null)}
+                    onClick={saveSettings}
                     className="mt-5 w-full rounded-full bg-emerald-600 py-2.5 text-sm font-black text-white"
                   >
                     {copy.save}
