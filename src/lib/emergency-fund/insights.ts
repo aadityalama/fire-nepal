@@ -61,28 +61,51 @@ export function buildEmergencyInsights(input: BuildInsightsInput): EmergencyInsi
     });
   }
 
-  if (input.breakdown.ambiguousLines.length > 0) {
+  if (input.breakdown.isProvisional || input.breakdown.provisionalLines.length > 0) {
     insights.push({
-      id: "ambiguous-budget",
+      id: "provisional-budget",
       priority: "missing_budget",
-      title: "Review ambiguous annual allocations",
-      body: `${input.breakdown.ambiguousLines.length} yearly budget ${
-        input.breakdown.ambiguousLines.length === 1 ? "item shares" : "items share"
-      } a category with monthly lines but amounts do not match. Review the budget breakdown to avoid double counting.`,
-      actionLabel: "Open Budget Planner",
+      title: "Unresolved budget integration",
+      body: `${input.breakdown.provisionalLines.length} yearly ${
+        input.breakdown.provisionalLines.length === 1 ? "obligation is" : "obligations are"
+      } included in Full Lifestyle protection but share a category with monthly lines at different amounts. Confirm each as a separate annual obligation or mark as already included. Calculations remain provisional until reviewed.`,
+      actionLabel: "Review allocations",
       actionHref: "/budget",
     });
   }
 
-  const urgent = input.upcomingPayments.filter((p) => p.window === "30" || p.window === "90");
-  for (const payment of urgent.slice(0, 2)) {
+  if (input.breakdown.emergencyFundContributionExcludedNpr > 0) {
+    insights.push({
+      id: "ef-contribution-excluded",
+      priority: "funding_plan",
+      title: "Emergency contribution excluded from expenses",
+      body: `Your planned Emergency Fund contribution of ${formatEmergencyNpr(
+        input.breakdown.emergencyFundContributionExcludedNpr,
+      )} / month is treated as a transfer into savings, not a living expense that the reserve must cover.`,
+    });
+  }
+
+  const urgent = input.upcomingPayments.filter(
+    (p) =>
+      p.status === "overdue" ||
+      p.status === "due_today" ||
+      p.status === "partially_paid" ||
+      p.window === "30" ||
+      p.window === "90",
+  );
+  const seenPaymentInsights = new Set<string>();
+  for (const payment of urgent.slice(0, 3)) {
+    if (seenPaymentInsights.has(payment.id)) continue;
+    seenPaymentInsights.add(payment.id);
     insights.push({
       id: `annual-${payment.id}`,
       priority: "annual_obligation",
-      title: `${payment.name} due soon`,
-      body: `Your annual obligation of ${formatEmergencyNpr(payment.amountNpr)} is due ${
-        payment.daysUntil <= 0 ? "now" : `in ${payment.daysUntil} days`
-      }. Review your available liquidity — this is separate from your normalized emergency fund target.`,
+      title: `${payment.name}: ${payment.statusLabel}`,
+      body: `Annual obligation of ${formatEmergencyNpr(payment.amountNpr)} (due ${payment.dueDate}). ${
+        payment.status === "overdue"
+          ? "This payment is overdue — review liquidity separately from your emergency fund target."
+          : "Liquidity risk is separate from your normalized emergency fund target."
+      }`,
       actionLabel: "Review payments",
     });
   }
@@ -134,8 +157,8 @@ export function buildEmergencyInsights(input: BuildInsightsInput): EmergencyInsi
     insights.push({
       id: "consider-essential",
       priority: "funding_plan",
-      title: "Consider Essential Survival mode",
-      body: "Switching to Essential Survival Protection may reduce your emergency funding requirement by focusing on commitments you must continue during an emergency.",
+      title: "Consider Essential Only mode",
+      body: "Switching to Essential Only may reduce your emergency funding requirement by focusing on commitments you must continue during an emergency.",
     });
   }
 

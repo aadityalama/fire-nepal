@@ -61,6 +61,16 @@ export function formatEmergencyNpr(value: number, maximumFractionDigits = 0): st
   }).format(maximumFractionDigits === 0 ? Math.round(safe) : safe);
 }
 
+/**
+ * Display money with enough precision to reconcile non-integer monthly bases
+ * (e.g. yearly amount / 12) without inventing rounded internal values.
+ */
+export function formatEmergencyNprPrecise(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const isWhole = Math.abs(safe - Math.round(safe)) < 1e-9;
+  return formatEmergencyNpr(safe, isWhole ? 0 : 2);
+}
+
 export function formatMonthsLabel(value: number, singular = "month", plural = "months"): string {
   const rounded = Math.round(value * 100) / 100;
   const abs = Math.abs(rounded);

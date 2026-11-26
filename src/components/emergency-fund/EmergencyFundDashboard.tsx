@@ -39,6 +39,7 @@ import { buildUpcomingAnnualPayments } from "@/lib/emergency-fund/annual-payment
 import {
   defaultEssentialRecordIds,
   normalizeBudgetForEmergencyFund,
+  plannedEmergencyContributionFromBudget,
   resolveMonthlyProtectionBasis,
 } from "@/lib/emergency-fund/budget-integration";
 import {
@@ -53,6 +54,7 @@ import { getEmergencyFundCopy } from "@/lib/emergency-fund/i18n";
 import { buildEmergencyInsights } from "@/lib/emergency-fund/insights";
 import {
   formatEmergencyNpr,
+  formatEmergencyNprPrecise,
   formatMonthYear,
   formatMonthsLabel,
 } from "@/lib/emergency-fund/math";
@@ -74,6 +76,7 @@ import type {
   EmergencyFundSettingsState,
   EmergencyFundTransaction,
   ProtectionMode,
+  YearlyAllocationResolution,
 } from "@/lib/emergency-fund/types";
 import {
   FUNDING_DEADLINE_OPTIONS,
@@ -350,7 +353,13 @@ export function EmergencyFundDashboard() {
     settings.protectionMonths,
   ]);
 
-  const breakdown = useMemo(() => normalizeBudgetForEmergencyFund(budgets), [budgets]);
+  const breakdown = useMemo(
+    () =>
+      normalizeBudgetForEmergencyFund(budgets, {
+        yearlyAllocationDecisions: settings.yearlyAllocationDecisions,
+      }),
+    [budgets, settings.yearlyAllocationDecisions],
+  );
 
   useEffect(() => {
     if (!settingsHydrated || !breakdown.hasBudgetData || essentialsSeeded.current) return;
@@ -396,8 +405,32 @@ export function EmergencyFundDashboard() {
         breakdown,
         settings.protectionMode,
         settings.essentialRecordIds,
+        { excludedRecordIds: settings.excludedRecordIds },
       ),
-    [breakdown, settings.essentialRecordIds, settings.protectionMode],
+    [
+      breakdown,
+      settings.essentialRecordIds,
+      settings.excludedRecordIds,
+      settings.protectionMode,
+    ],
+  );
+
+  const plannedBudgetContribution = useMemo(
+    () => plannedEmergencyContributionFromBudget(breakdown),
+    [breakdown],
+  );
+
+  const inclusionLabel = useCallback(
+    (line: { inclusion: string; needsReview?: boolean }) => {
+      if (line.inclusion === "emergency_contribution") return copy.inclusionEmergency;
+      if (line.inclusion === "already_included") return copy.inclusionAlready;
+      if (line.inclusion === "projection_duplicate") return copy.inclusionProjection;
+      if (line.inclusion === "excluded") return copy.inclusionExcludedUser;
+      if (line.inclusion === "included" && line.needsReview) return copy.inclusionProvisional;
+      if (line.inclusion === "included") return copy.inclusionIncluded;
+      return line.inclusion;
+    },
+    [copy],
   );
 
   const cashflow = useMemo(() => {
@@ -632,6 +665,24 @@ export function EmergencyFundDashboard() {
     });
   };
 
+  const resolveYearlyAllocation = (
+    yearlyId: string,
+    resolution: YearlyAllocationResolution,
+    linkedMonthlyRecordId: string | null = null,
+  ) => {
+    setSettings((prev) => ({
+      ...prev,
+      yearlyAllocationDecisions: {
+        ...prev.yearlyAllocationDecisions,
+        [yearlyId]: {
+          resolution,
+          linkedMonthlyRecordId,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    }));
+  };
+
   const toggleLinkedGoal = (id: string) => {
     setSettings((prev) => {
       const set = new Set(prev.linkedSavingsGoalIds);
@@ -791,11 +842,11 @@ export function EmergencyFundDashboard() {
                     {copy.target}
                   </p>
                   <p className="mt-1 truncate text-2xl font-black tracking-tight sm:text-3xl">
-                    {formatEmergencyNpr(core.emergencyFundTargetNpr)}
+                    {formatEmergencyNprPrecise(core.emergencyFundTargetNpr)}
                   </p>
                   <p className="mt-1 text-xs font-semibold text-emerald-50/75">
                     {formatMonthsLabel(core.protectionMonths)} · {copy.monthlyBasis}{" "}
-                    {formatEmergencyNpr(core.monthlyProtectionBasisNpr)}
+                    {formatEmergencyNprPrecise(core.monthlyProtectionBasisNpr)}
                   </p>
                 </div>
               </div>
@@ -874,11 +925,11 @@ export function EmergencyFundDashboard() {
                     return (
                       <label
                         key={line.id}
-                        className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold ${
+                        className={`flex items-start justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold ${
                           light ? "border-emerald-100" : "border-white/8"
                         }`}
                       >
-                        <span className="min-w-0 truncate">
+                        <span className="min-w-0 break-words">
                           <input
                             type="checkbox"
                             className="mr-2 align-middle"
@@ -886,15 +937,22 @@ export function EmergencyFundDashboard() {
                             onChange={() => toggleEssential(line.id)}
                           />
                           {line.name}
+                          {line.needsReview ? (
+                            <span className="mt-0.5 block text-[10px] font-bold text-amber-200/80">
+                              {copy.inclusionProvisional}
+                            </span>
+                          ) : null}
                         </span>
-                        <span className="shrink-0 tabular-nums">{formatEmergencyNpr(line.monthlyEquivalentNpr)}</span>
+                        <span className="shrink-0 tabular-nums">
+                          {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)}
+                        </span>
                       </label>
                     );
                   })}
                 </div>
               )}
               <p className="mt-2 text-sm font-black">
-                {copy.monthlyBasis}: {formatEmergencyNpr(protectionResolved.monthlyProtectionBasisNpr)}
+                {copy.monthlyBasis}: {formatEmergencyNprPrecise(protectionResolved.finalMonthlyProtectionBasisNpr)}
               </p>
             </section>
 
@@ -1032,22 +1090,27 @@ export function EmergencyFundDashboard() {
             ) : null}
 
             {/* F — Budget integration */}
-            <SectionShell title={copy.budgetIntegration} defaultOpen={breakdown.ambiguousLines.length > 0}>
+            <SectionShell
+              title={copy.budgetIntegration}
+              defaultOpen={breakdown.isProvisional || breakdown.emergencyFundContributionExcludedNpr > 0}
+              badge={breakdown.isProvisional ? "Review" : undefined}
+            >
               <div className="grid gap-1.5 text-xs font-semibold">
                 {[
-                  [copy.originalMonthly, breakdown.originalMonthlyBudgetNpr],
+                  [copy.grossMonthly, breakdown.grossMonthlyBudgetNpr],
                   [copy.yearlyTotal, breakdown.yearlyBudgetTotalNpr],
                   [copy.annualMonthlyEq, breakdown.annualMonthlyEquivalentNpr],
-                  [copy.annualAlreadyIncluded, breakdown.annualAllocationsAlreadyIncludedNpr],
                   [copy.additionalAnnual, breakdown.additionalAnnualMonthlyAllocationsNpr],
-                  [copy.effectiveMonthly, breakdown.effectiveMonthlyBudgetNpr],
+                  [copy.annualAlreadyIncluded, breakdown.annualAllocationsAlreadyIncludedNpr],
+                  [copy.totalNormalized, breakdown.totalNormalizedBudgetNpr],
+                  [copy.efContributionExcluded, breakdown.emergencyFundContributionExcludedNpr],
+                  [copy.otherUserExclusions, protectionResolved.otherUserExclusionsNpr],
                   [copy.essentialSelected, protectionResolved.essentialSelectedBudgetNpr],
-                  [copy.excludedCategories, protectionResolved.excludedBudgetNpr],
-                  [copy.finalBasis, protectionResolved.monthlyProtectionBasisNpr],
+                  [copy.finalBasis, protectionResolved.finalMonthlyProtectionBasisNpr],
                 ].map(([label, value]) => (
-                  <div key={String(label)} className="flex items-center justify-between gap-3">
-                    <span className="opacity-70">{label}</span>
-                    <span className="tabular-nums">{formatEmergencyNpr(Number(value))}</span>
+                  <div key={String(label)} className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words opacity-70">{label}</span>
+                    <span className="shrink-0 tabular-nums">{formatEmergencyNprPrecise(Number(value))}</span>
                   </div>
                 ))}
                 <div className="flex items-center justify-between gap-3 pt-1">
@@ -1059,24 +1122,79 @@ export function EmergencyFundDashboard() {
                   </span>
                 </div>
               </div>
-              {breakdown.ambiguousLines.length > 0 ? (
-                <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-50">
-                  Ambiguous yearly allocations were excluded from the effective total until reviewed:{" "}
-                  {breakdown.ambiguousLines.map((l) => l.name).join(", ")}.
-                </p>
+              <p
+                className={`mt-3 text-[11px] font-black uppercase tracking-wide ${
+                  breakdown.isProvisional ? "text-amber-200" : "text-lime-200/80"
+                }`}
+              >
+                {breakdown.isProvisional ? copy.calculationProvisional : copy.calculationVerified}
+              </p>
+              {breakdown.isProvisional ? (
+                <div className="mt-2 space-y-2">
+                  <p className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-50">
+                    {copy.provisionalWarning}
+                  </p>
+                  {breakdown.provisionalLines.map((line) => (
+                    <div
+                      key={`review-${line.id}`}
+                      className={`rounded-xl border px-3 py-2.5 ${
+                        light ? "border-amber-200 bg-amber-50/80" : "border-amber-300/25 bg-amber-400/10"
+                      }`}
+                    >
+                      <p className="text-xs font-black break-words">{line.name}</p>
+                      <p className="mt-0.5 text-[11px] font-semibold opacity-70">
+                        {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)} / mo · {line.category}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-lime-300/40 bg-lime-300/15 px-2 py-1 text-[10px] font-black text-lime-100"
+                          onClick={() => resolveYearlyAllocation(line.id, "separate")}
+                        >
+                          {copy.resolveSeparate}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-white/15 px-2 py-1 text-[10px] font-black"
+                          onClick={() => resolveYearlyAllocation(line.id, "already_included")}
+                        >
+                          {copy.resolveAlreadyIncluded}
+                        </button>
+                        {(line.reviewCandidateMonthlyIds ?? []).slice(0, 1).map((monthlyId) => (
+                          <button
+                            key={monthlyId}
+                            type="button"
+                            className="rounded-lg border border-white/15 px-2 py-1 text-[10px] font-black"
+                            onClick={() => resolveYearlyAllocation(line.id, "linked", monthlyId)}
+                          >
+                            {copy.resolveLinked}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <Link href="/budget" className="inline-flex items-center gap-1 text-[11px] font-black text-lime-200">
+                    {copy.reviewBudget} <ExternalLink size={11} />
+                  </Link>
+                </div>
               ) : null}
-              <div className="mt-3 max-h-48 space-y-1 overflow-y-auto text-[11px]">
+              <div className="mt-3 max-h-56 space-y-1 overflow-y-auto text-[11px]">
                 {breakdown.allLines.map((line) => (
                   <div
                     key={line.id}
-                    className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
+                    className={`flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 ${
                       light ? "bg-emerald-50/80" : "bg-white/[0.03]"
                     }`}
                   >
-                    <span className="min-w-0 truncate">
-                      {line.name} · {line.period} · {line.inclusion}
+                    <span className="min-w-0 break-words">
+                      <span className="font-black">{line.name}</span>
+                      <span className="mt-0.5 block opacity-60">
+                        {line.period} · {inclusionLabel(line)}
+                      </span>
                     </span>
-                    <span className="shrink-0 tabular-nums">{formatEmergencyNpr(line.monthlyEquivalentNpr)}</span>
+                    <span className="shrink-0 tabular-nums">
+                      {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1099,7 +1217,9 @@ export function EmergencyFundDashboard() {
                         {m.months} Mo — {m.label}
                         {m.achieved ? " ✓" : ""}
                       </span>
-                      <span className="tabular-nums opacity-70">{formatEmergencyNpr(m.requiredReserveNpr)}</span>
+                      <span className="tabular-nums opacity-70">
+                        {formatEmergencyNprPrecise(m.requiredReserveNpr)}
+                      </span>
                     </div>
                     <div className={`mt-1 h-1.5 overflow-hidden rounded-full ${light ? "bg-emerald-100" : "bg-white/10"}`}>
                       <div
@@ -1135,9 +1255,27 @@ export function EmergencyFundDashboard() {
                           ...prev,
                           fundingMethod: amount > 0 ? "monthly_contribution" : prev.fundingMethod,
                           plannedMonthlyContributionNpr: amount > 0 ? amount : null,
+                          importedPlannedContributionFromBudget: false,
                         }));
                       }}
                     />
+                    {plannedBudgetContribution > 0 ? (
+                      <button
+                        type="button"
+                        className="mt-2 text-left text-[11px] font-black text-lime-200 underline-offset-2 hover:underline"
+                        onClick={() => {
+                          setContributionRaw(String(plannedBudgetContribution));
+                          setSettings((prev) => ({
+                            ...prev,
+                            fundingMethod: "monthly_contribution",
+                            plannedMonthlyContributionNpr: plannedBudgetContribution,
+                            importedPlannedContributionFromBudget: true,
+                          }));
+                        }}
+                      >
+                        {copy.importPlannedContribution} ({formatEmergencyNprPrecise(plannedBudgetContribution)})
+                      </button>
+                    ) : null}
                     {monthlyFunding ? (
                       <p className="mt-2 text-xs font-semibold opacity-80">
                         {copy.estimatedMonths}: {monthlyFunding.estimatedMonthsRemaining} · {copy.estimatedCompletion}:{" "}
@@ -1266,6 +1404,9 @@ export function EmergencyFundDashboard() {
                   <CalendarClock size={16} className="text-amber-200" />
                   <h2 className="text-sm font-black">{copy.annualPayments}</h2>
                 </div>
+                <p className="mt-1 text-[11px] font-semibold opacity-55">
+                  Liquidity warnings only — not deducted from your emergency reserve automatically.
+                </p>
                 <div className="mt-3 space-y-2">
                   {upcomingPayments
                     .filter((p) => p.window !== "later")
@@ -1274,20 +1415,20 @@ export function EmergencyFundDashboard() {
                       <div
                         key={p.id}
                         className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                          p.window === "30"
+                          p.status === "overdue" || p.status === "due_today"
                             ? "border-amber-300/40 bg-amber-400/10"
                             : light
                               ? "border-emerald-100"
                               : "border-white/8"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate font-black">{p.name}</span>
-                          <span className="tabular-nums">{formatEmergencyNpr(p.amountNpr)}</span>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="min-w-0 break-words font-black">{p.name}</span>
+                          <span className="shrink-0 tabular-nums">{formatEmergencyNpr(p.amountNpr)}</span>
                         </div>
-                        <p className="mt-1 opacity-70">
-                          Due {p.dueDate} · {p.daysUntil <= 0 ? "due now" : `${p.daysUntil} days`} · remaining{" "}
-                          {formatEmergencyNpr(p.remainingObligationNpr)}
+                        <p className="mt-1 font-black text-amber-100/90">{p.statusLabel}</p>
+                        <p className="mt-0.5 opacity-70">
+                          Due {p.dueDate} · remaining {formatEmergencyNpr(p.remainingObligationNpr)}
                         </p>
                       </div>
                     ))}

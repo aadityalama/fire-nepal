@@ -86,3 +86,11 @@ export function normalizeEmergencyFinanceCategory(category: string): EmergencyFi
 export function isSuggestedEssentialCategory(category: string): boolean {
   return SUGGESTED_ESSENTIAL_CATEGORY_IDS.has(normalizeEmergencyFinanceCategory(category));
 }
+
+/**
+ * Planned Emergency Fund contributions are transfers into the reserve,
+ * not living expenses that the reserve must cover.
+ */
+export function isEmergencyFundContributionCategory(category: string): boolean {
+  return normalizeEmergencyFinanceCategory(category) === "Emergency";
+}

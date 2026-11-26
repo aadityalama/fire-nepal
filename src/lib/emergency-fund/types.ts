@@ -11,9 +11,20 @@ export type BudgetLineInclusion =
   | "excluded"
   | "already_included"
   | "projection_duplicate"
+  | "emergency_contribution"
   | "ambiguous";
 
 export type BudgetLineSource = "monthly_budget" | "yearly_budget";
+
+export type YearlyAllocationResolution = "separate" | "already_included" | "linked";
+
+/** Persisted user decision for a provisional yearly ↔ monthly relationship. */
+export type YearlyAllocationDecision = {
+  resolution: YearlyAllocationResolution;
+  /** When resolution is `linked`, the monthly budget record id confirmed as the same allocation. */
+  linkedMonthlyRecordId?: string | null;
+  updatedAt: string;
+};
 
 export type EmergencyBudgetLine = {
   id: string;
@@ -25,6 +36,10 @@ export type EmergencyBudgetLine = {
   inclusion: BudgetLineInclusion;
   source: BudgetLineSource;
   suggestedEssential: boolean;
+  /** Included but relationship with monthly records needs user review. */
+  needsReview?: boolean;
+  /** Candidate monthly record ids for linking when needsReview is true. */
+  reviewCandidateMonthlyIds?: string[];
 };
 
 export type NormalizedBudgetBreakdown = {
@@ -32,26 +47,43 @@ export type NormalizedBudgetBreakdown = {
   hasBudgetData: boolean;
   /** True when only yearly obligations exist (no monthly lines). */
   isPartialBudget: boolean;
-  /** Sum of Monthly-period budget monthly amounts. */
+  /** True when some included yearly lines need user review (provisional). */
+  isProvisional: boolean;
+  /** Sum of Monthly-period budget monthly amounts (gross, before EF contribution exclusion). */
   originalMonthlyBudgetNpr: number;
+  /** Alias of original monthly gross. */
+  grossMonthlyBudgetNpr: number;
   /** Sum of Yearly-period original annual amounts. */
   yearlyBudgetTotalNpr: number;
-  /** Sum of yearly monthly equivalents before dedupe (amount/12). */
+  /** Sum of yearly monthly equivalents before dedupe (exact amount/12). */
   annualMonthlyEquivalentNpr: number;
+  /** Sum of Math.round(amount/12) — explains Budget Planner display drift. */
+  roundedAnnualMonthlyEquivalentNpr: number;
   /** Yearly monthly equivalents already covered by monthly allocations. */
   annualAllocationsAlreadyIncludedNpr: number;
   /** Yearly monthly equivalents treated as projections of monthly totals. */
   yearlyProjectionDuplicateNpr: number;
   /** Additional yearly monthly equivalents added to the monthly total. */
   additionalAnnualMonthlyAllocationsNpr: number;
-  /** Original monthly + additional annual monthly (not already included / not projection). */
+  /** Planned Emergency Fund contributions excluded from protection expenses. */
+  emergencyFundContributionExcludedNpr: number;
+  /**
+   * Gross monthly − EF contributions + additional annual monthly.
+   * Shared protection pool before mode selection.
+   */
+  totalNormalizedBudgetNpr: number;
+  /** Alias of totalNormalizedBudgetNpr (legacy field name). */
   effectiveMonthlyBudgetNpr: number;
-  /** Lines used for Full Lifestyle mode (included only). */
+  /** Protection-eligible lines (included, after EF contribution / duplicate handling). */
   includedLines: EmergencyBudgetLine[];
+  /** Same as includedLines — canonical selectable set for both modes. */
+  protectionEligibleLines: EmergencyBudgetLine[];
   /** All normalized lines (including excluded / flagged). */
   allLines: EmergencyBudgetLine[];
-  /** Ambiguous yearly ↔ monthly relationships requiring user review. */
+  /** @deprecated Use provisionalLines. Kept for UI compatibility. */
   ambiguousLines: EmergencyBudgetLine[];
+  /** Included yearly lines flagged for review (still counted). */
+  provisionalLines: EmergencyBudgetLine[];
   /** Latest budget record updatedAt (ISO), if any. */
   lastBudgetUpdatedAt: string | null;
   currency: "NPR";
@@ -84,6 +116,18 @@ export type EmergencyFundSettingsState = {
   useCustomProtectionMonths: boolean;
   /** Budget record ids selected as essential (Essential Survival mode). */
   essentialRecordIds: string[];
+  /** Full Lifestyle: protection-eligible record ids explicitly excluded by the user. */
+  excludedRecordIds: string[];
+  /**
+   * When true, Personal Funding Plan contribution field was seeded from the
+   * Budget Planner Emergency contribution (never posts a reserve transaction).
+   */
+  importedPlannedContributionFromBudget: boolean;
+  /**
+   * User-confirmed resolutions for provisional yearly allocations keyed by yearly record id.
+   * Default (missing) keeps the yearly obligation included as a separate annual cost.
+   */
+  yearlyAllocationDecisions: Record<string, YearlyAllocationDecision>;
   fundingMethod: FundingMethod;
   plannedMonthlyContributionNpr: number | null;
   deadlineMonths: number | null;
@@ -144,6 +188,14 @@ export type EmergencySimulationResult = {
   monthByMonth: Array<{ month: number; remainingNpr: number }>;
 };
 
+export type AnnualPaymentStatus =
+  | "upcoming"
+  | "due_today"
+  | "overdue"
+  | "partially_paid"
+  | "paid"
+  | "unknown";
+
 export type UpcomingAnnualPayment = {
   id: string;
   name: string;
@@ -151,8 +203,11 @@ export type UpcomingAnnualPayment = {
   amountNpr: number;
   reservedNpr: number;
   remainingObligationNpr: number;
+  /** Calendar days until due (negative = overdue). */
   daysUntil: number;
-  window: "30" | "90" | "180" | "later";
+  status: AnnualPaymentStatus;
+  statusLabel: string;
+  window: "30" | "90" | "180" | "later" | "overdue";
 };
 
 export const DEFAULT_PROTECTION_MONTHS = 6;

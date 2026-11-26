@@ -33,15 +33,20 @@ import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
 
 function monthlyBasisFromBudgets(budgets: BudgetRecord[], userId?: string | null): number | null {
   if (budgets.length === 0) return null;
-  const breakdown = normalizeBudgetForEmergencyFund(budgets);
-  if (!breakdown.hasBudgetData) return null;
   const settings = loadEmergencyFundSettingsLocal(userId);
+  const breakdown = normalizeBudgetForEmergencyFund(budgets, {
+    yearlyAllocationDecisions: settings.yearlyAllocationDecisions,
+  });
+  if (!breakdown.hasBudgetData) return null;
   const resolved = resolveMonthlyProtectionBasis(
     breakdown,
     settings.protectionMode,
     settings.essentialRecordIds,
+    { excludedRecordIds: settings.excludedRecordIds },
   );
-  return resolved.monthlyProtectionBasisNpr > 0 ? resolved.monthlyProtectionBasisNpr : null;
+  return resolved.finalMonthlyProtectionBasisNpr > 0
+    ? resolved.finalMonthlyProtectionBasisNpr
+    : null;
 }
 
 function storageTouchesSession(key: string | null, userId?: string | null): boolean {

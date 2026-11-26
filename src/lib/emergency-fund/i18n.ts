@@ -43,6 +43,24 @@ export type EmergencyFundCopy = {
   essentialSelected: string;
   excludedCategories: string;
   finalBasis: string;
+  grossMonthly: string;
+  totalNormalized: string;
+  efContributionExcluded: string;
+  otherUserExclusions: string;
+  provisionalWarning: string;
+  reviewBudget: string;
+  importPlannedContribution: string;
+  inclusionIncluded: string;
+  inclusionExcludedUser: string;
+  inclusionEmergency: string;
+  inclusionAlready: string;
+  inclusionProjection: string;
+  inclusionProvisional: string;
+  resolveSeparate: string;
+  resolveAlreadyIncluded: string;
+  resolveLinked: string;
+  calculationProvisional: string;
+  calculationVerified: string;
   activePeriod: string;
   lastSync: string;
   safetyJourney: string;
@@ -103,15 +121,34 @@ const en: EmergencyFundCopy = {
   excessReserve: "Excess Reserve",
   monthlyBasis: "Monthly protection basis",
   budgetIntegration: "Budget Integration",
-  originalMonthly: "Original Monthly Budget",
-  yearlyTotal: "Yearly Budget Total",
+  originalMonthly: "Monthly Budget",
+  yearlyTotal: "Yearly Budget",
   annualMonthlyEq: "Annual Monthly Equivalent",
   annualAlreadyIncluded: "Annual Allocations Already Included",
-  additionalAnnual: "Additional Annual Monthly Allocations",
-  effectiveMonthly: "Effective Monthly Budget",
+  additionalAnnual: "Annual Monthly Allocations",
+  effectiveMonthly: "Total Normalized Budget",
   essentialSelected: "Essential Selected Budget",
   excludedCategories: "Excluded Budget Categories",
-  finalBasis: "Final Emergency Fund Monthly Basis",
+  finalBasis: "Final Monthly Protection Basis",
+  grossMonthly: "Gross Monthly Budget",
+  totalNormalized: "Total Normalized Budget",
+  efContributionExcluded: "Emergency Fund Contribution Excluded",
+  otherUserExclusions: "Other User Exclusions",
+  provisionalWarning:
+    "Some yearly allocations share a category with monthly lines but amounts differ. They are included in protection sizing — review your Budget Planner to confirm there is no double counting.",
+  reviewBudget: "Review in Budget Planner",
+  importPlannedContribution: "Use budgeted Emergency contribution in Funding Plan",
+  inclusionIncluded: "Included",
+  inclusionExcludedUser: "Excluded by user",
+  inclusionEmergency: "Emergency contribution excluded",
+  inclusionAlready: "Already included annual allocation",
+  inclusionProjection: "Yearly projection (not added)",
+  inclusionProvisional: "Included — review recommended",
+  resolveSeparate: "Separate annual obligation",
+  resolveAlreadyIncluded: "Already in monthly budget",
+  resolveLinked: "Link to monthly allocation",
+  calculationProvisional: "Calculation provisional — unresolved allocations remain",
+  calculationVerified: "Budget normalization verified",
   activePeriod: "Active Budget Period",
   lastSync: "Last Successful Synchronization",
   safetyJourney: "Financial Safety Journey",
@@ -173,6 +210,25 @@ const np: EmergencyFundCopy = {
   excessReserve: "अतिरिक्त जगेडा",
   monthlyBasis: "मासिक सुरक्षा आधार",
   budgetIntegration: "बजेट एकीकरण",
+  grossMonthly: "कुल मासिक बजेट",
+  totalNormalized: "कुल सामान्यीकृत बजेट",
+  efContributionExcluded: "आपतकालीन कोष योगदान हटाइएको",
+  otherUserExclusions: "अन्य प्रयोगकर्ता बहिष्करण",
+  provisionalWarning:
+    "केही वार्षिक विनियोजन मासिक श्रेणीसँग मिल्छ तर रकम फरक छ। सुरक्षा गणनामा समावेश छ — दोहोरो गणना नहोस् भनी बजेट प्लानर समीक्षा गर्नुहोस्।",
+  reviewBudget: "बजेट प्लानरमा समीक्षा गर्नुहोस्",
+  importPlannedContribution: "बजेटको आपतकालीन योगदान कोष योजनामा प्रयोग गर्नुहोस्",
+  inclusionIncluded: "समावेश",
+  inclusionExcludedUser: "प्रयोगकर्ताद्वारा बहिष्कृत",
+  inclusionEmergency: "आपतकालीन योगदान बहिष्कृत",
+  inclusionAlready: "पहिले नै समावेश वार्षिक विनियोजन",
+  inclusionProjection: "वार्षिक प्रक्षेपण (थपिएन)",
+  inclusionProvisional: "समावेश — समीक्षा सिफारिस",
+  resolveSeparate: "छुट्टै वार्षिक दायित्व",
+  resolveAlreadyIncluded: "मासिक बजेटमा पहिले नै समावेश",
+  resolveLinked: "मासिक विनियोजनसँग जोड्नुहोस्",
+  calculationProvisional: "गणना अस्थायी — अनसुलझे विनियोजन बाँकी",
+  calculationVerified: "बजेट सामान्यीकरण प्रमाणित",
   safetyJourney: "आर्थिक सुरक्षा यात्रा",
   fundingPlan: "व्यक्तिगत कोष योजना",
   setContributionPrompt: "व्यक्तिगत कोष योजना बनाउन मासिक योगदान सेट गर्नुहोस्।",
@@ -232,6 +288,25 @@ const kr: EmergencyFundCopy = {
   excessReserve: "초과 준비금",
   monthlyBasis: "월간 보호 기준",
   budgetIntegration: "예산 연동",
+  grossMonthly: "총 월간 예산",
+  totalNormalized: "정규화된 총 예산",
+  efContributionExcluded: "비상자금 기여금 제외",
+  otherUserExclusions: "기타 사용자 제외",
+  provisionalWarning:
+    "일부 연간 항목이 월간 카테고리와 같지만 금액이 다릅니다. 보호 계산에는 포함됩니다 — 이중 계산이 없는지 예산 플래너에서 확인하세요.",
+  reviewBudget: "예산 플래너에서 검토",
+  importPlannedContribution: "예산된 비상자금 기여금을 적립 계획에 사용",
+  inclusionIncluded: "포함",
+  inclusionExcludedUser: "사용자가 제외",
+  inclusionEmergency: "비상자금 기여금 제외",
+  inclusionAlready: "이미 포함된 연간 배분",
+  inclusionProjection: "연간 투영(추가 안 함)",
+  inclusionProvisional: "포함 — 검토 권장",
+  resolveSeparate: "별도 연간 의무",
+  resolveAlreadyIncluded: "월간 예산에 이미 포함",
+  resolveLinked: "월간 배분에 연결",
+  calculationProvisional: "계산 잠정 — 미해결 배분 남음",
+  calculationVerified: "예산 정규화 확인됨",
   safetyJourney: "재무 안전 여정",
   fundingPlan: "개인 적립 계획",
   setContributionPrompt: "개인 적립 계획을 만들려면 월 기여금을 설정하세요.",

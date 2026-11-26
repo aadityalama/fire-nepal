@@ -8,6 +8,8 @@ import type {
   FundingMethod,
   ProtectionGuidanceAnswers,
   ProtectionMode,
+  YearlyAllocationDecision,
+  YearlyAllocationResolution,
 } from "@/lib/emergency-fund/types";
 import { DEFAULT_PROTECTION_MONTHS } from "@/lib/emergency-fund/types";
 import { finiteNonNeg } from "@/lib/emergency-fund/math";
@@ -26,6 +28,9 @@ export function defaultEmergencyFundSettings(): EmergencyFundSettingsState {
     protectionMonths: DEFAULT_PROTECTION_MONTHS,
     useCustomProtectionMonths: false,
     essentialRecordIds: [],
+    excludedRecordIds: [],
+    importedPlannedContributionFromBudget: false,
+    yearlyAllocationDecisions: {},
     fundingMethod: null,
     plannedMonthlyContributionNpr: null,
     deadlineMonths: null,
@@ -94,6 +99,31 @@ function sanitizeGuidance(raw: unknown): ProtectionGuidanceAnswers | null {
   };
 }
 
+function sanitizeYearlyResolution(raw: unknown): YearlyAllocationResolution | null {
+  if (raw === "separate" || raw === "already_included" || raw === "linked") return raw;
+  return null;
+}
+
+function sanitizeYearlyAllocationDecisions(raw: unknown): Record<string, YearlyAllocationDecision> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, YearlyAllocationDecision> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!key.trim() || !value || typeof value !== "object") continue;
+    const row = value as Partial<YearlyAllocationDecision>;
+    const resolution = sanitizeYearlyResolution(row.resolution);
+    if (!resolution) continue;
+    out[key.trim()] = {
+      resolution,
+      linkedMonthlyRecordId:
+        typeof row.linkedMonthlyRecordId === "string" && row.linkedMonthlyRecordId.trim()
+          ? row.linkedMonthlyRecordId.trim()
+          : null,
+      updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : new Date().toISOString(),
+    };
+  }
+  return out;
+}
+
 export function sanitizeEmergencyFundSettings(raw: unknown): EmergencyFundSettingsState {
   const defaults = defaultEmergencyFundSettings();
   if (!raw || typeof raw !== "object") return defaults;
@@ -107,6 +137,10 @@ export function sanitizeEmergencyFundSettings(raw: unknown): EmergencyFundSettin
 
   const essentialRecordIds = Array.isArray(o.essentialRecordIds)
     ? o.essentialRecordIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+
+  const excludedRecordIds = Array.isArray(o.excludedRecordIds)
+    ? o.excludedRecordIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
 
   const linkedSavingsGoalIds = Array.isArray(o.linkedSavingsGoalIds)
@@ -142,6 +176,9 @@ export function sanitizeEmergencyFundSettings(raw: unknown): EmergencyFundSettin
     protectionMonths,
     useCustomProtectionMonths: Boolean(o.useCustomProtectionMonths),
     essentialRecordIds,
+    excludedRecordIds,
+    importedPlannedContributionFromBudget: Boolean(o.importedPlannedContributionFromBudget),
+    yearlyAllocationDecisions: sanitizeYearlyAllocationDecisions(o.yearlyAllocationDecisions),
     fundingMethod: sanitizeFundingMethod(o.fundingMethod),
     plannedMonthlyContributionNpr,
     deadlineMonths,
