@@ -1,11 +1,13 @@
 /**
  * Finance Emergency Fund plan — single source of truth for amounts & targets.
  *
- * Balance SoT: `CashflowDashboardState.emergencyCashReserve`
- * Essential expenses SoT: cashflow `monthlyBurn` (override → categories)
+ * Balance SoT: ledger-derived reserve when `cashflow.emergencyFund` exists,
+ * otherwise `CashflowDashboardState.emergencyCashReserve`.
+ * Essential expenses SoT (legacy path): cashflow `monthlyBurn` (override → categories)
  * Default target: 6 × monthly essential expenses (no risk buffer)
  *
- * Used by Emergency Fund workspace and FIRE Progress so both stay aligned.
+ * Used by FIRE Progress so both stay aligned with the Emergency Fund workspace.
+ * The Emergency Fund dashboard uses `computeIntelligentEmergencyFund` for richer metrics.
  */
 
 import {
@@ -14,9 +16,11 @@ import {
   sumIncome,
 } from "@/components/cashflow/cashflow-metrics";
 import type { CashflowDashboardState } from "@/components/cashflow/types";
+import { deriveEmergencyCashReserveFromLedger } from "@/lib/emergency-fund/intelligent-engine";
+import { DEFAULT_PROTECTION_MONTHS } from "@/lib/emergency-fund/types";
 
 /** Classic FIRE Nepal emergency buffer — months of essential spend. */
-export const DEFAULT_EMERGENCY_FUND_MONTHS = 6;
+export const DEFAULT_EMERGENCY_FUND_MONTHS = DEFAULT_PROTECTION_MONTHS;
 
 export type EmergencyFundPlan = {
   /** Whether income/expense cashflow is enough to size a target. */
@@ -27,7 +31,7 @@ export type EmergencyFundPlan = {
   recommendedMonths: number;
   /** Target = expenses × recommendedMonths. */
   recommendedTarget: number;
-  /** Current liquid emergency reserve (cashflow SoT). */
+  /** Current liquid emergency reserve (cashflow / ledger SoT). */
   currentAmount: number;
   /** max(0, target − current). */
   remainingAmount: number;
@@ -62,7 +66,23 @@ export type ComputeEmergencyFundPlanOptions = {
   recommendedMonths?: number;
   /** Optional expense total already resolved (avoids re-reading modules). */
   autoExpenseTotal?: number;
+  /** Linked emergency savings goal balances (NPR). */
+  linkedSavingsBalanceNpr?: number;
 };
+
+function resolveCurrentReserve(
+  cashflow: CashflowDashboardState,
+  linkedSavingsBalanceNpr = 0,
+): number {
+  if (cashflow.emergencyFund?.version === 1) {
+    return deriveEmergencyCashReserveFromLedger(
+      cashflow.emergencyFund,
+      linkedSavingsBalanceNpr,
+      cashflow.emergencyCashReserve,
+    );
+  }
+  return finiteNonNeg(cashflow.emergencyCashReserve);
+}
 
 /**
  * Derive the Finance Emergency Fund plan from cashflow state.
@@ -79,7 +99,10 @@ export function computeEmergencyFundPlan(
   const monthlyEssentialExpenses = monthlyBurn(cashflow, options.autoExpenseTotal);
   const monthlyIncome = sumIncome(cashflow);
   const monthlySurplus = investableCashflow(cashflow, options.autoExpenseTotal);
-  const currentAmount = finiteNonNeg(cashflow.emergencyCashReserve);
+  const currentAmount = resolveCurrentReserve(
+    cashflow,
+    options.linkedSavingsBalanceNpr ?? 0,
+  );
 
   const hasSufficientData = monthlyEssentialExpenses > 0;
   const recommendedTarget = hasSufficientData

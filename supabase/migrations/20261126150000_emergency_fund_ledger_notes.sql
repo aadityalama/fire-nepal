@@ -1,0 +1,22 @@
+-- Emergency Fund intelligent ledger (2026-11-26)
+--
+-- NO schema change required.
+-- Settings + contribution/withdrawal history are stored inside the existing
+-- public.cashflow_snapshots.state JSONB document as:
+--
+--   state.emergencyFund = {
+--     version: 1,
+--     settings: {
+--       protectionMonths, allocationPct, openingBalanceNpr,
+--       linkedSavingsGoalIds, reserveMode, employmentType, ...
+--     },
+--     transactions: [{ id, type, amountNpr, date, note, confirmed, ... }]
+--   }
+--
+-- Canonical display balance remains state.emergencyCashReserve, kept in sync
+-- from the ledger (opening + contributions − withdrawals [+ linked goals]).
+--
+-- Existing RLS on cashflow_snapshots already scopes rows to auth.uid() = user_id.
+-- Do not disable RLS. This file is documentation-only for deploy order awareness.
+
+select 1;
