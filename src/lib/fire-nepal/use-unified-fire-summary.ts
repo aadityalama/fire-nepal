@@ -15,6 +15,13 @@ import {
   portfolioStorageKey,
 } from "@/components/portfolio/storage";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
+import { fetchBudgetRecords } from "@/lib/budget/budget-api";
+import type { BudgetRecord } from "@/lib/budget/types";
+import {
+  normalizeBudgetForEmergencyFund,
+  resolveMonthlyProtectionBasis,
+} from "@/lib/emergency-fund/budget-integration";
+import { loadEmergencyFundSettingsLocal } from "@/lib/emergency-fund/settings";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
@@ -23,6 +30,19 @@ import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
+
+function monthlyBasisFromBudgets(budgets: BudgetRecord[], userId?: string | null): number | null {
+  if (budgets.length === 0) return null;
+  const breakdown = normalizeBudgetForEmergencyFund(budgets);
+  if (!breakdown.hasBudgetData) return null;
+  const settings = loadEmergencyFundSettingsLocal(userId);
+  const resolved = resolveMonthlyProtectionBasis(
+    breakdown,
+    settings.protectionMode,
+    settings.essentialRecordIds,
+  );
+  return resolved.monthlyProtectionBasisNpr > 0 ? resolved.monthlyProtectionBasisNpr : null;
+}
 
 function storageTouchesSession(key: string | null, userId?: string | null): boolean {
   if (key == null) return false;
@@ -45,6 +65,7 @@ export function useUnifiedFireSummary(): {
   const uid = user?.id;
   const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => defaultWealthState());
   const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => defaultCashflowState());
+  const [monthlyProtectionBasisNpr, setMonthlyProtectionBasisNpr] = useState<number | null>(null);
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -53,12 +74,13 @@ export function useUnifiedFireSummary(): {
     if (!uid || !isSupabaseConfigured()) {
       setPortfolio(loadWealthPortfolioState(uid));
       setCashflow(loadCashflowState(uid));
+      setMonthlyProtectionBasisNpr(null);
       return;
     }
 
     void (async () => {
       try {
-        const [cfRes, remotePortfolio] = await Promise.all([
+        const [cfRes, remotePortfolio, budgets] = await Promise.all([
           fetch("/api/cashflow", { credentials: "include", cache: "no-store" }).then(
             (r) =>
               r.json() as Promise<{
@@ -67,6 +89,7 @@ export function useUnifiedFireSummary(): {
               }>,
           ),
           loadWealthPortfolioFromSupabase(getSupabaseBrowserClient(), uid),
+          fetchBudgetRecords().catch(() => [] as BudgetRecord[]),
         ]);
         setPortfolio(remotePortfolio ?? defaultWealthState());
         setCashflow(
@@ -74,19 +97,23 @@ export function useUnifiedFireSummary(): {
             ? sanitizeCashflowState(cfRes.snapshot.state)
             : defaultCashflowState(),
         );
+        setMonthlyProtectionBasisNpr(monthlyBasisFromBudgets(budgets, uid));
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[unified-fire-summary] cloud resync failed", error);
         }
         setPortfolio(defaultWealthState());
         setCashflow(defaultCashflowState());
+        setMonthlyProtectionBasisNpr(null);
       }
     })();
   }, [uid]);
 
   useEffect(() => {
     if (loading) return;
-    resync();
+    queueMicrotask(() => {
+      resync();
+    });
   }, [loading, resync]);
 
   useEffect(() => {
@@ -119,12 +146,15 @@ export function useUnifiedFireSummary(): {
 
   useEffect(() => {
     let cancelled = false;
-    setRatesLoading(true);
-    fetchNprCrossRates().then((r) => {
+    queueMicrotask(() => {
       if (cancelled) return;
-      setKrwPerNpr(r.krwPerNpr);
-      setUsdPerNpr(r.usdPerNpr);
-      setRatesLoading(false);
+      setRatesLoading(true);
+      fetchNprCrossRates().then((r) => {
+        if (cancelled) return;
+        setKrwPerNpr(r.krwPerNpr);
+        setUsdPerNpr(r.usdPerNpr);
+        setRatesLoading(false);
+      });
     });
     return () => {
       cancelled = true;
@@ -132,8 +162,11 @@ export function useUnifiedFireSummary(): {
   }, []);
 
   const summary = useMemo(
-    () => computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr),
-    [portfolio, cashflow, krwPerNpr, usdPerNpr],
+    () =>
+      computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr, {
+        monthlyProtectionBasisNpr,
+      }),
+    [portfolio, cashflow, krwPerNpr, usdPerNpr, monthlyProtectionBasisNpr],
   );
 
   return { summary, portfolio, cashflow, ratesLoading, resync };

@@ -220,7 +220,7 @@ export function UnifiedFireDashboard() {
                     {formatMoney(summary.emergencyFundCurrentAmount, "NPR")}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold leading-relaxed text-emerald-200/50">
-                    Target {formatMoney(summary.emergencyFundTargetAmount, "NPR")} (6× burn) ·{" "}
+                    Target {formatMoney(summary.emergencyFundTargetAmount, "NPR")} (6× budget) ·{" "}
                     {summary.emergencyFundSixMoProgressPct?.toFixed(0) ?? 0}% funded ·{" "}
                     {formatMoney(summary.emergencyFundRemainingAmount, "NPR")} remaining. Same reserve as Finance →
                     Emergency Fund.
@@ -228,8 +228,8 @@ export function UnifiedFireDashboard() {
                 </>
               ) : (
                 <p className="mt-2 text-sm font-bold leading-relaxed text-emerald-100/90">
-                  Complete Cashflow income &amp; expenses to size a 6‑month emergency target. Updates sync
-                  automatically with the Emergency Fund workspace.
+                  Create a Monthly Budget to size a 6‑month emergency target. Updates sync automatically with the
+                  Emergency Fund workspace.
                 </p>
               )}
             </div>

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Emergency Fund finance plan + FIRE Progress SoT tests.
+ * Emergency Fund finance plan + FIRE Progress SoT tests (Budget Planner basis).
  * Run: npx tsx --test scripts/emergency-fund-plan.test.mjs
  */
 import assert from "node:assert/strict";
@@ -23,14 +23,15 @@ function cashflowWith(overrides = {}) {
   };
 }
 
-describe("computeEmergencyFundPlan", () => {
-  it("sizes a 6-month target from essential monthly expenses", () => {
+describe("computeEmergencyFundPlan (budget-powered)", () => {
+  it("sizes a 6-month target from the budget monthly protection basis", () => {
     const plan = computeEmergencyFundPlan(
       cashflowWith({
         expenses: { rent: 20_000, food: 15_000, transportation: 10_000 },
         emergencyCashReserve: 90_000,
         income: { salary: 120_000 },
       }),
+      { monthlyProtectionBasisNpr: 45_000 },
     );
 
     assert.equal(plan.hasSufficientData, true);
@@ -40,17 +41,18 @@ describe("computeEmergencyFundPlan", () => {
     assert.equal(plan.currentAmount, 90_000);
     assert.equal(plan.remainingAmount, 180_000);
     assert.ok(Math.abs((plan.progressPct ?? 0) - (90_000 / 270_000) * 100) < 1e-9);
-    assert.equal(plan.monthlySurplus, 75_000);
-    assert.equal(plan.recommendedMonthlyContribution, 75_000);
-    assert.equal(plan.estimatedMonthsRemaining, 3);
+    assert.equal(plan.monthlyIncome, 0);
+    assert.equal(plan.monthlySurplus, 0);
   });
 
-  it("shows setup-insufficient state when expenses are missing", () => {
+  it("shows setup-insufficient state when budget basis is missing", () => {
     const plan = computeEmergencyFundPlan(
       cashflowWith({
         income: { salary: 100_000 },
+        expenses: { rent: 40_000 },
         emergencyCashReserve: 50_000,
       }),
+      { monthlyProtectionBasisNpr: null },
     );
 
     assert.equal(plan.hasSufficientData, false);
@@ -61,43 +63,56 @@ describe("computeEmergencyFundPlan", () => {
     assert.equal(plan.currentAmount, 50_000);
   });
 
-  it("marks funded plans as ready with zero remaining months", () => {
+  it("marks funded plans as ready with zero remaining months when contribution set", () => {
     const plan = computeEmergencyFundPlan(
       cashflowWith({
-        expenses: { rent: 45_000 },
         emergencyCashReserve: 270_000,
-        income: { salary: 80_000 },
       }),
+      {
+        monthlyProtectionBasisNpr: 45_000,
+        plannedMonthlyContributionNpr: 10_000,
+      },
     );
 
     assert.equal(plan.remainingAmount, 0);
     assert.equal(plan.progressPct, 100);
-    assert.equal(plan.recommendedMonthlyContribution, 0);
     assert.equal(plan.estimatedMonthsRemaining, 0);
   });
 
-  it("does not invent a contribution when surplus is zero or negative", () => {
-    const plan = computeEmergencyFundPlan(
+  it("uses planned contribution instead of inventing income surplus", () => {
+    const withoutPlan = computeEmergencyFundPlan(
       cashflowWith({
         expenses: { rent: 50_000 },
-        income: { salary: 40_000 },
+        income: { salary: 200_000 },
         emergencyCashReserve: 10_000,
       }),
+      { monthlyProtectionBasisNpr: 50_000 },
     );
+    assert.equal(withoutPlan.recommendedMonthlyContribution, 0);
+    assert.equal(withoutPlan.estimatedMonthsRemaining, null);
 
-    assert.equal(plan.monthlySurplus, -10_000);
-    assert.equal(plan.recommendedMonthlyContribution, 0);
-    assert.equal(plan.estimatedMonthsRemaining, null);
+    const withPlan = computeEmergencyFundPlan(
+      cashflowWith({
+        emergencyCashReserve: 10_000,
+      }),
+      {
+        monthlyProtectionBasisNpr: 50_000,
+        plannedMonthlyContributionNpr: 20_000,
+      },
+    );
+    assert.equal(withPlan.recommendedMonthlyContribution, 20_000);
+    assert.equal(withPlan.estimatedMonthsRemaining, 15);
   });
 
-  it("respects monthlyExpensesOverride as essential burn", () => {
+  it("ignores cashflow monthlyExpensesOverride for sizing", () => {
     const plan = computeEmergencyFundPlan(
       cashflowWith({
         expenses: { rent: 10_000 },
-        monthlyExpensesOverride: 45_000,
+        monthlyExpensesOverride: 99_000,
         emergencyCashReserve: 0,
         income: { salary: 100_000 },
       }),
+      { monthlyProtectionBasisNpr: 45_000 },
     );
 
     assert.equal(plan.monthlyEssentialExpenses, 45_000);
@@ -112,8 +127,11 @@ describe("FIRE Progress emergency fund SoT", () => {
       emergencyCashReserve: 90_000,
       income: { salary: 120_000 },
     });
-    const plan = computeEmergencyFundPlan(cashflow);
-    const summary = computeUnifiedFireSummary(defaultWealthState(), cashflow, 10, 0.0075);
+    const basis = 45_000;
+    const plan = computeEmergencyFundPlan(cashflow, { monthlyProtectionBasisNpr: basis });
+    const summary = computeUnifiedFireSummary(defaultWealthState(), cashflow, 10, 0.0075, {
+      monthlyProtectionBasisNpr: basis,
+    });
 
     assert.equal(summary.emergencyFundHasSufficientData, true);
     assert.equal(summary.emergencyFundCurrentAmount, plan.currentAmount);
@@ -124,8 +142,8 @@ describe("FIRE Progress emergency fund SoT", () => {
     assert.ok(Math.abs((summary.emergencyFundCoverageMonths ?? 0) - 2) < 1e-9);
   });
 
-  it("keeps emergency fields empty-safe when burn is missing", () => {
-    const cashflow = cashflowWith({ emergencyCashReserve: 12_000 });
+  it("keeps emergency fields empty-safe when budget basis is missing", () => {
+    const cashflow = cashflowWith({ emergencyCashReserve: 12_000, expenses: { rent: 30_000 } });
     const summary = computeUnifiedFireSummary(defaultWealthState(), cashflow, 10, 0.0075);
 
     assert.equal(summary.emergencyFundHasSufficientData, false);
