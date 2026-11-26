@@ -13,15 +13,15 @@ import {
   cashflowTotalExpenseEstimate,
   expensesToExpenseLike,
 } from "@/lib/emergency-fund/financial-inputs";
-import {
-  computeIntelligentEmergencyFund,
-} from "@/lib/emergency-fund/intelligent-engine";
+import { computeIntelligentEmergencyFund } from "@/lib/emergency-fund/intelligent-engine";
 import {
   appendEmergencyTransaction,
   buildReserveGrowthSeries,
   ensureEmergencyFundLedger,
+  reverseEmergencyTransaction,
   syncReserveFromLedger,
   updateEmergencySettings,
+  type GrowthSeriesPoint,
 } from "@/lib/emergency-fund/ledger";
 import type {
   EmergencyFundLedger,
@@ -29,12 +29,13 @@ import type {
   IntelligentEmergencyFundResult,
 } from "@/lib/emergency-fund/types";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
-import { getCachedExchangeRate } from "@/lib/exchange-rate";
+import { fetchLiveExchangeRate, getCachedExchangeRate } from "@/lib/exchange-rate";
 import { FALLBACK_USD_PER_NPR } from "@/lib/portfolio-convert";
 import { loadPersonalExpenseState } from "@/lib/personal-expense-storage";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import type { SavingsGoal } from "@/lib/savings/savings-types";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import type { EmergencyPeriodMode } from "@/lib/emergency-fund/period";
 
 export type EmergencyFundWorkspaceView = {
   result: IntelligentEmergencyFundResult;
@@ -43,10 +44,12 @@ export type EmergencyFundWorkspaceView = {
   budgets: BudgetRecord[];
   emergencyGoals: SavingsGoal[];
   linkedSavingsBalanceNpr: number;
-  growthSeries: Array<{ date: string; reserve: number; label: string }>;
+  growthSeries: GrowthSeriesPoint[];
   hydrated: boolean;
   loading: boolean;
   budgetsError: string | null;
+  lastSyncedAt: string | null;
+  syncing: boolean;
 };
 
 function linkedEmergencyBalance(goals: SavingsGoal[], linkedIds: string[]): number {
@@ -73,10 +76,39 @@ export function useIntelligentEmergencyFund() {
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [budgetsError, setBudgetsError] = useState<string | null>(null);
   const [budgetsLoading, setBudgetsLoading] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [fxTick, setFxTick] = useState(0);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ledgerRef = useRef<EmergencyFundLedger | null>(null);
 
   const bump = useCallback(() => setSyncTick((t) => t + 1), []);
+
+  const markSynced = useCallback(() => {
+    const ts = new Date().toISOString();
+    setLastSyncedAt(ts);
+    const base =
+      ledgerRef.current ??
+      ensureEmergencyFundLedger(
+        loadCashflowState(uid).emergencyFund,
+        loadCashflowState(uid).emergencyCashReserve,
+      );
+    const next = updateEmergencySettings(base, { lastSyncedAt: ts });
+    ledgerRef.current = next;
+    const local = loadCashflowState(uid);
+    const linked = linkedEmergencyBalance(
+      loadSavingsWorkspaceState().goals,
+      next.settings.linkedSavingsGoalIds,
+    );
+    saveCashflowState(
+      {
+        ...local,
+        emergencyFund: next,
+        emergencyCashReserve: syncReserveFromLedger(next, linked),
+      },
+      uid,
+    );
+  }, [uid]);
 
   const loadBudgets = useCallback(async () => {
     if (!uid) {
@@ -91,11 +123,26 @@ export function useIntelligentEmergencyFund() {
       setBudgetsError(null);
     } catch (error) {
       setBudgetsError(error instanceof Error ? error.message : "Could not load budgets.");
-      // Keep prior budgets on failure — do not wipe to empty silently as zero.
     } finally {
       setBudgetsLoading(false);
     }
   }, [uid]);
+
+  const refreshFinanceSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await Promise.all([
+        loadBudgets(),
+        fetchLiveExchangeRate()
+          .then(() => setFxTick((t) => t + 1))
+          .catch(() => undefined),
+      ]);
+      markSynced();
+      bump();
+    } finally {
+      setSyncing(false);
+    }
+  }, [bump, loadBudgets, markSynced]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -103,15 +150,27 @@ export function useIntelligentEmergencyFund() {
 
     const boot = window.setTimeout(() => {
       if (cancelled) return;
-      void loadBudgets().finally(() => {
+      void (async () => {
+        await loadBudgets();
         if (cancelled) return;
+        // Warm FX cache once — do not mark sync on mere page render.
+        try {
+          await fetchLiveExchangeRate();
+          if (!cancelled) setFxTick((t) => t + 1);
+        } catch {
+          /* keep going */
+        }
+        if (cancelled) return;
+        const existing = loadCashflowState(uid).emergencyFund?.settings.lastSyncedAt ?? null;
+        setLastSyncedAt(existing);
         setHydrated(true);
         bump();
-      });
+      })();
     }, 0);
 
     const onReady = () => {
       void loadBudgets();
+      markSynced();
       bump();
     };
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
@@ -124,13 +183,12 @@ export function useIntelligentEmergencyFund() {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onReady);
       window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, onReady);
     };
-  }, [authLoading, bump, loadBudgets]);
+  }, [authLoading, bump, loadBudgets, markSynced, uid]);
 
   const persistLedger = useCallback(
     (nextLedger: EmergencyFundLedger, linkedBalance: number) => {
       ledgerRef.current = nextLedger;
       const reserve = syncReserveFromLedger(nextLedger, linkedBalance);
-      // Immediate local write for responsive UI; cloud sync is debounced.
       const local = loadCashflowState(uid);
       saveCashflowState(
         {
@@ -151,7 +209,10 @@ export function useIntelligentEmergencyFund() {
           emergencyFund: latest,
           emergencyCashReserve: latestReserve,
         }))
-          .then(() => bump())
+          .then(() => {
+            markSynced();
+            bump();
+          })
           .catch((error) => {
             if (process.env.NODE_ENV !== "production") {
               console.warn("[emergency-fund] persist failed", error);
@@ -160,17 +221,16 @@ export function useIntelligentEmergencyFund() {
           });
       }, 450);
     },
-    [bump, uid],
+    [bump, markSynced, uid],
   );
 
   const view: EmergencyFundWorkspaceView = useMemo(() => {
     void syncTick;
+    void fxTick;
     const cashflow = loadCashflowState(uid);
     const expenseState = loadPersonalExpenseState();
     const savings = loadSavingsWorkspaceState();
     const emergencyGoals = allEmergencyEligibleGoals(savings.goals);
-    // Prefer cashflow cache (updated synchronously on persist). Ref is only for
-    // rapid successive mutations between renders.
     const ledger = ensureEmergencyFundLedger(
       cashflow.emergencyFund,
       cashflow.emergencyCashReserve,
@@ -186,12 +246,13 @@ export function useIntelligentEmergencyFund() {
       krwPerNpr: cachedFx?.krwPerNpr ?? null,
       usdPerNpr: FALLBACK_USD_PER_NPR,
       rateUpdatedAt: cachedFx?.updatedAt ?? null,
-      incomplete: !cachedFx?.krwPerNpr,
+      // Do not flag incomplete merely because FX cache is empty when amounts are NPR.
+      incomplete: false,
       stale: cachedFx?.source === "cached",
-      flaggedMessage: !cachedFx?.krwPerNpr
-        ? "Exchange-rate data missing for KRW conversion."
-        : undefined,
+      flaggedMessage: undefined,
     };
+
+    const periodMode = (ledger.settings.periodMode ?? "latest_completed") as EmergencyPeriodMode;
 
     const inputs = buildEmergencyFinancialInputs({
       cashflow,
@@ -199,9 +260,13 @@ export function useIntelligentEmergencyFund() {
       budgets,
       extraIncludedCategories: ledger.settings.includeDiscretionaryCategoryIds,
       rates,
+      periodMode,
+      customStartMonth: ledger.settings.customPeriodStartMonth,
+      customEndMonth: ledger.settings.customPeriodEndMonth,
+      essentialAvgMonths: periodMode === "last_6_completed" ? 6 : 3,
+      // Do NOT pass fetchedAt=now — lastUpdatedAt must come from ledger/sync.
     });
 
-    // When expense history is empty, surface cashflow total as estimate for capacity math.
     const actualTotal =
       inputs.actualMonthlyTotalExpensesNpr ??
       (inputs.actualEssentialMonthlyAvgNpr == null
@@ -212,6 +277,7 @@ export function useIntelligentEmergencyFund() {
 
     const result = computeIntelligentEmergencyFund({
       monthlyNetIncomeNpr: inputs.monthlyNetIncomeNpr,
+      recurringMonthlyIncomeNpr: inputs.recurringMonthlyIncomeNpr,
       actualMonthlyTotalExpensesNpr: actualTotal,
       actualEssentialMonthlyAvgNpr: inputs.actualEssentialMonthlyAvgNpr,
       plannedEssentialMonthlyNpr: inputs.plannedEssentialMonthlyNpr,
@@ -223,9 +289,19 @@ export function useIntelligentEmergencyFund() {
       expenseBasisOverrideNpr: ledger.settings.expenseBasisOverrideNpr,
       manualMonthlyExpenseNpr: ledger.settings.manualMonthlyExpenseNpr,
       analysisPeriodLabel: inputs.analysisPeriodLabel,
+      incomePeriodLabel: inputs.incomePeriodLabel,
+      expensePeriodLabel: inputs.expensePeriodLabel,
+      essentialAveragingLabel: inputs.essentialAveragingLabel,
       categoryClassificationReliable: inputs.categoryClassificationReliable,
-      currency: inputs.currency,
-      lastUpdatedAt: ledger.settings.lastUpdatedAt ?? inputs.fetchedAt,
+      currency: {
+        ...inputs.currency,
+        rateUpdatedAt: cachedFx?.updatedAt ?? null,
+        stale: cachedFx?.source === "cached",
+      },
+      lastUpdatedAt: ledger.settings.lastUpdatedAt,
+      lastSyncedAt: lastSyncedAt ?? ledger.settings.lastSyncedAt ?? null,
+      dataQuality: inputs.dataQuality,
+      fundingDeadlineMonths: ledger.settings.fundingDeadlineMonths,
     });
 
     return {
@@ -235,12 +311,29 @@ export function useIntelligentEmergencyFund() {
       budgets,
       emergencyGoals,
       linkedSavingsBalanceNpr,
-      growthSeries: buildReserveGrowthSeries(ledger, linkedSavingsBalanceNpr),
+      growthSeries: buildReserveGrowthSeries(ledger, linkedSavingsBalanceNpr, {
+        targetNpr: result.emergencyFundTargetNpr,
+        monthlyContributionNpr: result.recommendedMonthlyContributionNpr,
+        chartMonths: ledger.settings.growthChartMonths ?? 12,
+      }),
       hydrated,
       loading: authLoading || !hydrated || budgetsLoading,
       budgetsError,
+      lastSyncedAt: lastSyncedAt ?? ledger.settings.lastSyncedAt ?? null,
+      syncing,
     };
-  }, [authLoading, budgets, budgetsError, budgetsLoading, hydrated, syncTick, uid]);
+  }, [
+    authLoading,
+    budgets,
+    budgetsError,
+    budgetsLoading,
+    fxTick,
+    hydrated,
+    lastSyncedAt,
+    syncTick,
+    syncing,
+    uid,
+  ]);
 
   const recordTransaction = useCallback(
     (input: {
@@ -257,7 +350,37 @@ export function useIntelligentEmergencyFund() {
           loadCashflowState(uid).emergencyFund,
           loadCashflowState(uid).emergencyCashReserve,
         );
+      if (input.type === "withdrawal") {
+        const current = syncReserveFromLedger(
+          base,
+          linkedEmergencyBalance(
+            loadSavingsWorkspaceState().goals,
+            base.settings.linkedSavingsGoalIds,
+          ),
+        );
+        if (input.amountNpr > current) {
+          throw new Error("Withdrawal exceeds current emergency reserve.");
+        }
+      }
       const next = appendEmergencyTransaction(base, input);
+      const linked = linkedEmergencyBalance(
+        loadSavingsWorkspaceState().goals,
+        next.settings.linkedSavingsGoalIds,
+      );
+      persistLedger(next, linked);
+    },
+    [persistLedger, uid],
+  );
+
+  const reverseTransaction = useCallback(
+    (transactionId: string) => {
+      const base =
+        ledgerRef.current ??
+        ensureEmergencyFundLedger(
+          loadCashflowState(uid).emergencyFund,
+          loadCashflowState(uid).emergencyCashReserve,
+        );
+      const next = reverseEmergencyTransaction(base, transactionId);
       const linked = linkedEmergencyBalance(
         loadSavingsWorkspaceState().goals,
         next.settings.linkedSavingsGoalIds,
@@ -297,10 +420,7 @@ export function useIntelligentEmergencyFund() {
       if (ids.has(goalId)) ids.delete(goalId);
       else ids.add(goalId);
       const nextIds = [...ids];
-      const nextBalance = linkedEmergencyBalance(
-        loadSavingsWorkspaceState().goals,
-        nextIds,
-      );
+      const nextBalance = linkedEmergencyBalance(loadSavingsWorkspaceState().goals, nextIds);
       const next = updateEmergencySettings(base, {
         linkedSavingsGoalIds: nextIds,
         reserveMode: nextIds.length > 0 ? "hybrid" : "ledger",
@@ -313,8 +433,10 @@ export function useIntelligentEmergencyFund() {
   return {
     ...view,
     recordTransaction,
+    reverseTransaction,
     patchSettings,
     toggleLinkedGoal,
     reloadBudgets: loadBudgets,
+    refreshFinanceSync,
   };
 }

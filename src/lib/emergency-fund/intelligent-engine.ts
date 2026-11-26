@@ -3,6 +3,10 @@
  * Single source of truth for derived EF metrics — no I/O.
  */
 
+import type { DataQualityReport } from "@/lib/emergency-fund/data-quality";
+import { buildFundingPlans } from "@/lib/emergency-fund/funding-plans";
+import { buildSafetyMilestones } from "@/lib/emergency-fund/milestones";
+import { pluralMonths } from "@/lib/emergency-fund/period";
 import {
   DEFAULT_ALLOCATION_PCT,
   DEFAULT_PROTECTION_MONTHS,
@@ -68,10 +72,6 @@ export function labelForDataSource(source: EmergencyDataSource): EmergencyDataSo
   }
 }
 
-/**
- * Resolve recommended monthly expense basis with fallback hierarchy.
- * Never silently treats missing data as zero for the recommended basis.
- */
 export function resolveExpenseBasis(input: {
   actualEssentialMonthlyAvgNpr: number | null;
   plannedEssentialMonthlyNpr: number | null;
@@ -85,7 +85,6 @@ export function resolveExpenseBasis(input: {
 } {
   const override = finiteOrNull(input.expenseBasisOverrideNpr);
   if (override != null && override > 0) {
-    // Override still reports the underlying source for transparency.
     const underlying = resolveExpenseBasis({
       ...input,
       expenseBasisOverrideNpr: null,
@@ -150,11 +149,11 @@ export function computeLedgerReserve(params: {
 
 export type ComputeIntelligentEmergencyFundInput = {
   monthlyNetIncomeNpr: number | null;
+  recurringMonthlyIncomeNpr?: number | null;
   actualMonthlyTotalExpensesNpr: number | null;
   actualEssentialMonthlyAvgNpr: number | null;
   plannedEssentialMonthlyNpr: number | null;
   cashflowEssentialMonthlyNpr: number | null;
-  /** Other committed allocations not already in spending totals (NPR / month). */
   otherCommittedAllocationsNpr?: number | null;
   currentReserveNpr: number;
   protectionMonths?: number;
@@ -163,10 +162,16 @@ export type ComputeIntelligentEmergencyFundInput = {
   expenseBasisOverrideNpr?: number | null;
   manualMonthlyExpenseNpr?: number | null;
   analysisPeriodLabel?: string | null;
+  incomePeriodLabel?: string | null;
+  expensePeriodLabel?: string | null;
+  essentialAveragingLabel?: string | null;
   categoryClassificationReliable?: boolean;
   currency?: CurrencyConversionMeta;
   now?: Date;
   lastUpdatedAt?: string;
+  lastSyncedAt?: string | null;
+  dataQuality?: DataQualityReport | null;
+  fundingDeadlineMonths?: number | null;
 };
 
 function addMonthsLabel(from: Date, months: number): string {
@@ -184,46 +189,94 @@ function buildInsights(result: {
   actualEssentialMonthlyAvgNpr: number | null;
   plannedEssentialMonthlyNpr: number | null;
   protectionMonths: number;
-  currencyCode: string;
+  dataQuality: DataQualityReport | null;
   formatAmount: (n: number) => string;
+  capacityReliable: boolean;
 }): EmergencyInsight[] {
   const insights: EmergencyInsight[] = [];
   const fmt = result.formatAmount;
 
-  if (result.safetyRunwayMonths != null) {
-    const mo = roundMonths(result.safetyRunwayMonths, 1);
+  if (result.dataQuality) {
+    for (const issue of result.dataQuality.issues.filter((i) => i.severity !== "info")) {
+      insights.push({
+        id: `dq-${issue.id}`,
+        tone: issue.severity === "critical" ? "critical" : "warning",
+        priority: issue.severity === "critical" ? 1 : 2,
+        titleEn: "Data quality",
+        titleNe: "डाटा गुणस्तर",
+        titleKo: "데이터 품질",
+        messageEn: issue.messageEn,
+        messageNe: issue.messageNe,
+        messageKo: issue.messageKo,
+        actionEn: "Open the linked Finance tool and refresh your records.",
+        actionNe: "सम्बन्धित वित्त उपकरण खोल्नुहोस् र रेकर्ड अद्यावधिक गर्नुहोस्।",
+        actionKo: "연결된 금융 도구를 열고 기록을 갱신하세요.",
+        href: issue.href,
+      });
+    }
+  }
+
+  if (result.negativeCashflow) {
     insights.push({
-      id: "runway",
-      tone: mo < 3 ? "critical" : mo < 6 ? "warning" : "positive",
-      messageEn: `Your emergency reserve currently covers ${mo} months of essential expenses.`,
-      messageNe: `तपाईंको आपतकालीन जगेडाले अहिले करिब ${mo} महिनाको आवश्यक खर्च धान्छ।`,
-      messageKo: `비상금이 현재 필수 생활비 약 ${mo}개월분을 커버합니다.`,
+      id: "negative-cashflow",
+      tone: "critical",
+      priority: 3,
+      titleEn: "Negative cashflow",
+      titleNe: "ऋणात्मक क्यासफ्लो",
+      titleKo: "마이너스 캐시플로",
+      messageEn:
+        "Monthly expenses exceed income for the selected period. Prioritize cashflow recovery before increasing emergency contributions.",
+      messageNe: "चयन अवधिमा खर्च आयभन्दा बढी छ। योगदान बढाउनुअघि क्यासफ्लो सुधार्नुहोस्।",
+      messageKo: "선택한 기간에 지출이 소득을 초과합니다. 비상 기여 전에 캐시플로를 회복하세요.",
+      actionEn: "Review Cashflow and Expense Tracker.",
+      actionNe: "क्यासफ्लो र खर्च ट्र्याकर समीक्षा गर्नुहोस्।",
+      actionKo: "캐시플로와 지출 트래커를 점검하세요.",
+      href: "/cashflow-dashboard",
     });
   }
 
-  if (result.fullyFunded) {
+  if (result.safetyRunwayMonths != null && result.safetyRunwayMonths < 3) {
     insights.push({
-      id: "fully-funded",
-      tone: "positive",
-      messageEn:
-        "Your emergency fund is fully funded. Review whether additional savings should be allocated toward other financial goals.",
-      messageNe:
-        "तपाईंको आपतकालीन कोष पूर्ण रूपमा भरिएको छ। थप बचत अन्य वित्तीय लक्ष्यतिर लैजाने समीक्षा गर्नुहोस्।",
-      messageKo: "비상금 목표가 달성되었습니다. 추가 저축을 다른 재무 목표로 배분할지 검토하세요.",
-      href: "/savings-tracker",
-    });
-  } else if (result.remainingShortfallNpr != null && result.remainingShortfallNpr > 0) {
-    insights.push({
-      id: "shortfall",
-      tone: "warning",
-      messageEn: `You need an additional ${fmt(result.remainingShortfallNpr)} to achieve your ${result.protectionMonths}-month target.`,
-      messageNe: `${result.protectionMonths} महिनाको लक्ष्य पूरा गर्न थप ${fmt(result.remainingShortfallNpr)} आवश्यक छ।`,
-      messageKo: `${result.protectionMonths}개월 목표 달성을 위해 추가로 ${fmt(result.remainingShortfallNpr)}이 필요합니다.`,
+      id: "low-protection",
+      tone: result.safetyRunwayMonths < 1 ? "critical" : "warning",
+      priority: 4,
+      titleEn: "Insufficient emergency protection",
+      titleNe: "अपुग आपतकालीन सुरक्षा",
+      titleKo: "비상 보호 부족",
+      messageEn: `Your reserve covers about ${pluralMonths(result.safetyRunwayMonths)}. Building toward at least 3 months reduces short-term shock risk.`,
+      messageNe: `तपाईंको जगेडाले करिब ${pluralMonths(result.safetyRunwayMonths)} धान्छ। कम्तीमा ३ महिनातर्फ बढाउँदा अल्पकालीन झट्का कम हुन्छ।`,
+      messageKo: `예비금이 약 ${pluralMonths(result.safetyRunwayMonths)}분을 커버합니다. 최소 3개월을 목표로 하면 단기 충격에 강해집니다.`,
+      actionEn: "Record a contribution or raise surplus allocation.",
+      actionNe: "योगदान रेकर्ड गर्नुहोस् वा बचत बाँडफाँड बढाउनुहोस्।",
+      actionKo: "기여금을 기록하거나 여유금 배분을 높이세요.",
     });
   }
 
   if (
     !result.fullyFunded &&
+    result.remainingShortfallNpr != null &&
+    result.remainingShortfallNpr > 0 &&
+    result.capacityReliable
+  ) {
+    insights.push({
+      id: "shortfall",
+      tone: "warning",
+      priority: 5,
+      titleEn: "Funding shortfall",
+      titleNe: "कोष कमी",
+      titleKo: "적립 부족",
+      messageEn: `You still need ${fmt(result.remainingShortfallNpr)} to reach your ${result.protectionMonths}-month target.`,
+      messageNe: `${result.protectionMonths} महिनाको लक्ष्यका लागि अझ ${fmt(result.remainingShortfallNpr)} चाहिन्छ।`,
+      messageKo: `${result.protectionMonths}개월 목표까지 ${fmt(result.remainingShortfallNpr)}이 더 필요합니다.`,
+      actionEn: "Compare deadline-based funding plans below.",
+      actionNe: "तलका समयसीमा योजना तुलना गर्नुहोस्।",
+      actionKo: "아래 기간별 적립 계획을 비교하세요.",
+    });
+  }
+
+  if (
+    !result.fullyFunded &&
+    result.capacityReliable &&
     result.recommendedMonthlyContributionNpr != null &&
     result.recommendedMonthlyContributionNpr > 0 &&
     result.estimatedMonthsRemaining != null &&
@@ -232,44 +285,54 @@ function buildInsights(result: {
     insights.push({
       id: "contribution-plan",
       tone: "info",
-      messageEn: `Saving ${fmt(result.recommendedMonthlyContributionNpr)} per month could help you achieve your target in ${result.estimatedMonthsRemaining} months.`,
-      messageNe: `मासिक ${fmt(result.recommendedMonthlyContributionNpr)} बचत गर्दा करिब ${result.estimatedMonthsRemaining} महिनामा लक्ष्य पुग्न सकिन्छ।`,
-      messageKo: `매월 ${fmt(result.recommendedMonthlyContributionNpr)}을 저축하면 약 ${result.estimatedMonthsRemaining}개월 후 목표에 도달할 수 있습니다.`,
+      priority: 6,
+      titleEn: "Affordable funding path",
+      titleNe: "किफायती कोष मार्ग",
+      titleKo: "감당 가능한 적립 경로",
+      messageEn: `Saving ${fmt(result.recommendedMonthlyContributionNpr)} per month could reach your target in about ${pluralMonths(result.estimatedMonthsRemaining)}.`,
+      messageNe: `मासिक ${fmt(result.recommendedMonthlyContributionNpr)} बचत गर्दा करिब ${pluralMonths(result.estimatedMonthsRemaining)}मा लक्ष्य पुग्न सकिन्छ।`,
+      messageKo: `매월 ${fmt(result.recommendedMonthlyContributionNpr)}을 저축하면 약 ${pluralMonths(result.estimatedMonthsRemaining)} 후 목표에 도달할 수 있습니다.`,
+    });
+  }
+
+  if (result.fullyFunded) {
+    insights.push({
+      id: "fully-funded",
+      tone: "positive",
+      priority: 7,
+      titleEn: "Target funded",
+      titleNe: "लक्ष्य पूरा",
+      titleKo: "목표 달성",
+      messageEn:
+        "Your emergency fund target is fully funded. Review whether additional savings should go to other goals — reaching a target does not eliminate all financial risks.",
+      messageNe:
+        "आपतकालीन कोष लक्ष्य पूरा भएको छ। थप बचत अन्य लक्ष्यतिर लैजाने समीक्षा गर्नुहोस् — लक्ष्यले सबै जोखिम हटाउँदैन।",
+      messageKo:
+        "비상금 목표가 달성되었습니다. 추가 저축을 다른 목표로 옮길지 검토하세요. 목표 달성이 모든 위험을 없애지는 않습니다.",
+      href: "/savings-tracker",
     });
   }
 
   const actual = result.actualEssentialMonthlyAvgNpr;
   const planned = result.plannedEssentialMonthlyNpr;
-  if (actual != null && planned != null && planned > actual) {
+  if (actual != null && planned != null && planned > actual * 1.05) {
     insights.push({
       id: "budget-higher",
       tone: "info",
-      messageEn: "Your current budget is higher than your historical essential expenses.",
-      messageNe: "तपाईंको हालको बजेट ऐतिहासिक आवश्यक खर्चभन्दा बढी छ।",
-      messageKo: "현재 필수 예산이 과거 실제 필수 지출보다 높습니다.",
+      priority: 8,
+      titleEn: "Budget above history",
+      titleNe: "बजेट इतिहासभन्दा माथि",
+      titleKo: "예산이 이력보다 높음",
+      messageEn: "Your essential budget is higher than historical essential spending, so the target uses the higher (conservative) figure.",
+      messageNe: "आवश्यक बजेट ऐतिहासिक खर्चभन्दा बढी छ — लक्ष्यले उच्च (संरक्षणात्मक) अंक प्रयोग गर्छ।",
+      messageKo: "필수 예산이 과거 필수 지출보다 높아 목표가 더 보수적인 값을 사용합니다.",
       href: "/budget",
     });
   }
 
-  if (result.negativeCashflow) {
-    insights.push({
-      id: "negative-cashflow",
-      tone: "critical",
-      messageEn:
-        "Your monthly expenses exceed your income. Review your spending before increasing contributions.",
-      messageNe: "तपाईंको मासिक खर्च आयभन्दा बढी छ। योगदान बढाउनुअघि खर्च समीक्षा गर्नुहोस्।",
-      messageKo: "월 지출이 소득을 초과합니다. 기여금을 늘리기 전에 지출을 점검하세요.",
-      href: "/cashflow-dashboard",
-    });
-  }
-
-  return insights;
+  return insights.sort((a, b) => a.priority - b.priority).slice(0, 8);
 }
 
-/**
- * Full intelligent emergency fund calculation.
- * Matches the product formulas in the Emergency Fund upgrade spec.
- */
 export function computeIntelligentEmergencyFund(
   input: ComputeIntelligentEmergencyFundInput,
 ): IntelligentEmergencyFundResult {
@@ -282,6 +345,7 @@ export function computeIntelligentEmergencyFund(
     0,
     Math.min(100, input.allocationPct ?? DEFAULT_ALLOCATION_PCT),
   );
+  const dataQuality = input.dataQuality ?? null;
 
   const { basisNpr, dataSource, overridden } = resolveExpenseBasis({
     actualEssentialMonthlyAvgNpr: input.actualEssentialMonthlyAvgNpr,
@@ -312,22 +376,20 @@ export function computeIntelligentEmergencyFund(
   const safetyStatus = classifyFinancialSafety(safetyRunwayMonths);
 
   const monthlyNetIncomeNpr = finiteOrNull(input.monthlyNetIncomeNpr);
+  const recurringMonthlyIncomeNpr =
+    finiteOrNull(input.recurringMonthlyIncomeNpr) ?? monthlyNetIncomeNpr;
   const actualMonthlyTotalExpensesNpr = finiteOrNull(input.actualMonthlyTotalExpensesNpr);
+
+  const capacityIncome = recurringMonthlyIncomeNpr ?? monthlyNetIncomeNpr;
 
   const actualMonthlySavingsNpr =
     monthlyNetIncomeNpr != null && actualMonthlyTotalExpensesNpr != null
       ? roundMoney(monthlyNetIncomeNpr - actualMonthlyTotalExpensesNpr)
       : null;
 
-  // Conservative total spending = max(actual total, planned essential as floor when actual missing)
-  // Spec: Available Contribution Capacity = MAX(0, Monthly Net Income − Conservative Monthly Total Spending − Other Uncounted Committed Allocations)
-  // Conservative spending uses max of actual total expenses and planned essential (when both exist),
-  // else whichever reliable total is available — without adding budget on top of actual.
   let conservativeMonthlySpendingNpr: number | null = null;
   const planned = finiteOrNull(input.plannedEssentialMonthlyNpr);
   if (actualMonthlyTotalExpensesNpr != null && actualMonthlyTotalExpensesNpr > 0) {
-    // Do NOT add budget to actual. Use actual total; if planned essential exceeds actual total,
-    // use planned as the conservative ceiling for capacity (same spirit as expense basis MAX).
     conservativeMonthlySpendingNpr =
       planned != null && planned > actualMonthlyTotalExpensesNpr
         ? planned
@@ -344,22 +406,37 @@ export function computeIntelligentEmergencyFund(
     actualMonthlyTotalExpensesNpr != null &&
     actualMonthlyTotalExpensesNpr > monthlyNetIncomeNpr;
 
+  const capacityReliable = dataQuality?.capacityReliable !== false && dataQuality != null
+    ? dataQuality.capacityReliable
+    : dataQuality == null;
+
   let availableContributionCapacityNpr: number | null = null;
-  if (monthlyNetIncomeNpr != null && conservativeMonthlySpendingNpr != null) {
+  if (capacityIncome != null && conservativeMonthlySpendingNpr != null && capacityReliable) {
     availableContributionCapacityNpr = Math.max(
       0,
-      roundMoney(monthlyNetIncomeNpr - conservativeMonthlySpendingNpr - otherCommitted),
+      roundMoney(capacityIncome - conservativeMonthlySpendingNpr - otherCommitted),
+    );
+  } else if (capacityIncome != null && conservativeMonthlySpendingNpr != null) {
+    // Provisional capacity — may still be shown with quality warnings
+    availableContributionCapacityNpr = Math.max(
+      0,
+      roundMoney(capacityIncome - conservativeMonthlySpendingNpr - otherCommitted),
     );
   }
 
   const fullyFunded =
     remainingShortfallNpr != null && remainingShortfallNpr <= 0 && hasSufficientData;
 
+  const suppressContrib = dataQuality?.suppressContributionRecommendations === true;
+  const suppressDates = dataQuality?.suppressCompletionDates === true;
+
   let recommendedMonthlyContributionNpr: number | null = null;
   let contributionExceedsCapacity = false;
 
   if (fullyFunded) {
     recommendedMonthlyContributionNpr = 0;
+  } else if (suppressContrib) {
+    recommendedMonthlyContributionNpr = null;
   } else if (negativeCashflow) {
     recommendedMonthlyContributionNpr = 0;
   } else if (remainingShortfallNpr != null && availableContributionCapacityNpr != null) {
@@ -375,13 +452,12 @@ export function computeIntelligentEmergencyFund(
       );
       recommendedMonthlyContributionNpr = Math.min(remainingShortfallNpr, fromAllocation);
     }
-  } else if (remainingShortfallNpr != null && remainingShortfallNpr > 0) {
-    recommendedMonthlyContributionNpr = null;
   }
 
   const additionalSavingsRequired =
     !fullyFunded &&
     hasSufficientData &&
+    capacityReliable &&
     (availableContributionCapacityNpr == null || availableContributionCapacityNpr <= 0);
 
   let estimatedMonthsRemaining: number | null = null;
@@ -390,6 +466,9 @@ export function computeIntelligentEmergencyFund(
   if (fullyFunded) {
     estimatedMonthsRemaining = 0;
     estimatedCompletionLabel = "Emergency Fund Fully Funded";
+  } else if (suppressDates) {
+    estimatedMonthsRemaining = null;
+    estimatedCompletionLabel = null;
   } else if (additionalSavingsRequired) {
     estimatedMonthsRemaining = null;
     estimatedCompletionLabel = "Additional savings required";
@@ -402,7 +481,7 @@ export function computeIntelligentEmergencyFund(
     estimatedMonthsRemaining = Math.ceil(
       remainingShortfallNpr / recommendedMonthlyContributionNpr,
     );
-    estimatedCompletionLabel = addMonthsLabel(now, estimatedMonthsRemaining);
+    estimatedCompletionLabel = `Estimate · ${addMonthsLabel(now, estimatedMonthsRemaining)}`;
   }
 
   const currency: CurrencyConversionMeta = input.currency ?? {
@@ -419,6 +498,16 @@ export function computeIntelligentEmergencyFund(
     return `${code} ${roundMoney(n).toLocaleString("en-IN")}`;
   };
 
+  const milestones = buildSafetyMilestones(basisNpr, currentReserveNpr);
+  const fundingPlans = buildFundingPlans({
+    remainingShortfallNpr,
+    availableContributionCapacityNpr: capacityReliable
+      ? availableContributionCapacityNpr
+      : null,
+    capacityReliable,
+    customDeadlineMonths: input.fundingDeadlineMonths,
+  });
+
   const insights = hasSufficientData
     ? buildInsights({
         safetyRunwayMonths,
@@ -430,18 +519,23 @@ export function computeIntelligentEmergencyFund(
         actualEssentialMonthlyAvgNpr: finiteOrNull(input.actualEssentialMonthlyAvgNpr),
         plannedEssentialMonthlyNpr: finiteOrNull(input.plannedEssentialMonthlyNpr),
         protectionMonths,
-        currencyCode: currency.baseCurrency,
+        dataQuality,
         formatAmount,
+        capacityReliable,
       })
     : [
         {
           id: "onboarding",
           tone: "info" as const,
+          priority: 1,
+          titleEn: "Connect finance data",
+          titleNe: "वित्त डाटा जोड्नुहोस्",
+          titleKo: "재무 데이터 연결",
           messageEn:
-            "Add income, expenses, or a budget so we can size your emergency fund automatically.",
+            "Add income, expenses, or a budget for the selected period so we can size your emergency fund.",
           messageNe:
-            "आपतकालीन कोष स्वचालित रूपमा गणना गर्न आय, खर्च वा बजेट थप्नुहोस्।",
-          messageKo: "비상금을 자동으로 산정하려면 소득, 지출 또는 예산을 추가하세요.",
+            "चयन अवधिमा आपतकालीन कोष गणना गर्न आय, खर्च वा बजेट थप्नुहोस्।",
+          messageKo: "선택한 기간의 비상금 산정을 위해 소득·지출·예산을 추가하세요.",
           href: "/cashflow-dashboard",
         },
       ];
@@ -451,7 +545,11 @@ export function computeIntelligentEmergencyFund(
     dataSource,
     dataSourceLabel: labelForDataSource(dataSource),
     calculationPeriodLabel: input.analysisPeriodLabel ?? null,
+    incomePeriodLabel: input.incomePeriodLabel ?? input.analysisPeriodLabel ?? null,
+    expensePeriodLabel: input.expensePeriodLabel ?? input.analysisPeriodLabel ?? null,
+    essentialAveragingLabel: input.essentialAveragingLabel ?? null,
     lastUpdatedAt: input.lastUpdatedAt ?? now.toISOString(),
+    lastSyncedAt: input.lastSyncedAt ?? null,
 
     actualEssentialMonthlyAvgNpr: finiteOrNull(input.actualEssentialMonthlyAvgNpr),
     plannedEssentialMonthlyNpr: finiteOrNull(input.plannedEssentialMonthlyNpr),
@@ -470,6 +568,7 @@ export function computeIntelligentEmergencyFund(
     safetyStatus,
 
     monthlyNetIncomeNpr,
+    recurringMonthlyIncomeNpr,
     actualMonthlyTotalExpensesNpr,
     actualMonthlySavingsNpr,
     conservativeMonthlySpendingNpr,
@@ -478,18 +577,22 @@ export function computeIntelligentEmergencyFund(
     recommendedMonthlyContributionNpr,
     contributionExceedsCapacity,
     negativeCashflow,
+    capacityReliable,
 
     estimatedMonthsRemaining,
     estimatedCompletionLabel,
     fullyFunded,
     additionalSavingsRequired,
 
+    dataQuality,
+    milestones,
+    fundingPlans,
+
     insights,
     currency,
   };
 }
 
-/** Sync displayed reserve into cashflow.emergencyCashReserve SoT. */
 export function deriveEmergencyCashReserveFromLedger(
   ledger: EmergencyFundLedger | null | undefined,
   linkedSavingsBalanceNpr = 0,

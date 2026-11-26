@@ -5,6 +5,7 @@
 import {
   defaultEmergencyFundLedger,
   defaultEmergencyFundSettings,
+  DEFAULT_PERIOD_MODE,
   type EmergencyFundLedger,
   type EmergencyFundSettings,
   type EmergencyFundTransaction,
@@ -13,6 +14,7 @@ import {
   type EmergencyIncomeSources,
 } from "@/lib/emergency-fund/types";
 import { deriveEmergencyCashReserveFromLedger } from "@/lib/emergency-fund/intelligent-engine";
+import type { EmergencyPeriodMode } from "@/lib/emergency-fund/period";
 import type { FinanceCategoryId } from "@/lib/finance/categories";
 
 const KNOWN_FINANCE_CATEGORY_IDS = new Set([
@@ -32,6 +34,14 @@ const KNOWN_FINANCE_CATEGORY_IDS = new Set([
   "Entertainment",
   "Gifts",
   "Other",
+]);
+
+const PERIOD_MODES = new Set<EmergencyPeriodMode>([
+  "latest_completed",
+  "current_partial",
+  "last_3_completed",
+  "last_6_completed",
+  "custom",
 ]);
 
 function finiteNonNeg(n: unknown): number {
@@ -143,6 +153,31 @@ function sanitizeSettings(raw: unknown, fallbackOpening = 0): EmergencyFundSetti
       o.customContributionNpr >= 0
         ? Math.round(o.customContributionNpr)
         : undefined,
+    periodMode: PERIOD_MODES.has(o.periodMode as EmergencyPeriodMode)
+      ? (o.periodMode as EmergencyPeriodMode)
+      : DEFAULT_PERIOD_MODE,
+    customPeriodStartMonth:
+      typeof o.customPeriodStartMonth === "string" && /^\d{4}-\d{2}$/.test(o.customPeriodStartMonth)
+        ? o.customPeriodStartMonth
+        : undefined,
+    customPeriodEndMonth:
+      typeof o.customPeriodEndMonth === "string" && /^\d{4}-\d{2}$/.test(o.customPeriodEndMonth)
+        ? o.customPeriodEndMonth
+        : undefined,
+    fundingDeadlineMonths:
+      typeof o.fundingDeadlineMonths === "number" &&
+      Number.isFinite(o.fundingDeadlineMonths) &&
+      o.fundingDeadlineMonths >= 1
+        ? Math.round(o.fundingDeadlineMonths)
+        : undefined,
+    growthChartMonths:
+      o.growthChartMonths === 3 ||
+      o.growthChartMonths === 6 ||
+      o.growthChartMonths === 12 ||
+      o.growthChartMonths === 24
+        ? o.growthChartMonths
+        : 12,
+    lastSyncedAt: typeof o.lastSyncedAt === "string" ? o.lastSyncedAt : undefined,
     lastUpdatedAt:
       typeof o.lastUpdatedAt === "string" ? o.lastUpdatedAt : new Date().toISOString(),
   };
@@ -235,21 +270,37 @@ export function syncReserveFromLedger(
   return deriveEmergencyCashReserveFromLedger(ledger, linkedSavingsBalanceNpr);
 }
 
-/** Growth series from opening + chronological transactions (oldest → newest). */
+export type GrowthSeriesPoint = {
+  date: string;
+  reserve: number | null;
+  projection: number | null;
+  label: string;
+  kind: "actual" | "projection";
+};
+
+/** Actual history + optional future projection (dashed in UI). Never fabricates past balances. */
 export function buildReserveGrowthSeries(
   ledger: EmergencyFundLedger,
   linkedSavingsBalanceNpr = 0,
-): Array<{ date: string; reserve: number; label: string }> {
+  options: {
+    targetNpr?: number | null;
+    monthlyContributionNpr?: number | null;
+    chartMonths?: number;
+  } = {},
+): GrowthSeriesPoint[] {
   const sorted = [...ledger.transactions]
     .filter((t) => t.confirmed !== false)
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
 
   let running = finiteNonNeg(ledger.settings.openingBalanceNpr);
-  const points: Array<{ date: string; reserve: number; label: string }> = [
+  const today = new Date().toISOString().slice(0, 10);
+  const points: GrowthSeriesPoint[] = [
     {
-      date: sorted[0]?.date ?? new Date().toISOString().slice(0, 10),
+      date: sorted[0]?.date ?? today,
       reserve: running,
+      projection: null,
       label: "Opening",
+      kind: "actual",
     },
   ];
 
@@ -259,21 +310,81 @@ export function buildReserveGrowthSeries(
     points.push({
       date: tx.date,
       reserve: running,
+      projection: null,
       label: tx.type === "contribution" ? "Contribution" : "Withdrawal",
+      kind: "actual",
     });
   }
 
+  let actual = points;
   if (ledger.settings.reserveMode === "linked") {
-    return [
+    actual = [
       {
-        date: new Date().toISOString().slice(0, 10),
+        date: today,
         reserve: linkedSavingsBalanceNpr,
+        projection: null,
         label: "Linked",
+        kind: "actual",
       },
     ];
+  } else if (ledger.settings.reserveMode === "hybrid") {
+    actual = points.map((p) => ({
+      ...p,
+      reserve: (p.reserve ?? 0) + linkedSavingsBalanceNpr,
+    }));
   }
-  if (ledger.settings.reserveMode === "hybrid") {
-    return points.map((p) => ({ ...p, reserve: p.reserve + linkedSavingsBalanceNpr }));
+
+  const current = actual[actual.length - 1]?.reserve ?? 0;
+  const monthly = options.monthlyContributionNpr;
+  const target = options.targetNpr;
+  const months = Math.max(3, Math.min(24, options.chartMonths ?? 12));
+
+  if (monthly != null && monthly > 0 && target != null && target > current) {
+    // Bridge: last actual point also seeds projection line
+    const bridged = actual.map((p) => ({ ...p, projection: p.reserve }));
+    let proj = current;
+    for (let i = 1; i <= months; i += 1) {
+      proj = Math.min(target, proj + monthly);
+      const d = new Date();
+      d.setMonth(d.getMonth() + i);
+      bridged.push({
+        date: d.toISOString().slice(0, 10),
+        reserve: null,
+        projection: proj,
+        label: `Proj M${i}`,
+        kind: "projection",
+      });
+      if (proj >= target) break;
+    }
+    return bridged;
   }
-  return points;
+
+  return actual;
+}
+
+export function reverseEmergencyTransaction(
+  ledger: EmergencyFundLedger,
+  transactionId: string,
+): EmergencyFundLedger {
+  const tx = ledger.transactions.find((t) => t.id === transactionId);
+  if (!tx || tx.confirmed === false) return ledger;
+  const reversalType = tx.type === "contribution" ? "withdrawal" : "contribution";
+  const note = `Reversal of ${tx.id}${tx.note ? ` (${tx.note})` : ""}`;
+  const nextTx: EmergencyFundTransaction = {
+    id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `ef-rev-${Date.now()}`,
+    type: reversalType,
+    amountNpr: tx.amountNpr,
+    date: new Date().toISOString().slice(0, 10),
+    note: note.slice(0, 500),
+    createdAt: new Date().toISOString(),
+    confirmed: true,
+  };
+  return {
+    ...ledger,
+    settings: { ...ledger.settings, lastUpdatedAt: new Date().toISOString() },
+    transactions: [nextTx, ...ledger.transactions],
+  };
 }

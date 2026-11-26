@@ -277,48 +277,27 @@ describe("safety classification", () => {
 });
 
 describe("multi-currency conversion", () => {
-  it("flags incomplete rates and does not invent 1:1 KRW conversion", () => {
-    const { slices, incompleteConversion } = buildMonthlyEssentialSlices(
+  it("treats stored expense amounts as NPR and does not convert again", () => {
+    const { slices, hasNonNprEntryMetadata } = buildMonthlyEssentialSlices(
       [
+        // amount already NPR; amountCurrency is entry metadata only
         { amount: 100_000, date: "2026-09-10", category: "Rent", amountCurrency: "KRW" },
         { amount: 20_000, date: "2026-09-12", category: "Food", amountCurrency: "NPR" },
       ],
-      {
-        now: new Date("2026-11-15"),
-        rates: {
-          baseCurrency: "NPR",
-          krwPerNpr: null,
-          usdPerNpr: null,
-          rateUpdatedAt: null,
-          incomplete: false,
-          stale: false,
-        },
-      },
+      { now: new Date("2026-11-15"), monthKeys: ["2026-09"] },
     );
-    assert.equal(incompleteConversion, true);
+    assert.equal(hasNonNprEntryMetadata, true);
     const sep = slices.find((s) => s.monthKey === "2026-09");
-    assert.equal(sep?.essentialTotalNpr, 20_000);
+    assert.equal(sep?.essentialTotalNpr, 120_000);
   });
 
-  it("converts KRW with provided rate before aggregation", () => {
-    const { slices, incompleteConversion } = buildMonthlyEssentialSlices(
-      [{ amount: 92_700, date: "2026-08-05", category: "Rent", amountCurrency: "KRW" }],
-      {
-        now: new Date("2026-11-15"),
-        rates: {
-          baseCurrency: "NPR",
-          krwPerNpr: 9.27,
-          usdPerNpr: 0.0075,
-          rateUpdatedAt: "2026-11-01T00:00:00Z",
-          incomplete: false,
-          stale: false,
-        },
-      },
+  it("does not invent 1:1 FX when aggregating NPR-stored amounts", () => {
+    const { slices } = buildMonthlyEssentialSlices(
+      [{ amount: 10_000, date: "2026-08-05", category: "Rent", amountCurrency: "KRW" }],
+      { now: new Date("2026-11-15"), monthKeys: ["2026-08"] },
     );
-    assert.equal(incompleteConversion, false);
     const aug = slices.find((s) => s.monthKey === "2026-08");
-    assert.ok(aug);
-    assert.ok(Math.abs(aug.essentialTotalNpr - 10_000) < 2);
+    assert.equal(aug?.essentialTotalNpr, 10_000);
   });
 });
 

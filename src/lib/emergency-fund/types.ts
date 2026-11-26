@@ -4,11 +4,16 @@
  */
 
 import type { FinanceCategoryId } from "@/lib/finance/categories";
+import type { DataQualityReport } from "@/lib/emergency-fund/data-quality";
+import type { EmergencyPeriodMode } from "@/lib/emergency-fund/period";
+import type { FundingPlanOption } from "@/lib/emergency-fund/funding-plans";
+import type { SafetyMilestone } from "@/lib/emergency-fund/milestones";
 
 export const DEFAULT_PROTECTION_MONTHS = 6;
 export const DEFAULT_ALLOCATION_PCT = 30;
 export const ALLOCATION_PCT_OPTIONS = [10, 20, 30, 50, 75, 100] as const;
 export const PROTECTION_MONTH_OPTIONS = [3, 6, 9, 12] as const;
+export const DEFAULT_PERIOD_MODE: EmergencyPeriodMode = "latest_completed";
 
 /** Categories counted as essential living / mandatory obligations by default. */
 export const ESSENTIAL_FINANCE_CATEGORY_IDS = [
@@ -98,6 +103,16 @@ export type EmergencyFundSettings = {
   includeDiscretionaryCategoryIds?: FinanceCategoryId[];
   /** Custom contribution amount override (takes precedence over allocation %). */
   customContributionNpr?: number;
+  /** Selected calculation period mode. */
+  periodMode?: EmergencyPeriodMode;
+  customPeriodStartMonth?: string;
+  customPeriodEndMonth?: string;
+  /** Deadline-based funding plan months (optional). */
+  fundingDeadlineMonths?: number;
+  /** Chart window for growth history/projection. */
+  growthChartMonths?: 3 | 6 | 12 | 24;
+  /** Last successful cloud/local sync of EF-related finance data (not page render). */
+  lastSyncedAt?: string;
   lastUpdatedAt?: string;
 };
 
@@ -146,9 +161,16 @@ export type EmergencyInsightTone = "positive" | "warning" | "info" | "critical";
 export type EmergencyInsight = {
   id: string;
   tone: EmergencyInsightTone;
+  priority: number;
+  titleEn: string;
+  titleNe: string;
+  titleKo: string;
   messageEn: string;
   messageNe: string;
   messageKo: string;
+  actionEn?: string;
+  actionNe?: string;
+  actionKo?: string;
   href?: string;
 };
 
@@ -157,7 +179,11 @@ export type IntelligentEmergencyFundResult = {
   dataSource: EmergencyDataSource;
   dataSourceLabel: EmergencyDataSourceLabel;
   calculationPeriodLabel: string | null;
+  incomePeriodLabel: string | null;
+  expensePeriodLabel: string | null;
+  essentialAveragingLabel: string | null;
   lastUpdatedAt: string;
+  lastSyncedAt: string | null;
 
   actualEssentialMonthlyAvgNpr: number | null;
   plannedEssentialMonthlyNpr: number | null;
@@ -178,6 +204,7 @@ export type IntelligentEmergencyFundResult = {
   safetyStatus: FinancialSafetyStatus | null;
 
   monthlyNetIncomeNpr: number | null;
+  recurringMonthlyIncomeNpr: number | null;
   actualMonthlyTotalExpensesNpr: number | null;
   actualMonthlySavingsNpr: number | null;
   conservativeMonthlySpendingNpr: number | null;
@@ -186,11 +213,16 @@ export type IntelligentEmergencyFundResult = {
   recommendedMonthlyContributionNpr: number | null;
   contributionExceedsCapacity: boolean;
   negativeCashflow: boolean;
+  capacityReliable: boolean;
 
   estimatedMonthsRemaining: number | null;
   estimatedCompletionLabel: string | null;
   fullyFunded: boolean;
   additionalSavingsRequired: boolean;
+
+  dataQuality: DataQualityReport | null;
+  milestones: SafetyMilestone[];
+  fundingPlans: FundingPlanOption[];
 
   insights: EmergencyInsight[];
   currency: CurrencyConversionMeta;
@@ -205,6 +237,8 @@ export function defaultEmergencyFundSettings(
     openingBalanceNpr: Math.max(0, openingBalanceNpr),
     linkedSavingsGoalIds: [],
     reserveMode: "ledger",
+    periodMode: DEFAULT_PERIOD_MODE,
+    growthChartMonths: 12,
     lastUpdatedAt: new Date().toISOString(),
   };
 }
