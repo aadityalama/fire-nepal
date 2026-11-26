@@ -136,11 +136,10 @@ export function buildEmergencyInsights(input: BuildInsightsInput): EmergencyInsi
     });
   }
 
-  // previousEffective lags only when Budget Planner source records change (dashboard sync).
-  // Normalization / selection-only shifts collapse previous → current, so they never reach here.
-  // Optional budgetPlannerChanged=false hard-blocks the insight for unit tests.
+  // Require an explicit Budget Planner source-data change signal.
+  // Normalization / selection-only shifts must pass budgetPlannerChanged=false (or omit a lagging previous).
   if (
-    input.budgetPlannerChanged !== false &&
+    input.budgetPlannerChanged === true &&
     input.previousEffectiveMonthlyBudgetNpr != null &&
     Number.isFinite(input.previousEffectiveMonthlyBudgetNpr) &&
     input.previousEffectiveMonthlyBudgetNpr > 0

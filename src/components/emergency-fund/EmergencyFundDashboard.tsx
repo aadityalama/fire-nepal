@@ -552,10 +552,20 @@ export function EmergencyFundDashboard() {
     [insurancePayments],
   );
 
+  /**
+   * previousEffective only lags current after a real Budget Planner edit
+   * (normalization/selection-only shifts collapse previous → current in the sync effect).
+   */
   const budgetPlannerChanged = useMemo(() => {
-    if (!settings.lastSeenBudgetPlannerSignature) return false;
-    return settings.lastSeenBudgetPlannerSignature !== plannerSignature;
-  }, [plannerSignature, settings.lastSeenBudgetPlannerSignature]);
+    const previous = settings.previousEffectiveMonthlyBudgetNpr;
+    if (previous == null || !Number.isFinite(previous) || previous <= 0) return false;
+    if (!breakdown.hasBudgetData) return false;
+    return Math.abs(breakdown.effectiveMonthlyBudgetNpr - previous) >= 1;
+  }, [
+    breakdown.effectiveMonthlyBudgetNpr,
+    breakdown.hasBudgetData,
+    settings.previousEffectiveMonthlyBudgetNpr,
+  ]);
 
   const ineligibleEssentialSelections = useMemo(
     () => findIneligibleEssentialSelections(breakdown, settings.essentialRecordIds),

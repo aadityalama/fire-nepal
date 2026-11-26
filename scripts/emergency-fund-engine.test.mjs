@@ -511,6 +511,17 @@ describe("Final normalization — no auto already_included from category/amount"
     });
     assert.equal(blocked.some((i) => i.id === "budget-change"), false);
 
+    const omitted = buildEmergencyInsights({
+      breakdown,
+      core,
+      mode: "full_lifestyle",
+      milestones,
+      fundingPlan: null,
+      upcomingPayments: [],
+      previousEffectiveMonthlyBudgetNpr: 119_000,
+    });
+    assert.equal(omitted.some((i) => i.id === "budget-change"), false);
+
     const allowed = buildEmergencyInsights({
       breakdown,
       core,
