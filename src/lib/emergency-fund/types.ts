@@ -26,6 +26,9 @@ export type YearlyAllocationDecision = {
   updatedAt: string;
 };
 
+/** Whether inclusion came from EF engine heuristics or an explicit user decision. */
+export type ClassificationSource = "automatic" | "user_decision";
+
 export type EmergencyBudgetLine = {
   id: string;
   name: string;
@@ -40,6 +43,10 @@ export type EmergencyBudgetLine = {
   needsReview?: boolean;
   /** Candidate monthly record ids for linking when needsReview is true. */
   reviewCandidateMonthlyIds?: string[];
+  /** Distinguishes heuristic engine labels from explicit user resolutions. */
+  classificationSource?: ClassificationSource;
+  /** True when a same-category monthly amount is within ±1 NPR of yearly/12 (review hint only). */
+  nearAmountMatch?: boolean;
 };
 
 export type NormalizedBudgetBreakdown = {
@@ -84,6 +91,8 @@ export type NormalizedBudgetBreakdown = {
   ambiguousLines: EmergencyBudgetLine[];
   /** Included yearly lines flagged for review (still counted). */
   provisionalLines: EmergencyBudgetLine[];
+  /** Yearly lines whose inclusion reflects an explicit persisted user decision. */
+  userDecisionLines: EmergencyBudgetLine[];
   /** Latest budget record updatedAt (ISO), if any. */
   lastBudgetUpdatedAt: string | null;
   currency: "NPR";
@@ -146,6 +155,11 @@ export type EmergencyFundSettingsState = {
   previousEffectiveMonthlyBudgetNpr: number | null;
   /** Last successfully synced effective monthly budget (for detecting changes). */
   lastSeenEffectiveMonthlyBudgetNpr: number | null;
+  /**
+   * Fingerprint of Budget Planner records last observed.
+   * Smart Insights only report budget increase/decrease when this signature changes.
+   */
+  lastSeenBudgetPlannerSignature: string | null;
 };
 
 export type SafetyMilestone = {

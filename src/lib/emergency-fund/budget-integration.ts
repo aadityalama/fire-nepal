@@ -1,15 +1,14 @@
 /**
  * Normalize Monthly + Yearly Budget Planner records into one Emergency Fund dataset.
  *
- * Canonical rules (Emergency Fund 3.0 audit fix):
+ * Canonical rules (Emergency Fund 3.0 final normalization correction):
  * - Monthly and Yearly rows are independent in `finance_budget_records`.
  * - Monthly dashboard totals do NOT auto-include Yearly monthly equivalents.
- * - Yearly monthly equivalent uses exact `amountNpr / 12` (Budget Planner UI may
- *   store `Math.round(amount/12)` per row — that rounded sum can differ by ~NPR 1).
- * - Independent yearly obligations are INCLUDED unless proven already covered or a
- *   full yearly projection of the monthly set.
- * - Same-category mismatched amounts are included and flagged for review (provisional),
- *   never silently dropped (underestimation is unsafe).
+ * - Yearly monthly equivalent uses exact `amountNpr / 12`.
+ * - Independent yearly obligations are INCLUDED by default.
+ * - Category overlap or near-matching amounts only flag review — never auto-exclude.
+ * - `already_included` / linked status requires an explicit user decision (or a
+ *   verified linkedMonthlyRecordId from that decision). There is no DB source link.
  * - Emergency-category planned contributions are transfers into the reserve, not
  *   protection expenses — excluded from the protection basis.
  */
@@ -61,8 +60,24 @@ function latestUpdatedAt(records: BudgetRecord[]): string | null {
 }
 
 /**
+ * Stable fingerprint of Budget Planner record amounts/periods (not EF rule output).
+ * Used so Smart Insights only report budget changes when planner data actually changed.
+ */
+export function budgetPlannerSignature(records: readonly BudgetRecord[]): string {
+  const parts = records
+    .map((r) => {
+      const amount = finiteNonNeg(r.amountNpr);
+      const monthly = finiteNonNeg(r.monthlyBudgetNpr);
+      return `${r.id}|${r.period}|${r.category}|${amount}|${monthly}|${r.updatedAt ?? ""}`;
+    })
+    .sort();
+  return parts.join(";");
+}
+
+/**
  * Detect whether the yearly set is essentially an annual projection of the monthly set.
  * Uses totals (within 1 NPR) and overlapping categories — not names alone.
+ * This is a full-set projection check, not per-row amount matching.
  */
 function isYearlyProjectionOfMonthly(
   monthlyTotal: number,
@@ -81,29 +96,37 @@ function isYearlyProjectionOfMonthly(
 }
 
 /**
- * A yearly obligation is already funded via a matching monthly allocation when
- * the same normalized category has a monthly line ≈ yearly/12.
+ * Find same-category monthly candidates for review / explicit linking.
+ * Does NOT auto-classify as already_included — category+amount alone is insufficient.
  */
-function findMatchingMonthlyAllocation(
+export function findSameCategoryMonthlyCandidates(
   yearly: BudgetRecord,
   monthlyByCategory: Map<string, BudgetRecord[]>,
-): BudgetRecord | null {
+): { candidates: BudgetRecord[]; nearAmountMatchIds: string[] } {
   const category = normalizeEmergencyFinanceCategory(yearly.category);
-  const candidates = monthlyByCategory.get(category) ?? [];
+  const candidates = (monthlyByCategory.get(category) ?? []).filter(
+    (r) => !isEmergencyFundContributionCategory(r.category),
+  );
   const yearlyMonthly = monthlyEquivalentExact(yearly);
+  const nearAmountMatchIds: string[] = [];
   for (const monthly of candidates) {
-    // Skip emergency contribution lines as "already included" matches.
-    if (isEmergencyFundContributionCategory(monthly.category)) continue;
     const monthlyAmt = monthlyEquivalentExact(monthly);
-    if (approxEqual(monthlyAmt, yearlyMonthly, 1)) return monthly;
+    if (approxEqual(monthlyAmt, yearlyMonthly, 1)) {
+      nearAmountMatchIds.push(monthly.id);
+    }
   }
-  return null;
+  return { candidates, nearAmountMatchIds };
 }
 
 function buildLine(
   record: BudgetRecord,
   inclusion: EmergencyBudgetLine["inclusion"],
-  options: { needsReview?: boolean; reviewCandidateMonthlyIds?: string[] } = {},
+  options: {
+    needsReview?: boolean;
+    reviewCandidateMonthlyIds?: string[];
+    classificationSource?: EmergencyBudgetLine["classificationSource"];
+    nearAmountMatch?: boolean;
+  } = {},
 ): EmergencyBudgetLine {
   return {
     id: record.id,
@@ -117,12 +140,14 @@ function buildLine(
     suggestedEssential: isSuggestedEssential(record.category),
     needsReview: Boolean(options.needsReview),
     reviewCandidateMonthlyIds: options.reviewCandidateMonthlyIds,
+    classificationSource: options.classificationSource ?? "automatic",
+    nearAmountMatch: Boolean(options.nearAmountMatch),
   };
 }
 
 export type NormalizeBudgetOptions = {
   /**
-   * Persisted user resolutions for provisional yearly allocations.
+   * Persisted user resolutions for yearly ↔ monthly relationships.
    * Missing entries default to including the yearly item as a separate obligation.
    */
   yearlyAllocationDecisions?: Readonly<Record<string, YearlyAllocationDecision>>;
@@ -136,7 +161,9 @@ export function normalizeBudgetForEmergencyFund(
   options: NormalizeBudgetOptions = {},
 ): NormalizedBudgetBreakdown {
   const decisions = options.yearlyAllocationDecisions ?? {};
-  const active = records.filter((r) => finiteNonNeg(r.amountNpr) > 0 || finiteNonNeg(r.monthlyBudgetNpr) > 0);
+  const active = records.filter(
+    (r) => finiteNonNeg(r.amountNpr) > 0 || finiteNonNeg(r.monthlyBudgetNpr) > 0,
+  );
   const monthly = active.filter((r) => r.period === "Monthly");
   const yearly = active.filter((r) => r.period === "Yearly");
 
@@ -144,7 +171,6 @@ export function normalizeBudgetForEmergencyFund(
   const yearlyBudgetTotalNpr = yearly.reduce((sum, r) => sum + finiteNonNeg(r.amountNpr), 0);
   const annualMonthlyEquivalentNpr = yearly.reduce((sum, r) => sum + monthlyEquivalentExact(r), 0);
 
-  // Rounded Budget Planner monthly equivalents (for explaining ~NPR 1 display drift).
   const roundedAnnualMonthlyEquivalentNpr = yearly.reduce(
     (sum, r) => sum + Math.round(finiteNonNeg(r.amountNpr) / 12),
     0,
@@ -155,9 +181,10 @@ export function normalizeBudgetForEmergencyFund(
       .filter((r) => !isEmergencyFundContributionCategory(r.category))
       .map((r) => normalizeEmergencyFinanceCategory(r.category)),
   );
-  const yearlyCategories = new Set(yearly.map((r) => normalizeEmergencyFinanceCategory(r.category)));
+  const yearlyCategories = new Set(
+    yearly.map((r) => normalizeEmergencyFinanceCategory(r.category)),
+  );
 
-  // Projection detection uses non-contribution monthly total.
   const monthlyForProjection = monthly
     .filter((r) => !isEmergencyFundContributionCategory(r.category))
     .reduce((sum, r) => sum + monthlyEquivalentExact(r), 0);
@@ -183,72 +210,88 @@ export function normalizeBudgetForEmergencyFund(
   let yearlyProjectionDuplicateNpr = 0;
   let additionalAnnualMonthlyAllocationsNpr = 0;
   const provisionalLines: EmergencyBudgetLine[] = [];
+  const userDecisionLines: EmergencyBudgetLine[] = [];
 
   for (const record of monthly) {
     if (isEmergencyFundContributionCategory(record.category)) {
-      const line = buildLine(record, "emergency_contribution");
+      const line = buildLine(record, "emergency_contribution", {
+        classificationSource: "automatic",
+      });
       allLines.push(line);
       emergencyFundContributionExcludedNpr += line.monthlyEquivalentNpr;
       continue;
     }
-    allLines.push(buildLine(record, "included"));
+    allLines.push(buildLine(record, "included", { classificationSource: "automatic" }));
   }
 
   for (const record of yearly) {
     const monthlyEq = monthlyEquivalentExact(record);
 
     if (isEmergencyFundContributionCategory(record.category)) {
-      const line = buildLine(record, "emergency_contribution");
+      const line = buildLine(record, "emergency_contribution", {
+        classificationSource: "automatic",
+      });
       allLines.push(line);
       emergencyFundContributionExcludedNpr += monthlyEq;
       continue;
     }
 
     if (projectionDuplicate) {
-      const line = buildLine(record, "projection_duplicate");
+      const line = buildLine(record, "projection_duplicate", {
+        classificationSource: "automatic",
+      });
       allLines.push(line);
       yearlyProjectionDuplicateNpr += monthlyEq;
       continue;
     }
 
-    const match = findMatchingMonthlyAllocation(record, monthlyByCategory);
-    if (match) {
-      const line = buildLine(record, "already_included");
-      allLines.push(line);
-      annualAllocationsAlreadyIncludedNpr += monthlyEq;
-      continue;
-    }
-
-    const category = normalizeEmergencyFinanceCategory(record.category);
-    const sameCategoryMonthly = (monthlyByCategory.get(category) ?? []).filter(
-      (r) => !isEmergencyFundContributionCategory(r.category),
+    const { candidates, nearAmountMatchIds } = findSameCategoryMonthlyCandidates(
+      record,
+      monthlyByCategory,
     );
-    const candidateIds = sameCategoryMonthly.map((r) => r.id);
+    const candidateIds = candidates.map((r) => r.id);
     const decision = decisions[record.id];
 
-    // User confirmed the yearly amount is already represented monthly / linked.
+    // Explicit user decision only — never auto-exclude from category/amount heuristics.
     if (
       decision?.resolution === "already_included" ||
       decision?.resolution === "linked"
     ) {
+      const linkedId =
+        decision.resolution === "linked" && decision.linkedMonthlyRecordId
+          ? decision.linkedMonthlyRecordId
+          : nearAmountMatchIds[0] ?? candidateIds[0] ?? null;
       const line = buildLine(record, "already_included", {
+        classificationSource: "user_decision",
         reviewCandidateMonthlyIds: candidateIds,
+        nearAmountMatch: nearAmountMatchIds.length > 0,
       });
+      // Preserve verified link id on the decision path (surfaced via candidates).
+      if (linkedId && !line.reviewCandidateMonthlyIds?.includes(linkedId)) {
+        line.reviewCandidateMonthlyIds = [linkedId, ...(line.reviewCandidateMonthlyIds ?? [])];
+      }
       allLines.push(line);
+      userDecisionLines.push(line);
       annualAllocationsAlreadyIncludedNpr += monthlyEq;
       continue;
     }
 
     // Default and explicit "separate": INCLUDE independent annual obligations.
-    // Category overlap alone is never enough to drop them.
     const needsReview =
-      decision?.resolution !== "separate" && sameCategoryMonthly.length > 0;
+      decision?.resolution !== "separate" &&
+      (candidates.length > 0 || nearAmountMatchIds.length > 0);
     const line = buildLine(record, "included", {
       needsReview,
       reviewCandidateMonthlyIds: candidateIds,
+      classificationSource:
+        decision?.resolution === "separate" ? "user_decision" : "automatic",
+      nearAmountMatch: nearAmountMatchIds.length > 0,
     });
     allLines.push(line);
     additionalAnnualMonthlyAllocationsNpr += monthlyEq;
+    if (decision?.resolution === "separate") {
+      userDecisionLines.push(line);
+    }
     if (needsReview) provisionalLines.push(line);
   }
 
@@ -258,7 +301,6 @@ export function normalizeBudgetForEmergencyFund(
     emergencyFundContributionExcludedNpr +
     additionalAnnualMonthlyAllocationsNpr;
 
-  // Legacy alias: effective monthly before mode selection = total normalized protection pool.
   const effectiveMonthlyBudgetNpr = totalNormalizedBudgetNpr;
 
   const protectionEligibleLines = allLines.filter((line) => line.inclusion === "included");
@@ -286,21 +328,21 @@ export function normalizeBudgetForEmergencyFund(
     allLines,
     ambiguousLines: provisionalLines,
     provisionalLines,
+    userDecisionLines,
     lastBudgetUpdatedAt: latestUpdatedAt(active),
     currency: "NPR",
   };
 }
 
 export type ResolveProtectionBasisOptions = {
-  /** Essential Survival: selected protection-eligible record ids. */
   essentialRecordIds?: readonly string[];
-  /** Full Lifestyle: optional explicit user exclusions from the eligible set. */
   excludedRecordIds?: readonly string[];
 };
 
 /**
  * Monthly protection basis for the selected mode.
  * Essential and Full Lifestyle both select from the same protection-eligible dataset.
+ * Linked / already_included yearly lines are not eligible (counted via monthly side only).
  */
 export function resolveMonthlyProtectionBasis(
   breakdown: NormalizedBudgetBreakdown,
@@ -339,7 +381,6 @@ export function resolveMonthlyProtectionBasis(
   }
 
   const selected = new Set(essentialRecordIds);
-  // Only protection-eligible ids count — never emergency_contribution / already_included / projection.
   const selectedLines = eligible.filter((line) => selected.has(line.id));
   const excludedLines = eligible.filter((line) => !selected.has(line.id));
   const essentialSelectedBudgetNpr = selectedLines.reduce(
@@ -363,6 +404,28 @@ export function resolveMonthlyProtectionBasis(
 export function defaultEssentialRecordIds(breakdown: NormalizedBudgetBreakdown): string[] {
   const eligible = breakdown.protectionEligibleLines ?? breakdown.includedLines;
   return eligible.filter((line) => line.suggestedEssential).map((line) => line.id);
+}
+
+/**
+ * Previously selected essential ids that are no longer protection-eligible.
+ * IDs are preserved in settings; this surfaces a warning instead of silent removal.
+ */
+export function findIneligibleEssentialSelections(
+  breakdown: NormalizedBudgetBreakdown,
+  essentialRecordIds: readonly string[],
+): EmergencyBudgetLine[] {
+  if (essentialRecordIds.length === 0) return [];
+  const eligibleIds = new Set(
+    (breakdown.protectionEligibleLines ?? breakdown.includedLines).map((l) => l.id),
+  );
+  const byId = new Map(breakdown.allLines.map((l) => [l.id, l]));
+  const out: EmergencyBudgetLine[] = [];
+  for (const id of essentialRecordIds) {
+    if (eligibleIds.has(id)) continue;
+    const line = byId.get(id);
+    if (line) out.push(line);
+  }
+  return out;
 }
 
 /** Planned monthly Emergency Fund contribution implied by budget (never auto-posts reserve). */

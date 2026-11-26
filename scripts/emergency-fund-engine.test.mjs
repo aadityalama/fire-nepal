@@ -6,6 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  budgetPlannerSignature,
+  findIneligibleEssentialSelections,
   normalizeBudgetForEmergencyFund,
   plannedEmergencyContributionFromBudget,
   resolveMonthlyProtectionBasis,
@@ -19,7 +21,9 @@ import {
   computeDeadlineFundingPlan,
   computeEmergencyFundCore,
   computeMonthlyFundingPlan,
+  computeSafetyMilestones,
 } from "../src/lib/emergency-fund/calculations.ts";
+import { buildEmergencyInsights } from "../src/lib/emergency-fund/insights.ts";
 import { runEmergencySimulation } from "../src/lib/emergency-fund/simulator.ts";
 import { computeEmergencyFundPlan } from "../src/lib/emergency-fund-plan.ts";
 import { defaultCashflowState } from "../src/components/cashflow/cashflow-storage.ts";
@@ -231,15 +235,31 @@ describe("Audit Case C — Essential Only exact basis", () => {
 });
 
 describe("Audit Case D — already included annual allocations", () => {
-  it("does not re-add yearly premium when monthly allocation matches yearly/12", () => {
-    const breakdown = normalizeBudgetForEmergencyFund([
+  it("near-matching yearly/12 alone still includes yearly; only user decision excludes", () => {
+    const records = [
       budget({ id: "m-ins", category: "Insurance", period: "Monthly", amountNpr: 10_000 }),
       budget({ id: "m-rent", category: "Rent", period: "Monthly", amountNpr: 50_000 }),
       budget({ id: "y-ins", category: "Insurance", period: "Yearly", amountNpr: 120_000 }),
-    ]);
-    assert.equal(breakdown.annualAllocationsAlreadyIncludedNpr, 10_000);
-    assert.equal(breakdown.additionalAnnualMonthlyAllocationsNpr, 0);
-    assert.equal(breakdown.totalNormalizedBudgetNpr, 60_000);
+    ];
+    const auto = normalizeBudgetForEmergencyFund(records);
+    // Category + amount match is review-only — yearly stays in Additional Annual.
+    assert.equal(auto.annualAllocationsAlreadyIncludedNpr, 0);
+    assert.equal(auto.additionalAnnualMonthlyAllocationsNpr, 10_000);
+    assert.equal(auto.totalNormalizedBudgetNpr, 70_000);
+    assert.equal(auto.isProvisional, true);
+
+    const decided = normalizeBudgetForEmergencyFund(records, {
+      yearlyAllocationDecisions: {
+        "y-ins": {
+          resolution: "already_included",
+          linkedMonthlyRecordId: "m-ins",
+          updatedAt: "2026-11-26T00:00:00.000Z",
+        },
+      },
+    });
+    assert.equal(decided.annualAllocationsAlreadyIncludedNpr, 10_000);
+    assert.equal(decided.additionalAnnualMonthlyAllocationsNpr, 0);
+    assert.equal(decided.totalNormalizedBudgetNpr, 60_000);
   });
 });
 
@@ -347,6 +367,175 @@ describe("Provisional same-category yearly is included, not dropped", () => {
     );
     approx(resolved.additionalAnnualMonthlyAllocationsNpr, 10_500);
     assert.equal(resolved.isProvisional, false);
+  });
+});
+
+describe("Final normalization — no auto already_included from category/amount", () => {
+  const fixtureIndependent = () => [
+    budget({ id: "living", category: "Housing", period: "Monthly", amountNpr: 86_074 }),
+    budget({ id: "ins-m", category: "Insurance", period: "Monthly", amountNpr: 10_500 }),
+    budget({ id: "edu-m", category: "Education", period: "Monthly", amountNpr: 7_500 }),
+    budget({ id: "tax-m", category: "Taxes", period: "Monthly", amountNpr: 4_926 }),
+    budget({ id: "ef", category: "Emergency", period: "Monthly", amountNpr: 10_000 }),
+    budget({ id: "ins-y", name: "Life insurance", category: "Insurance", period: "Yearly", amountNpr: 125_994 }),
+    budget({ id: "edu-y", name: "School admission", category: "Education", period: "Yearly", amountNpr: 90_000 }),
+    budget({ id: "tax-y", name: "Annual tax", category: "Taxes", period: "Yearly", amountNpr: 59_115 }),
+  ];
+
+  it("includes near-matching yearly amounts instead of auto already_included", () => {
+    const breakdown = normalizeBudgetForEmergencyFund(fixtureIndependent());
+    approx(breakdown.grossMonthlyBudgetNpr, 119_000);
+    approx(breakdown.yearlyBudgetTotalNpr, 275_109);
+    approx(breakdown.annualMonthlyEquivalentNpr, 22_925.75);
+    approx(breakdown.additionalAnnualMonthlyAllocationsNpr, 22_925.75);
+    assert.equal(breakdown.annualAllocationsAlreadyIncludedNpr, 0);
+    approx(breakdown.emergencyFundContributionExcludedNpr, 10_000);
+    approx(breakdown.totalNormalizedBudgetNpr, 131_925.75);
+    assert.equal(breakdown.isProvisional, true);
+    assert.ok(breakdown.provisionalLines.every((l) => l.nearAmountMatch));
+    assert.ok(
+      breakdown.allLines
+        .filter((l) => l.period === "Yearly")
+        .every((l) => l.inclusion === "included" && l.classificationSource === "automatic"),
+    );
+
+    const full = resolveMonthlyProtectionBasis(breakdown, "full_lifestyle", []);
+    approx(full.finalMonthlyProtectionBasisNpr, 131_925.75);
+
+    const three = computeEmergencyFundCore({
+      monthlyProtectionBasisNpr: full.finalMonthlyProtectionBasisNpr,
+      protectionMonths: 3,
+      designatedReserveNpr: 140_000,
+    });
+    approx(three.emergencyFundTargetNpr, 395_777.25);
+    approx(three.remainingShortfallNpr, 255_777.25);
+    approx(three.fundingProgressPct ?? 0, 35.37, 0.02);
+  });
+
+  it("allows yearly insurance in Essential Only from the same eligible set", () => {
+    const breakdown = normalizeBudgetForEmergencyFund(fixtureIndependent());
+    const essential = resolveMonthlyProtectionBasis(breakdown, "essential_survival", [
+      "ins-m",
+      "edu-m",
+      "ins-y",
+    ]);
+    // 10500 + 7500 + 10499.5
+    approx(essential.finalMonthlyProtectionBasisNpr, 28_499.5);
+    assert.ok(essential.selectedLines.some((l) => l.id === "ins-y"));
+  });
+
+  it("honors explicit linked decisions and counts yearly once", () => {
+    const breakdown = normalizeBudgetForEmergencyFund(fixtureIndependent(), {
+      yearlyAllocationDecisions: {
+        "ins-y": {
+          resolution: "linked",
+          linkedMonthlyRecordId: "ins-m",
+          updatedAt: "2026-11-26T00:00:00.000Z",
+        },
+      },
+    });
+    const insY = breakdown.allLines.find((l) => l.id === "ins-y");
+    assert.equal(insY?.inclusion, "already_included");
+    assert.equal(insY?.classificationSource, "user_decision");
+    approx(breakdown.annualAllocationsAlreadyIncludedNpr, 10_499.5);
+    approx(breakdown.additionalAnnualMonthlyAllocationsNpr, 22_925.75 - 10_499.5);
+    // Linked yearly is not double-counted in Full Lifestyle eligible set.
+    assert.equal(
+      breakdown.protectionEligibleLines.some((l) => l.id === "ins-y"),
+      false,
+    );
+    assert.ok(breakdown.userDecisionLines.some((l) => l.id === "ins-y"));
+  });
+
+  it("preserves essentialRecordIds and warns when a selection becomes ineligible", () => {
+    const records = fixtureIndependent();
+    const open = normalizeBudgetForEmergencyFund(records);
+    const selected = ["ins-y", "edu-y", "living"];
+    assert.equal(findIneligibleEssentialSelections(open, selected).length, 0);
+
+    const closed = normalizeBudgetForEmergencyFund(records, {
+      yearlyAllocationDecisions: {
+        "ins-y": {
+          resolution: "already_included",
+          updatedAt: "2026-11-26T00:00:00.000Z",
+        },
+      },
+    });
+    const ineligible = findIneligibleEssentialSelections(closed, selected);
+    assert.equal(ineligible.length, 1);
+    assert.equal(ineligible[0].id, "ins-y");
+    // Selection list itself is unchanged by the helper — caller keeps settings intact.
+    assert.deepEqual(selected, ["ins-y", "edu-y", "living"]);
+  });
+
+  it("treats decision reset (missing entry) as independent included again", () => {
+    const records = fixtureIndependent();
+    const withDecision = normalizeBudgetForEmergencyFund(records, {
+      yearlyAllocationDecisions: {
+        "ins-y": {
+          resolution: "already_included",
+          updatedAt: "2026-11-26T00:00:00.000Z",
+        },
+      },
+    });
+    assert.ok(withDecision.annualAllocationsAlreadyIncludedNpr > 0);
+
+    const reset = normalizeBudgetForEmergencyFund(records, {
+      yearlyAllocationDecisions: {},
+    });
+    approx(reset.additionalAnnualMonthlyAllocationsNpr, 22_925.75);
+    assert.equal(reset.annualAllocationsAlreadyIncludedNpr, 0);
+    assert.equal(reset.allLines.find((l) => l.id === "ins-y")?.inclusion, "included");
+  });
+
+  it("does not emit budget decrease insight for normalization-only deltas", () => {
+    const breakdown = normalizeBudgetForEmergencyFund(fixtureIndependent());
+    const core = computeEmergencyFundCore({
+      monthlyProtectionBasisNpr: breakdown.totalNormalizedBudgetNpr,
+      protectionMonths: 3,
+      designatedReserveNpr: 140_000,
+    });
+    const milestones = computeSafetyMilestones(
+      breakdown.totalNormalizedBudgetNpr,
+      140_000,
+    );
+    const blocked = buildEmergencyInsights({
+      breakdown,
+      core,
+      mode: "full_lifestyle",
+      milestones,
+      fundingPlan: null,
+      upcomingPayments: [],
+      previousEffectiveMonthlyBudgetNpr: 119_000,
+      budgetPlannerChanged: false,
+    });
+    assert.equal(blocked.some((i) => i.id === "budget-change"), false);
+
+    const allowed = buildEmergencyInsights({
+      breakdown,
+      core,
+      mode: "full_lifestyle",
+      milestones,
+      fundingPlan: null,
+      upcomingPayments: [],
+      previousEffectiveMonthlyBudgetNpr: 119_000,
+      budgetPlannerChanged: true,
+    });
+    assert.equal(allowed.some((i) => i.id === "budget-change"), true);
+  });
+
+  it("builds a stable budget planner signature for change detection", () => {
+    const a = budgetPlannerSignature(fixtureIndependent());
+    const b = budgetPlannerSignature(fixtureIndependent());
+    assert.equal(a, b);
+    const edited = fixtureIndependent();
+    edited[0] = budget({
+      id: "living",
+      category: "Housing",
+      period: "Monthly",
+      amountNpr: 84_000,
+    });
+    assert.notEqual(budgetPlannerSignature(edited), a);
   });
 });
 

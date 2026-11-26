@@ -21,6 +21,11 @@ export type BuildInsightsInput = {
   fundingPlan: MonthlyFundingPlanResult | null;
   upcomingPayments: UpcomingAnnualPayment[];
   previousEffectiveMonthlyBudgetNpr: number | null;
+  /**
+   * True only when Budget Planner source records changed (ids/amounts/periods).
+   * False for EF normalization rule changes, protection mode, or selection edits.
+   */
+  budgetPlannerChanged?: boolean;
 };
 
 function priorityRank(priority: EmergencyInsight["priority"]): number {
@@ -131,7 +136,11 @@ export function buildEmergencyInsights(input: BuildInsightsInput): EmergencyInsi
     });
   }
 
+  // previousEffective lags only when Budget Planner source records change (dashboard sync).
+  // Normalization / selection-only shifts collapse previous → current, so they never reach here.
+  // Optional budgetPlannerChanged=false hard-blocks the insight for unit tests.
   if (
+    input.budgetPlannerChanged !== false &&
     input.previousEffectiveMonthlyBudgetNpr != null &&
     Number.isFinite(input.previousEffectiveMonthlyBudgetNpr) &&
     input.previousEffectiveMonthlyBudgetNpr > 0
@@ -144,9 +153,9 @@ export function buildEmergencyInsights(input: BuildInsightsInput): EmergencyInsi
         id: "budget-change",
         priority: "funding_shortfall",
         title: delta > 0 ? "Monthly budget increased" : "Monthly budget decreased",
-        body: `Your monthly budget ${delta > 0 ? "increased" : "decreased"} by ${formatEmergencyNpr(
+        body: `Your Budget Planner totals ${delta > 0 ? "increased" : "decreased"} by ${formatEmergencyNpr(
           Math.abs(delta),
-        )}, ${delta > 0 ? "increasing" : "decreasing"} your ${core.protectionMonths}-month emergency fund target by ${formatEmergencyNpr(Math.abs(targetDelta))}.`,
+        )} in the Emergency Fund basis, ${delta > 0 ? "increasing" : "decreasing"} your ${core.protectionMonths}-month emergency fund target by ${formatEmergencyNpr(Math.abs(targetDelta))}.`,
         actionLabel: "Open Budget Planner",
         actionHref: "/budget",
       });

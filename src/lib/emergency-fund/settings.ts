@@ -42,6 +42,7 @@ export function defaultEmergencyFundSettings(): EmergencyFundSettingsState {
     lastSuccessfulSyncAt: null,
     previousEffectiveMonthlyBudgetNpr: null,
     lastSeenEffectiveMonthlyBudgetNpr: null,
+    lastSeenBudgetPlannerSignature: null,
   };
 }
 
@@ -202,6 +203,10 @@ export function sanitizeEmergencyFundSettings(raw: unknown): EmergencyFundSettin
       Number.isFinite(o.lastSeenEffectiveMonthlyBudgetNpr) &&
       o.lastSeenEffectiveMonthlyBudgetNpr >= 0
         ? o.lastSeenEffectiveMonthlyBudgetNpr
+        : null,
+    lastSeenBudgetPlannerSignature:
+      typeof o.lastSeenBudgetPlannerSignature === "string" && o.lastSeenBudgetPlannerSignature.trim()
+        ? o.lastSeenBudgetPlannerSignature
         : null,
   };
 }

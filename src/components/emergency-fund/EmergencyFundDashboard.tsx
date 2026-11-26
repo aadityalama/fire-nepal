@@ -37,7 +37,9 @@ import type { BudgetRecord } from "@/lib/budget/types";
 import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
 import { buildUpcomingAnnualPayments } from "@/lib/emergency-fund/annual-payments";
 import {
+  budgetPlannerSignature,
   defaultEssentialRecordIds,
+  findIneligibleEssentialSelections,
   normalizeBudgetForEmergencyFund,
   plannedEmergencyContributionFromBudget,
   resolveMonthlyProtectionBasis,
@@ -373,6 +375,8 @@ export function EmergencyFundDashboard() {
     setSettings((prev) => ({ ...prev, essentialRecordIds: defaults }));
   }, [breakdown, settings.essentialRecordIds.length, settingsHydrated, setSettings]);
 
+  const plannerSignature = useMemo(() => budgetPlannerSignature(budgets), [budgets]);
+
   useEffect(() => {
     if (!settingsHydrated || budgetLoading) return;
     if (!breakdown.hasBudgetData && budgets.length === 0 && !budgetError) return;
@@ -380,24 +384,45 @@ export function EmergencyFundDashboard() {
     const current = breakdown.hasBudgetData ? breakdown.effectiveMonthlyBudgetNpr : null;
     setSettings((prev) => {
       const lastSeen = prev.lastSeenEffectiveMonthlyBudgetNpr;
-      const changed =
+      const plannerChanged =
+        prev.lastSeenBudgetPlannerSignature != null &&
+        prev.lastSeenBudgetPlannerSignature !== plannerSignature;
+      const effectiveChanged =
         current != null && lastSeen != null && Math.abs(lastSeen - current) >= 1;
-      // Only bump sync timestamp on first mark or when budget basis actually changes.
-      if (syncMarked.current && !changed && prev.lastSuccessfulSyncAt) {
+      // Only bump sync timestamp on first mark, planner edits, or effective basis changes.
+      if (
+        syncMarked.current &&
+        !plannerChanged &&
+        !effectiveChanged &&
+        prev.lastSuccessfulSyncAt
+      ) {
         return prev;
       }
       syncMarked.current = true;
       return {
         ...prev,
         lastSuccessfulSyncAt: nowIso,
-        previousEffectiveMonthlyBudgetNpr: changed
+        // Lag previous effective only for real Budget Planner edits.
+        // Normalization / selection-only shifts collapse previous → current (no false insight).
+        previousEffectiveMonthlyBudgetNpr: plannerChanged
           ? lastSeen
-          : prev.previousEffectiveMonthlyBudgetNpr,
+          : effectiveChanged && current != null
+            ? current
+            : prev.previousEffectiveMonthlyBudgetNpr,
         lastSeenEffectiveMonthlyBudgetNpr:
           current != null ? current : prev.lastSeenEffectiveMonthlyBudgetNpr,
+        lastSeenBudgetPlannerSignature: plannerSignature,
       };
     });
-  }, [budgetError, budgetLoading, budgets.length, breakdown, setSettings, settingsHydrated]);
+  }, [
+    budgetError,
+    budgetLoading,
+    budgets.length,
+    breakdown,
+    plannerSignature,
+    setSettings,
+    settingsHydrated,
+  ]);
 
   const protectionResolved = useMemo(
     () =>
@@ -421,12 +446,25 @@ export function EmergencyFundDashboard() {
   );
 
   const inclusionLabel = useCallback(
-    (line: { inclusion: string; needsReview?: boolean }) => {
+    (line: {
+      inclusion: string;
+      needsReview?: boolean;
+      classificationSource?: string;
+    }) => {
       if (line.inclusion === "emergency_contribution") return copy.inclusionEmergency;
-      if (line.inclusion === "already_included") return copy.inclusionAlready;
-      if (line.inclusion === "projection_duplicate") return copy.inclusionProjection;
+      if (line.inclusion === "already_included") {
+        return line.classificationSource === "user_decision"
+          ? `${copy.inclusionAlready} · ${copy.inclusionUserDecision}`
+          : copy.inclusionAlready;
+      }
+      if (line.inclusion === "projection_duplicate") {
+        return `${copy.inclusionProjection} · ${copy.inclusionAutomatic}`;
+      }
       if (line.inclusion === "excluded") return copy.inclusionExcludedUser;
       if (line.inclusion === "included" && line.needsReview) return copy.inclusionProvisional;
+      if (line.inclusion === "included" && line.classificationSource === "user_decision") {
+        return `${copy.inclusionIncluded} · ${copy.inclusionUserDecision}`;
+      }
       if (line.inclusion === "included") return copy.inclusionIncluded;
       return line.inclusion;
     },
@@ -514,6 +552,16 @@ export function EmergencyFundDashboard() {
     [insurancePayments],
   );
 
+  const budgetPlannerChanged = useMemo(() => {
+    if (!settings.lastSeenBudgetPlannerSignature) return false;
+    return settings.lastSeenBudgetPlannerSignature !== plannerSignature;
+  }, [plannerSignature, settings.lastSeenBudgetPlannerSignature]);
+
+  const ineligibleEssentialSelections = useMemo(
+    () => findIneligibleEssentialSelections(breakdown, settings.essentialRecordIds),
+    [breakdown, settings.essentialRecordIds],
+  );
+
   const insights = useMemo(
     () =>
       buildEmergencyInsights({
@@ -524,9 +572,11 @@ export function EmergencyFundDashboard() {
         fundingPlan: monthlyFunding,
         upcomingPayments,
         previousEffectiveMonthlyBudgetNpr: settings.previousEffectiveMonthlyBudgetNpr,
+        budgetPlannerChanged,
       }),
     [
       breakdown,
+      budgetPlannerChanged,
       core,
       milestones,
       monthlyFunding,
@@ -681,6 +731,16 @@ export function EmergencyFundDashboard() {
         },
       },
     }));
+  };
+
+  /** Reversible reset — removes a persisted yearly allocation decision without touching other settings. */
+  const resetYearlyAllocationDecision = (yearlyId: string) => {
+    setSettings((prev) => {
+      if (!(yearlyId in prev.yearlyAllocationDecisions)) return prev;
+      const next = { ...prev.yearlyAllocationDecisions };
+      delete next[yearlyId];
+      return { ...prev, yearlyAllocationDecisions: next };
+    });
   };
 
   const toggleLinkedGoal = (id: string) => {
@@ -919,36 +979,46 @@ export function EmergencyFundDashboard() {
                   {copy.fullLifestyleNote}
                 </p>
               ) : (
-                <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto">
-                  {protectionResolved.selectedLines.concat(protectionResolved.excludedLines).map((line) => {
-                    const checked = settings.essentialRecordIds.includes(line.id);
-                    return (
-                      <label
-                        key={line.id}
-                        className={`flex items-start justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold ${
-                          light ? "border-emerald-100" : "border-white/8"
-                        }`}
-                      >
-                        <span className="min-w-0 break-words">
-                          <input
-                            type="checkbox"
-                            className="mr-2 align-middle"
-                            checked={checked}
-                            onChange={() => toggleEssential(line.id)}
-                          />
-                          {line.name}
-                          {line.needsReview ? (
-                            <span className="mt-0.5 block text-[10px] font-bold text-amber-200/80">
-                              {copy.inclusionProvisional}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="shrink-0 tabular-nums">
-                          {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)}
-                        </span>
-                      </label>
-                    );
-                  })}
+                <div className="mt-3 space-y-2">
+                  {ineligibleEssentialSelections.length > 0 ? (
+                    <p className="rounded-lg border border-amber-300/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-amber-50">
+                      {copy.ineligibleEssentialWarning}
+                      <span className="mt-1 block opacity-80">
+                        {ineligibleEssentialSelections.map((l) => l.name).join(", ")}
+                      </span>
+                    </p>
+                  ) : null}
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto">
+                    {protectionResolved.selectedLines.concat(protectionResolved.excludedLines).map((line) => {
+                      const checked = settings.essentialRecordIds.includes(line.id);
+                      return (
+                        <label
+                          key={line.id}
+                          className={`flex items-start justify-between gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold ${
+                            light ? "border-emerald-100" : "border-white/8"
+                          }`}
+                        >
+                          <span className="min-w-0 break-words">
+                            <input
+                              type="checkbox"
+                              className="mr-2 align-middle"
+                              checked={checked}
+                              onChange={() => toggleEssential(line.id)}
+                            />
+                            {line.name}
+                            {line.needsReview ? (
+                              <span className="mt-0.5 block text-[10px] font-bold text-amber-200/80">
+                                {copy.inclusionProvisional}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 tabular-nums">
+                            {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               <p className="mt-2 text-sm font-black">
@@ -1144,6 +1214,7 @@ export function EmergencyFundDashboard() {
                       <p className="text-xs font-black break-words">{line.name}</p>
                       <p className="mt-0.5 text-[11px] font-semibold opacity-70">
                         {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)} / mo · {line.category}
+                        {line.nearAmountMatch ? " · near amount match" : ""}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <button
@@ -1176,6 +1247,30 @@ export function EmergencyFundDashboard() {
                   <Link href="/budget" className="inline-flex items-center gap-1 text-[11px] font-black text-lime-200">
                     {copy.reviewBudget} <ExternalLink size={11} />
                   </Link>
+                </div>
+              ) : null}
+              {breakdown.userDecisionLines.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  {breakdown.userDecisionLines.map((line) => (
+                    <div
+                      key={`decision-${line.id}`}
+                      className={`rounded-xl border px-3 py-2.5 ${
+                        light ? "border-emerald-200 bg-emerald-50/80" : "border-white/10 bg-white/[0.04]"
+                      }`}
+                    >
+                      <p className="text-xs font-black break-words">{line.name}</p>
+                      <p className="mt-0.5 text-[11px] font-semibold opacity-70">
+                        {inclusionLabel(line)} · {formatEmergencyNprPrecise(line.monthlyEquivalentNpr)} / mo
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-2 rounded-lg border border-white/15 px-2 py-1 text-[10px] font-black"
+                        onClick={() => resetYearlyAllocationDecision(line.id)}
+                      >
+                        {copy.resetDecision}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               ) : null}
               <div className="mt-3 max-h-56 space-y-1 overflow-y-auto text-[11px]">

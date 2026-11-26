@@ -59,6 +59,10 @@ export type EmergencyFundCopy = {
   resolveSeparate: string;
   resolveAlreadyIncluded: string;
   resolveLinked: string;
+  resetDecision: string;
+  inclusionUserDecision: string;
+  inclusionAutomatic: string;
+  ineligibleEssentialWarning: string;
   calculationProvisional: string;
   calculationVerified: string;
   activePeriod: string;
@@ -147,6 +151,11 @@ const en: EmergencyFundCopy = {
   resolveSeparate: "Separate annual obligation",
   resolveAlreadyIncluded: "Already in monthly budget",
   resolveLinked: "Link to monthly allocation",
+  resetDecision: "Reset review decision",
+  inclusionUserDecision: "User decision",
+  inclusionAutomatic: "Automatic",
+  ineligibleEssentialWarning:
+    "Some previously selected essential items are no longer eligible (for example, marked already included). Your selections were kept — review or reset them.",
   calculationProvisional: "Calculation provisional — unresolved allocations remain",
   calculationVerified: "Budget normalization verified",
   activePeriod: "Active Budget Period",
@@ -227,6 +236,11 @@ const np: EmergencyFundCopy = {
   resolveSeparate: "छुट्टै वार्षिक दायित्व",
   resolveAlreadyIncluded: "मासिक बजेटमा पहिले नै समावेश",
   resolveLinked: "मासिक विनियोजनसँग जोड्नुहोस्",
+  resetDecision: "समीक्षा निर्णय रिसेट गर्नुहोस्",
+  inclusionUserDecision: "प्रयोगकर्ता निर्णय",
+  inclusionAutomatic: "स्वचालित",
+  ineligibleEssentialWarning:
+    "पहिले चयन गरिएका केही आवश्यक वस्तुहरू अब योग्य छैनन्। तपाईंका चयनहरू सुरक्षित छन् — समीक्षा वा रिसेट गर्नुहोस्।",
   calculationProvisional: "गणना अस्थायी — अनसुलझे विनियोजन बाँकी",
   calculationVerified: "बजेट सामान्यीकरण प्रमाणित",
   safetyJourney: "आर्थिक सुरक्षा यात्रा",
@@ -305,6 +319,11 @@ const kr: EmergencyFundCopy = {
   resolveSeparate: "별도 연간 의무",
   resolveAlreadyIncluded: "월간 예산에 이미 포함",
   resolveLinked: "월간 배분에 연결",
+  resetDecision: "검토 결정 초기화",
+  inclusionUserDecision: "사용자 결정",
+  inclusionAutomatic: "자동",
+  ineligibleEssentialWarning:
+    "이전에 선택한 필수 항목 중 일부가 더 이상 적용되지 않습니다. 선택은 유지되었습니다 — 검토하거나 초기화하세요.",
   calculationProvisional: "계산 잠정 — 미해결 배분 남음",
   calculationVerified: "예산 정규화 확인됨",
   safetyJourney: "재무 안전 여정",
