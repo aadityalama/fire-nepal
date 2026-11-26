@@ -1,4 +1,5 @@
 import type { CashflowIncomeTypeId, IncomeFrequency } from "@/lib/cashflow/income-types";
+import type { EmergencyFundLedger } from "@/lib/emergency-fund/types";
 
 /** Monthly cashflow dashboard (separate from portfolio v2 storage). */
 export const CASHFLOW_STATE_VERSION = 1 as const;
@@ -51,4 +52,9 @@ export type CashflowDashboardState = {
    * the sum of expense categories.
    */
   monthlyExpensesOverride: number | undefined;
+  /**
+   * Intelligent Emergency Fund ledger (settings + transactions).
+   * Optional for backward compatibility — when absent, emergencyCashReserve is the SoT balance.
+   */
+  emergencyFund?: EmergencyFundLedger;
 };

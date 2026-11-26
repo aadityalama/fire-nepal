@@ -1,885 +1,1041 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowLeft,
-  CalendarClock,
-  FileDown,
-  Flame,
-  Gauge,
+  Calculator,
+  Link2,
+  MinusCircle,
   PiggyBank,
-  ShieldCheck,
+  PlusCircle,
+  Settings2,
+  Shield,
   Sparkles,
   Target,
-  Users,
-  WalletCards,
-  type LucideIcon,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { monthlyBurn } from "@/components/cashflow/cashflow-metrics";
-import { loadCashflowState } from "@/components/cashflow/cashflow-storage";
 import { EmergencyFundAiSafetyAnalysis } from "@/components/emergency-fund/EmergencyFundAiSafetyAnalysis";
-import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
-import { patchCashflowState } from "@/lib/cashflow/patch-cashflow-cloud";
-import {
-  computeEmergencyFundPlan,
-  DEFAULT_EMERGENCY_FUND_MONTHS,
-} from "@/lib/emergency-fund-plan";
-import {
-  buildEmergencyFundSafetyAnalysis,
-  formatEmergencyMonths,
-  formatEmergencyNpr,
-  runEmergencyFundProjection,
-  type EmergencyRiskProfileKey,
-} from "@/lib/emergency-fund";
-import { downloadEmergencyFundSafetyReportPdf } from "@/lib/emergency-fund-report";
-import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { BackToReturnChecklistBannerSlot } from "@/components/return-to-nepal/BackToReturnChecklistBannerSlot";
+import { SavingsRingProgress } from "@/components/savings-tracker/SavingsRingProgress";
+import { useFireTheme } from "@/contexts/FireThemeContext";
+import { useHomepageLanguage } from "@/contexts/HomepageLanguageContext";
+import { useIntelligentEmergencyFund } from "@/hooks/useIntelligentEmergencyFund";
+import {
+  ALLOCATION_PCT_OPTIONS,
+  PROTECTION_MONTH_OPTIONS,
+} from "@/lib/emergency-fund/types";
+import {
+  getEmergencyFundCopy,
+  localizeDataSourceLabel,
+} from "@/lib/emergency-fund/i18n";
+import { runEmergencyFundProjection } from "@/lib/emergency-fund";
 import { formatMoney } from "@/lib/expense-utils";
 
-function sanitizeDecimalInput(value: string) {
-  const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
-  const dot = cleaned.indexOf(".");
-  if (dot === -1) return cleaned;
-  return `${cleaned.slice(0, dot + 1)}${cleaned.slice(dot + 1).replace(/\./g, "")}`;
+function money(n: number | null | undefined, currency: "NPR" | "KRW" | "USD" = "NPR") {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return formatMoney(n, currency);
 }
 
-function sanitizeIntegerInput(value: string) {
-  return value.replace(/[^\d]/g, "");
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function parseNumber(value: string) {
-  return Math.max(0, Number(value || 0));
-}
-
-function compactNumber(value: number) {
-  if (value >= 10_000_000) return `${(value / 10_000_000).toFixed(1)}Cr`;
-  if (value >= 100_000) return `${(value / 100_000).toFixed(1)}L`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
-  return Math.round(value).toLocaleString("en-US");
-}
-
-/** Map standalone UI toggles onto existing risk profiles — no engine changes. */
-function resolveRiskLevel(
-  stableJob: boolean,
-  dependents: number,
-  returnToNepal: boolean,
-): EmergencyRiskProfileKey {
-  if (returnToNepal) return "high";
-  if (dependents > 0 || !stableJob) return "moderate";
-  return "stable";
-}
-
-function safetyLevelFromReadiness(readiness: number): {
-  label: string;
-  tone: "emerald" | "lime" | "gold" | "dark";
-} {
-  if (readiness >= 90) return { label: "Excellent", tone: "emerald" };
-  if (readiness >= 70) return { label: "Safe", tone: "lime" };
-  if (readiness >= 45) return { label: "Moderate", tone: "gold" };
-  return { label: "Critical", tone: "dark" };
-}
-
-function InputField({
-  label,
-  nepaliLabel,
-  value,
-  onChange,
-  prefix,
-  suffix,
-  inputMode = "decimal",
-}: Readonly<{
-  label: string;
-  nepaliLabel: string;
-  value: string;
-  onChange: (next: string) => void;
-  prefix?: string;
-  suffix?: string;
-  inputMode?: "decimal" | "numeric";
-}>) {
-  return (
-    <label className="block rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_18px_55px_rgba(0,63,47,0.07)] backdrop-blur-xl transition focus-within:border-emerald-300 focus-within:ring-4 focus-within:ring-emerald-100/80">
-      <span className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{label}</span>
-      <span className="font-nepali mt-0.5 block text-[0.72rem] font-semibold text-slate-400">{nepaliLabel}</span>
-      <span className="mt-3 flex items-center gap-2">
-        {prefix ? <span className="text-sm font-black text-emerald-700">{prefix}</span> : null}
-        <input
-          className="min-w-0 flex-1 bg-transparent text-right text-2xl font-black tracking-tight text-emerald-950 outline-none placeholder:text-emerald-200 sm:text-3xl"
-          inputMode={inputMode}
-          value={value}
-          placeholder="0"
-          onChange={(event) => onChange(event.target.value)}
-        />
-        {suffix ? <span className="text-sm font-black text-slate-500">{suffix}</span> : null}
-      </span>
-    </label>
-  );
-}
-
-function ToggleChip({
-  active,
-  onClick,
-  label,
-  nepaliLabel,
-  icon: Icon,
-}: Readonly<{
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  nepaliLabel: string;
-  icon: LucideIcon;
-}>) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex min-h-[72px] flex-col items-start justify-center rounded-2xl border p-3.5 text-left transition ${
-        active
-          ? "border-emerald-400 bg-emerald-50 text-emerald-950 shadow-sm"
-          : "border-white/70 bg-white/70 text-slate-600 hover:border-emerald-200 hover:bg-emerald-50/50"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        <Icon size={16} className={active ? "text-emerald-700" : "text-slate-400"} />
-        <span className="text-sm font-black">{label}</span>
-      </span>
-      <span className="font-nepali mt-1 text-[0.7rem] font-semibold text-slate-500">{nepaliLabel}</span>
-    </button>
-  );
-}
-
-function ResultCard({
-  label,
-  nepaliLabel,
-  value,
-  hint,
-  icon: Icon,
-  tone = "emerald",
-}: Readonly<{
-  label: string;
-  nepaliLabel: string;
-  value: string;
-  hint: string;
-  icon: LucideIcon;
-  tone?: "emerald" | "gold" | "lime" | "dark";
-}>) {
-  const toneClass =
-    tone === "gold"
-      ? "from-amber-400 to-yellow-300 text-amber-950"
-      : tone === "lime"
-        ? "from-lime-300 to-emerald-400 text-emerald-950"
-        : tone === "dark"
-          ? "from-slate-950 to-emerald-900 text-white"
-          : "from-emerald-700 to-emerald-500 text-white";
-
-  return (
-    <motion.article
-      whileHover={{ y: -5, scale: 1.01 }}
-      transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className="group overflow-hidden rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_20px_70px_rgba(0,63,47,0.09)] backdrop-blur-xl sm:p-5"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{label}</p>
-          <p className="font-nepali mt-0.5 text-[0.7rem] font-semibold text-slate-400">{nepaliLabel}</p>
-          <p className="mt-3 text-2xl font-black tracking-tight text-emerald-950 sm:text-3xl">{value}</p>
-          <p className="mt-2 text-sm font-bold leading-snug text-slate-500">{hint}</p>
-        </div>
-        <div
-          className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${toneClass} shadow-lg transition group-hover:scale-105`}
-        >
-          <Icon size={22} />
-        </div>
-      </div>
-    </motion.article>
-  );
+function insightMessage(
+  insight: { messageEn: string; messageNe: string; messageKo: string },
+  language: string,
+) {
+  if (language === "np") return insight.messageNe;
+  if (language === "kr") return insight.messageKo;
+  return insight.messageEn;
 }
 
 export function EmergencyFundDashboard() {
-  const { user, loading: authLoading } = useProductAuth();
-  const uid = user?.id;
-  const [hydrated, setHydrated] = useState(false);
-  const [syncTick, setSyncTick] = useState(0);
-  const [monthlyExpenseRaw, setMonthlyExpenseRaw] = useState("");
-  const [currentFundRaw, setCurrentFundRaw] = useState("0");
-  const [monthlySaveRaw, setMonthlySaveRaw] = useState("0");
-  const [inflationRaw, setInflationRaw] = useState("5.8");
-  const [dependentsRaw, setDependentsRaw] = useState("0");
-  const [stableJob, setStableJob] = useState(true);
-  const [returnToNepal, setReturnToNepal] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const [recommendedMonths, setRecommendedMonths] = useState(DEFAULT_EMERGENCY_FUND_MONTHS);
-  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seededContributionRef = useRef(false);
+  const { resolvedTheme } = useFireTheme();
+  const light = resolvedTheme === "light";
+  const { language } = useHomepageLanguage();
+  const copy = getEmergencyFundCopy(language);
 
-  const bumpSync = useCallback(() => {
-    setSyncTick((tick) => tick + 1);
-  }, []);
+  const {
+    result,
+    ledger,
+    emergencyGoals,
+    growthSeries,
+    loading,
+    budgetsError,
+    recordTransaction,
+    patchSettings,
+    toggleLinkedGoal,
+  } = useIntelligentEmergencyFund();
 
-  const applyCashflowToEditors = useCallback(() => {
-    const cashflow = loadCashflowState(uid);
-    const nextPlan = computeEmergencyFundPlan(cashflow, { recommendedMonths });
-    const burn = monthlyBurn(cashflow);
-    const nextFund =
-      cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
-        ? String(Math.round(Math.max(0, cashflow.emergencyCashReserve)))
-        : "0";
-    setCurrentFundRaw(nextFund);
-    setMonthlyExpenseRaw(burn > 0 ? String(Math.round(burn)) : "");
-    if (!seededContributionRef.current && nextPlan.recommendedMonthlyContribution > 0) {
-      setMonthlySaveRaw(String(nextPlan.recommendedMonthlyContribution));
-      seededContributionRef.current = true;
-    }
-  }, [recommendedMonths, uid]);
+  const [sheet, setSheet] = useState<
+    null | "contribute" | "withdraw" | "settings" | "link" | "calc"
+  >(null);
+  const [amountRaw, setAmountRaw] = useState("");
+  const [noteRaw, setNoteRaw] = useState("");
+  const [dateRaw, setDateRaw] = useState(todayIso());
+  const [customMonthsRaw, setCustomMonthsRaw] = useState("");
+  const [showAi, setShowAi] = useState(false);
 
-  const plan = useMemo(() => {
-    void syncTick;
-    return computeEmergencyFundPlan(loadCashflowState(uid), { recommendedMonths });
-  }, [recommendedMonths, syncTick, uid]);
+  const shell = light
+    ? "min-h-screen bg-[radial-gradient(ellipse_at_top,_#ecfdf5_0%,_#f8fafc_45%,_#f1f5f9_100%)] text-emerald-950"
+    : "premium-shell min-h-screen bg-[#04150f] text-emerald-50";
 
-  useEffect(() => {
-    if (authLoading) return;
+  const card = light
+    ? "rounded-3xl border border-emerald-100/80 bg-white/80 shadow-[0_18px_50px_rgba(6,78,59,0.08)] backdrop-blur"
+    : "rounded-3xl border border-white/10 bg-white/[0.04] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur";
 
-    let cancelled = false;
-    const cashflow = loadCashflowState(uid);
-    const initial = computeEmergencyFundPlan(cashflow, { recommendedMonths });
-    const hasLocalSignal =
-      initial.monthlyEssentialExpenses > 0 ||
-      initial.monthlyIncome > 0 ||
-      initial.currentAmount > 0 ||
-      !uid;
+  const muted = light ? "text-slate-500" : "text-emerald-100/65";
+  const strong = light ? "text-emerald-950" : "text-white";
 
-    const finishHydrate = () => {
-      if (cancelled) return;
-      applyCashflowToEditors();
-      bumpSync();
-      setHydrated(true);
-    };
+  const safetyTone =
+    result.safetyStatus === "critical" || result.safetyStatus === "high_risk"
+      ? "text-amber-600"
+      : result.safetyStatus === "building_safety"
+        ? "text-lime-600"
+        : "text-emerald-600";
 
-    if (hasLocalSignal) {
-      const frame = window.requestAnimationFrame(finishHydrate);
-      return () => {
-        cancelled = true;
-        window.cancelAnimationFrame(frame);
-      };
-    }
-
-    const onReady = () => {
-      if (cancelled) return;
-      finishHydrate();
-    };
-    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
-    const timer = window.setTimeout(onReady, 1200);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onReady);
-      window.clearTimeout(timer);
-    };
-  }, [applyCashflowToEditors, authLoading, bumpSync, recommendedMonths, uid]);
-
-  const persistEmergencyReserve = useCallback(
-    (fundNpr: number) => {
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      persistTimer.current = setTimeout(() => {
-        void patchCashflowState(uid, (cf) => ({
-          ...cf,
-          emergencyCashReserve: Math.max(0, Math.round(fundNpr)),
-        }))
-          .then(() => {
-            bumpSync();
-          })
-          .catch((error) => {
-            if (process.env.NODE_ENV !== "production") {
-              console.warn("[emergency-fund] cashflow persist failed", error);
-            }
-          });
-      }, 450);
-    },
-    [bumpSync, uid],
-  );
-
-  useEffect(() => {
-    const onExternal = () => {
-      applyCashflowToEditors();
-      bumpSync();
-    };
-    window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
-    return () => {
-      window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
-      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
-    };
-  }, [applyCashflowToEditors, bumpSync]);
-
-  const riskLevel = useMemo(
-    () => resolveRiskLevel(stableJob, parseNumber(dependentsRaw), returnToNepal),
-    [stableJob, dependentsRaw, returnToNepal],
-  );
-
-  const analytics = useMemo(
-    () =>
-      runEmergencyFundProjection({
-        monthlyExpense: parseNumber(monthlyExpenseRaw),
-        currentFund: parseNumber(currentFundRaw),
-        monthlySave: parseNumber(monthlySaveRaw),
-        riskLevel,
-        inflationPct: parseNumber(inflationRaw),
-      }),
-    [currentFundRaw, inflationRaw, monthlyExpenseRaw, monthlySaveRaw, riskLevel],
-  );
-
-  const safety = safetyLevelFromReadiness(analytics.readiness);
-
-  const inflationChart = useMemo(() => {
-    return [0, 1, 2, 3, 4, 5].map((year) => {
-      const factor = Math.pow(1 + analytics.inflationPct / 100, year);
-      return {
-        year: `Y${year}`,
-        nominal: analytics.currentFund,
-        real: analytics.currentFund / factor,
-      };
+  const legacyAiResult = useMemo(() => {
+    if (!result.recommendedExpenseBasisNpr) return null;
+    return runEmergencyFundProjection({
+      monthlyExpense: result.recommendedExpenseBasisNpr,
+      currentFund: result.currentReserveNpr,
+      monthlySave: result.recommendedMonthlyContributionNpr ?? 0,
+      riskLevel:
+        ledger.settings.employmentType === "overseas" ||
+        ledger.settings.employmentType === "uncertain"
+          ? "high"
+          : (ledger.settings.dependents ?? 0) > 0
+            ? "moderate"
+            : "stable",
     });
-  }, [analytics.currentFund, analytics.inflationPct]);
+  }, [ledger.settings.dependents, ledger.settings.employmentType, result]);
 
-  const coverageChart = useMemo(
-    () => [
-      { label: "Current", months: analytics.runwayMonths },
-      { label: "Recommended", months: analytics.recommendedMonths },
-      { label: "Stress", months: analytics.stressRunway },
-    ],
-    [analytics.recommendedMonths, analytics.runwayMonths, analytics.stressRunway],
-  );
-
-  const handlePdf = async () => {
-    setPdfBusy(true);
-    try {
-      const analysis = buildEmergencyFundSafetyAnalysis(analytics);
-      await downloadEmergencyFundSafetyReportPdf(analysis, analytics);
-    } finally {
-      setPdfBusy(false);
-    }
+  const openTx = (kind: "contribute" | "withdraw") => {
+    setAmountRaw("");
+    setNoteRaw("");
+    setDateRaw(todayIso());
+    setSheet(kind);
   };
 
-  const financePlan = plan;
-  const showSetup = hydrated && !financePlan.hasSufficientData;
+  const submitTx = () => {
+    const amount = Math.max(0, Math.round(Number(amountRaw.replace(/,/g, "")) || 0));
+    if (amount <= 0) return;
+    recordTransaction({
+      type: sheet === "withdraw" ? "withdrawal" : "contribution",
+      amountNpr: amount,
+      date: dateRaw || todayIso(),
+      note: noteRaw.trim() || undefined,
+      originalCurrency: "NPR",
+      originalAmount: amount,
+    });
+    setSheet(null);
+  };
 
-  if (authLoading || !hydrated) {
+  if (loading) {
     return (
-      <main className="premium-shell min-h-screen bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
-        <div className="mx-auto flex max-w-7xl items-center justify-center py-24">
-          <p className="text-sm font-bold text-emerald-800/80">Loading emergency fund…</p>
+      <main className={`${shell} px-4 pb-24 pt-6 sm:px-6 lg:px-10`}>
+        <div className="mx-auto flex max-w-6xl items-center justify-center py-24">
+          <p className={`text-sm font-bold ${muted}`}>{copy.loading}</p>
         </div>
       </main>
     );
   }
 
+  const showOnboarding = !result.hasSufficientData;
+
   return (
-    <main className="premium-shell min-h-screen overflow-hidden bg-[#f4fbf6] px-4 pb-24 pt-6 text-emerald-950 sm:px-6 sm:pt-8 lg:px-10">
-      <section className="mx-auto max-w-7xl">
-        <BackToReturnChecklistBannerSlot light className="mb-3" />
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <main className={`${shell} overflow-hidden px-4 pb-28 pt-6 sm:px-6 lg:px-10`}>
+      <section className="mx-auto max-w-6xl">
+        <BackToReturnChecklistBannerSlot light={light} className="mb-3" />
+
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/finance"
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black transition hover:-translate-y-0.5 ${
+              light
+                ? "border-emerald-100 bg-white/80 text-emerald-800"
+                : "border-white/15 bg-white/5 text-emerald-100"
+            }`}
           >
             <ArrowLeft size={16} />
-            Back to Finance
+            {copy.backToFinance}
           </Link>
-          <Link
-            href="/financial-freedom-nepal"
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-100 bg-white/75 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50"
-          >
-            Financial freedom planning
-          </Link>
-          {!showSetup ? (
-            <button
-              type="button"
-              onClick={handlePdf}
-              disabled={pdfBusy}
-              className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-black text-emerald-800 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:bg-emerald-50 disabled:opacity-60"
-            >
-              <FileDown size={16} />
-              {pdfBusy ? "Preparing…" : "PDF Export"}
-            </button>
-          ) : null}
+          <p className={`text-xs font-bold ${muted}`}>
+            {copy.lastUpdated}:{" "}
+            {new Date(result.lastUpdatedAt).toLocaleString(
+              language === "np" ? "ne-NP" : language === "kr" ? "ko-KR" : "en-US",
+            )}
+          </p>
         </div>
 
-        {/* Finance Emergency Fund — shared SoT with FIRE Progress */}
-        <section className="dark-glass-card relative overflow-hidden rounded-[2rem] p-5 text-white sm:p-7 lg:p-9">
-          <div className="absolute -left-24 top-8 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl" />
-          <div className="absolute -right-24 bottom-0 h-96 w-96 rounded-full bg-lime-300/10 blur-3xl" />
+        {/* Hero / Section A */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className={`relative overflow-hidden ${card} p-5 sm:p-7`}
+        >
+          <div
+            className={`pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl ${
+              light ? "bg-emerald-300/30" : "bg-emerald-400/15"
+            }`}
+          />
+          <div
+            className={`pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full blur-3xl ${
+              light ? "bg-lime-200/40" : "bg-lime-300/10"
+            }`}
+          />
           <div className="relative">
-            <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
-              <Sparkles size={14} />
+            <p
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${
+                light
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-white/15 bg-white/10 text-emerald-100"
+              }`}
+            >
+              <Sparkles size={13} />
               Finance · Emergency Fund
             </p>
-            <h1 className="mt-4 text-4xl font-black leading-[0.95] tracking-[-0.05em] sm:text-5xl">
-              Emergency Fund
+            <h1 className={`mt-3 text-3xl font-black tracking-[-0.04em] sm:text-4xl ${strong}`}>
+              {copy.title}
             </h1>
-            <p className="mt-3 max-w-2xl text-base font-medium leading-relaxed text-emerald-50/85 sm:text-lg">
-              Target sized from your Cashflow essential expenses. The same reserve updates FIRE Progress
-              automatically.
+            <p className={`mt-2 max-w-2xl text-sm font-medium leading-relaxed sm:text-base ${muted}`}>
+              {copy.subtitle}
             </p>
 
-            {showSetup ? (
-              <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/25 bg-white/10 p-5 sm:p-6">
-                <h2 className="text-xl font-black tracking-tight">Complete your cashflow first</h2>
-                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-emerald-50/80">
-                  We need your monthly essential expenses from Income / Expense / Cashflow before we can
-                  recommend a 6‑month emergency fund target. Add those numbers to avoid incorrect estimates.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-3">
+            {showOnboarding ? (
+              <div
+                className={`mt-6 rounded-2xl border border-dashed p-5 ${
+                  light ? "border-emerald-200 bg-emerald-50/60" : "border-white/20 bg-white/5"
+                }`}
+              >
+                <h2 className={`text-lg font-black ${strong}`}>{copy.onboardingTitle}</h2>
+                <p className={`mt-2 text-sm ${muted}`}>{copy.onboardingBody}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Link
                     href="/cashflow-dashboard"
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-black text-emerald-900 shadow-sm transition hover:-translate-y-0.5"
+                    className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-black text-white"
                   >
-                    Open Cashflow
+                    {copy.openCashflow}
                   </Link>
                   <Link
                     href="/expense-dashboard?finance=personal"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-black text-white transition hover:bg-white/15"
+                    className={`rounded-full border px-4 py-2 text-sm font-black ${
+                      light ? "border-emerald-200 text-emerald-800" : "border-white/20 text-white"
+                    }`}
                   >
-                    Add Expenses
+                    {copy.addExpenses}
+                  </Link>
+                  <Link
+                    href="/budget"
+                    className={`rounded-full border px-4 py-2 text-sm font-black ${
+                      light ? "border-emerald-200 text-emerald-800" : "border-white/20 text-white"
+                    }`}
+                  >
+                    {copy.openBudget}
                   </Link>
                 </div>
               </div>
             ) : (
-              <>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Monthly essential expenses
-                    </p>
-                    <p className="mt-2 text-2xl font-black sm:text-3xl">
-                      {formatMoney(financePlan.monthlyEssentialExpenses, "NPR")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Recommended months
-                    </p>
-                    <div className="mt-2 flex items-end gap-2">
-                      <p className="text-2xl font-black sm:text-3xl">{financePlan.recommendedMonths}</p>
-                      <label className="mb-1 text-xs font-bold text-emerald-100/80">
-                        <span className="sr-only">Adjust recommended months</span>
-                        <select
-                          className="rounded-lg border border-white/20 bg-emerald-950/40 px-2 py-1 text-xs font-black text-white outline-none"
-                          value={recommendedMonths}
-                          onChange={(event) => setRecommendedMonths(Number(event.target.value))}
-                        >
-                          {[3, 4, 5, 6, 8, 9, 12].map((months) => (
-                            <option key={months} value={months}>
-                              {months} mo
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Recommended target
-                    </p>
-                    <p className="mt-2 text-2xl font-black sm:text-3xl">
-                      {formatMoney(financePlan.recommendedTarget, "NPR")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Current emergency fund
-                    </p>
-                    <p className="mt-2 text-2xl font-black sm:text-3xl">
-                      {formatMoney(financePlan.currentAmount, "NPR")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Remaining</p>
-                    <p className="mt-2 text-2xl font-black sm:text-3xl">
-                      {formatMoney(financePlan.remainingAmount, "NPR")}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">Funding progress</p>
-                    <p className="mt-2 text-2xl font-black sm:text-3xl">
-                      {financePlan.progressPct == null ? "—" : `${Math.round(financePlan.progressPct)}%`}
-                    </p>
-                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/15">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-lime-300 to-yellow-300"
-                        style={{ width: `${financePlan.progressPct ?? 0}%` }}
-                      />
-                    </div>
-                  </div>
+              <div className="mt-6 grid gap-5 lg:grid-cols-[160px_1fr]">
+                <div className="flex justify-center lg:justify-start">
+                  <SavingsRingProgress
+                    pct={result.fundingProgressRingPct ?? 0}
+                    label={copy.fundingProgress}
+                    sublabel={
+                      result.fundingProgressPct != null && result.fundingProgressPct > 100
+                        ? `${result.fundingProgressPct.toFixed(0)}%`
+                        : undefined
+                    }
+                    size={148}
+                  />
                 </div>
-
-                <div className="mt-5 grid gap-3 rounded-[1.5rem] border border-white/15 bg-white/10 p-4 sm:grid-cols-2 sm:p-5">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Recommended monthly contribution
-                    </p>
-                    <p className="mt-2 text-xl font-black">
-                      {financePlan.recommendedMonthlyContribution > 0
-                        ? formatMoney(financePlan.recommendedMonthlyContribution, "NPR")
-                        : financePlan.remainingAmount <= 0
-                          ? "Target funded"
-                          : "No surplus yet"}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-emerald-50/70">
-                      Based on Cashflow surplus (income − expenses)
-                      {financePlan.monthlySurplus !== 0
-                        ? ` · surplus ${formatMoney(financePlan.monthlySurplus, "NPR")}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-100">
-                      Estimated months remaining
-                    </p>
-                    <p className="mt-2 text-xl font-black">
-                      {financePlan.estimatedMonthsRemaining == null
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Metric
+                    label={copy.target}
+                    value={money(result.emergencyFundTargetNpr)}
+                    icon={Target}
+                    strong={strong}
+                    muted={muted}
+                    cardClass={light ? "bg-emerald-50/70" : "bg-white/5"}
+                  />
+                  <Metric
+                    label={copy.currentReserve}
+                    value={money(result.currentReserveNpr)}
+                    icon={Shield}
+                    strong={strong}
+                    muted={muted}
+                    cardClass={light ? "bg-emerald-50/70" : "bg-white/5"}
+                  />
+                  <Metric
+                    label={copy.fundingProgress}
+                    value={
+                      result.fundingProgressPct == null
                         ? "—"
-                        : financePlan.estimatedMonthsRemaining === 0
-                          ? "Ready"
-                          : `${financePlan.estimatedMonthsRemaining} mo`}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-emerald-50/70">
-                      At the recommended contribution pace
-                    </p>
-                  </div>
+                        : `${result.fundingProgressPct.toFixed(2)}%`
+                    }
+                    icon={PiggyBank}
+                    strong={strong}
+                    muted={muted}
+                    cardClass={light ? "bg-emerald-50/70" : "bg-white/5"}
+                  />
+                  <Metric
+                    label={copy.safetyStatus}
+                    value={
+                      result.safetyStatus ? copy.safety[result.safetyStatus] : "—"
+                    }
+                    icon={AlertTriangle}
+                    strong={safetyTone}
+                    muted={muted}
+                    cardClass={light ? "bg-emerald-50/70" : "bg-white/5"}
+                  />
                 </div>
-              </>
+              </div>
             )}
           </div>
-        </section>
+        </motion.section>
 
-        {/* Current reserve editor — always available so FIRE Progress can sync */}
-        <section className="glass-card soft-gradient-border mt-6 rounded-[2rem] p-4 sm:p-5">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">
-                Current Emergency Fund
-              </h2>
-              <p className="text-sm font-bold text-slate-500">
-                Saved to Cashflow reserve — FIRE Progress reads the same value.
+        {/* Section B — Synced data */}
+        {!showOnboarding ? (
+          <section className={`mt-5 ${card} p-5 sm:p-6`}>
+            <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+              {copy.syncedData}
+            </h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <DataRow label={copy.monthlyNetIncome} value={money(result.monthlyNetIncomeNpr)} muted={muted} strong={strong} />
+              <DataRow label={copy.actualMonthlyExpenses} value={money(result.actualMonthlyTotalExpensesNpr)} muted={muted} strong={strong} />
+              <DataRow label={copy.essentialAverage} value={money(result.actualEssentialMonthlyAvgNpr)} muted={muted} strong={strong} />
+              <DataRow label={copy.plannedEssential} value={money(result.plannedEssentialMonthlyNpr)} muted={muted} strong={strong} />
+              <DataRow label={copy.recommendedBasis} value={money(result.recommendedExpenseBasisNpr)} muted={muted} strong={strong} />
+              <DataRow
+                label={copy.availableSurplus}
+                value={money(result.availableContributionCapacityNpr)}
+                muted={muted}
+                strong={strong}
+              />
+            </div>
+            <div className={`mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold ${muted}`}>
+              <span>
+                {copy.dataSource}: {localizeDataSourceLabel(result.dataSourceLabel, language)}
+              </span>
+              {result.calculationPeriodLabel ? (
+                <span>
+                  {copy.calculationPeriod}: {result.calculationPeriodLabel}
+                </span>
+              ) : null}
+              {result.expenseBasisOverridden ? (
+                <span className="text-amber-600">{copy.overrideBasis}</span>
+              ) : null}
+            </div>
+            {!result.categoryClassificationReliable ? (
+              <p className="mt-3 flex items-start gap-2 text-sm font-semibold text-amber-600">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                {copy.categoryLimitation}
               </p>
-            </div>
-            <Link href="/fire-summary" className="text-xs font-black uppercase tracking-wide text-emerald-700 hover:underline">
-              View in FIRE Progress →
-            </Link>
+            ) : null}
+            {result.currency.incomplete || result.currency.stale ? (
+              <p className="mt-2 text-sm font-semibold text-amber-600">{copy.currencyFlag}</p>
+            ) : null}
+            {budgetsError ? (
+              <p className="mt-2 text-sm font-semibold text-amber-600">{budgetsError}</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* Section C — Protection period */}
+        <section className={`mt-5 ${card} p-5 sm:p-6`}>
+          <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+            {copy.protectionPeriod}
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {PROTECTION_MONTH_OPTIONS.map((m) => {
+              const active = ledger.settings.protectionMonths === m && !customMonthsRaw;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setCustomMonthsRaw("");
+                    patchSettings({ protectionMonths: m });
+                  }}
+                  className={`min-h-11 rounded-2xl px-4 text-sm font-black transition ${
+                    active
+                      ? "bg-emerald-600 text-white shadow"
+                      : light
+                        ? "border border-emerald-100 bg-white text-emerald-900"
+                        : "border border-white/15 bg-white/5 text-emerald-50"
+                  }`}
+                >
+                  {m} mo
+                </button>
+              );
+            })}
+            <label
+              className={`flex min-h-11 items-center gap-2 rounded-2xl border px-3 ${
+                light ? "border-emerald-100 bg-white" : "border-white/15 bg-white/5"
+              }`}
+            >
+              <span className={`text-xs font-bold ${muted}`}>{copy.customMonths}</span>
+              <input
+                className={`w-16 bg-transparent text-right text-sm font-black outline-none ${strong}`}
+                inputMode="numeric"
+                value={
+                  customMonthsRaw !== ""
+                    ? customMonthsRaw
+                    : (PROTECTION_MONTH_OPTIONS as readonly number[]).includes(
+                          ledger.settings.protectionMonths,
+                        )
+                      ? ""
+                      : String(ledger.settings.protectionMonths)
+                }
+                placeholder="—"
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^\d]/g, "");
+                  setCustomMonthsRaw(v);
+                  const n = Number(v);
+                  if (n >= 1 && n <= 36) patchSettings({ protectionMonths: n });
+                }}
+              />
+            </label>
           </div>
-          <InputField
-            label="Amount you can keep as Emergency Fund"
-            nepaliLabel="हालको आपतकालीन कोष"
-            value={currentFundRaw}
-            prefix="रु"
-            onChange={(next) => {
-              const cleaned = sanitizeIntegerInput(next);
-              setCurrentFundRaw(cleaned);
-              persistEmergencyReserve(parseNumber(cleaned));
-            }}
-            inputMode="numeric"
-          />
         </section>
 
-        {!showSetup ? (
-          <>
-            {/* Inputs + results */}
-            <section className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
-                <div className="mb-5 flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-tight text-emerald-950">Safety scenario</h2>
-                    <p className="font-nepali text-sm font-bold text-slate-500">आफ्नो सुरक्षा विवरण हाल्नुहोस्</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Live</span>
-                </div>
-                <div className="grid gap-4">
-                  <InputField
-                    label="Monthly Essential Expenses"
-                    nepaliLabel="मासिक आवश्यक खर्च"
-                    value={monthlyExpenseRaw}
-                    prefix="रु"
-                    onChange={(next) => setMonthlyExpenseRaw(sanitizeIntegerInput(next))}
-                    inputMode="numeric"
-                  />
-                  <InputField
-                    label="Monthly Contribution"
-                    nepaliLabel="मासिक बचत योगदान"
-                    value={monthlySaveRaw}
-                    prefix="रु"
-                    onChange={(next) => setMonthlySaveRaw(sanitizeIntegerInput(next))}
-                    inputMode="numeric"
-                  />
-                  <InputField
-                    label="Inflation"
-                    nepaliLabel="मुद्रास्फीति"
-                    value={inflationRaw}
-                    suffix="%"
-                    onChange={(next) => setInflationRaw(sanitizeDecimalInput(next))}
-                  />
-                  <InputField
-                    label="Dependents"
-                    nepaliLabel="आश्रित परिवार सदस्य"
-                    value={dependentsRaw}
-                    onChange={(next) => setDependentsRaw(sanitizeIntegerInput(next))}
-                    inputMode="numeric"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ToggleChip
-                      active={stableJob}
-                      onClick={() => setStableJob((v) => !v)}
-                      label={stableJob ? "Stable Job: On" : "Stable Job: Off"}
-                      nepaliLabel="स्थिर जागिर"
-                      icon={ShieldCheck}
-                    />
-                    <ToggleChip
-                      active={returnToNepal}
-                      onClick={() => setReturnToNepal((v) => !v)}
-                      label={returnToNepal ? "Return to Nepal: On" : "Return to Nepal: Off"}
-                      nepaliLabel="नेपाल फर्कने योजना"
-                      icon={Users}
-                    />
-                  </div>
-                  <p className="rounded-2xl bg-emerald-50/80 px-4 py-3 text-xs font-bold leading-relaxed text-emerald-800">
-                    Scenario profile → <span className="font-black capitalize">{riskLevel}</span> (
-                    {analytics.recommendedMonths} mo + buffer). Finance target above stays at{" "}
-                    {financePlan.recommendedMonths} × essential expenses for FIRE Progress parity.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ResultCard
-                  label="Readiness Score"
-                  nepaliLabel="तयारी स्कोर"
-                  value={`${Math.round(analytics.readiness)}%`}
-                  hint="Funded vs scenario target"
-                  icon={Gauge}
-                />
-                <ResultCard
-                  label="Current Coverage"
-                  nepaliLabel="हालको कभरेज"
-                  value={formatEmergencyMonths(analytics.runwayMonths)}
-                  hint={`Stress runway ${formatEmergencyMonths(analytics.stressRunway)}`}
-                  icon={CalendarClock}
-                  tone="lime"
-                />
-                <ResultCard
-                  label="Scenario Fund"
-                  nepaliLabel="सिफारिस कोष"
-                  value={formatEmergencyNpr(analytics.recommendedFund)}
-                  hint={`${analytics.recommendedMonths} months + buffer`}
-                  icon={Target}
-                />
-                <ResultCard
-                  label="Funding Gap"
-                  nepaliLabel="कमी रकम"
-                  value={formatEmergencyNpr(analytics.gap)}
-                  hint={analytics.gap === 0 ? "Fully funded" : "Still to save"}
-                  icon={PiggyBank}
-                  tone="gold"
-                />
-                <ResultCard
-                  label="Time to Goal"
-                  nepaliLabel="लक्ष्य पुग्ने समय"
-                  value={
-                    analytics.gap === 0
-                      ? "Ready"
-                      : analytics.monthsToTarget > 0
-                        ? `${analytics.monthsToTarget} mo`
-                        : "—"
-                  }
-                  hint="At current monthly contribution"
-                  icon={WalletCards}
-                  tone="dark"
-                />
-                <ResultCard
-                  label="Safety Level"
-                  nepaliLabel="सुरक्षा स्तर"
-                  value={safety.label}
-                  hint="Based on readiness score"
-                  icon={ShieldCheck}
-                  tone={safety.tone}
-                />
-              </div>
-            </section>
-
-            {/* Charts */}
-            <section className="mt-6 grid gap-5 xl:grid-cols-3">
-              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-2">
-                <div className="mb-4">
-                  <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Fund Growth</h2>
-                  <p className="font-nepali text-sm font-bold text-slate-500">आपतकालीन कोष वृद्धि मार्ग</p>
-                </div>
-                <div className="h-[22rem]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={analytics.projection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="efStandaloneFund" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="5%" stopColor="#007a3d" stopOpacity={0.34} />
-                          <stop offset="95%" stopColor="#007a3d" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
-                        tickFormatter={(value: number) => compactNumber(value)}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: "rgba(255,255,255,0.94)",
-                          border: "1px solid rgba(0,122,61,0.16)",
-                          borderRadius: "18px",
-                        }}
-                        formatter={(value: number | string, name: string) => [
-                          formatEmergencyNpr(Number(value)),
-                          name === "fund" ? "Fund" : "Target",
-                        ]}
-                      />
-                      <Legend />
-                      <Area
-                        type="monotone"
-                        dataKey="fund"
-                        name="Fund"
-                        stroke="#007a3d"
-                        strokeWidth={3}
-                        fill="url(#efStandaloneFund)"
-                        animationDuration={900}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="target"
-                        name="Target"
-                        stroke="#84cc16"
-                        strokeWidth={2}
-                        strokeDasharray="6 5"
-                        dot={false}
-                        animationDuration={900}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5">
-                <div className="mb-4">
-                  <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Coverage Progress</h2>
-                  <p className="font-nepali text-sm font-bold text-slate-500">कभरेज प्रगति</p>
-                </div>
-                <div className="h-[22rem]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={coverageChart}>
-                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                      <YAxis tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                      <Tooltip
-                        contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
-                        formatter={(value: number | string) => formatEmergencyMonths(Number(value))}
-                      />
-                      <Bar dataKey="months" fill="#059669" radius={[14, 14, 0, 0]} animationDuration={850} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="glass-card soft-gradient-border rounded-[2rem] p-4 sm:p-5 xl:col-span-3">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-black tracking-tight text-emerald-950 sm:text-2xl">Inflation Impact</h2>
-                    <p className="font-nepali text-sm font-bold text-slate-500">मुद्रास्फीति प्रभाव</p>
-                  </div>
-                  <Flame className="text-amber-600" size={22} />
-                </div>
-                <div className="h-[20rem]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={inflationChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="efStandaloneReal" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="5%" stopColor="#d97706" stopOpacity={0.28} />
-                          <stop offset="95%" stopColor="#d97706" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#d7efe4" strokeDasharray="3 3" />
-                      <XAxis dataKey="year" tickLine={false} axisLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }} />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#64748b", fontSize: 12, fontWeight: 700 }}
-                        tickFormatter={(value: number) => compactNumber(value)}
-                      />
-                      <Tooltip
-                        contentStyle={{ background: "rgba(255,255,255,0.94)", borderRadius: "18px" }}
-                        formatter={(value: number | string, name: string) => [
-                          formatEmergencyNpr(Number(value)),
-                          name === "real" ? "Real purchasing power" : "Nominal",
-                        ]}
-                      />
-                      <Legend />
-                      <Area
-                        type="monotone"
-                        dataKey="nominal"
-                        name="Nominal"
-                        stroke="#059669"
-                        strokeWidth={2.5}
-                        fillOpacity={0}
-                        animationDuration={900}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="real"
-                        name="Real purchasing power"
-                        stroke="#d97706"
-                        strokeWidth={2.5}
-                        fill="url(#efStandaloneReal)"
-                        animationDuration={900}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </section>
-
-            <div className="mt-8">
-              <EmergencyFundAiSafetyAnalysis result={analytics} />
+        {/* Section D — Funding plan */}
+        {!showOnboarding ? (
+          <section className={`mt-5 ${card} p-5 sm:p-6`}>
+            <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+              {copy.fundingPlan}
+            </h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <DataRow label={copy.remainingShortfall} value={money(result.remainingShortfallNpr)} muted={muted} strong={strong} />
+              <DataRow
+                label={copy.recommendedContribution}
+                value={
+                  result.fullyFunded
+                    ? copy.fullyFunded
+                    : result.additionalSavingsRequired
+                      ? copy.additionalSavingsRequired
+                      : money(result.recommendedMonthlyContributionNpr)
+                }
+                muted={muted}
+                strong={strong}
+              />
+              <DataRow
+                label={copy.estimatedCompletion}
+                value={result.estimatedCompletionLabel ?? "—"}
+                muted={muted}
+                strong={strong}
+              />
+              <DataRow
+                label={copy.safetyRunway}
+                value={
+                  result.safetyRunwayMonths == null
+                    ? "—"
+                    : `${result.safetyRunwayMonths.toFixed(2)} mo`
+                }
+                muted={muted}
+                strong={strong}
+              />
             </div>
-          </>
+
+            <p className={`mt-4 text-xs font-bold ${muted}`}>{copy.allocation}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {ALLOCATION_PCT_OPTIONS.map((pct) => {
+                const active =
+                  ledger.settings.allocationPct === pct &&
+                  ledger.settings.customContributionNpr == null;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() =>
+                      patchSettings({ allocationPct: pct, customContributionNpr: undefined })
+                    }
+                    className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                      active
+                        ? "bg-emerald-600 text-white"
+                        : light
+                          ? "bg-emerald-50 text-emerald-800"
+                          : "bg-white/10 text-emerald-100"
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                );
+              })}
+              <label
+                className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-black ${
+                  light ? "bg-emerald-50 text-emerald-800" : "bg-white/10 text-emerald-100"
+                }`}
+              >
+                Custom
+                <input
+                  className="w-20 bg-transparent text-right outline-none"
+                  inputMode="numeric"
+                  placeholder="NPR"
+                  defaultValue={ledger.settings.customContributionNpr ?? ""}
+                  onBlur={(e) => {
+                    const n = Number(String(e.target.value).replace(/,/g, ""));
+                    if (Number.isFinite(n) && n >= 0) {
+                      patchSettings({ customContributionNpr: Math.round(n) });
+                    } else {
+                      patchSettings({ customContributionNpr: undefined });
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            {result.contributionExceedsCapacity ? (
+              <p className="mt-3 text-sm font-semibold text-amber-600">{copy.contributionWarning}</p>
+            ) : null}
+            {result.negativeCashflow ? (
+              <p className="mt-2 text-sm font-semibold text-amber-600">{copy.negativeCashflowHint}</p>
+            ) : null}
+            <p className={`mt-3 text-xs ${muted}`}>{copy.estimateNote}</p>
+          </section>
         ) : null}
+
+        {/* Section E — Growth */}
+        <section className={`mt-5 ${card} p-5 sm:p-6`}>
+          <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+            {copy.growth}
+          </h2>
+          <div className="mt-4 h-52 w-full">
+            {growthSeries.length > 1 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={growthSeries}>
+                  <defs>
+                    <linearGradient id="ef-growth" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={light ? "#d1fae5" : "#134e4a"} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke={light ? "#64748b" : "#6ee7b7"} />
+                  <YAxis tick={{ fontSize: 10 }} stroke={light ? "#64748b" : "#6ee7b7"} width={56} />
+                  <Tooltip
+                    formatter={(v: number) => money(v)}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "none",
+                      background: light ? "#fff" : "#064e3b",
+                      color: light ? "#064e3b" : "#ecfdf5",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="reserve"
+                    stroke="#059669"
+                    fill="url(#ef-growth)"
+                    strokeWidth={2.5}
+                    name="Actual reserve"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className={`grid h-full place-items-center text-sm font-semibold ${muted}`}>
+                {copy.noTransactions}
+              </p>
+            )}
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <TxList
+              title={copy.contributions}
+              empty={copy.noTransactions}
+              items={ledger.transactions.filter((t) => t.type === "contribution")}
+              muted={muted}
+              strong={strong}
+            />
+            <TxList
+              title={copy.withdrawals}
+              empty={copy.noTransactions}
+              items={ledger.transactions.filter((t) => t.type === "withdrawal")}
+              muted={muted}
+              strong={strong}
+            />
+          </div>
+        </section>
+
+        {/* Section F — Insights */}
+        <section className={`mt-5 ${card} p-5 sm:p-6`}>
+          <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+            {copy.insights}
+          </h2>
+          <ul className="mt-4 space-y-3">
+            {result.insights.map((insight) => (
+              <li
+                key={insight.id}
+                className={`rounded-2xl border px-4 py-3 text-sm font-semibold leading-relaxed ${
+                  insight.tone === "critical" || insight.tone === "warning"
+                    ? light
+                      ? "border-amber-200 bg-amber-50 text-amber-950"
+                      : "border-amber-400/30 bg-amber-400/10 text-amber-100"
+                    : light
+                      ? "border-emerald-100 bg-emerald-50/70 text-emerald-950"
+                      : "border-white/10 bg-white/5 text-emerald-50"
+                }`}
+              >
+                {insight.href ? (
+                  <Link href={insight.href} className="underline-offset-2 hover:underline">
+                    {insightMessage(insight, language)}
+                  </Link>
+                ) : (
+                  insightMessage(insight, language)
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Section G — Quick actions */}
+        <section className={`mt-5 ${card} p-5 sm:p-6`}>
+          <h2 className={`text-sm font-black uppercase tracking-[0.14em] ${muted}`}>
+            {copy.quickActions}
+          </h2>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <ActionBtn label={copy.addContribution} icon={PlusCircle} onClick={() => openTx("contribute")} light={light} />
+            <ActionBtn label={copy.recordWithdrawal} icon={MinusCircle} onClick={() => openTx("withdraw")} light={light} />
+            <ActionBtn label={copy.linkSavingsGoal} icon={Link2} onClick={() => setSheet("link")} light={light} />
+            <ActionBtn label={copy.editSettings} icon={Settings2} onClick={() => setSheet("settings")} light={light} />
+            <ActionBtn label={copy.reviewCalculation} icon={Calculator} onClick={() => setSheet("calc")} light={light} />
+          </div>
+        </section>
+
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => setShowAi((v) => !v)}
+            className={`text-sm font-black underline-offset-2 hover:underline ${muted}`}
+          >
+            {showAi ? "Hide" : "Show"} extended AI safety analysis
+          </button>
+          {showAi && legacyAiResult ? (
+            <div className="mt-4">
+              <EmergencyFundAiSafetyAnalysis result={legacyAiResult} />
+            </div>
+          ) : null}
+        </div>
       </section>
 
-      {!showSetup ? (
-        <div className="fixed inset-x-3 bottom-3 z-30 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-[0_18px_60px_rgba(0,63,47,0.18)] backdrop-blur-xl sm:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Progress</p>
-              <p className="text-lg font-black text-emerald-950">
-                {financePlan.progressPct == null ? "—" : `${Math.round(financePlan.progressPct)}%`}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white">
-              {formatMoney(financePlan.remainingAmount, "NPR")} left
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {sheet ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-3 sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSheet(null)}
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              className={`w-full max-w-md rounded-3xl p-5 ${
+                light ? "bg-white text-emerald-950" : "bg-[#0b1f18] text-emerald-50"
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {sheet === "contribute" || sheet === "withdraw" ? (
+                <>
+                  <h3 className="text-lg font-black">
+                    {sheet === "contribute" ? copy.addContribution : copy.recordWithdrawal}
+                  </h3>
+                  <p className={`mt-1 text-xs ${muted}`}>
+                    Recording here updates your emergency reserve tracker — it does not initiate a bank transfer.
+                  </p>
+                  <label className="mt-4 block text-xs font-bold uppercase tracking-wide">
+                    {copy.amount} (NPR)
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-lg font-black outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      inputMode="decimal"
+                      value={amountRaw}
+                      onChange={(e) => setAmountRaw(e.target.value.replace(/[^\d.]/g, ""))}
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase tracking-wide">
+                    {copy.date}
+                    <input
+                      type="date"
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      value={dateRaw}
+                      onChange={(e) => setDateRaw(e.target.value)}
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase tracking-wide">
+                    {copy.note}
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-semibold outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      value={noteRaw}
+                      onChange={(e) => setNoteRaw(e.target.value)}
+                      maxLength={500}
+                    />
+                  </label>
+                  <div className="mt-5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSheet(null)}
+                      className={`flex-1 rounded-full border py-2.5 text-sm font-black ${
+                        light ? "border-emerald-100" : "border-white/15"
+                      }`}
+                    >
+                      {copy.cancel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={submitTx}
+                      className="flex-1 rounded-full bg-emerald-600 py-2.5 text-sm font-black text-white"
+                    >
+                      {copy.save}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
+              {sheet === "link" ? (
+                <>
+                  <h3 className="text-lg font-black">{copy.linkSavingsGoal}</h3>
+                  <p className={`mt-1 text-xs ${muted}`}>
+                    Only goals explicitly designated as emergency reserves are eligible.
+                  </p>
+                  <ul className="mt-4 max-h-64 space-y-2 overflow-auto">
+                    {emergencyGoals.length === 0 ? (
+                      <li className={`text-sm ${muted}`}>
+                        No emergency savings goals yet.{" "}
+                        <Link href="/savings-tracker" className="font-black underline">
+                          Open Savings
+                        </Link>
+                      </li>
+                    ) : (
+                      emergencyGoals.map((goal) => {
+                        const linked = ledger.settings.linkedSavingsGoalIds.includes(goal.id);
+                        return (
+                          <li key={goal.id}>
+                            <button
+                              type="button"
+                              onClick={() => toggleLinkedGoal(goal.id)}
+                              className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm font-bold ${
+                                linked
+                                  ? "border-emerald-400 bg-emerald-50 text-emerald-950"
+                                  : light
+                                    ? "border-emerald-100"
+                                    : "border-white/15"
+                              }`}
+                            >
+                              <span>
+                                {goal.icon} {goal.name}
+                              </span>
+                              <span>{money(goal.savedAmountNpr)}</span>
+                            </button>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setSheet(null)}
+                    className="mt-4 w-full rounded-full bg-emerald-600 py-2.5 text-sm font-black text-white"
+                  >
+                    {copy.save}
+                  </button>
+                </>
+              ) : null}
+
+              {sheet === "settings" ? (
+                <>
+                  <h3 className="text-lg font-black">{copy.editSettings}</h3>
+                  <label className="mt-4 block text-xs font-bold uppercase">
+                    {copy.openingBalance}
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-black outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      inputMode="numeric"
+                      defaultValue={ledger.settings.openingBalanceNpr}
+                      onBlur={(e) => {
+                        const n = Math.max(0, Math.round(Number(e.target.value.replace(/,/g, "")) || 0));
+                        patchSettings({ openingBalanceNpr: n });
+                      }}
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase">
+                    {copy.manualExpense}
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-black outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      inputMode="numeric"
+                      defaultValue={ledger.settings.manualMonthlyExpenseNpr ?? ""}
+                      placeholder="Optional"
+                      onBlur={(e) => {
+                        const raw = e.target.value.replace(/,/g, "");
+                        if (!raw) {
+                          patchSettings({ manualMonthlyExpenseNpr: undefined });
+                          return;
+                        }
+                        const n = Math.max(0, Math.round(Number(raw) || 0));
+                        patchSettings({ manualMonthlyExpenseNpr: n || undefined });
+                      }}
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase">
+                    {copy.overrideBasis}
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-black outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      inputMode="numeric"
+                      defaultValue={ledger.settings.expenseBasisOverrideNpr ?? ""}
+                      placeholder="Optional"
+                      onBlur={(e) => {
+                        const raw = e.target.value.replace(/,/g, "");
+                        if (!raw) {
+                          patchSettings({ expenseBasisOverrideNpr: undefined });
+                          return;
+                        }
+                        const n = Math.max(0, Math.round(Number(raw) || 0));
+                        patchSettings({ expenseBasisOverrideNpr: n || undefined });
+                      }}
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase">
+                    {copy.employmentType}
+                    <select
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      value={ledger.settings.employmentType ?? ""}
+                      onChange={(e) =>
+                        patchSettings({
+                          employmentType: (e.target.value || undefined) as
+                            | EmergencyFundSettingsEmployment
+                            | undefined,
+                        })
+                      }
+                    >
+                      <option value="">—</option>
+                      <option value="stable">Stable</option>
+                      <option value="contract">Contract</option>
+                      <option value="overseas">Overseas</option>
+                      <option value="self_employed">Self-employed</option>
+                      <option value="uncertain">Uncertain</option>
+                    </select>
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase">
+                    {copy.dependents}
+                    <input
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-black outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      inputMode="numeric"
+                      defaultValue={ledger.settings.dependents ?? 0}
+                      onBlur={(e) =>
+                        patchSettings({
+                          dependents: Math.max(0, Math.round(Number(e.target.value) || 0)),
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="mt-3 block text-xs font-bold uppercase">
+                    {copy.incomeSources}
+                    <select
+                      className={`mt-1 w-full rounded-2xl border px-3 py-3 text-sm font-bold outline-none ${
+                        light ? "border-emerald-100" : "border-white/15 bg-white/5"
+                      }`}
+                      value={ledger.settings.incomeSources ?? ""}
+                      onChange={(e) =>
+                        patchSettings({
+                          incomeSources: (e.target.value || undefined) as
+                            | "single"
+                            | "multiple"
+                            | undefined,
+                        })
+                      }
+                    >
+                      <option value="">—</option>
+                      <option value="single">Single</option>
+                      <option value="multiple">Multiple</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSheet(null)}
+                    className="mt-5 w-full rounded-full bg-emerald-600 py-2.5 text-sm font-black text-white"
+                  >
+                    {copy.save}
+                  </button>
+                </>
+              ) : null}
+
+              {sheet === "calc" ? (
+                <>
+                  <h3 className="text-lg font-black">{copy.reviewCalculation}</h3>
+                  <ul className={`mt-4 space-y-2 text-sm font-semibold ${muted}`}>
+                    <li>
+                      Basis = MAX(actual essential, planned essential) →{" "}
+                      <span className={strong}>{money(result.recommendedExpenseBasisNpr)}</span>
+                    </li>
+                    <li>
+                      Target = basis × {result.protectionMonths} →{" "}
+                      <span className={strong}>{money(result.emergencyFundTargetNpr)}</span>
+                    </li>
+                    <li>
+                      Reserve = opening + contributions − withdrawals →{" "}
+                      <span className={strong}>{money(result.currentReserveNpr)}</span>
+                    </li>
+                    <li>
+                      Capacity × {result.allocationPct}% →{" "}
+                      <span className={strong}>{money(result.recommendedMonthlyContributionNpr)}</span>
+                    </li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setSheet(null)}
+                    className="mt-5 w-full rounded-full bg-emerald-600 py-2.5 text-sm font-black text-white"
+                  >
+                    {copy.cancel}
+                  </button>
+                </>
+              ) : null}
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </main>
+  );
+}
+
+type EmergencyFundSettingsEmployment =
+  | "stable"
+  | "contract"
+  | "overseas"
+  | "self_employed"
+  | "uncertain";
+
+function Metric({
+  label,
+  value,
+  icon: Icon,
+  strong,
+  muted,
+  cardClass,
+}: {
+  label: string;
+  value: string;
+  icon: typeof Wallet;
+  strong: string;
+  muted: string;
+  cardClass: string;
+}) {
+  return (
+    <div className={`rounded-2xl p-3.5 ${cardClass}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${muted}`}>{label}</p>
+          <p className={`mt-1.5 text-xl font-black tracking-tight sm:text-2xl ${strong}`}>{value}</p>
+        </div>
+        <Icon size={18} className="mt-1 shrink-0 opacity-70" />
+      </div>
+    </div>
+  );
+}
+
+function DataRow({
+  label,
+  value,
+  muted,
+  strong,
+}: {
+  label: string;
+  value: string;
+  muted: string;
+  strong: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-transparent px-1 py-1">
+      <p className={`text-[11px] font-bold uppercase tracking-[0.1em] ${muted}`}>{label}</p>
+      <p className={`mt-1 text-base font-black ${strong}`}>{value}</p>
+    </div>
+  );
+}
+
+function ActionBtn({
+  label,
+  icon: Icon,
+  onClick,
+  light,
+}: {
+  label: string;
+  icon: typeof Wallet;
+  onClick: () => void;
+  light: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[72px] flex-col items-start justify-center gap-1 rounded-2xl border px-3 py-3 text-left text-xs font-black transition hover:-translate-y-0.5 ${
+        light
+          ? "border-emerald-100 bg-white text-emerald-900"
+          : "border-white/15 bg-white/5 text-emerald-50"
+      }`}
+    >
+      <Icon size={18} className="text-emerald-500" />
+      {label}
+    </button>
+  );
+}
+
+function TxList({
+  title,
+  empty,
+  items,
+  muted,
+  strong,
+}: {
+  title: string;
+  empty: string;
+  items: Array<{ id: string; amountNpr: number; date: string; note?: string }>;
+  muted: string;
+  strong: string;
+}) {
+  return (
+    <div>
+      <p className={`text-xs font-black uppercase tracking-[0.12em] ${muted}`}>{title}</p>
+      {items.length === 0 ? (
+        <p className={`mt-2 text-sm ${muted}`}>{empty}</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {items.slice(0, 6).map((tx) => (
+            <li key={tx.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className={muted}>
+                {tx.date}
+                {tx.note ? ` · ${tx.note}` : ""}
+              </span>
+              <span className={`font-black ${strong}`}>{money(tx.amountNpr)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -8,6 +8,8 @@ import {
 import type { CashflowIncomeTypeId } from "@/lib/cashflow/income-types";
 import { normalizeIncomeFrequency, normalizeIncomeType } from "@/lib/cashflow/income-types";
 import { INCOME_SOURCE_META } from "@/components/cashflow/cashflow-constants";
+import { sanitizeEmergencyFundLedger } from "@/lib/emergency-fund/ledger";
+import type { EmergencyFundLedger } from "@/lib/emergency-fund/types";
 
 export const CASHFLOW_STORAGE_KEY = "fire-nepal-cashflow-v1";
 
@@ -150,16 +152,26 @@ function sanitizeExpenseRecord(raw: unknown): Record<ExpenseCategoryKey, number 
   return out;
 }
 
+function sanitizeEmergencyFundField(
+  raw: unknown,
+  legacyReserve: number | undefined,
+): EmergencyFundLedger | undefined {
+  if (raw == null) return undefined;
+  return sanitizeEmergencyFundLedger(raw, legacyReserve ?? 0);
+}
+
 export function sanitizeCashflowState(raw: unknown): CashflowDashboardState {
   if (!raw || typeof raw !== "object") return defaultCashflowState();
   const o = raw as Partial<CashflowDashboardState>;
+  const emergencyCashReserve = sanitizeMoney(o.emergencyCashReserve);
   let state: CashflowDashboardState = {
     version: CASHFLOW_STATE_VERSION,
     income: sanitizeIncomeRecord(o.income),
     incomeEntries: sanitizeIncomeEntries(o.incomeEntries),
     expenses: sanitizeExpenseRecord(o.expenses),
-    emergencyCashReserve: sanitizeMoney(o.emergencyCashReserve),
+    emergencyCashReserve,
     monthlyExpensesOverride: sanitizeMoney(o.monthlyExpensesOverride),
+    emergencyFund: sanitizeEmergencyFundField(o.emergencyFund, emergencyCashReserve),
   };
   const migrated = migrateLegacyIncomeToEntries(state);
   state = clearLegacyIncomeAfterMigration(state, migrated);
