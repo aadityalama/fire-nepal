@@ -61,7 +61,9 @@ export function SavingsRingProgress({
         </svg>
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
-            <p className={`text-2xl font-black leading-none sm:text-[1.65rem] ${resolvedValueClass}`}>{Math.round(clamped)}%</p>
+            <p className={`text-2xl font-black leading-none sm:text-[1.65rem] ${resolvedValueClass}`}>
+              {clamped > 0 && clamped < 1 ? clamped.toFixed(1) : Math.round(clamped)}%
+            </p>
             {sublabel ? (
               <p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${light ? "text-emerald-600/85" : "fn-txt-muted"}`}>
                 {sublabel}

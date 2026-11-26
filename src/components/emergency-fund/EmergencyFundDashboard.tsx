@@ -400,7 +400,7 @@ export function EmergencyFundDashboard() {
             {result.currency.incomplete || result.currency.stale ? (
               <p className="mt-2 text-sm font-semibold text-amber-600">{copy.currencyFlag}</p>
             ) : null}
-            {budgetsError ? (
+            {budgetsError && !/supabase is not configured/i.test(budgetsError) ? (
               <p className="mt-2 text-sm font-semibold text-amber-600">{budgetsError}</p>
             ) : null}
           </section>
