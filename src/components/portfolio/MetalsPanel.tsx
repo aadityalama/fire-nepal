@@ -1,6 +1,6 @@
 "use client";
 
-import { Gem, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
@@ -13,10 +13,12 @@ import {
   METAL_LEDGER_MAX_BILLS_PER_TX,
   METAL_LEDGER_MAX_PHOTOS_PER_TX,
   metalItemCoverFromLedger,
+  sanitizeMetalTxBillUrls,
+  sanitizeMetalTxPhotoUrls,
 } from "@/components/portfolio/metal-photo-utils";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { metalRowFirstBuyIso, roiPct } from "@/components/portfolio/metals-premium-metrics";
-import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
+import { recordMetalBuy, recordMetalSell, updateMetalTxn } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
   portfolioTxnTodayIso,
@@ -25,11 +27,12 @@ import {
 import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
-import { NEPAL_METAL_TOLA_GRAMS } from "@/lib/market/bullion-estimate";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
+import {
+  HAMRO_PATRO_GOLD_SOURCE_URL,
+  resolveNepalMarketFreshness,
+} from "@/services/market/hamropatro-nepal-rates";
 import { toast } from "sonner";
-import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
-
 function todayIso() {
   return portfolioTxnTodayIso();
 }
@@ -42,6 +45,8 @@ const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
 export type MetalTxnFormHandle = {
   openBuyForMetal: (metal: "gold" | "silver") => void;
   focusBillsInput: () => void;
+  /** Prefill the form from an existing metal ledger entry and switch to edit mode. */
+  openEditEntry: (entry: PortfolioLedgerEntry) => void;
 };
 
 const UniversalMetalTransactionForm = forwardRef<
@@ -72,21 +77,25 @@ const UniversalMetalTransactionForm = forwardRef<
   const [pendingBillUrls, setPendingBillUrls] = useState<string[]>([]);
   const [pendingPhotoUrls, setPendingPhotoUrls] = useState<string[]>([]);
   const [attachBusy, setAttachBusy] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const internalBillsRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
   const billsInputRef = billsFileInputRef ?? internalBillsRef;
   const billsInputId = useId();
   const photosInputId = useId();
+  const isEditing = editingEntryId != null;
 
   const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
   const sellCandidates = useMemo(() => candidates.filter((r) => (r.grams ?? 0) > 1e-9), [candidates]);
   const canUseExistingBuy = candidates.length > 0;
-  const buyModeActive: "new" | "existing" = buyMode === "existing" && canUseExistingBuy ? "existing" : "new";
+  const buyModeActive: "new" | "existing" =
+    isEditing ? "existing" : buyMode === "existing" && canUseExistingBuy ? "existing" : "new";
 
   useImperativeHandle(
     ref,
     () => ({
       openBuyForMetal(metal) {
+        setEditingEntryId(null);
         setFormMetal(metal);
         setSegmentId("buy");
         setBuyMode("new");
@@ -94,6 +103,53 @@ const UniversalMetalTransactionForm = forwardRef<
       },
       focusBillsInput() {
         billsInputRef.current?.click();
+      },
+      openEditEntry(entry) {
+        if (entry.bucket !== "metal" || (entry.txType !== "buy" && entry.txType !== "sell")) {
+          toast.error("Only gold and silver buy/sell records can be edited.");
+          return;
+        }
+        const meta = entry.meta && typeof entry.meta === "object" ? (entry.meta as Record<string, unknown>) : {};
+        const metal = entry.metal === "silver" ? "silver" : "gold";
+        const grams = entry.quantity;
+        const tola = gramsToTolaUi(grams);
+        setEditingEntryId(entry.id);
+        setFormMetal(metal);
+        setSegmentId(entry.txType);
+        setBuyMode("existing");
+        setExistingBuyRowId(entry.rowId);
+        setSellRowId(entry.rowId);
+        setItemName(entry.assetLabel || "");
+        setGramQtyStr(Number(grams.toFixed(6)).toString());
+        setTolaQtyStr(Number(tola.toFixed(6)).toString());
+        if (entry.txType === "buy") {
+          const unit = meta.buyPriceUnit === "tola" ? "tola" : "gram";
+          const stored =
+            typeof meta.metalBuyPriceNpr === "number" && Number.isFinite(meta.metalBuyPriceNpr)
+              ? meta.metalBuyPriceNpr
+              : unit === "tola"
+                ? entry.unitPrice * NEPAL_UI_GRAMS_PER_TOLA
+                : entry.unitPrice;
+          setBuyPriceUnit(unit);
+          setBuyPriceStr(Number(stored.toFixed(6)).toString());
+          setSellPriceStr("");
+          setSellPriceUnit("gram");
+        } else {
+          setSellPriceUnit("gram");
+          setSellPriceStr(Number(entry.unitPrice.toFixed(6)).toString());
+          setBuyPriceStr("");
+          setBuyPriceUnit("gram");
+        }
+        setFeesStr(entry.fees != null && entry.fees > 0 ? String(entry.fees) : "");
+        setNotes(entry.notes ?? "");
+        setTradeDate(entry.tradeDate);
+        setPendingBillUrls(sanitizeMetalTxBillUrls(meta.metalTxBillUrls));
+        setPendingPhotoUrls(sanitizeMetalTxPhotoUrls(meta.metalTxPhotoUrls));
+        setErr(null);
+        setOpen(true);
+        queueMicrotask(() => {
+          document.getElementById("metal-transactions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       },
     }),
     [billsInputRef],
@@ -119,6 +175,7 @@ const UniversalMetalTransactionForm = forwardRef<
   }, [candidates, existingBuyRowId]);
 
   const resetAllFields = () => {
+    setEditingEntryId(null);
     setSegmentId("buy");
     setBuyMode("new");
     setItemName("");
@@ -136,6 +193,11 @@ const UniversalMetalTransactionForm = forwardRef<
     setErr(null);
     setPendingBillUrls([]);
     setPendingPhotoUrls([]);
+  };
+
+  const cancelEdit = () => {
+    resetAllFields();
+    toast.message("Edit cancelled — no changes saved.");
   };
 
   const onGramQtyChange = useCallback((raw: string) => {
@@ -242,6 +304,56 @@ const UniversalMetalTransactionForm = forwardRef<
       return;
     }
 
+    if (isEditing && editingEntryId) {
+      if (segmentId === "sell") {
+        const unitPriceNprPerGram = parseSellUnitPriceNprPerGram();
+        if (unitPriceNprPerGram == null) {
+          setErr(`Enter sell price (NPR per ${sellPriceUnit === "gram" ? "gram" : "tola"}).`);
+          return;
+        }
+        const ok = onMutate((s) =>
+          updateMetalTxn(s, editingEntryId, {
+            grams,
+            unitPriceNprPerGram,
+            tradeDate,
+            feesNpr,
+            notes,
+            billAttachmentUrls: pendingBillUrls,
+            photoAttachmentUrls: pendingPhotoUrls,
+          }),
+        );
+        if (!ok) {
+          setErr("Could not update sell (invalid quantity or sequence). Original record unchanged.");
+          return;
+        }
+      } else {
+        const buyPriceNpr = parseBuyPriceNpr();
+        if (buyPriceNpr == null) {
+          setErr(`Enter buy price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
+          return;
+        }
+        const ok = onMutate((s) =>
+          updateMetalTxn(s, editingEntryId, {
+            grams,
+            buyPriceNpr,
+            buyPriceUnit,
+            tradeDate,
+            feesNpr,
+            notes,
+            billAttachmentUrls: pendingBillUrls,
+            photoAttachmentUrls: pendingPhotoUrls,
+          }),
+        );
+        if (!ok) {
+          setErr("Could not update buy (invalid values or sell sequence). Original record unchanged.");
+          return;
+        }
+      }
+      toast.success("Transaction updated successfully.");
+      resetAllFields();
+      return;
+    }
+
     if (segmentId === "sell") {
       if (sellCandidates.length === 0) {
         setErr("Nothing to sell — record a buy first.");
@@ -338,10 +450,15 @@ const UniversalMetalTransactionForm = forwardRef<
     <div id="metal-transactions">
       <PortfolioTransactionStrip
         open={open}
-        onOpenChange={setOpen}
-        headerLabel="Transactions"
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v && isEditing) resetAllFields();
+        }}
+        headerLabel={isEditing ? "Edit Transaction" : "Transactions"}
         summaryRight={
-          segmentId === "sell" && resolvedSellRowId ? (
+          isEditing ? (
+            <span className="text-amber-100/90">Editing existing record · ID preserved</span>
+          ) : segmentId === "sell" && resolvedSellRowId ? (
             <span className="text-emerald-200/80">
               Selling from{" "}
               <span className="font-black text-emerald-50">
@@ -362,16 +479,19 @@ const UniversalMetalTransactionForm = forwardRef<
         segments={METAL_TX_SEGMENTS}
         segmentId={segmentId}
         onSegmentId={setSegmentId}
+        segmentsLocked={isEditing}
         tradeDate={tradeDate}
         onTradeDate={setTradeDate}
-        feesLabel="Fees (NPR)"
+        feesLabel="Fees / making charges (NPR)"
         feesStr={feesStr}
         onFeesStrChange={setFeesStr}
         notes={notes}
         onNotesChange={setNotes}
         error={err}
-        submitLabel={segmentId === "sell" ? "Record sell" : "Record buy"}
+        submitLabel={isEditing ? "Save Changes" : segmentId === "sell" ? "Record sell" : "Record buy"}
         onSubmit={() => void submit()}
+        cancelLabel={isEditing ? "Cancel" : undefined}
+        onCancel={isEditing ? cancelEdit : undefined}
         accent="amber"
       >
         <div className="space-y-2">
@@ -380,14 +500,15 @@ const UniversalMetalTransactionForm = forwardRef<
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Metal</span>
               <select
                 value={formMetal}
+                disabled={isEditing}
                 onChange={(e) => setFormMetal(e.target.value as "gold" | "silver")}
-                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option value="gold">Gold</option>
                 <option value="silver">Silver</option>
               </select>
             </label>
-            {segmentId === "sell" && sellCandidates.length > 1 ? (
+            {segmentId === "sell" && !isEditing && sellCandidates.length > 1 ? (
               <label className="block">
                 <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Sell from item</span>
                 <select
@@ -403,9 +524,14 @@ const UniversalMetalTransactionForm = forwardRef<
                 </select>
               </label>
             ) : null}
+            {isEditing ? (
+              <p className="sm:col-span-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold text-amber-100/90">
+                Edit mode — buy/sell type and metal stay with the original record. Saving updates the same transaction ID.
+              </p>
+            ) : null}
           </div>
 
-          {segmentId === "buy" ? (
+          {segmentId === "buy" && !isEditing ? (
             <div className="flex flex-wrap gap-1.5">
               <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy type</span>
               {(["new", "existing"] as const).map((m) => {
@@ -434,7 +560,7 @@ const UniversalMetalTransactionForm = forwardRef<
             </div>
           ) : null}
 
-          {segmentId === "buy" && buyModeActive === "new" ? (
+          {segmentId === "buy" && buyModeActive === "new" && !isEditing ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item name</span>
               <input
@@ -447,7 +573,13 @@ const UniversalMetalTransactionForm = forwardRef<
             </label>
           ) : null}
 
-          {segmentId === "buy" && buyModeActive === "existing" && candidates.length > 0 ? (
+          {isEditing ? (
+            <p className="text-[11px] font-bold text-emerald-100/85">
+              Item: <span className="text-[#F4D06F]">{itemName || "Metal item"}</span>
+            </p>
+          ) : null}
+
+          {segmentId === "buy" && buyModeActive === "existing" && candidates.length > 0 && !isEditing ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item</span>
               <select
@@ -560,7 +692,7 @@ const UniversalMetalTransactionForm = forwardRef<
                 <p className="text-[10px] font-bold text-emerald-200/70">
                   This buy total (incl. fees):{" "}
                   <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
-                  {buyModeActive === "existing" ? (
+                  {buyModeActive === "existing" && !isEditing ? (
                     <>
                       {" · after submit ~ "}
                       <span className="tabular-nums text-amber-100">
@@ -658,157 +790,153 @@ export function MetalsPanel({
     bullionPriceRefreshing,
   } = useWealthPortfolio();
   const txnAnchorRef = useRef<HTMLDivElement>(null);
+  const holdingsAnchorRef = useRef<HTMLDivElement>(null);
   const metalFormRef = useRef<MetalTxnFormHandle>(null);
-  const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
-  const lastUpdatedLabel = bullionSpot?.updatedAt
+  const [holdingsOpen, setHoldingsOpen] = useState(true);
+  const [tradesOpen, setTradesOpen] = useState(true);
+  const syncLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "—";
-  const sourceLabel = bullionSpot?.source ?? "FX-anchored estimate";
   const gramRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
   const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
-  const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
+  const hasDomesticPrice =
+    Boolean(bullionSpot?.nepalDomesticPrimary) &&
+    (bullionSpot?.goldPerTolaNPR ?? 0) > 0 &&
+    (bullionSpot?.silverPerTolaNPR ?? 0) > 0;
+  const priceUnavailable =
+    bullionSpot?.domesticProvider === "unavailable" ||
+    (!bullionPriceLoading && !hasDomesticPrice && Boolean(bullionSpot || bullionError));
+  const freshness = resolveNepalMarketFreshness({
+    publishedDate: bullionSpot?.publishedDate,
+    degraded: bullionSpot?.degraded,
+    loading: bullionPriceLoading || bullionPriceRefreshing,
+    hasPrice: hasDomesticPrice,
+  });
+  const statusLabel =
+    freshness === "updated_today"
+      ? "Updated Today"
+      : freshness === "last_published"
+        ? "Last Published Rate"
+        : freshness === "stale"
+          ? "Stale Data"
+          : freshness === "updating"
+            ? "Updating"
+            : "Price Unavailable";
+  const publishedLabel = bullionSpot?.publishedDate
+    ? [
+        bullionSpot.publishedDate,
+        bullionSpot.publishedTimeLocal,
+        bullionSpot.publishedBsLabel ? `(${bullionSpot.publishedBsLabel})` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  const formatDailyChange = (npr: number | null | undefined, pct: number | null | undefined) => {
+    if (npr == null || !Number.isFinite(npr)) return null;
+    const sign = npr >= 0 ? "+" : "";
+    const pctPart =
+      pct != null && Number.isFinite(pct)
+        ? ` (${pct >= 0 ? "+" : ""}${pct.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%)`
+        : "";
+    return `${sign}${formatMoney(npr, "NPR")}${pctPart}`;
+  };
+  const goldChange = formatDailyChange(bullionSpot?.goldDailyChangeNpr, bullionSpot?.goldDailyChangePct);
+  const silverChange = formatDailyChange(bullionSpot?.silverDailyChangeNpr, bullionSpot?.silverDailyChangePct);
 
   const scrollToTransactions = () => {
-    txnAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTradesOpen(true);
+    queueMicrotask(() => {
+      txnAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   return (
-    <section className="wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => {
-            scrollToTransactions();
-            metalFormRef.current?.openBuyForMetal("gold");
-          }}
-          className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-100 transition hover:bg-amber-500/20"
-        >
-          <Plus size={12} className="inline" /> Gold
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            scrollToTransactions();
-            metalFormRef.current?.openBuyForMetal("silver");
-          }}
-          className="rounded-full border border-slate-400/25 bg-slate-500/10 px-2.5 py-1 text-[11px] font-black text-slate-100 transition hover:bg-slate-500/20"
-        >
-          <Plus size={12} className="inline" /> Silver
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            scrollToTransactions();
-            queueMicrotask(() => metalFormRef.current?.focusBillsInput());
-          }}
-          className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-100 transition hover:bg-emerald-500/20"
-        >
-          Upload bills
-        </button>
-        <PortfolioModuleDataResetButton module="metals" onMutate={onMutate} />
-      </div>
-      <div className="mb-2 flex items-start gap-2">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-400/15 text-amber-200">
-          <Gem size={16} />
-        </div>
-        <p className="min-w-0 text-[11px] font-bold leading-snug text-emerald-200/70 sm:text-xs">
-          Marks follow the <span className="text-emerald-100">FENEGOSIDA Nepal board</span>. USD/oz is reference only.
-        </p>
-      </div>
-
-      <div className="mb-3 space-y-2 rounded-xl border border-amber-400/20 bg-black/25 px-2.5 py-2.5 sm:px-3">
-        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-emerald-100/90 sm:gap-3 sm:text-[11px]">
+    <section className="gs-premium-shell wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
+      {/* Nepal Market Price — Hamro Patro */}
+      <div className="gs-live-strip mb-3 space-y-2 rounded-xl border border-[#D4AF37]/25 bg-gradient-to-br from-[#062B24]/50 to-[#03100F]/90 px-2.5 py-2.5 sm:px-3">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-[#F8FAFC] sm:gap-3 sm:text-[11px]">
+          <p className="text-[11px] font-black uppercase tracking-[0.08em] text-[#CBD5E1]/85">Nepal Market Price</p>
           <span
-            className="inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2 py-0.5 font-black uppercase tracking-widest text-emerald-100 shadow-[0_0_20px_-6px_rgba(52,211,153,0.45)]"
-            title="Quotes refresh about every 6 minutes while this page is open."
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-black uppercase tracking-wider ${
+              freshness === "updated_today"
+                ? "border-[#4ADE80]/40 bg-[#4ADE80]/15 text-[#4ADE80]"
+                : freshness === "stale" || freshness === "unavailable"
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                  : "border-[#CBD5E1]/25 bg-white/5 text-[#CBD5E1]/85"
+            }`}
           >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
-            </span>
-            Live
+            {freshness === "updated_today" ? (
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#4ADE80] opacity-60 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ADE80]" />
+              </span>
+            ) : null}
+            {statusLabel}
           </span>
-          {bullionPriceLoading ? (
-            <span className="text-emerald-200/75">Loading spot prices…</span>
-          ) : bullionPriceRefreshing ? (
-            <span className="text-emerald-200/75">Refreshing…</span>
-          ) : null}
-          <span className="text-emerald-200/75">
-            Last updated: <span className="text-emerald-50">{lastUpdatedLabel}</span>
-          </span>
-          {showWarning ? (
-            <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-black uppercase tracking-wide text-amber-200">
-              {bullionSpot?.degraded ? "Stale quote" : "Feed warning"}
+          {publishedLabel ? (
+            <span className="text-[#CBD5E1]/70">
+              Published: <span className="text-[#F8FAFC]">{publishedLabel}</span>
             </span>
           ) : null}
+          <span className="text-[#CBD5E1]/70">
+            Synced: <span className="text-[#F8FAFC]">{syncLabel}</span>
+          </span>
         </div>
 
-        {usingFallbackStrip ? (
+        {priceUnavailable ? (
           <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-snug text-amber-100/95 sm:text-[11px]">
-            Live feed unavailable ({bullionError}). Showing NPR estimates from USD anchors and your NPR/USD rate — Nepal
-            board (fenegosida.org) could not be reached; add API keys (see .env.example) for stronger international
-            feeds.
+            Price Unavailable — Hamro Patro Nepal rates could not be verified
+            {bullionError ? ` (${bullionError})` : ""}. Portfolio does not treat Yahoo Finance as the Nepal market
+            price.
+          </p>
+        ) : bullionSpot?.degraded ? (
+          <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-snug text-amber-100/95 sm:text-[11px]">
+            Stale data — showing the last successfully verified Hamro Patro prices (published{" "}
+            {bullionSpot.publishedDate ?? "—"}). A fresh sync will replace these when the source is reachable.
           </p>
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <div
             className={`rounded-lg border px-2 py-2 sm:px-2.5 ${
               bullionPriceLoading && !bullionSpot
-                ? "border-amber-400/15 bg-black/20"
-                : "border-amber-400/25 bg-amber-500/[0.07]"
+                ? "border-[#D4AF37]/15 bg-black/20"
+                : "border-[#D4AF37]/35 bg-[rgba(212,175,55,0.08)]"
             }`}
           >
-            <p className="text-[10px] font-black uppercase tracking-wide text-amber-200/80">Nepal gold (today)</p>
+            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-[#F4D06F]/90">
+              <span aria-hidden className="inline-block h-2 w-2 rounded-sm bg-[#F4D06F]" /> Gold Hallmark
+            </p>
             {bullionPriceLoading && !bullionSpot ? (
               <div className="mt-1.5 space-y-1.5">
-                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-emerald-400/10" />
-                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-emerald-400/10" />
+                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-[#D4AF37]/10" />
+                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-[#D4AF37]/10" />
               </div>
+            ) : priceUnavailable ? (
+              <p className="mt-2 text-sm font-black text-[#CBD5E1]/50">—</p>
             ) : (
               <>
-                {bullionSpot?.nepalDomesticPrimary &&
-                typeof bullionSpot.goldNepalPer10GramNPR === "number" &&
-                bullionSpot.goldNepalPer10GramNPR > 0 ? (
-                  <>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-200/60">
-                      Fine Gold (9999) — FENEGOSIDA board
-                    </p>
-                    <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
-                      {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")} / 10 g
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
-                      {formatMoney(bullionSpot.goldPerTolaNPR, "NPR")} / tola
-                    </p>
-                    <p className="mt-1 border-t border-amber-400/15 pt-1 text-[10px] font-bold text-emerald-200/70">
-                      Portfolio / g (board 10 g ÷ 10):{" "}
-                      <span className="font-black text-amber-100">{formatMoney(gramRates.goldNprPerGram, "NPR")}</span>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 font-black tabular-nums text-amber-100 sm:text-sm">
-                      {formatMoney(gramRates.goldNprPerGram, "NPR")} / g
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-amber-200/90">
-                      {formatMoney(tolaRates.goldNprPerTola, "NPR")} / tola
-                    </p>
-                  </>
-                )}
-                {bullionSpot?.nepalDomesticPrimary ? (
-                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
-                    Intl reference: ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
-                    USD/troy oz
-                    {bullionSpot.internationalRefSource ? (
-                      <span className="text-emerald-200/40"> ({bullionSpot.internationalRefSource})</span>
-                    ) : null}
+                <p className="mt-1 font-black tabular-nums text-[#F4D06F] sm:text-sm">
+                  {formatMoney(gramRates.goldNprPerGram, "NPR")}
+                  <span className="text-[10px] font-bold text-[#F4D06F]/70"> / g</span>
+                </p>
+                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-[#D4AF37]/90">
+                  {formatMoney(tolaRates.goldNprPerTola, "NPR")}
+                  <span className="text-[10px] font-semibold text-[#D4AF37]/65"> / tola</span>
+                </p>
+                {goldChange ? (
+                  <p
+                    className={`mt-1 text-[10px] font-bold tabular-nums ${
+                      (bullionSpot?.goldDailyChangeNpr ?? 0) >= 0 ? "text-[#4ADE80]" : "text-rose-300"
+                    }`}
+                  >
+                    Daily: {goldChange}
                   </p>
-                ) : bullionSpot ? (
-                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
-                    Spot-derived NPR (intl): ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}{" "}
-                    USD/troy oz
+                ) : null}
+                {typeof bullionSpot?.goldNepalPer10GramNPR === "number" && bullionSpot.goldNepalPer10GramNPR > 0 ? (
+                  <p className="mt-1 border-t border-[#D4AF37]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
+                    Per 10 g: {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")}
                   </p>
                 ) : null}
               </>
@@ -817,60 +945,42 @@ export function MetalsPanel({
           <div
             className={`rounded-lg border px-2 py-2 sm:px-2.5 ${
               bullionPriceLoading && !bullionSpot
-                ? "border-slate-400/15 bg-black/20"
-                : "border-slate-400/25 bg-slate-500/[0.07]"
+                ? "border-[#94A3B8]/15 bg-black/20"
+                : "border-[#94A3B8]/35 bg-[rgba(148,163,184,0.08)]"
             }`}
           >
-            <p className="text-[10px] font-black uppercase tracking-wide text-slate-200/80">Nepal silver (today)</p>
+            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-[#CBD5E1]/90">
+              <span aria-hidden className="inline-block h-2 w-2 rounded-sm bg-[#CBD5E1]" /> Silver
+            </p>
             {bullionPriceLoading && !bullionSpot ? (
               <div className="mt-1.5 space-y-1.5">
-                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-slate-400/10" />
-                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-slate-400/10" />
+                <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-[#94A3B8]/10" />
+                <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-[#94A3B8]/10" />
               </div>
+            ) : priceUnavailable ? (
+              <p className="mt-2 text-sm font-black text-[#CBD5E1]/50">—</p>
             ) : (
               <>
-                {bullionSpot?.nepalDomesticPrimary &&
-                typeof bullionSpot.silverNepalPer10GramNPR === "number" &&
-                bullionSpot.silverNepalPer10GramNPR > 0 ? (
-                  <>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-200/60">
-                      Silver — FENEGOSIDA board
-                    </p>
-                    <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
-                      {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")} / 10 g
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
-                      {formatMoney(bullionSpot.silverPerTolaNPR, "NPR")} / tola
-                    </p>
-                    <p className="mt-1 border-t border-slate-400/15 pt-1 text-[10px] font-bold text-emerald-200/70">
-                      Portfolio / g (board 10 g ÷ 10):{" "}
-                      <span className="font-black text-slate-100">{formatMoney(gramRates.silverNprPerGram, "NPR")}</span>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-1 font-black tabular-nums text-slate-50 sm:text-sm">
-                      {formatMoney(gramRates.silverNprPerGram, "NPR")} / g
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-bold tabular-nums text-slate-200/90">
-                      {formatMoney(tolaRates.silverNprPerTola, "NPR")} / tola
-                    </p>
-                  </>
-                )}
-                {bullionSpot?.nepalDomesticPrimary ? (
-                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
-                    Intl reference: ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
-                    USD/troy oz
-                    {bullionSpot.internationalRefSource ? (
-                      <span className="text-emerald-200/40"> ({bullionSpot.internationalRefSource})</span>
-                    ) : null}
+                <p className="mt-1 font-black tabular-nums text-[#E2E8F0] sm:text-sm">
+                  {formatMoney(gramRates.silverNprPerGram, "NPR")}
+                  <span className="text-[10px] font-bold text-[#CBD5E1]/70"> / g</span>
+                </p>
+                <p className="mt-0.5 text-[11px] font-bold tabular-nums text-[#CBD5E1]/90">
+                  {formatMoney(tolaRates.silverNprPerTola, "NPR")}
+                  <span className="text-[10px] font-semibold text-[#CBD5E1]/65"> / tola</span>
+                </p>
+                {silverChange ? (
+                  <p
+                    className={`mt-1 text-[10px] font-bold tabular-nums ${
+                      (bullionSpot?.silverDailyChangeNpr ?? 0) >= 0 ? "text-[#4ADE80]" : "text-rose-300"
+                    }`}
+                  >
+                    Daily: {silverChange}
                   </p>
-                ) : bullionSpot ? (
-                  <p className="mt-1 text-[10px] font-bold text-emerald-200/55">
-                    Spot-derived NPR (intl): ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}{" "}
-                    USD/troy oz
+                ) : null}
+                {typeof bullionSpot?.silverNepalPer10GramNPR === "number" && bullionSpot.silverNepalPer10GramNPR > 0 ? (
+                  <p className="mt-1 border-t border-[#94A3B8]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
+                    Per 10 g: {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")}
                   </p>
                 ) : null}
               </>
@@ -878,18 +988,74 @@ export function MetalsPanel({
           </div>
         </div>
 
-        <p className="text-[10px] font-bold leading-snug text-emerald-200/65 sm:text-[11px]">
-          <span className="text-emerald-200/55">Source:</span>{" "}
-          <span className="break-all text-emerald-50">{sourceLabel}</span>
-          <span className="mx-1.5 text-emerald-500/40">·</span>
-          <span className="text-emerald-200/55">Board 1 tola =</span> {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g (Nepal bullion
-          convention). <span className="text-emerald-200/55">Holdings UI conversion:</span> 1 tola = {NEPAL_UI_GRAMS_PER_TOLA} g.
+        <p className="text-[10px] font-bold leading-snug text-[#CBD5E1]/60 sm:text-[11px]">
+          <span className="text-[#CBD5E1]/45">Source:</span>{" "}
+          <a
+            href={bullionSpot?.sourceUrl ?? HAMRO_PATRO_GOLD_SOURCE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-black text-[#F4D06F] underline-offset-2 hover:underline"
+          >
+            Hamro Patro
+          </a>
+          <span className="mx-1.5 text-[#10B981]/40">·</span>
+          UI 1 tola = {NEPAL_UI_GRAMS_PER_TOLA} g
+          {bullionSpot?.internationalRefSource ? (
+            <>
+              <span className="mx-1.5 text-[#10B981]/40">·</span>
+              <span className="text-[#CBD5E1]/45">Intl ref:</span> {bullionSpot.internationalRefSource}
+            </>
+          ) : null}
         </p>
       </div>
 
-      <MetalsPremiumDashboard rows={rows} gramRates={gramRates} ledger={ledger} />
+      <MetalsPremiumDashboard
+        rows={rows}
+        gramRates={gramRates}
+        ledger={ledger}
+        onAddGold={() => {
+          scrollToTransactions();
+          metalFormRef.current?.openBuyForMetal("gold");
+        }}
+        onAddSilver={() => {
+          scrollToTransactions();
+          metalFormRef.current?.openBuyForMetal("silver");
+        }}
+        onTrades={scrollToTransactions}
+        onUploadBills={() => {
+          scrollToTransactions();
+          queueMicrotask(() => metalFormRef.current?.focusBillsInput());
+        }}
+        onMutate={onMutate}
+      />
 
-      <div className="mb-3 mt-3 grid gap-2 sm:grid-cols-2">
+      {/* Individual holdings — collapsible, all features preserved */}
+      <div ref={holdingsAnchorRef} className="mb-3 mt-1">
+        <button
+          type="button"
+          onClick={() => setHoldingsOpen((o) => !o)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-[#10B981]/25 bg-[#062B24]/40 px-3 py-2.5 text-left transition hover:border-[#10B981]/40"
+          aria-expanded={holdingsOpen}
+        >
+          <span className="text-xs font-black uppercase tracking-[0.1em] text-[#F8FAFC]">
+            Individual Holdings
+            <span className="ml-2 font-bold normal-case tracking-normal text-[#CBD5E1]/55">
+              ({rows.length})
+            </span>
+          </span>
+          <ChevronDown
+            size={18}
+            className={`shrink-0 text-[#CBD5E1]/70 transition ${holdingsOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+        {holdingsOpen ? (
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {rows.length === 0 ? (
+          <p className="col-span-full rounded-xl border border-white/10 bg-black/25 px-3 py-4 text-center text-[12px] font-semibold text-[#CBD5E1]/65">
+            No individual holdings yet. Use + Gold or + Silver to add items.
+          </p>
+        ) : null}
         {rows.map((row) => {
           const g = row.grams ?? 0;
           const uiRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
@@ -990,18 +1156,42 @@ export function MetalsPanel({
           );
         })}
       </div>
-
-      <div ref={txnAnchorRef} className="mt-1">
-        <UniversalMetalTransactionForm ref={metalFormRef} rows={rows} onMutate={onMutate} />
+        ) : null}
       </div>
 
-      <ModuleLedgerCard
-        bucket="metal"
-        ledger={ledger}
-        title="Gold & Silver ledger"
-        subtitle="Each row keeps its own bills and photos forever."
-        ledgerMutate={onMutate}
-      />
+      {/* Transactions + ledger — collapsible, full functionality preserved */}
+      <div ref={txnAnchorRef} className="mt-1 space-y-2">
+        <button
+          type="button"
+          onClick={() => setTradesOpen((o) => !o)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-[#10B981]/25 bg-[#062B24]/40 px-3 py-2.5 text-left transition hover:border-[#10B981]/40"
+          aria-expanded={tradesOpen}
+        >
+          <span className="text-xs font-black uppercase tracking-[0.1em] text-[#F8FAFC]">
+            Trades &amp; Transaction History
+          </span>
+          <ChevronDown
+            size={18}
+            className={`shrink-0 text-[#CBD5E1]/70 transition ${tradesOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
+        {/* Keep mounted when collapsed so Quick Action refs stay valid */}
+        <div className={`space-y-3 ${tradesOpen ? "" : "hidden"}`} hidden={!tradesOpen}>
+          <UniversalMetalTransactionForm ref={metalFormRef} rows={rows} onMutate={onMutate} />
+          <ModuleLedgerCard
+            bucket="metal"
+            ledger={ledger}
+            title="Gold & Silver ledger"
+            subtitle="Each row keeps its own bills and photos forever. Filter, search, and manage bills from each row."
+            ledgerMutate={onMutate}
+            onEditMetalEntry={(entry) => {
+              setTradesOpen(true);
+              queueMicrotask(() => metalFormRef.current?.openEditEntry(entry));
+            }}
+          />
+        </div>
+      </div>
     </section>
   );
 }

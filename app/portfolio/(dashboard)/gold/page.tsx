@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
 import { PortfolioGoldPage } from "@/components/portfolio/portfolio-route-views";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-gs-premium",
+  display: "swap",
+  weight: ["500", "600", "700", "800"],
+});
 
 export const metadata: Metadata = {
   title: "Gold & Silver | Portfolio | FIRE Nepal",
@@ -7,5 +15,9 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <PortfolioGoldPage />;
+  return (
+    <div className={`${manrope.variable} gs-premium-root min-w-0`}>
+      <PortfolioGoldPage />
+    </div>
+  );
 }

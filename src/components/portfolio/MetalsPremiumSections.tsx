@@ -1,6 +1,19 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
+import {
+  ArrowLeftRight,
+  BarChart3,
+  CalendarDays,
+  ImagePlus,
+  PieChart as PieChartIcon,
+  Plus,
+  Target,
+  TrendingUp,
+  Layers,
+} from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { toast } from "sonner";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import {
@@ -10,16 +23,19 @@ import {
 } from "@/components/portfolio/holding-stats";
 import {
   metalHoldingCalendarDays,
+  metalHoldingCalendarDaysForMetal,
   roiPct,
   rollupAllMetals,
   rollupMetalBucket,
   weightedBasisCostPerGram,
   type MetalRatePair,
 } from "@/components/portfolio/metals-premium-metrics";
-import type { MetalRow, PortfolioLedgerEntry } from "@/components/portfolio/types";
+import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
+import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
 import { formatMoney } from "@/lib/expense-utils";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
+import Image from "next/image";
 
 function formatRoiPct(pct: number | null): string {
   if (pct == null || !Number.isFinite(pct)) return "—";
@@ -27,101 +43,38 @@ function formatRoiPct(pct: number | null): string {
   return `${sign}${pct.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 0 })}%`;
 }
 
-function MetalPremiumKpiCard({
+function formatSignedMoney(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `${n >= 0 ? "+" : ""}${formatMoney(n, "NPR")}`;
+}
+
+function KpiCard({
   label,
-  labelClassName,
-  shellClassName,
   valueText,
   valueClassName,
-  maxRem,
-  minRem,
-  footer,
+  shellClassName,
+  icon,
+  maxRem = 1.35,
 }: {
   label: string;
-  labelClassName: string;
-  shellClassName: string;
   valueText: string;
   valueClassName: string;
-  maxRem: number;
-  minRem: number;
-  footer: ReactNode;
+  shellClassName: string;
+  icon: ReactNode;
+  maxRem?: number;
 }) {
   return (
-    <div
-      className={`group flex h-full min-h-[6.875rem] min-w-0 flex-col rounded-2xl border px-3 py-2.5 shadow-inner transition hover:ring-1 hover:ring-lime-400/20 sm:min-h-[7.25rem] sm:px-3.5 sm:py-3 ${shellClassName}`}
-    >
-      <p className={`shrink-0 text-[10px] font-black uppercase leading-tight tracking-[0.06em] ${labelClassName}`}>{label}</p>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center py-1 sm:py-1.5">
-        <AutoFitSingleLine text={valueText} maxRem={maxRem} minRem={minRem} className={valueClassName} />
+    <div className={`gs-kpi-card flex min-h-[5.25rem] min-w-0 flex-col rounded-xl border px-2.5 py-2 sm:min-h-[5.75rem] sm:px-3 sm:py-2.5 ${shellClassName}`}>
+      <div className="flex items-start justify-between gap-1">
+        <p className="text-[9px] font-black uppercase leading-tight tracking-[0.08em] text-[#CBD5E1]/75 sm:text-[10px]">
+          {label}
+        </p>
+        <span className="shrink-0 opacity-80">{icon}</span>
       </div>
-      <div className="mt-auto flex min-h-[2.625rem] w-full min-w-0 shrink-0 flex-col justify-end gap-0.5 text-[10px] leading-snug [&_p]:min-w-0 [&_p]:max-w-full [&_p]:break-words">
-        {footer}
+      <div className="mt-auto flex min-h-0 min-w-0 flex-1 items-end pt-1">
+        <AutoFitSingleLine text={valueText} maxRem={maxRem} minRem={0.55} className={`font-black tabular-nums ${valueClassName}`} />
       </div>
     </div>
-  );
-}
-
-function premiumShell(emphasis: boolean) {
-  if (emphasis) {
-    return "border-lime-400/30 bg-gradient-to-br from-lime-950/45 via-emerald-950/35 to-black/45 shadow-inner shadow-black/40 ring-1 ring-lime-400/15 hover:shadow-[0_0_28px_-8px_rgba(163,230,53,0.35)]";
-  }
-  return "border-emerald-400/25 bg-gradient-to-br from-emerald-950/40 to-black/40 shadow-inner shadow-black/35 ring-1 ring-emerald-400/10 hover:border-emerald-400/35";
-}
-
-function metalInsightBlock(opts: {
-  title: string;
-  accent: "amber" | "slate";
-  avgPurchasePerGram: number | null;
-  boardPerGram: number;
-  hasBasisLots: boolean;
-}) {
-  const { title, accent, avgPurchasePerGram, boardPerGram, hasBasisLots } = opts;
-  const diff =
-    avgPurchasePerGram != null && avgPurchasePerGram > 0 && boardPerGram > 0 ? boardPerGram - avgPurchasePerGram : null;
-  const profitPerG = diff;
-  const ring = accent === "amber" ? "ring-amber-400/15" : "ring-slate-400/15";
-  const border = accent === "amber" ? "border-amber-400/25" : "border-slate-400/25";
-  const labelTone = accent === "amber" ? "text-amber-200/70" : "text-slate-200/70";
-  return (
-    <div className={`min-w-0 rounded-2xl border ${border} bg-black/30 p-3 shadow-inner ${ring}`}>
-      <h3 className={`text-[11px] font-black uppercase tracking-[0.08em] ${labelTone}`}>{title}</h3>
-      <dl className="mt-2 space-y-1.5 text-[11px] font-bold leading-snug">
-        <div className="flex justify-between gap-2">
-          <dt className="text-emerald-200/55">Avg purchase / g</dt>
-          <dd className="tabular-nums text-emerald-50">
-            {avgPurchasePerGram != null && hasBasisLots ? formatMoney(avgPurchasePerGram, "NPR") : "—"}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-emerald-200/55">Nepal board / g</dt>
-          <dd className="tabular-nums text-emerald-50">{formatMoney(boardPerGram, "NPR")}</dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-emerald-200/55">Board − avg / g</dt>
-          <dd className={`tabular-nums ${diff != null && diff >= 0 ? "text-lime-200" : diff != null ? "text-rose-200" : "text-emerald-200/50"}`}>
-            {diff != null ? `${diff >= 0 ? "+" : ""}${formatMoney(diff, "NPR")}` : "—"}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-emerald-200/55">Profit / g (unrealized)</dt>
-          <dd className={`tabular-nums ${profitPerG != null && profitPerG >= 0 ? "text-lime-200" : profitPerG != null ? "text-rose-200" : "text-emerald-200/50"}`}>
-            {profitPerG != null ? `${profitPerG >= 0 ? "+" : ""}${formatMoney(profitPerG, "NPR")}` : "—"}
-          </dd>
-        </div>
-      </dl>
-      {!hasBasisLots ? (
-        <p className="mt-2 text-[10px] font-semibold text-emerald-200/45">Record BUY transactions with price to unlock averages.</p>
-      ) : null}
-    </div>
-  );
-}
-
-function holdingFooter(days: number | null) {
-  if (days == null) return <p className="font-semibold text-emerald-200/40">Record BUY transactions with dates to anchor holding time</p>;
-  return (
-    <p className="font-semibold text-emerald-200/50">
-      {days.toLocaleString()} calendar day{days === 1 ? "" : "s"}
-    </p>
   );
 }
 
@@ -194,25 +147,320 @@ export function MetalGramTolaFields({
   );
 }
 
+function MetalHoldingsCard({
+  title,
+  metal,
+  rollup,
+  cagrFrac,
+}: {
+  title: string;
+  metal: "gold" | "silver";
+  rollup: ReturnType<typeof rollupMetalBucket>;
+  cagrFrac: number | null;
+}) {
+  const isGold = metal === "gold";
+  const empty = rollup.grams <= 0;
+  const tola = empty ? null : gramsToTolaUi(rollup.grams);
+  const border = isGold ? "border-[#D4AF37]/35" : "border-[#94A3B8]/35";
+  const glow = isGold
+    ? "from-[#D4AF37]/12 via-[#062B24]/40 to-[#03100F]/80 shadow-[0_0_28px_-12px_rgba(212,175,55,0.45)]"
+    : "from-[#94A3B8]/12 via-[#0c1a24]/50 to-[#03100F]/80 shadow-[0_0_28px_-12px_rgba(148,163,184,0.35)]";
+  const titleTone = isGold ? "text-[#F4D06F]" : "text-[#CBD5E1]";
+  const art = isGold ? "/illustrations/gold-silver/gold-bars.svg" : "/illustrations/gold-silver/silver-bars.svg";
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Grams", value: empty ? "—" : `${rollup.grams.toLocaleString(undefined, { maximumFractionDigits: 4 })} g` },
+    { label: "Tola", value: tola != null ? tola.toFixed(4) : "—" },
+    { label: "Purchase", value: rollup.basisSumNpr > 0 ? formatMoney(rollup.basisSumNpr, "NPR") : "—" },
+    { label: "Current", value: empty ? "—" : formatMoney(rollup.currentNpr, "NPR") },
+  ];
+
+  const cagrText = empty || cagrFrac == null ? "—" : formatCagrPct(cagrFrac, 2).replace(" p.a.", "");
+
+  return (
+    <article className={`gs-glass overflow-hidden rounded-2xl border ${border} bg-gradient-to-br ${glow}`}>
+      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-stretch sm:p-4">
+        <div className="relative mx-auto h-24 w-28 shrink-0 sm:mx-0 sm:h-28 sm:w-32" aria-hidden>
+          <Image src={art} alt="" fill unoptimized className="object-contain drop-shadow-lg" sizes="128px" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className={`text-sm font-black uppercase tracking-[0.1em] ${titleTone}`}>{title}</h3>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold sm:grid-cols-2">
+            {rows.map((r) => (
+              <div key={r.label} className="flex justify-between gap-2 sm:block sm:space-y-0.5">
+                <dt className="text-[#CBD5E1]/55">{r.label}</dt>
+                <dd className="tabular-nums text-[#F8FAFC]">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {/* Mobile: CAGR directly under Current */}
+          <div
+            className={`mt-3 rounded-xl border px-3 py-2.5 lg:hidden ${
+              isGold ? "border-[#D4AF37]/35 bg-[#D4AF37]/10" : "border-[#94A3B8]/35 bg-[#94A3B8]/10"
+            }`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#CBD5E1]/70">CAGR Returns</p>
+            <p className={`mt-0.5 text-xl font-black tabular-nums ${isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]"}`}>
+              {cagrText}
+            </p>
+          </div>
+        </div>
+        {/* Desktop: side CAGR panel */}
+        <div
+          className={`hidden w-[9.5rem] shrink-0 flex-col justify-center rounded-xl border px-3 py-3 text-center lg:flex ${
+            isGold ? "border-[#D4AF37]/40 bg-black/40" : "border-[#94A3B8]/40 bg-black/40"
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#CBD5E1]/70">CAGR Returns</p>
+          <p className={`mt-1 text-2xl font-black tabular-nums leading-none ${isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]"}`}>
+            {cagrText}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MetalInsightsTable({
+  goldAvg,
+  silverAvg,
+  goldBoard,
+  silverBoard,
+  goldHasBasis,
+  silverHasBasis,
+}: {
+  goldAvg: number | null;
+  silverAvg: number | null;
+  goldBoard: number;
+  silverBoard: number;
+  goldHasBasis: boolean;
+  silverHasBasis: boolean;
+}) {
+  const goldDiff =
+    goldAvg != null && goldAvg > 0 && goldBoard > 0 ? goldBoard - goldAvg : null;
+  const silverDiff =
+    silverAvg != null && silverAvg > 0 && silverBoard > 0 ? silverBoard - silverAvg : null;
+
+  const cell = (n: number | null, signed = false) => {
+    if (n == null || !Number.isFinite(n)) return <span className="text-[#CBD5E1]/40">—</span>;
+    const tone = signed ? (n >= 0 ? "text-[#4ADE80]" : "text-rose-300") : "text-[#F8FAFC]";
+    return (
+      <span className={`tabular-nums ${tone}`}>
+        {signed ? `${n >= 0 ? "+" : ""}${formatMoney(n, "NPR")}` : formatMoney(n, "NPR")}
+      </span>
+    );
+  };
+
+  const rows: { metric: string; gold: ReactNode; silver: ReactNode }[] = [
+    {
+      metric: "Avg Purchase / g",
+      gold: goldHasBasis ? cell(goldAvg) : cell(null),
+      silver: silverHasBasis ? cell(silverAvg) : cell(null),
+    },
+    {
+      metric: "Nepal Board / g",
+      gold: cell(goldBoard > 0 ? goldBoard : null),
+      silver: cell(silverBoard > 0 ? silverBoard : null),
+    },
+    {
+      metric: "Board − Avg / g",
+      gold: goldHasBasis ? cell(goldDiff, true) : cell(null),
+      silver: silverHasBasis ? cell(silverDiff, true) : cell(null),
+    },
+    {
+      metric: "Profit / g (Unrealized)",
+      gold: goldHasBasis ? cell(goldDiff, true) : cell(null),
+      silver: silverHasBasis ? cell(silverDiff, true) : cell(null),
+    },
+  ];
+
+  return (
+    <section className="gs-glass rounded-2xl border border-[#10B981]/25 p-3 sm:p-4" aria-labelledby="gs-insights-title">
+      <h3 id="gs-insights-title" className="text-xs font-black uppercase tracking-[0.1em] text-[#F8FAFC] sm:text-sm">
+        Metal Insights (Per Gram)
+      </h3>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[18rem] border-collapse text-left text-[11px] font-bold">
+          <thead>
+            <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-[#CBD5E1]/55">
+              <th className="py-2 pr-2 font-black">Metric</th>
+              <th className="py-2 px-2 font-black text-[#F4D06F]">Gold</th>
+              <th className="py-2 pl-2 font-black text-[#CBD5E1]">Silver</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.metric} className="border-b border-white/[0.05]">
+                <td className="py-2.5 pr-2 text-[#CBD5E1]/70">{r.metric}</td>
+                <td className="px-2 py-2.5">{r.gold}</td>
+                <td className="py-2.5 pl-2">{r.silver}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!goldHasBasis && !silverHasBasis ? (
+        <p className="mt-2 text-[10px] font-semibold text-[#CBD5E1]/45">
+          Record BUY transactions with price to unlock averages.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function PortfolioAllocationCard({
+  goldValue,
+  silverValue,
+  netWorthSharePct,
+}: {
+  goldValue: number;
+  silverValue: number;
+  netWorthSharePct: number | null;
+}) {
+  const uid = useId().replace(/:/g, "");
+  const total = goldValue + silverValue;
+  const empty = total <= 0;
+  const goldPct = empty ? 0 : (goldValue / total) * 100;
+  const silverPct = empty ? 0 : (silverValue / total) * 100;
+
+  const data = useMemo(() => {
+    if (empty) return [{ name: "Empty", value: 1, color: "#1e293b" }];
+    const slices = [
+      { name: "Gold", value: goldValue, color: "#D4AF37" },
+      { name: "Silver", value: silverValue, color: "#94A3B8" },
+    ].filter((s) => s.value > 0);
+    return slices.length ? slices : [{ name: "Empty", value: 1, color: "#1e293b" }];
+  }, [empty, goldValue, silverValue]);
+
+  return (
+    <section className="gs-glass rounded-2xl border border-[#D4AF37]/25 p-3 sm:p-4" aria-labelledby="gs-alloc-title">
+      <h3 id="gs-alloc-title" className="text-xs font-black uppercase tracking-[0.1em] text-[#F8FAFC] sm:text-sm">
+        Portfolio Summary
+      </h3>
+      {empty ? (
+        <p className="mt-4 text-center text-[12px] font-semibold text-[#CBD5E1]/65">
+          No gold or silver holdings — allocation appears when you add metals.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+          <div className="relative h-36 w-36 shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius="62%"
+                  outerRadius="88%"
+                  paddingAngle={data.length > 1 ? 2 : 0}
+                  stroke="#03100F"
+                  strokeWidth={2}
+                >
+                  {data.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(3,16,15,0.96)",
+                    border: "1px solid rgba(212,175,55,0.25)",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#F8FAFC",
+                  }}
+                  formatter={(value: number, _n, item) => {
+                    const name = (item as { payload?: { name?: string } })?.payload?.name ?? "";
+                    const pct = total > 0 ? (value / total) * 100 : 0;
+                    return [`${formatMoney(value, "NPR")} (${pct.toFixed(1)}%)`, name];
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span
+                className={`text-sm font-black ${goldPct >= silverPct ? "text-[#F4D06F]" : "text-[#CBD5E1]"}`}
+                aria-hidden
+              >
+                {goldPct >= silverPct ? "Au" : "Ag"}
+              </span>
+              <span className="sr-only">Allocation center</span>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1 space-y-2 text-[12px] font-bold">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-[#F4D06F]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#D4AF37]" aria-hidden />
+                Gold
+              </span>
+              <span className="tabular-nums text-[#F8FAFC]">{goldPct.toFixed(0)}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-[#CBD5E1]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#94A3B8]" aria-hidden />
+                Silver
+              </span>
+              <span className="tabular-nums text-[#F8FAFC]">{silverPct.toFixed(0)}%</span>
+            </div>
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#CBD5E1]/55">Net Worth Share</p>
+              <p className="mt-0.5 text-lg font-black tabular-nums text-[#4ADE80]">
+                {netWorthSharePct != null ? `${netWorthSharePct.toFixed(2)}%` : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* silence unused uid if pie needs unique keys later */}
+      <span className="hidden" aria-hidden>{uid}</span>
+    </section>
+  );
+}
+
+const QUICK_BTN =
+  "gs-quick-btn flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-[11px] font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F4D06F] active:scale-[0.98] sm:min-h-12 sm:text-xs";
+
 export function MetalsPremiumDashboard({
   rows,
   gramRates,
   ledger = [],
+  onAddGold,
+  onAddSilver,
+  onTrades,
+  onUploadBills,
+  onMutate,
 }: {
   rows: readonly MetalRow[];
   gramRates: MetalRatePair;
   ledger?: readonly PortfolioLedgerEntry[];
+  onAddGold: () => void;
+  onAddSilver: () => void;
+  onTrades: () => void;
+  onUploadBills: () => void;
+  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
   const { totals } = useWealthPortfolio();
   const all = rollupAllMetals(rows, gramRates);
   const gold = rollupMetalBucket(rows, "gold", gramRates);
   const silver = rollupMetalBucket(rows, "silver", gramRates);
   const days = metalHoldingCalendarDays(rows, ledger);
+  const goldDays = metalHoldingCalendarDaysForMetal(rows, "gold", ledger);
+  const silverDays = metalHoldingCalendarDaysForMetal(rows, "silver", ledger);
   const purchase = all.basisSumNpr;
   const current = all.currentNpr;
   const netPl = purchase > 0 ? current - purchase : null;
   const roi = roiPct(purchase, current);
   const cagrFrac = days != null && days >= 1 && purchase > 0 ? annualizedCagrFraction(purchase, current, days) : null;
+  const goldCagr =
+    goldDays != null && goldDays >= 1 && gold.basisSumNpr > 0
+      ? annualizedCagrFraction(gold.basisSumNpr, gold.currentNpr, goldDays)
+      : null;
+  const silverCagr =
+    silverDays != null && silverDays >= 1 && silver.basisSumNpr > 0
+      ? annualizedCagrFraction(silver.basisSumNpr, silver.currentNpr, silverDays)
+      : null;
 
   const goldAvgPerG = weightedBasisCostPerGram(rows, "gold");
   const silverAvgPerG = weightedBasisCostPerGram(rows, "silver");
@@ -223,182 +471,162 @@ export function MetalsPremiumDashboard({
   const nw = totals.netWorthNpr;
   const nwContributionPct = nw > 0 && Number.isFinite(current) ? (current / nw) * 100 : null;
 
-  const netTone =
-    netPl == null ? "text-emerald-200/50" : netPl >= 0 ? "text-lime-200" : "text-rose-300";
-  const roiTone = roi == null ? "text-emerald-200/50" : roi >= 0 ? "text-lime-200" : "text-rose-300";
-  const cagrTone =
-    cagrFrac == null ? "text-emerald-200/50" : cagrFrac >= 0 ? "text-lime-200" : "text-rose-300";
-
-  const summaryCard = (opts: {
-    title: string;
-    accent: "amber" | "slate";
-    rollup: typeof gold;
-  }) => {
-    const { title, accent, rollup: r } = opts;
-    const tola = r.grams > 0 ? gramsToTolaUi(r.grams) : 0;
-    const border = accent === "amber" ? "border-amber-400/25" : "border-slate-400/25";
-    const glow = accent === "amber" ? "from-amber-950/35" : "from-slate-900/40";
-    return (
-      <div
-        className={`min-w-0 rounded-2xl border ${border} bg-gradient-to-br ${glow} to-black/45 p-3 shadow-inner ring-1 ring-white/5`}
-      >
-        <h3 className="text-xs font-black uppercase tracking-[0.08em] text-emerald-100/90">{title}</h3>
-        <dl className="mt-2 grid gap-1.5 text-[11px] font-bold sm:grid-cols-2">
-          <div className="flex justify-between gap-2 sm:block sm:space-y-0.5">
-            <dt className="text-emerald-200/55">Grams</dt>
-            <dd className="tabular-nums text-emerald-50">{r.grams > 0 ? r.grams.toLocaleString() : "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-2 sm:block sm:space-y-0.5">
-            <dt className="text-emerald-200/55">Tola (UI)</dt>
-            <dd className="tabular-nums text-amber-100/95">{r.grams > 0 ? tola.toFixed(4) : "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-2 sm:block sm:space-y-0.5">
-            <dt className="text-emerald-200/55">Purchase</dt>
-            <dd className="tabular-nums text-emerald-50">{r.basisSumNpr > 0 ? formatMoney(r.basisSumNpr, "NPR") : "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-2 sm:block sm:space-y-0.5">
-            <dt className="text-emerald-200/55">Current</dt>
-            <dd className="tabular-nums text-emerald-50">{r.grams > 0 ? formatMoney(r.currentNpr, "NPR") : "—"}</dd>
-          </div>
-        </dl>
-      </div>
-    );
-  };
+  const netTone = netPl == null ? "text-[#CBD5E1]/50" : netPl >= 0 ? "text-[#4ADE80]" : "text-rose-300";
+  const roiTone = roi == null ? "text-[#CBD5E1]/50" : roi >= 0 ? "text-[#4ADE80]" : "text-rose-300";
 
   return (
-    <div className="mb-3 space-y-3">
-      <div className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-950/25 via-black/35 to-lime-950/20 p-3 shadow-inner sm:p-3.5">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-lime-500/25 to-emerald-600/20 text-lime-100 ring-1 ring-lime-400/25">
-            <span className="text-sm font-black">Au</span>
+    <div className="gs-premium-dash mb-3 space-y-3 sm:space-y-3.5">
+      {/* KPI grid — 5 cards */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-5">
+        <KpiCard
+          label="Current Value"
+          valueText={all.grams > 0 ? formatMoney(current, "NPR") : "—"}
+          valueClassName="text-[#F4D06F]"
+          shellClassName="border-[#D4AF37]/40 bg-gradient-to-br from-[#D4AF37]/15 to-[#03100F]/80 shadow-[0_0_24px_-10px_rgba(212,175,55,0.45)]"
+          icon={<span className="text-[#F4D06F]">⬤</span>}
+        />
+        <KpiCard
+          label="Cost Basis"
+          valueText={purchase > 0 ? formatMoney(purchase, "NPR") : "—"}
+          valueClassName="text-[#F8FAFC]"
+          shellClassName="border-[#10B981]/35 bg-gradient-to-br from-[#10B981]/12 to-[#03100F]/80"
+          icon={<Layers size={14} className="text-[#10B981]" aria-hidden />}
+        />
+        <KpiCard
+          label="Profit / Loss"
+          valueText={formatSignedMoney(netPl)}
+          valueClassName={netTone}
+          shellClassName="border-[#10B981]/35 bg-gradient-to-br from-[#062B24]/60 to-[#03100F]/80"
+          icon={<TrendingUp size={14} className="text-[#4ADE80]" aria-hidden />}
+        />
+        <KpiCard
+          label="Total ROI"
+          valueText={formatRoiPct(roi)}
+          valueClassName={roiTone}
+          shellClassName="border-[#10B981]/35 bg-gradient-to-br from-[#062B24]/60 to-[#03100F]/80"
+          icon={<Target size={14} className="text-[#4ADE80]" aria-hidden />}
+          maxRem={1.5}
+        />
+        <KpiCard
+          label="CAGR"
+          valueText={formatCagrPct(cagrFrac, 2).replace(" p.a.", "")}
+          valueClassName="text-[#F4D06F]"
+          shellClassName="col-span-2 border-[#D4AF37]/45 bg-gradient-to-br from-[#0a1f2e]/80 via-[#062B24]/50 to-[#03100F] shadow-[0_0_28px_-10px_rgba(212,175,55,0.4)] lg:col-span-1"
+          icon={<BarChart3 size={14} className="text-[#F4D06F]" aria-hidden />}
+          maxRem={1.55}
+        />
+      </div>
+
+      {/* Holding duration + Net worth share */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div
+          className="gs-glass flex min-h-11 items-center gap-2.5 rounded-xl border border-[#10B981]/25 px-3 py-2.5"
+          title={days != null ? `${days.toLocaleString()} calendar days` : undefined}
+        >
+          <CalendarDays size={18} className="shrink-0 text-[#10B981]" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[#CBD5E1]/55">Held For</p>
+            <p className="text-sm font-black tabular-nums text-[#F8FAFC]">{holdingApprox}</p>
           </div>
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-[0.1em] text-emerald-50 sm:text-sm">Portfolio summary</h3>
-            <p className="text-[10px] font-bold text-emerald-200/55 sm:text-[11px]">
-              Totals across all gold and silver items — live marks, cost basis, return, and share of net worth.
+          {days != null ? (
+            <p className="ml-auto text-[10px] font-bold text-[#CBD5E1]/45">{days.toLocaleString()} days</p>
+          ) : null}
+        </div>
+        <div className="gs-glass flex min-h-11 items-center gap-2.5 rounded-xl border border-[#10B981]/25 px-3 py-2.5">
+          <PieChartIcon size={18} className="shrink-0 text-[#4ADE80]" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[#CBD5E1]/55">Net Worth Share</p>
+            <p className="text-sm font-black tabular-nums text-[#4ADE80]">
+              {nwContributionPct != null ? `${nwContributionPct.toFixed(2)}%` : "—"}
             </p>
           </div>
         </div>
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5 lg:grid-cols-4 xl:grid-cols-7">
-          <MetalPremiumKpiCard
-            label="Total gold value"
-            labelClassName="text-amber-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={gold.grams > 0 ? formatMoney(gold.currentNpr, "NPR") : "—"}
-            valueClassName="text-amber-100"
-            maxRem={1.45}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Live mark × gold grams</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total silver value"
-            labelClassName="text-slate-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={silver.grams > 0 ? formatMoney(silver.currentNpr, "NPR") : "—"}
-            valueClassName="text-slate-50"
-            maxRem={1.45}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Live mark × silver grams</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total cost basis"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={purchase > 0 ? formatMoney(purchase, "NPR") : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={1.5}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">From BUY transactions</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total current value"
-            labelClassName="text-emerald-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={all.grams > 0 ? formatMoney(current, "NPR") : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={1.5}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Gold + silver marks</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total profit / loss"
-            labelClassName="text-emerald-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={netPl != null ? `${netPl >= 0 ? "+" : ""}${formatMoney(netPl, "NPR")}` : "—"}
-            valueClassName={netTone}
-            maxRem={1.35}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Current − cost basis</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Total ROI %"
-            labelClassName="text-lime-200/70"
-            shellClassName={premiumShell(true)}
-            valueText={formatRoiPct(roi)}
-            valueClassName={roiTone}
-            maxRem={2}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Vs cost basis</p>}
-          />
-          <MetalPremiumKpiCard
-            label="Net worth share"
-            labelClassName="text-violet-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={nwContributionPct != null ? `${nwContributionPct.toFixed(2)}%` : "—"}
-            valueClassName="text-emerald-50"
-            maxRem={1.75}
-            minRem={0.5}
-            footer={<p className="font-semibold text-emerald-200/45">Metals ÷ portfolio net worth</p>}
-          />
-        </div>
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
-          <MetalPremiumKpiCard
-            label="CAGR %"
-            labelClassName="text-amber-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={formatCagrPct(cagrFrac, 2).replace(" p.a.", "")}
-            valueClassName={cagrTone}
-            maxRem={1.75}
-            minRem={0.5}
-            footer={holdingFooter(days)}
-          />
-          <MetalPremiumKpiCard
-            label="Holding duration"
-            labelClassName="text-violet-200/70"
-            shellClassName={premiumShell(false)}
-            valueText={holdingApprox}
-            valueClassName="text-emerald-50"
-            maxRem={1.5}
-            minRem={0.4375}
-            footer={holdingFooter(days)}
-          />
-        </div>
       </div>
 
-      <div className="grid min-w-0 gap-2 lg:grid-cols-2">
-        {summaryCard({ title: "Gold items", accent: "amber", rollup: gold })}
-        {summaryCard({ title: "Silver items", accent: "slate", rollup: silver })}
+      <MetalHoldingsCard title="Gold Items" metal="gold" rollup={gold} cagrFrac={goldCagr} />
+      <MetalHoldingsCard title="Silver Items" metal="silver" rollup={silver} cagrFrac={silverCagr} />
+
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <MetalInsightsTable
+          goldAvg={goldAvgPerG}
+          silverAvg={silverAvgPerG}
+          goldBoard={gramRates.goldNprPerGram}
+          silverBoard={gramRates.silverNprPerGram}
+          goldHasBasis={goldHasBasisLots}
+          silverHasBasis={silverHasBasisLots}
+        />
+        <PortfolioAllocationCard
+          goldValue={gold.grams > 0 ? gold.currentNpr : 0}
+          silverValue={silver.grams > 0 ? silver.currentNpr : 0}
+          netWorthSharePct={nwContributionPct}
+        />
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-black uppercase tracking-[0.08em] text-emerald-100/90">Metal insights (per gram)</h3>
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-          {metalInsightBlock({
-            title: "Gold insights",
-            accent: "amber",
-            avgPurchasePerGram: goldAvgPerG,
-            boardPerGram: gramRates.goldNprPerGram,
-            hasBasisLots: goldHasBasisLots,
-          })}
-          {metalInsightBlock({
-            title: "Silver insights",
-            accent: "slate",
-            avgPurchasePerGram: silverAvgPerG,
-            boardPerGram: gramRates.silverNprPerGram,
-            hasBasisLots: silverHasBasisLots,
-          })}
+      {/* Quick actions */}
+      <section aria-labelledby="gs-quick-title">
+        <h3 id="gs-quick-title" className="mb-2 text-xs font-black uppercase tracking-[0.1em] text-[#F8FAFC]">
+          Quick Actions
+        </h3>
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 lg:grid-cols-6">
+          <button
+            type="button"
+            onClick={onAddGold}
+            className={`${QUICK_BTN} border-[#D4AF37]/45 bg-[#D4AF37]/10 text-[#F4D06F] shadow-[0_0_20px_-8px_rgba(212,175,55,0.5)] hover:bg-[#D4AF37]/18`}
+          >
+            <Plus size={16} aria-hidden />
+            Gold
+          </button>
+          <button
+            type="button"
+            onClick={onAddSilver}
+            className={`${QUICK_BTN} border-[#94A3B8]/45 bg-[#94A3B8]/10 text-[#E2E8F0] shadow-[0_0_20px_-8px_rgba(148,163,184,0.4)] hover:bg-[#94A3B8]/18`}
+          >
+            <Plus size={16} aria-hidden />
+            Silver
+          </button>
+          <button
+            type="button"
+            onClick={onTrades}
+            className={`${QUICK_BTN} border-[#10B981]/35 bg-[#10B981]/10 text-[#6EE7B7] hover:bg-[#10B981]/18`}
+          >
+            <ArrowLeftRight size={16} aria-hidden />
+            Trades
+          </button>
+          <button
+            type="button"
+            onClick={onUploadBills}
+            className={`${QUICK_BTN} border-[#10B981]/35 bg-[#10B981]/10 text-[#6EE7B7] hover:bg-[#10B981]/18`}
+          >
+            <ImagePlus size={16} aria-hidden />
+            Upload Bills
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              toast.message("Report export is not available on Gold & Silver yet.", {
+                description: "Owner approval needed before adding a metals report/export feature.",
+              })
+            }
+            className={`${QUICK_BTN} border-[#10B981]/35 bg-[#10B981]/10 text-[#6EE7B7] hover:bg-[#10B981]/18`}
+            aria-label="Report — not available yet"
+          >
+            <BarChart3 size={16} aria-hidden />
+            Report
+          </button>
+          <PortfolioModuleDataResetButton
+            module="metals"
+            onMutate={onMutate}
+            className={`${QUICK_BTN} border-[#10B981]/35 bg-[#10B981]/10 text-[#6EE7B7] hover:bg-[#10B981]/18`}
+          >
+            <span className="inline-flex flex-col items-center gap-1">
+              <span className="text-base leading-none" aria-hidden>
+                ↺
+              </span>
+              Reset Data
+            </span>
+          </PortfolioModuleDataResetButton>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

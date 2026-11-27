@@ -47,8 +47,17 @@ export function sumMetalsNpr(
     liveGramRates != null &&
     liveGramRates.goldNprPerGram > 0 &&
     liveGramRates.silverNprPerGram > 0;
+  // Explicit zero rates = domestic Price Unavailable (do not silently use Yahoo/FX).
+  const domesticUnavailable =
+    liveGramRates != null &&
+    liveGramRates.goldNprPerGram <= 0 &&
+    liveGramRates.silverNprPerGram <= 0;
   const anchor = fallbackMetalRatesFromUsdAnchors(usdPerNprForFallback ?? FALLBACK_USD_PER_NPR);
-  const rates = hasLive ? liveGramRates : anchor;
+  const rates = hasLive
+    ? liveGramRates
+    : domesticUnavailable
+      ? { goldNprPerGram: 0, silverNprPerGram: 0 }
+      : anchor;
   return rows.reduce((a, r) => {
     const g = r.grams ?? 0;
     if (g <= 0) return a;
@@ -159,14 +168,20 @@ export function computeWealthTotals(
   const liveMarket = opts?.liveMarket ?? null;
   const explicitBullion = opts?.bullionGramRatesNpr;
   const fromSnap = liveMarket ? metalsNprPerGramFromSnapshot(liveMarket, usdPerNpr) : null;
+  const explicitDomesticUnavailable =
+    explicitBullion != null &&
+    explicitBullion.goldNprPerGram <= 0 &&
+    explicitBullion.silverNprPerGram <= 0;
   const metalGramRates =
     explicitBullion != null &&
     explicitBullion.goldNprPerGram > 0 &&
     explicitBullion.silverNprPerGram > 0
       ? explicitBullion
-      : fromSnap != null && fromSnap.goldNprPerGram > 0 && fromSnap.silverNprPerGram > 0
-        ? fromSnap
-        : null;
+      : explicitDomesticUnavailable
+        ? { goldNprPerGram: 0, silverNprPerGram: 0 }
+        : fromSnap != null && fromSnap.goldNprPerGram > 0 && fromSnap.silverNprPerGram > 0
+          ? fromSnap
+          : null;
   const liquidNpr = sumSimpleLinesNpr(s.liquidCash, krwPerNpr, usdPerNpr);
   const fdRows = s.fixedDeposits ?? [];
   const fixedDepositsPrincipalNpr = sumFixedDepositPrincipalNpr(fdRows, krwPerNpr, usdPerNpr);
@@ -302,6 +317,10 @@ export function resolveMetalGramRatesForUi(
   bullionSpot: GoldSilverPriceResponse | null,
   usdPerNpr: number,
 ): { goldNprPerGram: number; silverNprPerGram: number } {
+  // Nepal Market Price Unavailable — do not silently show Yahoo/FX as domestic NPR/g.
+  if (bullionSpot?.domesticProvider === "unavailable") {
+    return { goldNprPerGram: 0, silverNprPerGram: 0 };
+  }
   if (
     bullionSpot &&
     bullionSpot.goldPerGramNPR > 0 &&

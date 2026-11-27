@@ -11,16 +11,22 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
   const gg = o.goldPerGramNPR;
   const sg = o.silverPerGramNPR;
   if (typeof gg !== "number" || typeof sg !== "number") return null;
-  if (!Number.isFinite(gg) || !Number.isFinite(sg) || gg <= 0 || sg <= 0) return null;
+  if (!Number.isFinite(gg) || !Number.isFinite(sg) || gg < 0 || sg < 0) return null;
+
+  const unavailable = o.domesticProvider === "unavailable" || (gg === 0 && sg === 0 && o.degraded === true);
 
   const goldPerTolaNPR =
     typeof o.goldPerTolaNPR === "number" && Number.isFinite(o.goldPerTolaNPR) && o.goldPerTolaNPR > 0
       ? o.goldPerTolaNPR
-      : nprPerTolaFromGram(gg);
+      : gg > 0
+        ? nprPerTolaFromGram(gg)
+        : 0;
   const silverPerTolaNPR =
     typeof o.silverPerTolaNPR === "number" && Number.isFinite(o.silverPerTolaNPR) && o.silverPerTolaNPR > 0
       ? o.silverPerTolaNPR
-      : nprPerTolaFromGram(sg);
+      : sg > 0
+        ? nprPerTolaFromGram(sg)
+        : 0;
 
   const goldUsdPerTroyOz =
     typeof o.goldUsdPerTroyOz === "number" && Number.isFinite(o.goldUsdPerTroyOz) && o.goldUsdPerTroyOz > 0
@@ -39,6 +45,20 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
     typeof o.internationalRefSource === "string" && o.internationalRefSource.trim()
       ? o.internationalRefSource.trim()
       : undefined;
+  const sourceUrl =
+    typeof o.sourceUrl === "string" && o.sourceUrl.trim() ? o.sourceUrl.trim() : undefined;
+  const publishedDate =
+    typeof o.publishedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.publishedDate)
+      ? o.publishedDate
+      : undefined;
+  const publishedTimeLocal =
+    typeof o.publishedTimeLocal === "string" && o.publishedTimeLocal.trim()
+      ? o.publishedTimeLocal.trim()
+      : undefined;
+  const publishedBsLabel =
+    typeof o.publishedBsLabel === "string" && o.publishedBsLabel.trim()
+      ? o.publishedBsLabel.trim()
+      : undefined;
 
   const goldNepalPer10GramNPR =
     typeof o.goldNepalPer10GramNPR === "number" && Number.isFinite(o.goldNepalPer10GramNPR) && o.goldNepalPer10GramNPR > 0
@@ -50,6 +70,21 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
     o.silverNepalPer10GramNPR > 0
       ? o.silverNepalPer10GramNPR
       : undefined;
+
+  const domesticProvider =
+    o.domesticProvider === "hamro_patro" || o.domesticProvider === "fenegosida" || o.domesticProvider === "unavailable"
+      ? o.domesticProvider
+      : unavailable
+        ? "unavailable"
+        : nepalDomesticPrimary
+          ? "hamro_patro"
+          : undefined;
+
+  const numOrNull = (v: unknown): number | null | undefined => {
+    if (v === null) return null;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    return undefined;
+  };
 
   return {
     goldPerGramNPR: gg,
@@ -63,7 +98,20 @@ export function normalizeGoldSilverPriceResponse(raw: unknown): GoldSilverPriceR
     ...(degraded ? { degraded: true } : {}),
     ...(nepalDomesticPrimary ? { nepalDomesticPrimary: true } : {}),
     ...(internationalRefSource ? { internationalRefSource } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(publishedDate ? { publishedDate } : {}),
+    ...(publishedTimeLocal ? { publishedTimeLocal } : {}),
+    ...(publishedBsLabel ? { publishedBsLabel } : {}),
     ...(goldNepalPer10GramNPR != null ? { goldNepalPer10GramNPR } : {}),
     ...(silverNepalPer10GramNPR != null ? { silverNepalPer10GramNPR } : {}),
+    ...(domesticProvider ? { domesticProvider } : {}),
+    ...(numOrNull(o.goldDailyChangeNpr) !== undefined ? { goldDailyChangeNpr: numOrNull(o.goldDailyChangeNpr)! } : {}),
+    ...(numOrNull(o.silverDailyChangeNpr) !== undefined
+      ? { silverDailyChangeNpr: numOrNull(o.silverDailyChangeNpr)! }
+      : {}),
+    ...(numOrNull(o.goldDailyChangePct) !== undefined ? { goldDailyChangePct: numOrNull(o.goldDailyChangePct)! } : {}),
+    ...(numOrNull(o.silverDailyChangePct) !== undefined
+      ? { silverDailyChangePct: numOrNull(o.silverDailyChangePct)! }
+      : {}),
   };
 }

@@ -47,6 +47,7 @@ export function ModuleLedgerCard({
   ledger,
   defaultOpen = false,
   ledgerMutate,
+  onEditMetalEntry,
 }: {
   title: string;
   subtitle: string;
@@ -55,6 +56,8 @@ export function ModuleLedgerCard({
   defaultOpen?: boolean;
   /** When set, metal ledger rows can delete attachments in-place. */
   ledgerMutate?: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  /** Opens the metal transaction form for an existing ledger entry. */
+  onEditMetalEntry?: (entry: PortfolioLedgerEntry) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [view, setView] = useState<LedgerScopeView>("all");
@@ -158,6 +161,7 @@ export function ModuleLedgerCard({
             <LedgerEntryList
               entries={filtered}
               onPatchLedgerEntry={bucket === "metal" ? onPatchLedgerEntry : undefined}
+              onEditMetalEntry={bucket === "metal" ? onEditMetalEntry : undefined}
             />
           )}
         </div>

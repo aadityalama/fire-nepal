@@ -524,6 +524,181 @@ export function recordMetalSell(
   return appendEntry({ ...state, metals }, entry);
 }
 
+export type MetalTxnUpdatePayload = {
+  tradeDate: string;
+  grams: number;
+  /** Buy: NPR per gram or per UI tola (11.66 g), per `buyPriceUnit`. */
+  buyPriceNpr?: number;
+  buyPriceUnit?: "gram" | "tola";
+  /** Sell: NPR per gram. */
+  unitPriceNprPerGram?: number;
+  feesNpr?: number;
+  notes?: string;
+  billAttachmentUrls?: string[];
+  photoAttachmentUrls?: string[];
+};
+
+/**
+ * Update an existing metal ledger entry in place (same `id`).
+ * Rebuilds the linked MetalRow and re-validates the buy/sell sequence for that row
+ * so holdings cannot go negative. Does not create a duplicate transaction.
+ */
+export function updateMetalTxn(
+  state: WealthPortfolioStateV2,
+  entryId: string,
+  patch: MetalTxnUpdatePayload,
+): WealthPortfolioStateV2 | null {
+  if (!isoOk(patch.tradeDate)) return null;
+  if (patch.grams <= 0 || !Number.isFinite(patch.grams)) return null;
+  const feesNpr = patch.feesNpr ?? 0;
+  if (!Number.isFinite(feesNpr) || feesNpr < 0) return null;
+
+  const entryIdx = state.ledger.findIndex((e) => e.id === entryId && e.bucket === "metal");
+  if (entryIdx < 0) return null;
+  const original = state.ledger[entryIdx]!;
+  if (original.txType !== "buy" && original.txType !== "sell") return null;
+
+  const rowIdx = state.metals.findIndex((r) => r.id === original.rowId);
+  if (rowIdx < 0) return null;
+  const row = state.metals[rowIdx]!;
+
+  let unitPriceNprPerGram: number;
+  let buyPriceUnit: "gram" | "tola" | undefined;
+  let metalBuyPriceNpr: number | undefined;
+
+  if (original.txType === "buy") {
+    if (patch.buyPriceNpr == null || !Number.isFinite(patch.buyPriceNpr) || patch.buyPriceNpr <= 0) return null;
+    buyPriceUnit = patch.buyPriceUnit === "tola" ? "tola" : "gram";
+    metalBuyPriceNpr = patch.buyPriceNpr;
+    unitPriceNprPerGram =
+      buyPriceUnit === "tola" ? patch.buyPriceNpr / NEPAL_UI_GRAMS_PER_TOLA : patch.buyPriceNpr;
+    if (!Number.isFinite(unitPriceNprPerGram) || unitPriceNprPerGram < 0) return null;
+  } else {
+    if (
+      patch.unitPriceNprPerGram == null ||
+      !Number.isFinite(patch.unitPriceNprPerGram) ||
+      patch.unitPriceNprPerGram < 0
+    ) {
+      return null;
+    }
+    unitPriceNprPerGram = patch.unitPriceNprPerGram;
+  }
+
+  const billUrls = sanitizeMetalTxBillUrls(patch.billAttachmentUrls ?? []);
+  const photoUrls = sanitizeMetalTxPhotoUrls(patch.photoAttachmentUrls ?? []);
+  const prevMeta =
+    original.meta && typeof original.meta === "object" ? { ...(original.meta as Record<string, unknown>) } : {};
+
+  const nextMeta: Record<string, unknown> = {
+    ...prevMeta,
+    fifoVersion: 1,
+    unit: "grams",
+  };
+  if (original.txType === "buy") {
+    nextMeta.buyPriceUnit = buyPriceUnit;
+    nextMeta.metalBuyPriceNpr = metalBuyPriceNpr;
+    nextMeta.metalTxItemName = original.assetLabel;
+    // basisNprAdded refreshed by replay
+  }
+  if (billUrls.length) nextMeta.metalTxBillUrls = billUrls;
+  else delete nextMeta.metalTxBillUrls;
+  if (photoUrls.length) nextMeta.metalTxPhotoUrls = photoUrls;
+  else delete nextMeta.metalTxPhotoUrls;
+
+  const updatedEntry: PortfolioLedgerEntry = {
+    ...original,
+    quantity: patch.grams,
+    unitPrice: unitPriceNprPerGram,
+    tradeDate: patch.tradeDate,
+    fees: patch.feesNpr,
+    notes: patch.notes?.trim() || undefined,
+    meta: nextMeta,
+  };
+
+  const ledgerWithEdit = [...state.ledger];
+  ledgerWithEdit[entryIdx] = updatedEntry;
+
+  const rebuilt = rebuildMetalRowFromLedger(row, ledgerWithEdit);
+  if (!rebuilt) return null;
+
+  const metals = [...state.metals];
+  metals[rowIdx] = rebuilt.row;
+  return { ...state, metals, ledger: rebuilt.ledger };
+}
+
+/**
+ * Replay metal buy/sell entries for one holding row (chronological).
+ * Returns null if any sell would exceed available grams (invalid sequence).
+ */
+function rebuildMetalRowFromLedger(
+  row: MetalRow,
+  ledger: PortfolioLedgerEntry[],
+): { row: MetalRow; ledger: PortfolioLedgerEntry[] } | null {
+  const rowEntries = ledger
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => e.bucket === "metal" && e.rowId === row.id && (e.txType === "buy" || e.txType === "sell"))
+    .sort((a, b) => {
+      if (a.e.tradeDate !== b.e.tradeDate) return a.e.tradeDate.localeCompare(b.e.tradeDate);
+      return a.i - b.i;
+    });
+
+  let grams = 0;
+  let basis = 0;
+  let boughtDate: string | undefined;
+  const ledgerNext = [...ledger];
+
+  for (const { e, i } of rowEntries) {
+    const fees = e.fees ?? 0;
+    if (e.txType === "buy") {
+      if (e.quantity <= 0 || !Number.isFinite(e.quantity) || e.unitPrice < 0 || !Number.isFinite(e.unitPrice)) {
+        return null;
+      }
+      const addBasis = e.quantity * e.unitPrice + fees;
+      grams += e.quantity;
+      basis += addBasis;
+      boughtDate = minPurchaseIso(boughtDate, e.tradeDate);
+      const meta: Record<string, unknown> =
+        e.meta && typeof e.meta === "object" ? { ...(e.meta as Record<string, unknown>) } : { fifoVersion: 1 };
+      meta.basisNprAdded = addBasis;
+      meta.unit = "grams";
+      ledgerNext[i] = { ...e, realizedGainNpr: null, meta };
+    } else {
+      if (e.quantity <= 0 || !Number.isFinite(e.quantity) || e.unitPrice < 0 || !Number.isFinite(e.unitPrice)) {
+        return null;
+      }
+      if (e.quantity > grams + 1e-9) return null;
+      const proceedsNpr = e.quantity * e.unitPrice;
+      let costNpr = 0;
+      let realizedGainNpr: number | null = null;
+      if (basis > 0 && grams > 0) {
+        costNpr = (e.quantity / grams) * basis;
+        realizedGainNpr = proceedsNpr - costNpr - fees;
+      }
+      grams = Math.max(0, grams - e.quantity);
+      basis = Math.max(0, basis - costNpr);
+      if (grams < 1e-9) {
+        grams = 0;
+        basis = 0;
+      }
+      const meta: Record<string, unknown> =
+        e.meta && typeof e.meta === "object" ? { ...(e.meta as Record<string, unknown>) } : { fifoVersion: 1 };
+      meta.proceedsNpr = proceedsNpr;
+      meta.costNpr = costNpr;
+      meta.feesNpr = fees;
+      meta.unit = "grams";
+      ledgerNext[i] = { ...e, realizedGainNpr, meta };
+    }
+  }
+
+  const updatedRow = syncMetalLegacyBuyPriceFields({
+    ...row,
+    grams: grams > 0 ? grams : 0,
+    totalCostBasisNpr: basis > 0 ? Math.round(basis * 100) / 100 : undefined,
+    boughtDate,
+  });
+  return { row: updatedRow, ledger: ledgerNext };
+}
+
 export function recordMetalBuy(state: WealthPortfolioStateV2, input: MetalBuyPayload): WealthPortfolioStateV2 | null {
   if (!isoOk(input.tradeDate)) return null;
   if (input.grams <= 0 || !Number.isFinite(input.grams)) return null;
