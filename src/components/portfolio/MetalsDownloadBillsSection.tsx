@@ -334,17 +334,24 @@ function BillPreviewModal({
 
   useEffect(() => {
     if (!url) return;
-    const prevOverflow = document.body.style.overflow;
-    const prevTouch = document.body.style.touchAction;
+    const html = document.documentElement;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyTouch = document.body.style.touchAction;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevHtmlOverscroll = html.style.overscrollBehavior;
     document.body.style.overflow = "hidden";
     document.body.style.touchAction = "none";
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.touchAction = prevTouch;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.touchAction = prevBodyTouch;
+      html.style.overflow = prevHtmlOverflow;
+      html.style.overscrollBehavior = prevHtmlOverscroll;
       window.removeEventListener("keydown", onKey);
     };
   }, [url, onClose]);
