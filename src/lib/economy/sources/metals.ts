@@ -1,27 +1,28 @@
 import type { EconomyFetchOutcome } from "@/lib/economy/types";
-import { fetchNepalFenegosidaBoardRates } from "@/services/market/fenegosida-nepal-rates";
-
-const FENEGOSIDA_URL = "https://www.fenegosida.org/";
+import {
+  fetchHamroPatroNepalRates,
+  HAMRO_PATRO_GOLD_SOURCE_URL,
+} from "@/services/market/hamropatro-nepal-rates";
 
 function formatNpr(value: number) {
   return `रु ${Math.round(value).toLocaleString("en-US")}`;
 }
 
 /**
- * Nepal bullion board (FENEGOSIDA) — primary metals source.
- * Reuses the shared portfolio metals parser (never invents prices).
+ * Nepal bullion — Hamro Patro Hallmark gold & silver (same domestic source as portfolio).
+ * Reuses the shared Hamro Patro public-page parser (never invents prices).
  */
 export async function fetchFenegosidaMetalMetrics(): Promise<EconomyFetchOutcome[]> {
   try {
-    const board = await fetchNepalFenegosidaBoardRates();
+    const board = await fetchHamroPatroNepalRates();
     if (!board) {
       return [
-        { ok: false, key: "gold", error: "FENEGOSIDA board unavailable or unparseable", via: "primary" },
-        { ok: false, key: "silver", error: "FENEGOSIDA board unavailable or unparseable", via: "primary" },
+        { ok: false, key: "gold", error: "Hamro Patro gold page unavailable or unparseable", via: "primary" },
+        { ok: false, key: "silver", error: "Hamro Patro gold page unavailable or unparseable", via: "primary" },
       ];
     }
 
-    const publishedAt = new Date().toISOString();
+    const publishedAt = `${board.publishedDate}T00:00:00+05:45`;
     return [
       {
         ok: true,
@@ -32,9 +33,9 @@ export async function fetchFenegosidaMetalMetrics(): Promise<EconomyFetchOutcome
           displayValue: formatNpr(board.goldNprPerTola),
           unit: "NPR per tola",
           currency: "NPR",
-          source: "FENEGOSIDA",
-          sourceUrl: FENEGOSIDA_URL,
-          period: "Nepal bullion board · Fine Gold 9999",
+          source: "Hamro Patro",
+          sourceUrl: HAMRO_PATRO_GOLD_SOURCE_URL,
+          period: "Nepal market · Hallmark Gold",
           publishedAt,
           frequency: "daily",
           valueKind: "actual",
@@ -43,6 +44,8 @@ export async function fetchFenegosidaMetalMetrics(): Promise<EconomyFetchOutcome
           raw: {
             goldNprPer10Gram: board.goldNprPer10Gram,
             goldNprPerTola: board.goldNprPerTola,
+            publishedDate: board.publishedDate,
+            goldDailyChangeNpr: board.goldDailyChangeNpr,
           },
         },
       },
@@ -55,9 +58,9 @@ export async function fetchFenegosidaMetalMetrics(): Promise<EconomyFetchOutcome
           displayValue: formatNpr(board.silverNprPerTola),
           unit: "NPR per tola",
           currency: "NPR",
-          source: "FENEGOSIDA",
-          sourceUrl: FENEGOSIDA_URL,
-          period: "Nepal bullion board · Silver",
+          source: "Hamro Patro",
+          sourceUrl: HAMRO_PATRO_GOLD_SOURCE_URL,
+          period: "Nepal market · Silver",
           publishedAt,
           frequency: "daily",
           valueKind: "actual",
@@ -66,6 +69,8 @@ export async function fetchFenegosidaMetalMetrics(): Promise<EconomyFetchOutcome
           raw: {
             silverNprPer10Gram: board.silverNprPer10Gram,
             silverNprPerTola: board.silverNprPerTola,
+            publishedDate: board.publishedDate,
+            silverDailyChangeNpr: board.silverDailyChangeNpr,
           },
         },
       },

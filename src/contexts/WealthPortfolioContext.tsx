@@ -302,6 +302,13 @@ export function WealthPortfolioProvider({ children }: { children: ReactNode }) {
 
   const bullionGramRatesNpr = useMemo((): BullionGramRatesNpr | null => {
     if (!bullionSpot) return null;
+    // Explicit zeros block Yahoo/FX silent domestic substitution when Hamro Patro is unverified.
+    if (bullionSpot.domesticProvider === "unavailable") {
+      return { goldNprPerGram: 0, silverNprPerGram: 0 };
+    }
+    if (!(bullionSpot.goldPerGramNPR > 0) || !(bullionSpot.silverPerGramNPR > 0)) {
+      return { goldNprPerGram: 0, silverNprPerGram: 0 };
+    }
     return {
       goldNprPerGram: bullionSpot.goldPerGramNPR,
       silverNprPerGram: bullionSpot.silverPerGramNPR,

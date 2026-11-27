@@ -7,18 +7,18 @@ import {
 import type { GoldSilverPriceResponse } from "@/types/market/bullion";
 import { fetchNprForexCross } from "@/services/market/forex-npr";
 import {
-  fetchNepalFenegosidaBoardRates,
-  nprPerGramFromNepal10GramBoard,
-} from "@/services/market/fenegosida-nepal-rates";
+  fetchHamroPatroNepalRates,
+  hamroPatroCacheTtlMs,
+  HAMRO_PATRO_GOLD_SOURCE_URL,
+  nprPerGramFromHamroPatroTola,
+  type HamroPatroNepalMetalRates,
+} from "@/services/market/hamropatro-nepal-rates";
 import { fetchYahooLast } from "@/services/market/yahoo-quotes";
-
-/** Align with client refresh (5–15m): server-side coalescing window. */
-const CACHE_TTL_MS = 5 * 60 * 1000;
 
 let cacheExpiresAt = 0;
 let cached: GoldSilverPriceResponse | null = null;
-/** Last successful payload (for stale fallback). */
-let lastGood: GoldSilverPriceResponse | null = null;
+/** Last successful Hamro Patro (or domestic) payload for stale fallback — never Yahoo-as-domestic. */
+let lastGoodDomestic: GoldSilverPriceResponse | null = null;
 
 function isPositive(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n) && n > 0;
@@ -95,6 +95,7 @@ async function spotFromYahoo(): Promise<{ goldUsdPerOz: number; silverUsdPerOz: 
   return { goldUsdPerOz: g.last, silverUsdPerOz: s.last };
 }
 
+/** International USD/oz reference only — never used as silent Nepal domestic substitute. */
 async function resolveUsdSpot(): Promise<{ spot: { goldUsdPerOz: number; silverUsdPerOz: number }; source: string }> {
   const goldApiKey = process.env.GOLDAPI_API_KEY ?? process.env.GOLD_API_KEY;
   if (goldApiKey) {
@@ -122,114 +123,145 @@ async function resolveUsdSpot(): Promise<{ spot: { goldUsdPerOz: number; silverU
   };
 }
 
-async function nprPayloadFromSpot(
-  spot: { goldUsdPerOz: number; silverUsdPerOz: number },
-  source: string,
-  degraded?: boolean,
-): Promise<GoldSilverPriceResponse> {
-  const forex = await fetchNprForexCross();
-  const { goldNprPerGram, silverNprPerGram } = metalNprPerGramFromUsdSpot(
-    spot.goldUsdPerOz,
-    spot.silverUsdPerOz,
-    forex.usdPerNpr,
-  );
-  const gg = Math.max(goldNprPerGram, 1e-6);
-  const sg = Math.max(silverNprPerGram, 1e-6);
-  const updatedAt = new Date().toISOString();
-  return {
-    goldPerGramNPR: gg,
-    silverPerGramNPR: sg,
-    goldPerTolaNPR: nprPerTolaFromGram(gg),
-    silverPerTolaNPR: nprPerTolaFromGram(sg),
-    goldUsdPerTroyOz: spot.goldUsdPerOz,
-    silverUsdPerTroyOz: spot.silverUsdPerOz,
-    source,
-    updatedAt,
-    nepalDomesticPrimary: false,
-    ...(degraded ? { degraded: true } : {}),
-  };
-}
-
-/** Nepal board (FENEGOSIDA) — NPR from published 10 g & tola lines; international USD/oz is reference only. */
-function nepalBoardPayload(
-  nepal: {
-    goldNprPer10Gram: number;
-    goldNprPerTola: number;
-    silverNprPer10Gram: number;
-    silverNprPerTola: number;
-  },
+function hamroPatroDomesticPayload(
+  nepal: HamroPatroNepalMetalRates,
   intl: { spot: { goldUsdPerOz: number; silverUsdPerOz: number }; source: string },
 ): GoldSilverPriceResponse {
-  const gg = Math.max(nprPerGramFromNepal10GramBoard(nepal.goldNprPer10Gram), 1e-6);
-  const sg = Math.max(nprPerGramFromNepal10GramBoard(nepal.silverNprPer10Gram), 1e-6);
-  const updatedAt = new Date().toISOString();
+  const gg = Math.max(nprPerGramFromHamroPatroTola(nepal.goldNprPerTola), 1e-6);
+  const sg = Math.max(nprPerGramFromHamroPatroTola(nepal.silverNprPerTola), 1e-6);
+  const syncedAt = new Date().toISOString();
   return {
     goldPerGramNPR: gg,
     silverPerGramNPR: sg,
     goldPerTolaNPR: nepal.goldNprPerTola,
     silverPerTolaNPR: nepal.silverNprPerTola,
-    goldNepalPer10GramNPR: nepal.goldNprPer10Gram,
-    silverNepalPer10GramNPR: nepal.silverNprPer10Gram,
+    ...(nepal.goldNprPer10Gram != null ? { goldNepalPer10GramNPR: nepal.goldNprPer10Gram } : {}),
+    ...(nepal.silverNprPer10Gram != null ? { silverNepalPer10GramNPR: nepal.silverNprPer10Gram } : {}),
     goldUsdPerTroyOz: intl.spot.goldUsdPerOz,
     silverUsdPerTroyOz: intl.spot.silverUsdPerOz,
-    source: `Nepal — FENEGOSIDA / industry board (Fine Gold 9999 & Silver; fenegosida.org) · Intl ref: ${intl.source}`,
-    updatedAt,
+    source: "Nepal — Hamro Patro (Hallmark Gold & Silver)",
+    sourceUrl: HAMRO_PATRO_GOLD_SOURCE_URL,
+    updatedAt: syncedAt,
+    publishedDate: nepal.publishedDate,
+    ...(nepal.publishedTimeLocal ? { publishedTimeLocal: nepal.publishedTimeLocal } : {}),
+    ...(nepal.publishedBsLabel ? { publishedBsLabel: nepal.publishedBsLabel } : {}),
+    goldDailyChangeNpr: nepal.goldDailyChangeNpr,
+    silverDailyChangeNpr: nepal.silverDailyChangeNpr,
+    goldDailyChangePct: nepal.goldDailyChangePct,
+    silverDailyChangePct: nepal.silverDailyChangePct,
     nepalDomesticPrimary: true,
+    domesticProvider: "hamro_patro",
     internationalRefSource: intl.source,
   };
 }
 
 /**
- * Returns cached bullion NPR/g for a few minutes; on hard failure reuses last good values with `degraded: true`.
- * Never returns zero prices when any historical or anchor data exists.
+ * Domestic Nepal gold/silver from Hamro Patro (primary).
+ * International USD/oz is attached as reference only.
+ * On Hamro Patro failure: serve last verified Hamro Patro quote with `degraded` — never Yahoo as domestic.
+ * If no verified domestic quote exists yet, returns Price Unavailable shape (zeros + unavailable).
  */
 export async function getGoldSilverNprPrice(): Promise<GoldSilverPriceResponse> {
   const now = Date.now();
   if (cached && now < cacheExpiresAt) return cached;
 
+  const ttl = hamroPatroCacheTtlMs(new Date(now));
+
   try {
-    const [nepalBoard, intl] = await Promise.all([fetchNepalFenegosidaBoardRates(), resolveUsdSpot()]);
-    const fresh = nepalBoard
-      ? nepalBoardPayload(nepalBoard, intl)
-      : await nprPayloadFromSpot(intl.spot, `International spot → NPR (${intl.source})`, false);
-    lastGood = fresh;
-    cached = fresh;
-    cacheExpiresAt = now + CACHE_TTL_MS;
-    return fresh;
-  } catch {
-    if (lastGood) {
-      const stale: GoldSilverPriceResponse = { ...lastGood, degraded: true, updatedAt: lastGood.updatedAt };
+    const [hamro, intl] = await Promise.all([fetchHamroPatroNepalRates(), resolveUsdSpot()]);
+    if (hamro) {
+      const fresh = hamroPatroDomesticPayload(hamro, intl);
+      lastGoodDomestic = fresh;
+      cached = fresh;
+      cacheExpiresAt = now + ttl;
+      return fresh;
+    }
+
+    // Hamro Patro unavailable — never silently substitute Yahoo/FX as Nepal domestic.
+    if (lastGoodDomestic?.nepalDomesticPrimary && lastGoodDomestic.domesticProvider === "hamro_patro") {
+      const stale: GoldSilverPriceResponse = {
+        ...lastGoodDomestic,
+        degraded: true,
+        // Keep original publishedDate; refresh sync timestamp only as metadata via updatedAt of last good.
+      };
       cached = stale;
-      cacheExpiresAt = now + CACHE_TTL_MS;
+      cacheExpiresAt = now + Math.min(ttl, 15 * 60 * 1000);
       return stale;
     }
-    const forex = await fetchNprForexCross().catch(() => null);
-    const usdPerNpr = forex?.usdPerNpr ?? undefined;
-    const spot = {
-      goldUsdPerOz: DEFAULT_BULLION_USD_PER_TROY_OZ.goldUsdPerOz,
-      silverUsdPerOz: DEFAULT_BULLION_USD_PER_TROY_OZ.silverUsdPerOz,
-    };
-    const { goldNprPerGram, silverNprPerGram } = metalNprPerGramFromUsdSpot(
-      spot.goldUsdPerOz,
-      spot.silverUsdPerOz,
-      usdPerNpr ?? 1 / 133.5,
-    );
-    const gg = Math.max(goldNprPerGram, 1e-6);
-    const sg = Math.max(silverNprPerGram, 1e-6);
-    const emergency: GoldSilverPriceResponse = {
-      goldPerGramNPR: gg,
-      silverPerGramNPR: sg,
-      goldPerTolaNPR: nprPerTolaFromGram(gg),
-      silverPerTolaNPR: nprPerTolaFromGram(sg),
-      goldUsdPerTroyOz: spot.goldUsdPerOz,
-      silverUsdPerTroyOz: spot.silverUsdPerOz,
-      source: "Anchored estimate (no live feed yet)",
+
+    const unavailable: GoldSilverPriceResponse = {
+      goldPerGramNPR: 0,
+      silverPerGramNPR: 0,
+      goldPerTolaNPR: 0,
+      silverPerTolaNPR: 0,
+      goldUsdPerTroyOz: intl.spot.goldUsdPerOz,
+      silverUsdPerTroyOz: intl.spot.silverUsdPerOz,
+      source: "Price Unavailable — Hamro Patro Nepal rates could not be verified",
+      sourceUrl: HAMRO_PATRO_GOLD_SOURCE_URL,
       updatedAt: new Date().toISOString(),
       nepalDomesticPrimary: false,
+      domesticProvider: "unavailable",
+      internationalRefSource: intl.source,
       degraded: true,
     };
-    cached = emergency;
-    cacheExpiresAt = now + Math.min(CACHE_TTL_MS, 120_000);
-    return emergency;
+    cached = unavailable;
+    cacheExpiresAt = now + Math.min(ttl, 5 * 60 * 1000);
+    return unavailable;
+  } catch {
+    if (lastGoodDomestic?.nepalDomesticPrimary) {
+      const stale: GoldSilverPriceResponse = { ...lastGoodDomestic, degraded: true };
+      cached = stale;
+      cacheExpiresAt = now + Math.min(ttl, 15 * 60 * 1000);
+      return stale;
+    }
+    const unavailable: GoldSilverPriceResponse = {
+      goldPerGramNPR: 0,
+      silverPerGramNPR: 0,
+      goldPerTolaNPR: 0,
+      silverPerTolaNPR: 0,
+      goldUsdPerTroyOz: DEFAULT_BULLION_USD_PER_TROY_OZ.goldUsdPerOz,
+      silverUsdPerTroyOz: DEFAULT_BULLION_USD_PER_TROY_OZ.silverUsdPerOz,
+      source: "Price Unavailable — Hamro Patro Nepal rates could not be verified",
+      sourceUrl: HAMRO_PATRO_GOLD_SOURCE_URL,
+      updatedAt: new Date().toISOString(),
+      nepalDomesticPrimary: false,
+      domesticProvider: "unavailable",
+      degraded: true,
+    };
+    cached = unavailable;
+    cacheExpiresAt = now + 120_000;
+    return unavailable;
   }
+}
+
+/** Test/helpers: clear in-memory cache (unit tests only). */
+export function __resetGoldSilverPriceCacheForTests(): void {
+  cacheExpiresAt = 0;
+  cached = null;
+  lastGoodDomestic = null;
+}
+
+/** Kept for emergency tooling — FX spot → NPR is NOT used as Nepal domestic. */
+export async function getInternationalSpotNprEstimate(): Promise<GoldSilverPriceResponse> {
+  const intl = await resolveUsdSpot();
+  const forex = await fetchNprForexCross();
+  const { goldNprPerGram, silverNprPerGram } = metalNprPerGramFromUsdSpot(
+    intl.spot.goldUsdPerOz,
+    intl.spot.silverUsdPerOz,
+    forex.usdPerNpr,
+  );
+  const gg = Math.max(goldNprPerGram, 1e-6);
+  const sg = Math.max(silverNprPerGram, 1e-6);
+  return {
+    goldPerGramNPR: gg,
+    silverPerGramNPR: sg,
+    goldPerTolaNPR: nprPerTolaFromGram(gg),
+    silverPerTolaNPR: nprPerTolaFromGram(sg),
+    goldUsdPerTroyOz: intl.spot.goldUsdPerOz,
+    silverUsdPerTroyOz: intl.spot.silverUsdPerOz,
+    source: `International spot → NPR (${intl.source}) — reference only`,
+    updatedAt: new Date().toISOString(),
+    nepalDomesticPrimary: false,
+    internationalRefSource: intl.source,
+  };
 }

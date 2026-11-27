@@ -25,8 +25,11 @@ import {
 import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import { formatMoney } from "@/lib/expense-utils";
-import { NEPAL_METAL_TOLA_GRAMS } from "@/lib/market/bullion-estimate";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
+import {
+  HAMRO_PATRO_GOLD_SOURCE_URL,
+  resolveNepalMarketFreshness,
+} from "@/services/market/hamropatro-nepal-rates";
 import { toast } from "sonner";
 function todayIso() {
   return portfolioTxnTodayIso();
@@ -660,20 +663,55 @@ export function MetalsPanel({
   const metalFormRef = useRef<MetalTxnFormHandle>(null);
   const [holdingsOpen, setHoldingsOpen] = useState(true);
   const [tradesOpen, setTradesOpen] = useState(true);
-  const showWarning = Boolean(bullionSpot?.degraded) || Boolean(bullionError);
-  const lastUpdatedLabel = bullionSpot?.updatedAt
+  const syncLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "—";
-  const sourceLabel = bullionSpot?.source ?? "FX-anchored estimate";
   const gramRates = resolveMetalGramRatesForUi(bullionSpot, usdPerNpr);
   const tolaRates = resolveMetalTolaRatesForUi(bullionSpot, usdPerNpr);
-  const usingFallbackStrip = !bullionSpot && Boolean(bullionError);
-  const isLiveQuote =
-    Boolean(bullionSpot) &&
-    !bullionSpot?.degraded &&
-    !bullionError &&
-    !bullionPriceLoading &&
-    !usingFallbackStrip;
+  const hasDomesticPrice =
+    Boolean(bullionSpot?.nepalDomesticPrimary) &&
+    (bullionSpot?.goldPerTolaNPR ?? 0) > 0 &&
+    (bullionSpot?.silverPerTolaNPR ?? 0) > 0;
+  const priceUnavailable =
+    bullionSpot?.domesticProvider === "unavailable" ||
+    (!bullionPriceLoading && !hasDomesticPrice && Boolean(bullionSpot || bullionError));
+  const freshness = resolveNepalMarketFreshness({
+    publishedDate: bullionSpot?.publishedDate,
+    degraded: bullionSpot?.degraded,
+    loading: bullionPriceLoading || bullionPriceRefreshing,
+    hasPrice: hasDomesticPrice,
+  });
+  const statusLabel =
+    freshness === "updated_today"
+      ? "Updated Today"
+      : freshness === "last_published"
+        ? "Last Published Rate"
+        : freshness === "stale"
+          ? "Stale Data"
+          : freshness === "updating"
+            ? "Updating"
+            : "Price Unavailable";
+  const publishedLabel = bullionSpot?.publishedDate
+    ? [
+        bullionSpot.publishedDate,
+        bullionSpot.publishedTimeLocal,
+        bullionSpot.publishedBsLabel ? `(${bullionSpot.publishedBsLabel})` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  const formatDailyChange = (npr: number | null | undefined, pct: number | null | undefined) => {
+    if (npr == null || !Number.isFinite(npr)) return null;
+    const sign = npr >= 0 ? "+" : "";
+    const pctPart =
+      pct != null && Number.isFinite(pct)
+        ? ` (${pct >= 0 ? "+" : ""}${pct.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%)`
+        : "";
+    return `${sign}${formatMoney(npr, "NPR")}${pctPart}`;
+  };
+  const goldChange = formatDailyChange(bullionSpot?.goldDailyChangeNpr, bullionSpot?.goldDailyChangePct);
+  const silverChange = formatDailyChange(bullionSpot?.silverDailyChangeNpr, bullionSpot?.silverDailyChangePct);
 
   const scrollToTransactions = () => {
     setTradesOpen(true);
@@ -689,51 +727,52 @@ export function MetalsPanel({
           <Gem size={16} />
         </div>
         <p className="min-w-0 text-[11px] font-bold leading-snug text-[#CBD5E1]/80 sm:text-xs">
-          Marks follow the <span className="text-[#F8FAFC]">FENEGOSIDA Nepal board</span>. USD/oz is reference only.
+          Nepal marks follow <span className="text-[#F8FAFC]">Hamro Patro</span> Hallmark gold &amp; silver. International
+          USD/oz is reference only — never used as the Nepal market price.
         </p>
       </div>
 
-      {/* Live Nepal Market Price */}
+      {/* Nepal Market Price — Hamro Patro */}
       <div className="gs-live-strip mb-3 space-y-2 rounded-xl border border-[#D4AF37]/25 bg-gradient-to-br from-[#062B24]/50 to-[#03100F]/90 px-2.5 py-2.5 sm:px-3">
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-[#F8FAFC] sm:gap-3 sm:text-[11px]">
-          <p className="text-[11px] font-black uppercase tracking-[0.08em] text-[#CBD5E1]/85">
-            Nepal Market Price (Today)
-          </p>
-          {isLiveQuote ? (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-[#4ADE80]/40 bg-[#4ADE80]/15 px-2 py-0.5 font-black uppercase tracking-widest text-[#4ADE80] shadow-[0_0_20px_-6px_rgba(74,222,128,0.45)]"
-              title="Quotes refresh about every 6 minutes while this page is open."
-            >
+          <p className="text-[11px] font-black uppercase tracking-[0.08em] text-[#CBD5E1]/85">Nepal Market Price</p>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-black uppercase tracking-wider ${
+              freshness === "updated_today"
+                ? "border-[#4ADE80]/40 bg-[#4ADE80]/15 text-[#4ADE80]"
+                : freshness === "stale" || freshness === "unavailable"
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                  : "border-[#CBD5E1]/25 bg-white/5 text-[#CBD5E1]/85"
+            }`}
+          >
+            {freshness === "updated_today" ? (
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#4ADE80] opacity-60 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4ADE80]" />
               </span>
-              Live
+            ) : null}
+            {statusLabel}
+          </span>
+          {publishedLabel ? (
+            <span className="text-[#CBD5E1]/70">
+              Published: <span className="text-[#F8FAFC]">{publishedLabel}</span>
             </span>
-          ) : bullionPriceLoading ? (
-            <span className="rounded-full border border-[#CBD5E1]/25 bg-white/5 px-2 py-0.5 font-black uppercase tracking-wider text-[#CBD5E1]/80">
-              Loading
-            </span>
-          ) : showWarning || usingFallbackStrip ? (
-            <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-black uppercase tracking-wide text-amber-200">
-              {bullionSpot?.degraded ? "Stale" : "Unavailable"}
-            </span>
-          ) : (
-            <span className="rounded-full border border-[#CBD5E1]/25 bg-white/5 px-2 py-0.5 font-black uppercase tracking-wider text-[#CBD5E1]/80">
-              Updated
-            </span>
-          )}
-          {bullionPriceRefreshing ? <span className="text-[#CBD5E1]/70">Refreshing…</span> : null}
+          ) : null}
           <span className="text-[#CBD5E1]/70">
-            Updated: <span className="text-[#F8FAFC]">{lastUpdatedLabel}</span>
+            Synced: <span className="text-[#F8FAFC]">{syncLabel}</span>
           </span>
         </div>
 
-        {usingFallbackStrip ? (
+        {priceUnavailable ? (
           <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-snug text-amber-100/95 sm:text-[11px]">
-            Live feed unavailable ({bullionError}). Showing NPR estimates from USD anchors and your NPR/USD rate — Nepal
-            board (fenegosida.org) could not be reached; add API keys (see .env.example) for stronger international
-            feeds.
+            Price Unavailable — Hamro Patro Nepal rates could not be verified
+            {bullionError ? ` (${bullionError})` : ""}. Portfolio does not treat Yahoo Finance as the Nepal market
+            price.
+          </p>
+        ) : bullionSpot?.degraded ? (
+          <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold leading-snug text-amber-100/95 sm:text-[11px]">
+            Stale data — showing the last successfully verified Hamro Patro prices (published{" "}
+            {bullionSpot.publishedDate ?? "—"}). A fresh sync will replace these when the source is reachable.
           </p>
         ) : null}
 
@@ -746,13 +785,15 @@ export function MetalsPanel({
             }`}
           >
             <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-[#F4D06F]/90">
-              <span aria-hidden className="inline-block h-2 w-2 rounded-sm bg-[#F4D06F]" /> Gold
+              <span aria-hidden className="inline-block h-2 w-2 rounded-sm bg-[#F4D06F]" /> Gold Hallmark
             </p>
             {bullionPriceLoading && !bullionSpot ? (
               <div className="mt-1.5 space-y-1.5">
                 <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-[#D4AF37]/10" />
                 <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-[#D4AF37]/10" />
               </div>
+            ) : priceUnavailable ? (
+              <p className="mt-2 text-sm font-black text-[#CBD5E1]/50">—</p>
             ) : (
               <>
                 <p className="mt-1 font-black tabular-nums text-[#F4D06F] sm:text-sm">
@@ -763,17 +804,18 @@ export function MetalsPanel({
                   {formatMoney(tolaRates.goldNprPerTola, "NPR")}
                   <span className="text-[10px] font-semibold text-[#D4AF37]/65"> / tola</span>
                 </p>
-                {bullionSpot?.nepalDomesticPrimary &&
-                typeof bullionSpot.goldNepalPer10GramNPR === "number" &&
-                bullionSpot.goldNepalPer10GramNPR > 0 ? (
-                  <p className="mt-1 border-t border-[#D4AF37]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
-                    Board 10 g: {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")} · FENEGOSIDA
+                {goldChange ? (
+                  <p
+                    className={`mt-1 text-[10px] font-bold tabular-nums ${
+                      (bullionSpot?.goldDailyChangeNpr ?? 0) >= 0 ? "text-[#4ADE80]" : "text-rose-300"
+                    }`}
+                  >
+                    Daily: {goldChange}
                   </p>
                 ) : null}
-                {bullionSpot ? (
-                  <p className="mt-1 text-[9px] font-bold text-[#CBD5E1]/45">
-                    Intl ≈ ${bullionSpot.goldUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 0 })}/oz
-                    {bullionSpot.internationalRefSource ? ` (${bullionSpot.internationalRefSource})` : ""}
+                {typeof bullionSpot?.goldNepalPer10GramNPR === "number" && bullionSpot.goldNepalPer10GramNPR > 0 ? (
+                  <p className="mt-1 border-t border-[#D4AF37]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
+                    Per 10 g: {formatMoney(bullionSpot.goldNepalPer10GramNPR, "NPR")}
                   </p>
                 ) : null}
               </>
@@ -794,6 +836,8 @@ export function MetalsPanel({
                 <div className="h-4 max-w-[12rem] w-[75%] animate-pulse rounded bg-[#94A3B8]/10" />
                 <div className="h-4 max-w-[10rem] w-[60%] animate-pulse rounded bg-[#94A3B8]/10" />
               </div>
+            ) : priceUnavailable ? (
+              <p className="mt-2 text-sm font-black text-[#CBD5E1]/50">—</p>
             ) : (
               <>
                 <p className="mt-1 font-black tabular-nums text-[#E2E8F0] sm:text-sm">
@@ -804,17 +848,18 @@ export function MetalsPanel({
                   {formatMoney(tolaRates.silverNprPerTola, "NPR")}
                   <span className="text-[10px] font-semibold text-[#CBD5E1]/65"> / tola</span>
                 </p>
-                {bullionSpot?.nepalDomesticPrimary &&
-                typeof bullionSpot.silverNepalPer10GramNPR === "number" &&
-                bullionSpot.silverNepalPer10GramNPR > 0 ? (
-                  <p className="mt-1 border-t border-[#94A3B8]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
-                    Board 10 g: {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")} · FENEGOSIDA
+                {silverChange ? (
+                  <p
+                    className={`mt-1 text-[10px] font-bold tabular-nums ${
+                      (bullionSpot?.silverDailyChangeNpr ?? 0) >= 0 ? "text-[#4ADE80]" : "text-rose-300"
+                    }`}
+                  >
+                    Daily: {silverChange}
                   </p>
                 ) : null}
-                {bullionSpot ? (
-                  <p className="mt-1 text-[9px] font-bold text-[#CBD5E1]/45">
-                    Intl ≈ ${bullionSpot.silverUsdPerTroyOz.toLocaleString(undefined, { maximumFractionDigits: 2 })}/oz
-                    {bullionSpot.internationalRefSource ? ` (${bullionSpot.internationalRefSource})` : ""}
+                {typeof bullionSpot?.silverNepalPer10GramNPR === "number" && bullionSpot.silverNepalPer10GramNPR > 0 ? (
+                  <p className="mt-1 border-t border-[#94A3B8]/15 pt-1 text-[9px] font-bold text-[#CBD5E1]/55">
+                    Per 10 g: {formatMoney(bullionSpot.silverNepalPer10GramNPR, "NPR")}
                   </p>
                 ) : null}
               </>
@@ -824,9 +869,22 @@ export function MetalsPanel({
 
         <p className="text-[10px] font-bold leading-snug text-[#CBD5E1]/60 sm:text-[11px]">
           <span className="text-[#CBD5E1]/45">Source:</span>{" "}
-          <span className="break-all text-[#F8FAFC]/90">{sourceLabel}</span>
+          <a
+            href={bullionSpot?.sourceUrl ?? HAMRO_PATRO_GOLD_SOURCE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-black text-[#F4D06F] underline-offset-2 hover:underline"
+          >
+            Hamro Patro
+          </a>
           <span className="mx-1.5 text-[#10B981]/40">·</span>
-          Board 1 tola = {NEPAL_METAL_TOLA_GRAMS.toFixed(2)} g · UI 1 tola = {NEPAL_UI_GRAMS_PER_TOLA} g
+          UI 1 tola = {NEPAL_UI_GRAMS_PER_TOLA} g
+          {bullionSpot?.internationalRefSource ? (
+            <>
+              <span className="mx-1.5 text-[#10B981]/40">·</span>
+              <span className="text-[#CBD5E1]/45">Intl ref:</span> {bullionSpot.internationalRefSource}
+            </>
+          ) : null}
         </p>
       </div>
 
