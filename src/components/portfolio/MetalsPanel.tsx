@@ -1489,16 +1489,20 @@ export function MetalsPanel({
                 </button>
                 <button
                   type="button"
-                  aria-label="Remove item"
-                  title="Remove item (only when quantity is zero)"
+                  aria-label={`Delete ${row.name || metalLabel} holding`}
+                  title="Delete holding"
                   onClick={() => {
-                    if (g > 1e-9) {
-                      toast.error("Sell to zero grams before removing an item.");
+                    const label = (row.name || metalLabel).trim() || "this holding";
+                    if (
+                      !window.confirm(
+                        `Delete ${label}?\n\nThis removes the holding from your portfolio. No sell transaction is recorded.`,
+                      )
+                    ) {
                       return;
                     }
                     if (editingHoldingId === row.id) setEditingHoldingId(null);
                     onRemove(row.id);
-                    toast.success("Item removed.");
+                    toast.success("Holding deleted.");
                   }}
                   className="rounded-lg p-1.5 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
                 >
