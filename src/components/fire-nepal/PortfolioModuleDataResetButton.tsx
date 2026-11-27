@@ -1,7 +1,7 @@
 "use client";
 
 import { RotateCcw } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { DataResetConfirmModal } from "@/components/fire-nepal/DataResetConfirmModal";
 import type { WealthPortfolioStateV2 } from "@/components/portfolio/types";
@@ -52,9 +52,14 @@ const COPY: Record<
 export function PortfolioModuleDataResetButton({
   module,
   onMutate,
+  className,
+  children,
 }: {
   module: PortfolioWorkspaceModule;
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  /** Optional visual override — reset logic and confirmation modal stay unchanged. */
+  className?: string;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,9 +82,13 @@ export function PortfolioModuleDataResetButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={c.buttonClass} aria-haspopup="dialog">
-        <RotateCcw size={14} className="shrink-0 opacity-90" />
-        Reset Data
+      <button type="button" onClick={() => setOpen(true)} className={className ?? c.buttonClass} aria-haspopup="dialog">
+        {children ?? (
+          <>
+            <RotateCcw size={14} className="shrink-0 opacity-90" />
+            Reset Data
+          </>
+        )}
       </button>
       <DataResetConfirmModal
         open={open}

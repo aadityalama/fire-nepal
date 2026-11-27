@@ -96,7 +96,10 @@ export function PortfolioModulesShell({ children }: { children: ReactNode }) {
     pathname === "/portfolio/gold" ||
     pathname.startsWith("/portfolio/gold/");
   const hideGlobalAddFab =
-    pathname === "/portfolio/investments" || pathname.startsWith("/portfolio/investments/");
+    pathname === "/portfolio/investments" ||
+    pathname.startsWith("/portfolio/investments/") ||
+    pathname === "/portfolio/gold" ||
+    pathname.startsWith("/portfolio/gold/");
   const { resolvedTheme } = useFireTheme();
   const light = resolvedTheme === "light";
   const muted = light ? "text-slate-800" : "text-gray-100";
