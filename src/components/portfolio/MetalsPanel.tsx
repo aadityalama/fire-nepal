@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
@@ -18,7 +18,13 @@ import {
 } from "@/components/portfolio/metal-photo-utils";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { metalRowFirstBuyIso, roiPct } from "@/components/portfolio/metals-premium-metrics";
-import { recordMetalBuy, recordMetalSell, updateMetalTxn } from "@/components/portfolio/portfolio-ledger";
+import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
+import {
+  recordMetalBuy,
+  recordMetalSell,
+  updateMetalHolding,
+  updateMetalTxn,
+} from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
   portfolioTxnTodayIso,
@@ -768,6 +774,308 @@ const UniversalMetalTransactionForm = forwardRef<
 
 UniversalMetalTransactionForm.displayName = "UniversalMetalTransactionForm";
 
+function EditMetalHoldingForm({
+  row,
+  ledger,
+  onMutate,
+  onCancel,
+}: {
+  row: MetalRow;
+  ledger: readonly PortfolioLedgerEntry[];
+  onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
+  onCancel: () => void;
+}) {
+  const buys = useMemo(
+    () =>
+      ledger
+        .filter((e) => e.bucket === "metal" && e.rowId === row.id && e.txType === "buy")
+        .slice()
+        .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate)),
+    [ledger, row.id],
+  );
+  const anchor = buys[0];
+  const multiBuy = buys.length > 1;
+  const meta = anchor?.meta && typeof anchor.meta === "object" ? (anchor.meta as Record<string, unknown>) : {};
+
+  const [itemName, setItemName] = useState(row.name || "");
+  const [tradeDate, setTradeDate] = useState(
+    () => metalRowFirstBuyIso(row, ledger) || row.boughtDate || todayIso(),
+  );
+  const [gramQtyStr, setGramQtyStr] = useState(() => {
+    const g = row.grams ?? 0;
+    return g > 0 ? Number(g.toFixed(6)).toString() : "";
+  });
+  const [tolaQtyStr, setTolaQtyStr] = useState(() => {
+    const g = row.grams ?? 0;
+    return g > 0 ? Number(gramsToTolaUi(g).toFixed(6)).toString() : "";
+  });
+  const [buyPriceUnit, setBuyPriceUnit] = useState<"gram" | "tola">(() =>
+    meta.buyPriceUnit === "tola" ? "tola" : "gram",
+  );
+  const [buyPriceStr, setBuyPriceStr] = useState(() => {
+    if (typeof meta.metalBuyPriceNpr === "number" && Number.isFinite(meta.metalBuyPriceNpr) && meta.metalBuyPriceNpr > 0) {
+      return Number(meta.metalBuyPriceNpr.toFixed(6)).toString();
+    }
+    if (anchor && anchor.quantity > 0) {
+      const unit = meta.buyPriceUnit === "tola" ? "tola" : "gram";
+      const npr = unit === "tola" ? anchor.unitPrice * NEPAL_UI_GRAMS_PER_TOLA : anchor.unitPrice;
+      return Number(npr.toFixed(6)).toString();
+    }
+    const g = row.grams ?? 0;
+    const basis = row.totalCostBasisNpr ?? 0;
+    if (g > 0 && basis > 0) return Number((basis / g).toFixed(6)).toString();
+    return "";
+  });
+  const [feesStr, setFeesStr] = useState(() =>
+    anchor?.fees != null && anchor.fees > 0 ? String(anchor.fees) : "",
+  );
+  const [notes, setNotes] = useState(anchor?.notes ?? "");
+  const [err, setErr] = useState<string | null>(null);
+
+  const onGramQtyChange = (raw: string) => {
+    setGramQtyStr(raw);
+    const trimmed = raw.replace(/,/g, "").trim();
+    if (trimmed === "") {
+      setTolaQtyStr("");
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      setTolaQtyStr("");
+      return;
+    }
+    setTolaQtyStr(Number(gramsToTolaUi(n).toFixed(6)).toString());
+  };
+  const onTolaQtyChange = (raw: string) => {
+    setTolaQtyStr(raw);
+    const trimmed = raw.replace(/,/g, "").trim();
+    if (trimmed === "") {
+      setGramQtyStr("");
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      setGramQtyStr("");
+      return;
+    }
+    setGramQtyStr(Number(tolaUiToGrams(n).toFixed(6)).toString());
+  };
+
+  const parseQtyGrams = (): number | null => {
+    const gRaw = gramQtyStr.replace(/,/g, "").trim();
+    if (gRaw !== "") {
+      const n = Number(gRaw);
+      if (!Number.isFinite(n) || n < 0) return null;
+      return n;
+    }
+    const tRaw = tolaQtyStr.replace(/,/g, "").trim();
+    if (tRaw === "") return null;
+    const t = Number(tRaw);
+    if (!Number.isFinite(t) || t < 0) return null;
+    return Number(tolaUiToGrams(t).toFixed(6));
+  };
+
+  const submit = () => {
+    setErr(null);
+    const grams = parseQtyGrams();
+    if (grams == null || grams <= 0) {
+      setErr("Enter a valid quantity in grams and/or tola (1 tola = 11.66 g).");
+      return;
+    }
+    const buyPriceNpr = Number(buyPriceStr.replace(/,/g, "").trim());
+    if (!Number.isFinite(buyPriceNpr) || buyPriceNpr <= 0) {
+      setErr(`Enter purchase price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
+      return;
+    }
+    const feesNpr = feesStr.trim() === "" ? undefined : Number(feesStr.replace(/,/g, ""));
+    if (feesNpr != null && (!Number.isFinite(feesNpr) || feesNpr < 0)) {
+      setErr("Fees / making charges must be non-negative NPR.");
+      return;
+    }
+    const nm = itemName.replace(/\s+/g, " ").trim();
+    if (!nm) {
+      setErr("Item name is required.");
+      return;
+    }
+    if (multiBuy) {
+      const curG = row.grams ?? 0;
+      const economic =
+        Math.abs(curG - grams) > 1e-6 ||
+        Math.abs((anchor?.unitPrice ?? 0) - (buyPriceUnit === "tola" ? buyPriceNpr / NEPAL_UI_GRAMS_PER_TOLA : buyPriceNpr)) >
+          1e-6;
+      if (economic) {
+        setErr("This item has multiple buy trades. Edit quantity or price from Trades & Transaction History.");
+        return;
+      }
+    }
+    const ok = onMutate((s) =>
+      updateMetalHolding(s, row.id, {
+        name: nm,
+        tradeDate,
+        grams,
+        buyPriceNpr,
+        buyPriceUnit,
+        feesNpr,
+        notes,
+      }),
+    );
+    if (!ok) {
+      setErr("Could not update holding (invalid values or sell sequence). Original data unchanged.");
+      return;
+    }
+    toast.success("Holding updated successfully.");
+    onCancel();
+  };
+
+  const gramsPreview = parseQtyGrams();
+  const pricePreview = Number(buyPriceStr.replace(/,/g, "").trim());
+  const feesPreview = feesStr.trim() === "" ? 0 : Number(feesStr.replace(/,/g, ""));
+  let totalPreview: number | null = null;
+  if (
+    gramsPreview != null &&
+    gramsPreview > 0 &&
+    Number.isFinite(pricePreview) &&
+    pricePreview > 0 &&
+    Number.isFinite(feesPreview) &&
+    feesPreview >= 0
+  ) {
+    const npg = buyPriceUnit === "tola" ? pricePreview / NEPAL_UI_GRAMS_PER_TOLA : pricePreview;
+    totalPreview = gramsPreview * npg + feesPreview;
+  }
+
+  return (
+    <div
+      id="edit-metal-holding"
+      className="mb-3 rounded-xl border border-[#D4AF37]/35 bg-gradient-to-br from-[#062B24]/70 to-[#03100F]/95 p-3 sm:p-3.5"
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-black uppercase tracking-[0.08em] text-[#F4D06F]">Edit Holding</p>
+        <p className="text-[10px] font-bold text-[#CBD5E1]/70">
+          {row.metal === "gold" ? "Gold" : "Silver"} · same item ID preserved
+        </p>
+      </div>
+      {multiBuy ? (
+        <p className="mb-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold text-amber-100/90">
+          Multiple buy trades linked — rename and date are editable here; change qty/price via transaction Edit.
+        </p>
+      ) : null}
+      <div className="space-y-2">
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item name</span>
+          <input
+            value={itemName}
+            onChange={(e) => setItemName(e.target.value)}
+            className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold"
+            maxLength={120}
+          />
+        </label>
+        <PortfolioIsoDateField
+          label="Purchase date"
+          value={tradeDate}
+          onChange={(next) => setTradeDate(next ?? todayIso())}
+        />
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Grams</span>
+            <input
+              value={gramQtyStr}
+              onChange={(e) => onGramQtyChange(e.target.value)}
+              inputMode="decimal"
+              disabled={multiBuy}
+              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold disabled:opacity-60"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Tola (1 tola = 11.66 g)</span>
+            <input
+              value={tolaQtyStr}
+              onChange={(e) => onTolaQtyChange(e.target.value)}
+              inputMode="decimal"
+              disabled={multiBuy}
+              className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold disabled:opacity-60"
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Purchase price unit</span>
+          {(["gram", "tola"] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              disabled={multiBuy}
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+                buyPriceUnit === u
+                  ? "border-lime-400/45 bg-lime-500/15 text-lime-100"
+                  : "border-emerald-400/20 bg-black/30 text-emerald-200/70"
+              } ${multiBuy ? "opacity-50" : ""}`}
+              onClick={() => setBuyPriceUnit(u)}
+            >
+              NPR / {u === "gram" ? "g" : "tola"}
+            </button>
+          ))}
+        </div>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+            Purchase price ({buyPriceUnit === "gram" ? "NPR per gram" : "NPR per tola"})
+          </span>
+          <input
+            value={buyPriceStr}
+            onChange={(e) => setBuyPriceStr(e.target.value)}
+            inputMode="decimal"
+            disabled={multiBuy}
+            className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold disabled:opacity-60"
+          />
+        </label>
+        {totalPreview != null ? (
+          <p className="text-[10px] font-bold text-emerald-200/70">
+            Total purchase cost (incl. fees):{" "}
+            <span className="tabular-nums text-emerald-50">{formatMoney(totalPreview, "NPR")}</span>
+          </p>
+        ) : null}
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">
+            Fees / making charges (NPR)
+          </span>
+          <input
+            value={feesStr}
+            onChange={(e) => setFeesStr(e.target.value)}
+            inputMode="decimal"
+            disabled={multiBuy}
+            className="wealth-input-text w-full px-2 py-1.5 text-xs font-bold disabled:opacity-60"
+            placeholder="Optional"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Notes</span>
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="wealth-input-text w-full px-2 py-1.5 text-xs font-semibold"
+            placeholder="Optional"
+          />
+        </label>
+        {err ? <p className="text-[11px] font-bold text-rose-300">{err}</p> : null}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            type="button"
+            onClick={submit}
+            className="rounded-xl bg-gradient-to-r from-amber-700 to-amber-600 px-5 py-2 text-xs font-black text-white shadow-lg shadow-amber-900/30 transition hover:from-amber-600 hover:to-amber-500"
+          >
+            Save Changes
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-emerald-400/25 bg-black/30 px-4 py-2 text-xs font-black text-emerald-100/90 transition hover:border-emerald-400/40"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MetalsPanel({
   rows,
   ledger,
@@ -794,6 +1102,7 @@ export function MetalsPanel({
   const metalFormRef = useRef<MetalTxnFormHandle>(null);
   const [holdingsOpen, setHoldingsOpen] = useState(true);
   const [tradesOpen, setTradesOpen] = useState(true);
+  const [editingHoldingId, setEditingHoldingId] = useState<string | null>(null);
   const syncLabel = bullionSpot?.updatedAt
     ? new Date(bullionSpot.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : "—";
@@ -1050,7 +1359,23 @@ export function MetalsPanel({
           />
         </button>
         {holdingsOpen ? (
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 space-y-3">
+        {editingHoldingId ? (
+          (() => {
+            const editingRow = rows.find((r) => r.id === editingHoldingId);
+            if (!editingRow) return null;
+            return (
+              <EditMetalHoldingForm
+                key={editingRow.id}
+                row={editingRow}
+                ledger={ledger}
+                onMutate={onMutate}
+                onCancel={() => setEditingHoldingId(null)}
+              />
+            );
+          })()
+        ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
         {rows.length === 0 ? (
           <p className="col-span-full rounded-xl border border-white/10 bg-black/25 px-3 py-4 text-center text-[12px] font-semibold text-[#CBD5E1]/65">
             No individual holdings yet. Use + Gold or + Silver to add items.
@@ -1070,10 +1395,13 @@ export function MetalsPanel({
           const holdLabel = daysHeld != null ? formatHoldingDurationApprox(daysHeld) : "—";
           const cover = metalItemCoverFromLedger(row.id, ledger);
           const metalLabel = row.metal === "gold" ? "Gold" : "Silver";
+          const isEditingThis = editingHoldingId === row.id;
           return (
             <div
               key={row.id}
-              className="wealth-row-card flex gap-2 rounded-xl border border-emerald-400/10 p-2.5 sm:p-3"
+              className={`wealth-row-card flex gap-2 rounded-xl border p-2.5 sm:p-3 ${
+                isEditingThis ? "border-[#D4AF37]/45 bg-[#D4AF37]/08" : "border-emerald-400/10"
+              }`}
             >
               {cover ? (
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-amber-400/25 bg-black/40 sm:h-[4.5rem] sm:w-[4.5rem]">
@@ -1136,25 +1464,51 @@ export function MetalsPanel({
                   <div className="text-end text-emerald-100/90">{holdLabel}</div>
                 </dl>
               </div>
-              <button
-                type="button"
-                aria-label="Remove item"
-                title="Remove item (only when quantity is zero)"
-                onClick={() => {
-                  if (g > 1e-9) {
-                    toast.error("Sell to zero grams before removing an item.");
-                    return;
-                  }
-                  onRemove(row.id);
-                  toast.success("Item removed.");
-                }}
-                className="self-start rounded-lg p-1.5 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
-              >
-                <Trash2 size={15} />
-              </button>
+              <div className="flex shrink-0 flex-col gap-1 self-start">
+                <button
+                  type="button"
+                  aria-label={`Edit ${row.name || metalLabel} holding`}
+                  title="Edit holding"
+                  onClick={() => {
+                    setHoldingsOpen(true);
+                    setEditingHoldingId(row.id);
+                    queueMicrotask(() => {
+                      document.getElementById("edit-metal-holding")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    });
+                  }}
+                  className={`rounded-lg border p-1.5 transition ${
+                    isEditingThis
+                      ? "border-[#D4AF37]/50 bg-[#D4AF37]/15 text-[#F4D06F]"
+                      : "border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#F4D06F]/90 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/18"
+                  }`}
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Remove item"
+                  title="Remove item (only when quantity is zero)"
+                  onClick={() => {
+                    if (g > 1e-9) {
+                      toast.error("Sell to zero grams before removing an item.");
+                      return;
+                    }
+                    if (editingHoldingId === row.id) setEditingHoldingId(null);
+                    onRemove(row.id);
+                    toast.success("Item removed.");
+                  }}
+                  className="rounded-lg p-1.5 text-emerald-300/40 transition hover:bg-rose-500/15 hover:text-rose-300"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             </div>
           );
         })}
+      </div>
       </div>
         ) : null}
       </div>
