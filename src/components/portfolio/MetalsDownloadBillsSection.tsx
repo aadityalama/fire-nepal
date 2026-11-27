@@ -1,7 +1,18 @@
 "use client";
 
 import { ChevronDown, Download, Eye, FileText, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+  type TouchEvent as ReactTouchEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   sanitizeMetalPurchaseBillUrls,
   sanitizeMetalTxBillUrls,
@@ -120,38 +131,302 @@ export function collectMetalsBillRecords(
   return out;
 }
 
+/** Download the original file bytes only (never a screenshot of the preview UI). */
 function triggerDownload(url: string, fileName: string) {
   const run = (href: string, revoke?: () => void) => {
     const a = document.createElement("a");
     a.href = href;
     a.download = fileName;
     a.rel = "noopener";
-    a.target = "_blank";
+    // Keep same-tab so mobile Safari honors download= for blob/data URLs.
+    a.target = "_self";
     document.body.appendChild(a);
     a.click();
     a.remove();
     if (revoke) {
-      // Delay revoke so mobile browsers can start the download.
-      window.setTimeout(revoke, 1500);
+      window.setTimeout(revoke, 2000);
     }
   };
 
-  // Blob URLs download more reliably on mobile than huge data: URLs.
-  if (url.startsWith("data:")) {
-    void fetch(url)
-      .then((r) => r.blob())
-      .then((blob) => {
-        const objectUrl = URL.createObjectURL(blob);
-        run(objectUrl, () => URL.revokeObjectURL(objectUrl));
-      })
-      .catch(() => run(url));
-    return;
-  }
-  run(url);
+  void (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const blob = await res.blob();
+      // Preserve PDF / image MIME from the original payload when possible.
+      const typed =
+        blob.type && blob.type !== "application/octet-stream"
+          ? blob
+          : new Blob([blob], {
+              type: fileName.toLowerCase().endsWith(".pdf")
+                ? "application/pdf"
+                : fileName.toLowerCase().match(/\.png$/)
+                  ? "image/png"
+                  : fileName.toLowerCase().match(/\.webp$/)
+                    ? "image/webp"
+                    : fileName.toLowerCase().match(/\.gif$/)
+                      ? "image/gif"
+                      : "image/jpeg",
+            });
+      const objectUrl = URL.createObjectURL(typed);
+      run(objectUrl, () => URL.revokeObjectURL(objectUrl));
+    } catch {
+      // Cross-origin signed URLs without CORS: open original in a new tab (still the file, not the UI).
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.rel = "noopener";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  })();
+}
+
+type TouchPoint = { clientX: number; clientY: number };
+
+function touchDistance(a: TouchPoint, b: TouchPoint): number {
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
+
+/** Single-viewport image lightbox with pinch / double-tap zoom. */
+function BillImageLightbox({
+  url,
+  alt,
+  onBroken,
+}: {
+  url: string;
+  alt: string;
+  onBroken: () => void;
+}): ReactElement {
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const [gesturing, setGesturing] = useState(false);
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null);
+  const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const lastTapRef = useRef(0);
+
+  const resetZoom = useCallback(() => {
+    setScale(1);
+    setTx(0);
+    setTy(0);
+  }, []);
+
+  const onTouchStart = (e: ReactTouchEvent) => {
+    if (e.touches.length === 2) {
+      panRef.current = null;
+      pinchRef.current = {
+        startDist: touchDistance(e.touches[0], e.touches[1]),
+        startScale: scale,
+      };
+      setGesturing(true);
+      return;
+    }
+    if (e.touches.length === 1 && scale > 1) {
+      panRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        tx,
+        ty,
+      };
+      setGesturing(true);
+    }
+  };
+
+  const onTouchMove = (e: ReactTouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      e.preventDefault();
+      const dist = touchDistance(e.touches[0], e.touches[1]);
+      const next = Math.min(4, Math.max(1, (pinchRef.current.startScale * dist) / pinchRef.current.startDist));
+      setScale(next);
+      if (next <= 1.02) {
+        setTx(0);
+        setTy(0);
+      }
+      return;
+    }
+    if (e.touches.length === 1 && panRef.current && scale > 1) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - panRef.current.x;
+      const dy = e.touches[0].clientY - panRef.current.y;
+      setTx(panRef.current.tx + dx);
+      setTy(panRef.current.ty + dy);
+    }
+  };
+
+  const onTouchEnd = (e: ReactTouchEvent) => {
+    if (e.touches.length < 2) pinchRef.current = null;
+    if (e.touches.length === 0) {
+      panRef.current = null;
+      setGesturing(false);
+      if (scale < 1.05) resetZoom();
+    }
+  };
+
+  const onDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 320) {
+      if (scale > 1.05) resetZoom();
+      else setScale(2.2);
+      lastTapRef.current = 0;
+      return;
+    }
+    lastTapRef.current = now;
+  };
+
+  const onWheel = (e: ReactWheelEvent) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    setScale((s) => Math.min(4, Math.max(1, s - e.deltaY * 0.01)));
+  };
+
+  return (
+    <div
+      className="relative flex h-full min-h-0 w-full flex-1 items-center justify-center overflow-hidden overscroll-none touch-none"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onClick={onDoubleTap}
+      onWheel={onWheel}
+      data-testid="metals-bill-preview-viewport"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={alt}
+        draggable={false}
+        className="max-h-full max-w-full select-none object-contain"
+        style={{
+          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+          transformOrigin: "center center",
+          transition: gesturing ? undefined : "transform 120ms ease-out",
+        }}
+        data-testid="metals-bill-preview-image"
+        onError={onBroken}
+      />
+    </div>
+  );
+}
+
+function BillPreviewModal({
+  bill,
+  onClose,
+  onMissing,
+}: {
+  bill: MetalsBillRecord;
+  onClose: () => void;
+  onMissing: () => void;
+}): ReactElement | null {
+  const isClient = useIsClient();
+  const url = bill.url;
+
+  useEffect(() => {
+    if (!url) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouch = document.body.style.touchAction;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouch;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [url, onClose]);
+
+  if (!isClient || !url) return null;
+
+  const image = isImageUrl(url) && !isPdfUrl(url);
+  const pdf = isPdfUrl(url);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[400] flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-black pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bill preview"
+      data-testid="metals-bill-preview-modal"
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/15 bg-black/95 px-3 py-2.5">
+        <p className="min-w-0 flex-1 truncate text-left text-xs font-bold text-white/90">
+          {bill.itemName} · {bill.fileName}
+        </p>
+        <button
+          type="button"
+          onClick={() => triggerDownload(url, bill.fileName)}
+          data-testid="metals-bill-preview-download"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/20 px-3 text-xs font-black text-[#F4D06F]"
+        >
+          <Download size={15} aria-hidden />
+          Download
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close bill preview"
+          data-testid="metals-bill-preview-close"
+          className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white"
+        >
+          <X size={18} aria-hidden />
+        </button>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {image ? (
+          <BillImageLightbox url={url} alt={`Bill for ${bill.itemName}`} onBroken={onMissing} />
+        ) : pdf ? (
+          <div className="flex h-full min-h-0 w-full flex-1 flex-col">
+            <iframe
+              title={`PDF bill for ${bill.itemName}`}
+              src={url}
+              className="h-full min-h-0 w-full flex-1 border-0 bg-white"
+              data-testid="metals-bill-preview-pdf"
+            />
+          </div>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+            <FileText size={28} className="text-amber-200" aria-hidden />
+            <p className="text-sm font-bold text-white">This bill format opens best via download.</p>
+            <button
+              type="button"
+              onClick={() => triggerDownload(url, bill.fileName)}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#D4AF37]/45 bg-[#D4AF37]/15 px-3 text-xs font-black text-[#F4D06F]"
+            >
+              <Download size={14} aria-hidden />
+              Download Bill
+            </button>
+          </div>
+        )}
+      </div>
+
+      {image ? (
+        <p className="shrink-0 px-3 py-1.5 text-center text-[10px] font-semibold text-white/45">
+          Pinch or double-tap to zoom · Download saves the original file only
+        </p>
+      ) : null}
+    </div>,
+    document.body,
+  );
 }
 
 export function MetalsDownloadBillsSection({ ledger }: { ledger: readonly PortfolioLedgerEntry[] }) {
   const { state } = useWealthPortfolio();
+  const isClient = useIsClient();
   const [open, setOpen] = useState(false);
   const [metalFilter, setMetalFilter] = useState<MetalFilter>("all");
   const [query, setQuery] = useState("");
@@ -312,113 +587,37 @@ export function MetalsDownloadBillsSection({ ledger }: { ledger: readonly Portfo
       ) : null}
 
       {preview && preview.url ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm sm:p-6"
-          role="dialog"
-          aria-modal
-          aria-label="Bill preview"
-        >
-          <button
-            type="button"
-            className="absolute right-3 top-3 rounded-lg border border-white/20 bg-white/10 p-2 text-white"
-            onClick={() => setPreview(null)}
-            aria-label="Close bill preview"
-          >
-            <X size={18} />
-          </button>
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col items-center gap-3 overflow-auto">
-            <p className="text-center text-xs font-bold text-white/90">
-              {preview.itemName} · {preview.fileName}
-            </p>
-            {isImageUrl(preview.url) && !isPdfUrl(preview.url) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview.url}
-                alt={`Bill for ${preview.itemName}`}
-                className="max-h-[75vh] max-w-full rounded-lg object-contain shadow-2xl"
-                data-testid="metals-bill-preview-image"
-                onError={() => {
-                  setPreview({ ...preview, missing: true, url: null });
-                }}
-              />
-            ) : isPdfUrl(preview.url) ? (
-              <div className="flex w-full flex-col items-center gap-3">
-                <iframe
-                  title={`PDF bill for ${preview.itemName}`}
-                  src={preview.url}
-                  className="h-[min(70vh,640px)] w-full rounded-lg border border-white/15 bg-white"
-                  data-testid="metals-bill-preview-pdf"
-                />
-                <div className="flex flex-wrap justify-center gap-2">
-                  <a
-                    href={preview.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#10B981]/40 bg-[#10B981]/15 px-3 text-xs font-black text-[#6EE7B7]"
-                  >
-                    <Eye size={14} aria-hidden />
-                    Open file
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => triggerDownload(preview.url!, preview.fileName)}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#D4AF37]/45 bg-[#D4AF37]/15 px-3 text-xs font-black text-[#F4D06F]"
-                  >
-                    <Download size={14} aria-hidden />
-                    Download Bill
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full max-w-lg space-y-3 rounded-xl border border-white/15 bg-[#062B24] p-4 text-center">
-                <FileText size={28} className="mx-auto text-amber-200" aria-hidden />
-                <p className="text-sm font-bold text-white">This bill format opens best via download.</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <a
-                    href={preview.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#10B981]/40 bg-[#10B981]/15 px-3 text-xs font-black text-[#6EE7B7]"
-                  >
-                    <Eye size={14} aria-hidden />
-                    Open file
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => triggerDownload(preview.url!, preview.fileName)}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-[#D4AF37]/45 bg-[#D4AF37]/15 px-3 text-xs font-black text-[#F4D06F]"
-                  >
-                    <Download size={14} aria-hidden />
-                    Download Bill
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <BillPreviewModal
+          bill={preview}
+          onClose={() => setPreview(null)}
+          onMissing={() => setPreview({ ...preview, missing: true, url: null })}
+        />
       ) : null}
 
-      {preview?.missing ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4"
-          role="dialog"
-          aria-modal
-          aria-label="Missing bill"
-        >
-          <div className="max-w-sm rounded-xl border border-rose-400/30 bg-[#062B24] p-4 text-center">
-            <p className="text-sm font-bold text-rose-100">
-              Original file is missing or unreadable. No replacement bill was generated.
-            </p>
-            <button
-              type="button"
-              className="mt-3 rounded-lg border border-white/20 px-3 py-2 text-xs font-black text-white"
-              onClick={() => setPreview(null)}
+      {isClient && preview?.missing
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[400] flex h-[100dvh] items-center justify-center bg-black/90 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Missing bill"
             >
-              Close
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <div className="max-w-sm rounded-xl border border-rose-400/30 bg-[#062B24] p-4 text-center">
+                <p className="text-sm font-bold text-rose-100">
+                  Original file is missing or unreadable. No replacement bill was generated.
+                </p>
+                <button
+                  type="button"
+                  className="mt-3 rounded-lg border border-white/20 px-3 py-2 text-xs font-black text-white"
+                  onClick={() => setPreview(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

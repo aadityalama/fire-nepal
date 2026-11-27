@@ -134,8 +134,10 @@ async function runViewport(browser, label, contextOptions) {
   await page.getByLabel("Search bills by item name").fill("");
   await page.waitForTimeout(200);
 
-  // Preview first image bill
+  // Preview first image bill — single-viewport lightbox (no page-length black scroll)
   await rows.first().getByTestId("metals-bill-view").click();
+  const modal = page.getByTestId("metals-bill-preview-modal");
+  await modal.waitFor({ state: "visible", timeout: 8000 });
   const img = page.getByTestId("metals-bill-preview-image");
   const pdf = page.getByTestId("metals-bill-preview-pdf");
   await Promise.race([
@@ -144,11 +146,32 @@ async function runViewport(browser, label, contextOptions) {
   ]);
   const previewVisible = (await img.count()) > 0 || (await pdf.count()) > 0;
   assert.ok(previewVisible, `${label}: preview should show image or PDF`);
+  assert.ok(await page.getByTestId("metals-bill-preview-close").isVisible(), `${label}: Close visible`);
+  assert.ok(await page.getByTestId("metals-bill-preview-download").isVisible(), `${label}: Download visible`);
+
+  // Modal must be exactly one viewport tall (no multi-screen black scroll)
+  const modalBox = await modal.boundingBox();
+  const vp = page.viewportSize();
+  assert.ok(modalBox && vp, `${label}: modal/viewport measured`);
+  assert.ok(Math.abs(modalBox.height - vp.height) <= 2, `${label}: modal height ≈ viewport`);
+  const scrollH = await modal.evaluate((el) => el.scrollHeight);
+  assert.ok(scrollH <= vp.height + 2, `${label}: no tall black overflow scroll (${scrollH} vs ${vp.height})`);
+
   await page.screenshot({
     path: join(outDir, `metals-download-bills-preview-${label}.png`),
     fullPage: false,
   });
-  await page.getByLabel("Close bill preview").click();
+
+  // Download from preview toolbar — original file only
+  const [previewDownload] = await Promise.all([
+    page.waitForEvent("download", { timeout: 15000 }),
+    page.getByTestId("metals-bill-preview-download").click(),
+  ]);
+  assert.ok(previewDownload.suggestedFilename(), `${label}: preview download filename`);
+  assert.equal(await previewDownload.failure(), null, `${label}: preview download ok`);
+
+  await page.getByTestId("metals-bill-preview-close").click();
+  await modal.waitFor({ state: "hidden", timeout: 5000 });
 
   // Download
   const [download] = await Promise.all([
