@@ -54,14 +54,14 @@ export function GoldSilverHero() {
           </p>
         </div>
 
-        <div className="relative hidden h-[5.5rem] w-[7.5rem] shrink-0 sm:block md:h-[6.5rem] md:w-[9rem]" aria-hidden>
+        <div className="relative h-[4.75rem] w-[5.5rem] shrink-0 sm:h-[5.5rem] sm:w-[7.5rem] md:h-[6.5rem] md:w-[9rem]" aria-hidden>
           <Image
             src="/illustrations/gold-silver/gold-bars.svg"
             alt=""
             width={120}
             height={96}
             unoptimized
-            className="absolute right-0 top-0 h-auto w-[4.75rem] drop-shadow-[0_8px_20px_rgba(212,175,55,0.35)] md:w-[5.5rem]"
+            className="absolute right-0 top-0 h-auto w-[3.5rem] drop-shadow-[0_8px_20px_rgba(212,175,55,0.35)] sm:w-[4.75rem] md:w-[5.5rem]"
           />
           <Image
             src="/illustrations/gold-silver/silver-bars.svg"
@@ -69,7 +69,7 @@ export function GoldSilverHero() {
             width={100}
             height={80}
             unoptimized
-            className="absolute bottom-0 left-0 h-auto w-[3.75rem] opacity-95 drop-shadow-[0_8px_16px_rgba(148,163,184,0.35)] md:w-[4.25rem]"
+            className="absolute bottom-0 left-0 h-auto w-[2.75rem] opacity-95 drop-shadow-[0_8px_16px_rgba(148,163,184,0.35)] sm:w-[3.75rem] md:w-[4.25rem]"
           />
         </div>
       </div>
