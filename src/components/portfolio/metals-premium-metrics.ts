@@ -118,6 +118,21 @@ export function metalHoldingCalendarDays(
   return calendarDaysInvested(start, new Date());
 }
 
+/**
+ * Holding calendar days for one metal only.
+ * Reuses `metalHoldingCalendarDays` with a metal-filtered row set — same formula/convention.
+ */
+export function metalHoldingCalendarDaysForMetal(
+  rows: readonly MetalRow[],
+  metal: "gold" | "silver",
+  ledger?: readonly PortfolioLedgerEntry[],
+): number | null {
+  return metalHoldingCalendarDays(
+    rows.filter((r) => r.metal === metal),
+    ledger,
+  );
+}
+
 export function roiPct(cost: number, value: number): number | null {
   if (cost <= 0 || !Number.isFinite(value)) return null;
   return ((value - cost) / cost) * 100;

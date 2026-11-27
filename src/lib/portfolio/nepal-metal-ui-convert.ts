@@ -1,6 +1,7 @@
 /**
  * UI gram ↔ tola conversion for holdings entry (FIRE Nepal product spec).
- * Board pricing still comes from FENEGOSIDA; this constant is display/input only.
+ * Domestic NPR/tola comes from Hamro Patro; this constant is display/input only
+ * and keeps tola-denominated holdings marking to the published tola price.
  */
 export const NEPAL_UI_GRAMS_PER_TOLA = 11.66 as const;
 
