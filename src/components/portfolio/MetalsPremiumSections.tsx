@@ -161,58 +161,72 @@ function MetalHoldingsCard({
   const isGold = metal === "gold";
   const empty = rollup.grams <= 0;
   const tola = empty ? null : gramsToTolaUi(rollup.grams);
-  const border = isGold ? "border-[#D4AF37]/35" : "border-[#94A3B8]/35";
+  const border = isGold ? "border-[#D4AF37]/40" : "border-[#94A3B8]/40";
   const glow = isGold
-    ? "from-[#D4AF37]/12 via-[#062B24]/40 to-[#03100F]/80 shadow-[0_0_28px_-12px_rgba(212,175,55,0.45)]"
-    : "from-[#94A3B8]/12 via-[#0c1a24]/50 to-[#03100F]/80 shadow-[0_0_28px_-12px_rgba(148,163,184,0.35)]";
-  const titleTone = isGold ? "text-[#F4D06F]" : "text-[#CBD5E1]";
+    ? "from-[#D4AF37]/14 via-[#062B24]/45 to-[#03100F]/90 shadow-[0_0_28px_-12px_rgba(212,175,55,0.45)]"
+    : "from-[#94A3B8]/14 via-[#0c1a24]/55 to-[#03100F]/90 shadow-[0_0_28px_-12px_rgba(148,163,184,0.35)]";
+  const titleTone = isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]";
+  const valueTone = isGold ? "text-[#F8FAFC]" : "text-[#F8FAFC]";
+  const currentTone = isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]";
+  const cagrTone = isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]";
+  const cagrPanel = isGold
+    ? "border-[#D4AF37]/40 bg-gradient-to-r from-[#D4AF37]/16 to-[#D4AF37]/06"
+    : "border-[#94A3B8]/40 bg-gradient-to-r from-[#94A3B8]/16 to-[#94A3B8]/06";
   const art = isGold ? "/illustrations/gold-silver/gold-bars.svg" : "/illustrations/gold-silver/silver-bars.svg";
 
-  const rows: { label: string; value: string }[] = [
-    { label: "Grams", value: empty ? "—" : `${rollup.grams.toLocaleString(undefined, { maximumFractionDigits: 4 })} g` },
-    { label: "Tola", value: tola != null ? tola.toFixed(4) : "—" },
-    { label: "Purchase", value: rollup.basisSumNpr > 0 ? formatMoney(rollup.basisSumNpr, "NPR") : "—" },
-    { label: "Current", value: empty ? "—" : formatMoney(rollup.currentNpr, "NPR") },
-  ];
-
+  const gramsText = empty
+    ? "—"
+    : `${rollup.grams.toLocaleString(undefined, { maximumFractionDigits: 4 })} g`;
+  const tolaText = tola != null ? tola.toFixed(4) : "—";
+  const purchaseText = rollup.basisSumNpr > 0 ? formatMoney(rollup.basisSumNpr, "NPR") : "—";
+  const currentText = empty ? "—" : formatMoney(rollup.currentNpr, "NPR");
   const cagrText = empty || cagrFrac == null ? "—" : formatCagrPct(cagrFrac, 2).replace(" p.a.", "");
+
+  const metric = (label: string, value: string, emphasize = false) => (
+    <div className="min-w-0">
+      <dt className="text-[14px] font-semibold leading-snug text-[#CBD5E1]/85 sm:text-[15px] md:text-[16px]">
+        {label}
+      </dt>
+      <dd
+        className={`mt-1 break-words font-extrabold tabular-nums leading-none tracking-tight ${
+          emphasize
+            ? `text-[20px] sm:text-[22px] md:text-[24px] ${currentTone}`
+            : `text-[19px] text-[#F8FAFC] sm:text-[21px] md:text-[23px] ${valueTone}`
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
 
   return (
     <article className={`gs-glass overflow-hidden rounded-2xl border ${border} bg-gradient-to-br ${glow}`}>
-      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-stretch sm:p-4">
-        <div className="relative mx-auto h-24 w-28 shrink-0 sm:mx-0 sm:h-28 sm:w-32" aria-hidden>
-          <Image src={art} alt="" fill unoptimized className="object-contain drop-shadow-lg" sizes="128px" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className={`text-sm font-black uppercase tracking-[0.1em] ${titleTone}`}>{title}</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-bold sm:grid-cols-2">
-            {rows.map((r) => (
-              <div key={r.label} className="flex justify-between gap-2 sm:block sm:space-y-0.5">
-                <dt className="text-[#CBD5E1]/55">{r.label}</dt>
-                <dd className="tabular-nums text-[#F8FAFC]">{r.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {/* Mobile: CAGR directly under Current */}
-          <div
-            className={`mt-3 rounded-xl border px-3 py-2.5 lg:hidden ${
-              isGold ? "border-[#D4AF37]/35 bg-[#D4AF37]/10" : "border-[#94A3B8]/35 bg-[#94A3B8]/10"
-            }`}
-          >
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#CBD5E1]/70">CAGR Returns</p>
-            <p className={`mt-0.5 text-xl font-black tabular-nums ${isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]"}`}>
-              {cagrText}
-            </p>
+      <div className="px-3.5 py-3 sm:px-4 sm:py-3.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="relative h-11 w-12 shrink-0 sm:h-12 sm:w-14" aria-hidden>
+            <Image src={art} alt="" fill unoptimized className="object-contain drop-shadow-lg" sizes="56px" />
           </div>
+          <h3
+            className={`min-w-0 text-[22px] font-extrabold leading-none tracking-tight sm:text-[23px] md:text-[24px] ${titleTone}`}
+          >
+            {title}
+          </h3>
         </div>
-        {/* Desktop: side CAGR panel */}
-        <div
-          className={`hidden w-[9.5rem] shrink-0 flex-col justify-center rounded-xl border px-3 py-3 text-center lg:flex ${
-            isGold ? "border-[#D4AF37]/40 bg-black/40" : "border-[#94A3B8]/40 bg-black/40"
-          }`}
-        >
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#CBD5E1]/70">CAGR Returns</p>
-          <p className={`mt-1 text-2xl font-black tabular-nums leading-none ${isGold ? "text-[#F4D06F]" : "text-[#E2E8F0]"}`}>
+
+        <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:mt-3 sm:gap-x-5 sm:gap-y-3">
+          {metric("Grams", gramsText)}
+          {metric("Tola", tolaText)}
+          {metric("Purchase", purchaseText)}
+          {metric("Current Value", currentText, true)}
+        </dl>
+
+        <div className={`mt-3 rounded-xl border px-3.5 py-2.5 sm:mt-3.5 sm:px-4 sm:py-3 ${cagrPanel}`}>
+          <p className="text-[14px] font-bold uppercase tracking-[0.06em] text-[#CBD5E1]/85 sm:text-[15px] md:text-[16px]">
+            CAGR Returns
+          </p>
+          <p
+            className={`mt-1.5 break-words text-[30px] font-black tabular-nums leading-none tracking-tight sm:text-[34px] md:text-[36px] ${cagrTone}`}
+          >
             {cagrText}
           </p>
         </div>
