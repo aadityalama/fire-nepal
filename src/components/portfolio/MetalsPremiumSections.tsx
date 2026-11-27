@@ -13,8 +13,8 @@ import {
   Layers,
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { toast } from "sonner";
 import { AutoFitSingleLine } from "@/components/portfolio/AutoFitSingleLine";
+import { MetalsPortfolioReportModal } from "@/components/portfolio/MetalsPortfolioReportModal";
 import { useWealthPortfolio } from "@/contexts/WealthPortfolioContext";
 import {
   annualizedCagrFraction,
@@ -456,6 +456,8 @@ export function MetalsPremiumDashboard({
   onMutate: (fn: (s: WealthPortfolioStateV2) => WealthPortfolioStateV2 | null) => boolean;
 }) {
   const { totals } = useWealthPortfolio();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSession, setReportSession] = useState(0);
   const all = rollupAllMetals(rows, gramRates);
   const gold = rollupMetalBucket(rows, "gold", gramRates);
   const silver = rollupMetalBucket(rows, "silver", gramRates);
@@ -616,13 +618,12 @@ export function MetalsPremiumDashboard({
           </button>
           <button
             type="button"
-            onClick={() =>
-              toast.message("Report export is not available on Gold & Silver yet.", {
-                description: "Owner approval needed before adding a metals report/export feature.",
-              })
-            }
+            onClick={() => {
+              setReportSession((n) => n + 1);
+              setReportOpen(true);
+            }}
             className={`${QUICK_BTN} border-[#10B981]/35 bg-[#10B981]/10 text-[#6EE7B7] hover:bg-[#10B981]/18`}
-            aria-label="Report — not available yet"
+            aria-label="Open Gold and Silver investment report"
           >
             <BarChart3 size={16} aria-hidden />
             Report
@@ -641,6 +642,14 @@ export function MetalsPremiumDashboard({
           </PortfolioModuleDataResetButton>
         </div>
       </section>
+
+      <MetalsPortfolioReportModal
+        key={reportSession}
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        rows={rows}
+        ledger={ledger}
+      />
     </div>
   );
 }
