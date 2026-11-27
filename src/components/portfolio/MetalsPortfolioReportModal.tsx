@@ -20,11 +20,9 @@ import {
   type MetalsReportSectionId,
   type MetalsReportSnapshot,
 } from "@/lib/metals-portfolio-report";
-import {
-  downloadMetalsPortfolioReportPdf,
-  printMetalsPortfolioReportPdf,
-} from "@/lib/metals-portfolio-report-pdf";
-import { FIRE_NEPAL_LOGO_SRC } from "@/lib/settlement-share";
+
+/** Official FIRE Nepal logo asset (public/). Keep this literal — do not pull settlement-share into the metals report graph. */
+const FIRE_NEPAL_LOGO_SRC = "/logo.png";
 
 const SECTION_LABELS: { id: MetalsReportSectionId; label: string }[] = [
   { id: "summary", label: "Portfolio Summary" },
@@ -125,6 +123,10 @@ export function MetalsPortfolioReportModal({
     setError(null);
     setStatus(action === "pdf" ? "Generating PDF…" : "Preparing print…");
     try {
+      // Lazy-load jsPDF path only when the user exports — keeps /portfolio/gold SSR/client graph leaner.
+      const { downloadMetalsPortfolioReportPdf, printMetalsPortfolioReportPdf } = await import(
+        "@/lib/metals-portfolio-report-pdf"
+      );
       if (action === "pdf") {
         const filename = await downloadMetalsPortfolioReportPdf(snapshot);
         setStatus(`Downloaded ${filename}`);
@@ -161,7 +163,7 @@ export function MetalsPortfolioReportModal({
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={FIRE_NEPAL_LOGO_SRC} alt="FIRE Nepal" className="h-10 w-10 rounded-lg object-contain" />
+              <img src={FIRE_NEPAL_LOGO_SRC} alt="FIRE Nepal" className="h-10 w-10 rounded-lg bg-black object-contain" />
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100/90">
                   Financial Independence Retire Early
@@ -265,7 +267,7 @@ export function MetalsPortfolioReportModal({
           <article className="mx-auto max-w-[720px] rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6 print:border-0 print:shadow-none">
             <div className="mb-4 flex items-start gap-3 border-b border-emerald-100 pb-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="FIRE Nepal" className="h-12 w-12 rounded-lg object-contain" />
+              <img src={FIRE_NEPAL_LOGO_SRC} alt="FIRE Nepal" className="h-12 w-12 rounded-lg bg-black object-contain" />
               <div className="min-w-0 flex-1">
                 <p className="text-lg font-black text-emerald-900">FIRE Nepal</p>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
