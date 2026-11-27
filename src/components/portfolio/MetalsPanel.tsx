@@ -16,6 +16,7 @@ import {
   sanitizeMetalTxBillUrls,
   sanitizeMetalTxPhotoUrls,
 } from "@/components/portfolio/metal-photo-utils";
+import { MetalsDownloadBillsSection } from "@/components/portfolio/MetalsDownloadBillsSection";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { metalRowFirstBuyIso, roiPct } from "@/components/portfolio/metals-premium-metrics";
 import { PortfolioIsoDateField } from "@/components/portfolio/PortfolioIsoDateField";
@@ -1550,6 +1551,8 @@ export function MetalsPanel({
           />
         </div>
       </div>
+
+      <MetalsDownloadBillsSection ledger={ledger} />
     </section>
   );
 }
