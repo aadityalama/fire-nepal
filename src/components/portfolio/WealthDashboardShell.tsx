@@ -343,9 +343,16 @@ export function WealthDashboardShell({
     };
   }, [drawerOpen]);
 
+  const hideMainBottomNav =
+    (pathname ?? "") === "/portfolio/gold" || (pathname ?? "").startsWith("/portfolio/gold/");
+
   return (
     <main
-      className="portfolio-wealth-dash premium-shell relative min-h-screen bg-[#07111A] pb-24 text-white antialiased transition-[background-color,color] duration-300 ease-out max-xl:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] xl:pb-10"
+      className={`portfolio-wealth-dash premium-shell relative min-h-screen bg-[#07111A] text-white antialiased transition-[background-color,color] duration-300 ease-out xl:pb-10 ${
+        hideMainBottomNav
+          ? "pb-8 max-xl:pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]"
+          : "pb-24 max-xl:pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))]"
+      }`}
     >
       <div className="wealth-dash-atmosphere wealth-dash-atmosphere-float pointer-events-none fixed inset-0" />
 
@@ -511,11 +518,15 @@ export function WealthDashboardShell({
           </div>
         </aside>
 
-        <div className="relative mx-auto min-h-0 w-full max-w-[1680px] min-w-0 flex-1 self-start px-4 py-3 pb-28 sm:px-6 sm:py-3 lg:px-8 lg:py-3 xl:px-8 xl:py-3 xl:pb-3 2xl:px-8 2xl:py-3">
+        <div
+          className={`relative mx-auto min-h-0 w-full max-w-[1680px] min-w-0 flex-1 self-start px-4 py-3 sm:px-6 sm:py-3 lg:px-8 lg:py-3 xl:px-8 xl:py-3 xl:pb-3 2xl:px-8 2xl:py-3 ${
+            hideMainBottomNav ? "pb-8" : "pb-28"
+          }`}
+        >
           {children}
         </div>
       </div>
-      <FireNepalMainBottomNav />
+      {hideMainBottomNav ? null : <FireNepalMainBottomNav />}
     </main>
   );
 }

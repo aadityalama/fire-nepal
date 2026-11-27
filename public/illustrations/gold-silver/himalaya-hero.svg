@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMid slice" role="img" aria-label="">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a3a4a"/>
+      <stop offset="35%" stop-color="#3d5a4a"/>
+      <stop offset="70%" stop-color="#6b4a28"/>
+      <stop offset="100%" stop-color="#03100F"/>
+    </linearGradient>
+    <linearGradient id="sunGlow" x1="0.5" y1="0.2" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#F4D06F" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#D4AF37" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#03100F" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="peakLite" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8eef5" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#8fa3b0" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#062B24" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="peakMid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c5d4de"/>
+      <stop offset="50%" stop-color="#3d5c58"/>
+      <stop offset="100%" stop-color="#03100F"/>
+    </linearGradient>
+    <linearGradient id="overlay" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#03100F" stop-opacity="0.15"/>
+      <stop offset="55%" stop-color="#062B24" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#03100F" stop-opacity="0.92"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="420" fill="url(#sky)"/>
+  <ellipse cx="780" cy="120" rx="220" ry="90" fill="url(#sunGlow)"/>
+  <circle cx="820" cy="95" r="28" fill="#F4D06F" opacity="0.85"/>
+  <path d="M0 310 L140 210 L220 255 L340 140 L420 200 L520 95 L620 180 L700 130 L820 220 L940 150 L1050 230 L1200 180 L1200 420 L0 420 Z" fill="url(#peakMid)" opacity="0.85"/>
+  <path d="M0 340 L180 250 L280 290 L400 180 L500 240 L610 150 L720 230 L850 170 L980 260 L1100 200 L1200 250 L1200 420 L0 420 Z" fill="url(#peakLite)" opacity="0.9"/>
+  <path d="M0 380 L250 320 L450 360 L650 290 L850 350 L1050 310 L1200 340 L1200 420 L0 420 Z" fill="#03100F" opacity="0.75"/>
+  <rect width="1200" height="420" fill="url(#overlay)"/>
+</svg>
