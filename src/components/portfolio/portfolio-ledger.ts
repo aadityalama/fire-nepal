@@ -626,6 +626,149 @@ export function updateMetalTxn(
   return { ...state, metals, ledger: rebuilt.ledger };
 }
 
+export type MetalHoldingUpdatePayload = {
+  name: string;
+  tradeDate: string;
+  /** Desired net held grams after edit (what Individual Holdings shows). */
+  grams: number;
+  buyPriceNpr: number;
+  buyPriceUnit: "gram" | "tola";
+  feesNpr?: number;
+  notes?: string;
+};
+
+/**
+ * Edit an existing Individual Holding (`MetalRow`) by id — no duplicate rows.
+ * When a single anchor buy exists, updates that ledger entry in place and rebuilds
+ * qty/basis (accounting for later sells). Orphan rows (no ledger) update MetalRow only.
+ * Multi-buy holdings: name + notes/date on earliest buy only; economic qty/price edits rejected.
+ */
+export function updateMetalHolding(
+  state: WealthPortfolioStateV2,
+  rowId: string,
+  patch: MetalHoldingUpdatePayload,
+): WealthPortfolioStateV2 | null {
+  const name = patch.name.replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!name) return null;
+  if (!isoOk(patch.tradeDate)) return null;
+  if (patch.grams < 0 || !Number.isFinite(patch.grams)) return null;
+  if (patch.buyPriceNpr <= 0 || !Number.isFinite(patch.buyPriceNpr)) return null;
+  const feesNpr = patch.feesNpr ?? 0;
+  if (!Number.isFinite(feesNpr) || feesNpr < 0) return null;
+
+  const rowIdx = state.metals.findIndex((r) => r.id === rowId);
+  if (rowIdx < 0) return null;
+  const row = state.metals[rowIdx]!;
+
+  const buyPriceUnit = patch.buyPriceUnit === "tola" ? "tola" : "gram";
+  const nprPerGram =
+    buyPriceUnit === "tola" ? patch.buyPriceNpr / NEPAL_UI_GRAMS_PER_TOLA : patch.buyPriceNpr;
+  if (!Number.isFinite(nprPerGram) || nprPerGram < 0) return null;
+
+  const linked = state.ledger
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => e.bucket === "metal" && e.rowId === rowId && (e.txType === "buy" || e.txType === "sell"));
+  const buys = linked.filter(({ e }) => e.txType === "buy");
+  const sells = linked.filter(({ e }) => e.txType === "sell");
+
+  // Orphan holding (no ledger trades) — update MetalRow in place only.
+  if (linked.length === 0) {
+    if (patch.grams <= 0) return null;
+    const basis = patch.grams * nprPerGram + feesNpr;
+    const metals = [...state.metals];
+    metals[rowIdx] = syncMetalLegacyBuyPriceFields({
+      ...row,
+      name,
+      grams: patch.grams,
+      boughtDate: patch.tradeDate,
+      totalCostBasisNpr: basis > 0 ? Math.round(basis * 100) / 100 : undefined,
+    });
+    return { ...state, metals };
+  }
+
+  if (buys.length === 0) return null; // sells without buys — refuse
+
+  const buysSorted = [...buys].sort((a, b) => {
+    if (a.e.tradeDate !== b.e.tradeDate) return a.e.tradeDate.localeCompare(b.e.tradeDate);
+    return a.i - b.i;
+  });
+  const anchor = buysSorted[0]!;
+  const soldGrams = sells.reduce((a, { e }) => a + (e.quantity || 0), 0);
+
+  // Multi-buy: only rename (+ cascade labels); economic edits must go through transaction Edit.
+  if (buys.length > 1) {
+    const economicChange = Math.abs((row.grams ?? 0) - patch.grams) > 1e-6;
+    if (economicChange) return null;
+
+    const ledgerNext = [...state.ledger];
+    for (const { e, i } of linked) {
+      const meta: Record<string, unknown> =
+        e.meta && typeof e.meta === "object" ? { ...(e.meta as Record<string, unknown>) } : { fifoVersion: 1 };
+      meta.metalTxItemName = name;
+      ledgerNext[i] = {
+        ...e,
+        assetLabel: name,
+        meta,
+        ...(e.id === anchor.e.id
+          ? {
+              tradeDate: patch.tradeDate,
+              notes: patch.notes?.trim() || undefined,
+            }
+          : {}),
+      };
+    }
+    const rebuilt = rebuildMetalRowFromLedger({ ...row, name }, ledgerNext);
+    if (!rebuilt) return null;
+    const metals = [...state.metals];
+    metals[rowIdx] = rebuilt.row;
+    return { ...state, metals, ledger: rebuilt.ledger };
+  }
+
+  // Single buy: buy quantity must cover sold grams + desired net held grams.
+  const buyGrams = patch.grams + soldGrams;
+  if (buyGrams <= 1e-9) return null;
+
+  const entryIdx = anchor.i;
+  const original = anchor.e;
+  const prevMeta =
+    original.meta && typeof original.meta === "object" ? { ...(original.meta as Record<string, unknown>) } : {};
+  const nextMeta: Record<string, unknown> = {
+    ...prevMeta,
+    fifoVersion: 1,
+    unit: "grams",
+    buyPriceUnit,
+    metalBuyPriceNpr: patch.buyPriceNpr,
+    metalTxItemName: name,
+  };
+
+  const ledgerNext = [...state.ledger];
+  ledgerNext[entryIdx] = {
+    ...original,
+    assetLabel: name,
+    quantity: buyGrams,
+    unitPrice: nprPerGram,
+    tradeDate: patch.tradeDate,
+    fees: patch.feesNpr,
+    notes: patch.notes?.trim() || undefined,
+    meta: nextMeta,
+  };
+  // Cascade name onto sell rows for the same holding.
+  for (const { e, i } of sells) {
+    const meta = e.meta && typeof e.meta === "object" ? { ...(e.meta as Record<string, unknown>) } : {};
+    meta.metalTxItemName = name;
+    ledgerNext[i] = { ...e, assetLabel: name, meta };
+  }
+
+  const rebuilt = rebuildMetalRowFromLedger({ ...row, name }, ledgerNext);
+  if (!rebuilt) return null;
+  // Net grams after rebuild must match desired (within float tolerance).
+  if (Math.abs((rebuilt.row.grams ?? 0) - patch.grams) > 1e-4) return null;
+
+  const metals = [...state.metals];
+  metals[rowIdx] = rebuilt.row;
+  return { ...state, metals, ledger: rebuilt.ledger };
+}
+
 /**
  * Replay metal buy/sell entries for one holding row (chronological).
  * Returns null if any sell would exceed available grams (invalid sequence).
