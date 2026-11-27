@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, Trash2, X } from "lucide-react";
+import { Download, FileText, Pencil, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { PortfolioLedgerEntry } from "@/components/portfolio/types";
 import { formatMoney } from "@/lib/expense-utils";
@@ -158,12 +158,15 @@ export function LedgerEntryList({
   entries,
   listClassName,
   onPatchLedgerEntry,
+  onEditMetalEntry,
 }: {
   entries: readonly PortfolioLedgerEntry[];
   /** When set, overrides default scroll area (used by global master ledger). */
   listClassName?: string;
   /** When provided, metal bucket rows may edit attachment lists in-place. */
   onPatchLedgerEntry?: (entryId: string, patch: (e: PortfolioLedgerEntry) => PortfolioLedgerEntry) => void;
+  /** Opens the metal transaction form in edit mode for this ledger row. */
+  onEditMetalEntry?: (entry: PortfolioLedgerEntry) => void;
 }) {
   return (
     <ul
@@ -183,9 +186,25 @@ export function LedgerEntryList({
                 {bucketLabel(e)} · {e.tradeDate}
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-100/90">
-              {e.ledgerAction ?? e.txType}
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {e.bucket === "metal" &&
+              onEditMetalEntry &&
+              (e.txType === "buy" || e.txType === "sell") ? (
+                <button
+                  type="button"
+                  onClick={() => onEditMetalEntry(e)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/35 bg-[#D4AF37]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#F4D06F] transition hover:border-[#D4AF37]/55 hover:bg-[#D4AF37]/18"
+                  title="Edit transaction"
+                  aria-label={`Edit ${e.assetLabel} transaction`}
+                >
+                  <Pencil size={12} aria-hidden />
+                  Edit
+                </button>
+              ) : null}
+              <span className="rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-100/90">
+                {e.ledgerAction ?? e.txType}
+              </span>
+            </div>
           </div>
           <div className="mt-2 grid gap-1.5 text-xs font-bold tabular-nums text-emerald-100/90 sm:grid-cols-2 sm:text-sm">
             <div>

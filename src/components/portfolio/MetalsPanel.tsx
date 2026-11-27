@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Gem, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type RefObject } from "react";
 import {
   resolveMetalGramRatesForUi,
@@ -13,10 +13,12 @@ import {
   METAL_LEDGER_MAX_BILLS_PER_TX,
   METAL_LEDGER_MAX_PHOTOS_PER_TX,
   metalItemCoverFromLedger,
+  sanitizeMetalTxBillUrls,
+  sanitizeMetalTxPhotoUrls,
 } from "@/components/portfolio/metal-photo-utils";
 import { MetalsPremiumDashboard } from "@/components/portfolio/MetalsPremiumSections";
 import { metalRowFirstBuyIso, roiPct } from "@/components/portfolio/metals-premium-metrics";
-import { recordMetalBuy, recordMetalSell } from "@/components/portfolio/portfolio-ledger";
+import { recordMetalBuy, recordMetalSell, updateMetalTxn } from "@/components/portfolio/portfolio-ledger";
 import {
   PortfolioTransactionStrip,
   portfolioTxnTodayIso,
@@ -43,6 +45,8 @@ const METAL_TX_SEGMENTS: TxnSegmentDef[] = [
 export type MetalTxnFormHandle = {
   openBuyForMetal: (metal: "gold" | "silver") => void;
   focusBillsInput: () => void;
+  /** Prefill the form from an existing metal ledger entry and switch to edit mode. */
+  openEditEntry: (entry: PortfolioLedgerEntry) => void;
 };
 
 const UniversalMetalTransactionForm = forwardRef<
@@ -73,21 +77,25 @@ const UniversalMetalTransactionForm = forwardRef<
   const [pendingBillUrls, setPendingBillUrls] = useState<string[]>([]);
   const [pendingPhotoUrls, setPendingPhotoUrls] = useState<string[]>([]);
   const [attachBusy, setAttachBusy] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const internalBillsRef = useRef<HTMLInputElement>(null);
   const photosInputRef = useRef<HTMLInputElement>(null);
   const billsInputRef = billsFileInputRef ?? internalBillsRef;
   const billsInputId = useId();
   const photosInputId = useId();
+  const isEditing = editingEntryId != null;
 
   const candidates = useMemo(() => rows.filter((r) => r.metal === formMetal), [rows, formMetal]);
   const sellCandidates = useMemo(() => candidates.filter((r) => (r.grams ?? 0) > 1e-9), [candidates]);
   const canUseExistingBuy = candidates.length > 0;
-  const buyModeActive: "new" | "existing" = buyMode === "existing" && canUseExistingBuy ? "existing" : "new";
+  const buyModeActive: "new" | "existing" =
+    isEditing ? "existing" : buyMode === "existing" && canUseExistingBuy ? "existing" : "new";
 
   useImperativeHandle(
     ref,
     () => ({
       openBuyForMetal(metal) {
+        setEditingEntryId(null);
         setFormMetal(metal);
         setSegmentId("buy");
         setBuyMode("new");
@@ -95,6 +103,53 @@ const UniversalMetalTransactionForm = forwardRef<
       },
       focusBillsInput() {
         billsInputRef.current?.click();
+      },
+      openEditEntry(entry) {
+        if (entry.bucket !== "metal" || (entry.txType !== "buy" && entry.txType !== "sell")) {
+          toast.error("Only gold and silver buy/sell records can be edited.");
+          return;
+        }
+        const meta = entry.meta && typeof entry.meta === "object" ? (entry.meta as Record<string, unknown>) : {};
+        const metal = entry.metal === "silver" ? "silver" : "gold";
+        const grams = entry.quantity;
+        const tola = gramsToTolaUi(grams);
+        setEditingEntryId(entry.id);
+        setFormMetal(metal);
+        setSegmentId(entry.txType);
+        setBuyMode("existing");
+        setExistingBuyRowId(entry.rowId);
+        setSellRowId(entry.rowId);
+        setItemName(entry.assetLabel || "");
+        setGramQtyStr(Number(grams.toFixed(6)).toString());
+        setTolaQtyStr(Number(tola.toFixed(6)).toString());
+        if (entry.txType === "buy") {
+          const unit = meta.buyPriceUnit === "tola" ? "tola" : "gram";
+          const stored =
+            typeof meta.metalBuyPriceNpr === "number" && Number.isFinite(meta.metalBuyPriceNpr)
+              ? meta.metalBuyPriceNpr
+              : unit === "tola"
+                ? entry.unitPrice * NEPAL_UI_GRAMS_PER_TOLA
+                : entry.unitPrice;
+          setBuyPriceUnit(unit);
+          setBuyPriceStr(Number(stored.toFixed(6)).toString());
+          setSellPriceStr("");
+          setSellPriceUnit("gram");
+        } else {
+          setSellPriceUnit("gram");
+          setSellPriceStr(Number(entry.unitPrice.toFixed(6)).toString());
+          setBuyPriceStr("");
+          setBuyPriceUnit("gram");
+        }
+        setFeesStr(entry.fees != null && entry.fees > 0 ? String(entry.fees) : "");
+        setNotes(entry.notes ?? "");
+        setTradeDate(entry.tradeDate);
+        setPendingBillUrls(sanitizeMetalTxBillUrls(meta.metalTxBillUrls));
+        setPendingPhotoUrls(sanitizeMetalTxPhotoUrls(meta.metalTxPhotoUrls));
+        setErr(null);
+        setOpen(true);
+        queueMicrotask(() => {
+          document.getElementById("metal-transactions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       },
     }),
     [billsInputRef],
@@ -120,6 +175,7 @@ const UniversalMetalTransactionForm = forwardRef<
   }, [candidates, existingBuyRowId]);
 
   const resetAllFields = () => {
+    setEditingEntryId(null);
     setSegmentId("buy");
     setBuyMode("new");
     setItemName("");
@@ -137,6 +193,11 @@ const UniversalMetalTransactionForm = forwardRef<
     setErr(null);
     setPendingBillUrls([]);
     setPendingPhotoUrls([]);
+  };
+
+  const cancelEdit = () => {
+    resetAllFields();
+    toast.message("Edit cancelled — no changes saved.");
   };
 
   const onGramQtyChange = useCallback((raw: string) => {
@@ -243,6 +304,56 @@ const UniversalMetalTransactionForm = forwardRef<
       return;
     }
 
+    if (isEditing && editingEntryId) {
+      if (segmentId === "sell") {
+        const unitPriceNprPerGram = parseSellUnitPriceNprPerGram();
+        if (unitPriceNprPerGram == null) {
+          setErr(`Enter sell price (NPR per ${sellPriceUnit === "gram" ? "gram" : "tola"}).`);
+          return;
+        }
+        const ok = onMutate((s) =>
+          updateMetalTxn(s, editingEntryId, {
+            grams,
+            unitPriceNprPerGram,
+            tradeDate,
+            feesNpr,
+            notes,
+            billAttachmentUrls: pendingBillUrls,
+            photoAttachmentUrls: pendingPhotoUrls,
+          }),
+        );
+        if (!ok) {
+          setErr("Could not update sell (invalid quantity or sequence). Original record unchanged.");
+          return;
+        }
+      } else {
+        const buyPriceNpr = parseBuyPriceNpr();
+        if (buyPriceNpr == null) {
+          setErr(`Enter buy price (NPR per ${buyPriceUnit === "gram" ? "gram" : "tola"}).`);
+          return;
+        }
+        const ok = onMutate((s) =>
+          updateMetalTxn(s, editingEntryId, {
+            grams,
+            buyPriceNpr,
+            buyPriceUnit,
+            tradeDate,
+            feesNpr,
+            notes,
+            billAttachmentUrls: pendingBillUrls,
+            photoAttachmentUrls: pendingPhotoUrls,
+          }),
+        );
+        if (!ok) {
+          setErr("Could not update buy (invalid values or sell sequence). Original record unchanged.");
+          return;
+        }
+      }
+      toast.success("Transaction updated successfully.");
+      resetAllFields();
+      return;
+    }
+
     if (segmentId === "sell") {
       if (sellCandidates.length === 0) {
         setErr("Nothing to sell — record a buy first.");
@@ -339,10 +450,15 @@ const UniversalMetalTransactionForm = forwardRef<
     <div id="metal-transactions">
       <PortfolioTransactionStrip
         open={open}
-        onOpenChange={setOpen}
-        headerLabel="Transactions"
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v && isEditing) resetAllFields();
+        }}
+        headerLabel={isEditing ? "Edit Transaction" : "Transactions"}
         summaryRight={
-          segmentId === "sell" && resolvedSellRowId ? (
+          isEditing ? (
+            <span className="text-amber-100/90">Editing existing record · ID preserved</span>
+          ) : segmentId === "sell" && resolvedSellRowId ? (
             <span className="text-emerald-200/80">
               Selling from{" "}
               <span className="font-black text-emerald-50">
@@ -363,16 +479,19 @@ const UniversalMetalTransactionForm = forwardRef<
         segments={METAL_TX_SEGMENTS}
         segmentId={segmentId}
         onSegmentId={setSegmentId}
+        segmentsLocked={isEditing}
         tradeDate={tradeDate}
         onTradeDate={setTradeDate}
-        feesLabel="Fees (NPR)"
+        feesLabel="Fees / making charges (NPR)"
         feesStr={feesStr}
         onFeesStrChange={setFeesStr}
         notes={notes}
         onNotesChange={setNotes}
         error={err}
-        submitLabel={segmentId === "sell" ? "Record sell" : "Record buy"}
+        submitLabel={isEditing ? "Save Changes" : segmentId === "sell" ? "Record sell" : "Record buy"}
         onSubmit={() => void submit()}
+        cancelLabel={isEditing ? "Cancel" : undefined}
+        onCancel={isEditing ? cancelEdit : undefined}
         accent="amber"
       >
         <div className="space-y-2">
@@ -381,14 +500,15 @@ const UniversalMetalTransactionForm = forwardRef<
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Metal</span>
               <select
                 value={formMetal}
+                disabled={isEditing}
                 onChange={(e) => setFormMetal(e.target.value as "gold" | "silver")}
-                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm"
+                className="wealth-input w-full px-2 py-2 text-xs font-black sm:text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option value="gold">Gold</option>
                 <option value="silver">Silver</option>
               </select>
             </label>
-            {segmentId === "sell" && sellCandidates.length > 1 ? (
+            {segmentId === "sell" && !isEditing && sellCandidates.length > 1 ? (
               <label className="block">
                 <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Sell from item</span>
                 <select
@@ -404,9 +524,14 @@ const UniversalMetalTransactionForm = forwardRef<
                 </select>
               </label>
             ) : null}
+            {isEditing ? (
+              <p className="sm:col-span-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-2 py-1.5 text-[10px] font-bold text-amber-100/90">
+                Edit mode — buy/sell type and metal stay with the original record. Saving updates the same transaction ID.
+              </p>
+            ) : null}
           </div>
 
-          {segmentId === "buy" ? (
+          {segmentId === "buy" && !isEditing ? (
             <div className="flex flex-wrap gap-1.5">
               <span className="w-full text-[10px] font-bold uppercase text-emerald-200/55">Buy type</span>
               {(["new", "existing"] as const).map((m) => {
@@ -435,7 +560,7 @@ const UniversalMetalTransactionForm = forwardRef<
             </div>
           ) : null}
 
-          {segmentId === "buy" && buyModeActive === "new" ? (
+          {segmentId === "buy" && buyModeActive === "new" && !isEditing ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item name</span>
               <input
@@ -448,7 +573,13 @@ const UniversalMetalTransactionForm = forwardRef<
             </label>
           ) : null}
 
-          {segmentId === "buy" && buyModeActive === "existing" && candidates.length > 0 ? (
+          {isEditing ? (
+            <p className="text-[11px] font-bold text-emerald-100/85">
+              Item: <span className="text-[#F4D06F]">{itemName || "Metal item"}</span>
+            </p>
+          ) : null}
+
+          {segmentId === "buy" && buyModeActive === "existing" && candidates.length > 0 && !isEditing ? (
             <label className="block">
               <span className="mb-0.5 block text-[10px] font-bold uppercase text-emerald-200/55">Item</span>
               <select
@@ -561,7 +692,7 @@ const UniversalMetalTransactionForm = forwardRef<
                 <p className="text-[10px] font-bold text-emerald-200/70">
                   This buy total (incl. fees):{" "}
                   <span className="tabular-nums text-emerald-50">{formatMoney(previewAddBasis, "NPR")}</span>
-                  {buyModeActive === "existing" ? (
+                  {buyModeActive === "existing" && !isEditing ? (
                     <>
                       {" · after submit ~ "}
                       <span className="tabular-nums text-amber-100">
@@ -722,16 +853,6 @@ export function MetalsPanel({
 
   return (
     <section className="gs-premium-shell wealth-glass rounded-[1.35rem] p-3 sm:rounded-[1.5rem] sm:p-3.5">
-      <div className="mb-2 flex items-start gap-2">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#F4D06F]">
-          <Gem size={16} />
-        </div>
-        <p className="min-w-0 text-[11px] font-bold leading-snug text-[#CBD5E1]/80 sm:text-xs">
-          Nepal marks follow <span className="text-[#F8FAFC]">Hamro Patro</span> Hallmark gold &amp; silver. International
-          USD/oz is reference only — never used as the Nepal market price.
-        </p>
-      </div>
-
       {/* Nepal Market Price — Hamro Patro */}
       <div className="gs-live-strip mb-3 space-y-2 rounded-xl border border-[#D4AF37]/25 bg-gradient-to-br from-[#062B24]/50 to-[#03100F]/90 px-2.5 py-2.5 sm:px-3">
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-[#F8FAFC] sm:gap-3 sm:text-[11px]">
@@ -1064,6 +1185,10 @@ export function MetalsPanel({
             title="Gold & Silver ledger"
             subtitle="Each row keeps its own bills and photos forever. Filter, search, and manage bills from each row."
             ledgerMutate={onMutate}
+            onEditMetalEntry={(entry) => {
+              setTradesOpen(true);
+              queueMicrotask(() => metalFormRef.current?.openEditEntry(entry));
+            }}
           />
         </div>
       </div>

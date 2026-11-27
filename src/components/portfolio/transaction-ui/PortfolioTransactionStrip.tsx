@@ -62,6 +62,11 @@ type Props = {
   error: string | null;
   submitLabel: string;
   onSubmit: () => void;
+  /** Optional cancel control (e.g. edit mode). */
+  cancelLabel?: string;
+  onCancel?: () => void;
+  /** When true, segment pills are display-only (edit mode). */
+  segmentsLocked?: boolean;
   accent?: PortfolioTxnAccent;
 };
 
@@ -89,6 +94,9 @@ export function PortfolioTransactionStrip({
   error,
   submitLabel,
   onSubmit,
+  cancelLabel,
+  onCancel,
+  segmentsLocked = false,
   accent = "emerald",
 }: Props) {
   const today = portfolioTxnTodayIso;
@@ -128,8 +136,15 @@ export function PortfolioTransactionStrip({
               <button
                 key={s.id}
                 type="button"
-                className={segmentClass(segmentId === s.id, s.tone)}
-                onClick={() => onSegmentId(s.id)}
+                disabled={segmentsLocked}
+                aria-disabled={segmentsLocked}
+                className={`${segmentClass(segmentId === s.id, s.tone)}${
+                  segmentsLocked ? " cursor-default opacity-90" : ""
+                }`}
+                onClick={() => {
+                  if (segmentsLocked) return;
+                  onSegmentId(s.id);
+                }}
               >
                 {s.label}
               </button>
@@ -173,13 +188,24 @@ export function PortfolioTransactionStrip({
             />
           </label>
           {error ? <p className="text-[11px] font-bold text-rose-300">{error}</p> : null}
-          <button
-            type="button"
-            onClick={onSubmit}
-            className={`w-full rounded-xl bg-gradient-to-r py-2 text-xs font-black text-white shadow-lg transition sm:w-auto sm:px-6 ${accentBtn[accent]}`}
-          >
-            {submitLabel}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onSubmit}
+              className={`w-full rounded-xl bg-gradient-to-r py-2 text-xs font-black text-white shadow-lg transition sm:w-auto sm:px-6 ${accentBtn[accent]}`}
+            >
+              {submitLabel}
+            </button>
+            {onCancel && cancelLabel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="w-full rounded-xl border border-emerald-400/25 bg-black/30 px-4 py-2 text-xs font-black text-emerald-100/90 transition hover:border-emerald-400/40 hover:bg-black/40 sm:w-auto"
+              >
+                {cancelLabel}
+              </button>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

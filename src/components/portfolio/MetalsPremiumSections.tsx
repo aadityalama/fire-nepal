@@ -33,7 +33,6 @@ import {
 import type { MetalRow, PortfolioLedgerEntry, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { NumericMoneyInput } from "@/components/NumericMoneyInput";
 import { PortfolioModuleDataResetButton } from "@/components/fire-nepal/PortfolioModuleDataResetButton";
-import { GoldSilverValueTrendChart } from "@/components/portfolio/gold-silver/GoldSilverValueTrendChart";
 import { formatMoney } from "@/lib/expense-utils";
 import { gramsToTolaUi, NEPAL_UI_GRAMS_PER_TOLA, tolaUiToGrams } from "@/lib/portfolio/nepal-metal-ui-convert";
 import Image from "next/image";
@@ -543,8 +542,6 @@ export function MetalsPremiumDashboard({
           </div>
         </div>
       </div>
-
-      <GoldSilverValueTrendChart hasGold={gold.grams > 0} hasSilver={silver.grams > 0} />
 
       <MetalHoldingsCard title="Gold Items" metal="gold" rollup={gold} cagrFrac={goldCagr} />
       <MetalHoldingsCard title="Silver Items" metal="silver" rollup={silver} cagrFrac={silverCagr} />
