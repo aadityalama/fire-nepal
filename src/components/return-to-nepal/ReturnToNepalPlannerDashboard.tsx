@@ -403,9 +403,23 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <KpiCard
             label="Monthly Passive Income"
-            value={formatNprInteger(live.passiveMonthlyNpr)}
-            hint="Modeled · investments + FD + dividends"
-            hintPositive
+            value={
+              live.cashflowUnavailable
+                ? "—"
+                : live.cashflowLoading && !(live.actualPassiveMonthlyNpr > 0)
+                  ? "…"
+                  : formatNprInteger(live.actualPassiveMonthlyNpr)
+            }
+            hint={
+              live.cashflowUnavailable
+                ? "Could not verify Cashflow income"
+                : live.cashflowLoading && !(live.actualPassiveMonthlyNpr > 0)
+                  ? "Verifying Cashflow…"
+                  : live.actualPassiveMonthlyNpr > 0
+                    ? `Cashflow actual · modeled ${formatNprInteger(live.passiveMonthlyNpr)}`
+                    : `No Cashflow passive yet · modeled ${formatNprInteger(live.passiveMonthlyNpr)}`
+            }
+            hintPositive={live.actualPassiveMonthlyNpr > 0}
           />
           <KpiCard
             label="Nepal Monthly Cost"
