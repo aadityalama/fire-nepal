@@ -37,11 +37,29 @@ export function buildReturnChecklistSources(args: {
     (live.householdConfigured &&
       (effectiveState.schoolFeesMonthlyNpr > 0 || effectiveState.healthcareMonthlyNpr > 0));
 
+  const canonical = live.canonicalEmergencyFund;
+  const emergencyMonthsTarget =
+    canonical?.requiredProtectionMonths && canonical.requiredProtectionMonths > 0
+      ? canonical.requiredProtectionMonths
+      : effectiveState.emergencyMonthsTarget > 0
+        ? effectiveState.emergencyMonthsTarget
+        : 12;
+
   return {
     state: effectiveState,
-    emergencyCashReserveNpr: live.emergencyCashReserveNpr,
-    emergencyMonthlyBurnNpr: live.monthlyExpenseNpr > 0 ? live.monthlyExpenseNpr : Math.max(1, live.nepalColMonthlyNpr),
-    emergencyMonthsTarget: effectiveState.emergencyMonthsTarget,
+    emergencyCashReserveNpr:
+      canonical?.loadState === "ready" && canonical.hasReserveData
+        ? canonical.currentEmergencyReserveNpr
+        : live.emergencyCashReserveNpr,
+    // Prefer Budget Planner monthly protection basis; never silently use Nepal COL as EF burn.
+    emergencyMonthlyBurnNpr:
+      canonical?.monthlyProtectionBasisNpr != null && canonical.monthlyProtectionBasisNpr > 0
+        ? canonical.monthlyProtectionBasisNpr
+        : live.monthlyExpenseNpr > 0
+          ? live.monthlyExpenseNpr
+          : Math.max(1, live.nepalColMonthlyNpr),
+    emergencyMonthsTarget,
+    canonicalEmergencyFund: canonical,
     monthlySsfContributionNpr: live.monthlySsfContributionNpr,
     ssfContributionTargetNpr,
     totalInvestmentNpr: live.totalInvestmentNpr,

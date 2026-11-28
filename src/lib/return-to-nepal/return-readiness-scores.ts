@@ -65,7 +65,23 @@ export function computeReturnReadinessScores(
         : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
 
   let savingsEmergencyPct = 0;
-  if (checklistSources) {
+  if (checklistSources?.canonicalEmergencyFund) {
+    const canonical = checklistSources.canonicalEmergencyFund;
+    if (canonical.loadState === "ready") {
+      if (canonical.fundingProgressPct != null && Number.isFinite(canonical.fundingProgressPct)) {
+        savingsEmergencyPct = clampPct(canonical.fundingProgressPct);
+      } else if (
+        canonical.safetyRunwayMonths != null &&
+        Number.isFinite(canonical.safetyRunwayMonths) &&
+        emergencyTarget > 0
+      ) {
+        savingsEmergencyPct = clampPct((canonical.safetyRunwayMonths / emergencyTarget) * 100);
+      } else if (canonical.hasReserveData && (canonical.currentEmergencyReserveNpr ?? 0) > 0) {
+        savingsEmergencyPct = 35; // reserve exists but basis/target not yet sized
+      }
+    }
+    // loadState unavailable/loading → leave at 0 (do not treat as MISSING funded state)
+  } else if (checklistSources) {
     const configured =
       checklistSources.emergencyCashReserveNpr != null &&
       Number.isFinite(checklistSources.emergencyCashReserveNpr);
@@ -75,6 +91,7 @@ export function computeReturnReadinessScores(
       savingsEmergencyPct = clampPct((runway / emergencyTarget) * 100);
     }
   } else {
+    // Legacy Nepal return-fund coverage — not the Emergency Fund 3.0 runway.
     savingsEmergencyPct = clampPct((snapshot.emergencyReserveMonths / emergencyTarget) * 100);
   }
 

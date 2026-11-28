@@ -1,7 +1,13 @@
 import type { BudgetRecord, CreateBudgetInput } from "@/lib/budget/types";
+import { BUDGET_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 
 async function parseJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
+}
+
+function notifyBudgetModuleSync(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(BUDGET_MODULE_SYNC_EVENT));
 }
 
 export async function fetchBudgetRecords(): Promise<BudgetRecord[]> {
@@ -24,6 +30,7 @@ export async function createBudgetRecord(input: CreateBudgetInput): Promise<Budg
   if (!res.ok || !json.ok || !json.budget) {
     throw new Error(json.error ?? "Could not save your budget. Please check your connection and try again.");
   }
+  notifyBudgetModuleSync();
   return json.budget;
 }
 
@@ -38,6 +45,7 @@ export async function updateBudgetRecord(id: string, input: CreateBudgetInput): 
   if (!res.ok || !json.ok || !json.budget) {
     throw new Error(json.error ?? "Could not update your budget.");
   }
+  notifyBudgetModuleSync();
   return json.budget;
 }
 
@@ -64,5 +72,6 @@ export async function deleteBudgetRecord(id: string): Promise<DeleteBudgetResult
     }
     throw new Error(message);
   }
+  notifyBudgetModuleSync();
   return { alreadyDeleted: Boolean(json.alreadyDeleted) };
 }

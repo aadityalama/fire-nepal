@@ -1,6 +1,8 @@
 import { computeInsuranceRecommendation, hasAdequateHealthInsurance, hasAdequateLifeInsurance } from "@/lib/insurance/insurance-engine";
 import { loadInsuranceWorkspaceState } from "@/lib/insurance/insurance-storage";
 import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
+import type { CanonicalEmergencyFundSnapshot } from "@/lib/return-to-nepal/canonical-emergency-fund";
+import { formatCanonicalRunwayMonths } from "@/lib/return-to-nepal/canonical-emergency-fund";
 import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { ReturnReadinessPillarId, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 import { loadSsfPensionWorkspace } from "@/lib/ssf-pension/storage";
@@ -14,20 +16,29 @@ export type ReturnReadinessPillarStatus = {
 
 /**
  * Live Return OS pillars — Insurance Health/Life auto-update from Insurance Workspace.
+ * Emergency Fund pillar prefers the canonical EF 3.0 snapshot when provided.
  */
 export function computeReturnReadinessPillars(
   state: ReturnToNepalPlannerState,
   snapshot: PlannerSnapshot,
   insuranceInputs: InsuranceEngineInputs,
   investableNpr: number,
+  canonicalEmergencyFund?: CanonicalEmergencyFundSnapshot | null,
 ): ReturnReadinessPillarStatus[] {
   const policies = loadInsuranceWorkspaceState().policies;
   const recommendation = computeInsuranceRecommendation(policies, insuranceInputs);
   const healthOk = hasAdequateHealthInsurance(policies, recommendation.recommendedHealthCoverageNpr);
   const lifeOk = hasAdequateLifeInsurance(policies, recommendation.recommendedLifeCoverageNpr);
   const ssf = loadSsfPensionWorkspace();
-  const emergencyOk =
-    snapshot.emergencyStatusLabel === "solid" || snapshot.emergencyStatusLabel === "elite";
+  const emergencyOk = canonicalEmergencyFund?.loadState === "ready"
+    ? canonicalEmergencyFund.completionStatus === "completed"
+    : snapshot.emergencyStatusLabel === "solid" || snapshot.emergencyStatusLabel === "elite";
+  const emergencyDetail =
+    canonicalEmergencyFund?.loadState === "unavailable"
+      ? "Emergency Fund data unavailable"
+      : canonicalEmergencyFund?.loadState === "ready" && canonicalEmergencyFund.safetyRunwayMonths != null
+        ? `${formatCanonicalRunwayMonths(canonicalEmergencyFund.safetyRunwayMonths)} mo runway`
+        : `${snapshot.emergencyReserveMonths.toFixed(1)} mo Nepal living cover`;
   const investmentOk = investableNpr >= 500_000;
   const passiveOk = snapshot.passiveMonthlyNpr >= 25_000;
   const houseOk = snapshot.houseTotalBudgetNpr > 0 && state.houseProgressPct >= 20;
@@ -38,7 +49,7 @@ export function computeReturnReadinessPillars(
       id: "emergencyFund",
       label: "Emergency Fund",
       done: emergencyOk,
-      detail: `${snapshot.emergencyReserveMonths.toFixed(1)} mo runway`,
+      detail: emergencyDetail,
     },
     {
       id: "nepalSsf",

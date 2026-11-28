@@ -208,24 +208,67 @@ export function ReturnToNepalPlannerDashboard() {
 
   const checklist = useMemo(() => computeReturnChecklist(checklistSources), [checklistSources]);
 
+  const canonicalEf = live.canonicalEmergencyFund;
   const emergencyRunwayMonths = useMemo(() => {
+    if (canonicalEf?.loadState === "ready") {
+      return canonicalEf.safetyRunwayMonths;
+    }
+    if (canonicalEf?.loadState === "unavailable" || canonicalEf?.loadState === "loading") {
+      return null;
+    }
     if (live.emergencyCashReserveNpr == null) return null;
-    const burn = live.monthlyExpenseNpr > 0 ? live.monthlyExpenseNpr : Math.max(1, live.nepalColMonthlyNpr);
+    const burn =
+      canonicalEf?.monthlyProtectionBasisNpr && canonicalEf.monthlyProtectionBasisNpr > 0
+        ? canonicalEf.monthlyProtectionBasisNpr
+        : live.monthlyExpenseNpr > 0
+          ? live.monthlyExpenseNpr
+          : Math.max(1, live.nepalColMonthlyNpr);
     return burn > 0 ? live.emergencyCashReserveNpr / burn : 0;
-  }, [live.emergencyCashReserveNpr, live.monthlyExpenseNpr, live.nepalColMonthlyNpr]);
+  }, [canonicalEf, live.emergencyCashReserveNpr, live.monthlyExpenseNpr, live.nepalColMonthlyNpr]);
+
+  const emergencyMonthsRequired =
+    canonicalEf?.requiredProtectionMonths && canonicalEf.requiredProtectionMonths > 0
+      ? canonicalEf.requiredProtectionMonths
+      : effectiveState.emergencyMonthsTarget || 12;
+  const emergencyFundCompleted =
+    canonicalEf?.completionStatus === "completed" ||
+    (emergencyRunwayMonths != null &&
+      emergencyRunwayMonths >= emergencyMonthsRequired &&
+      canonicalEf?.completionStatus !== "data_unavailable");
 
   const roadmap = useMemo(() => {
-    return computeReturnRoadmap(savingsGoals.length > 0 ? savingsGoals : live.savingsGoals, snapshot, snapshot.estimatedReturnYear);
-  }, [savingsGoals, live.savingsGoals, snapshot]);
+    return computeReturnRoadmap(
+      savingsGoals.length > 0 ? savingsGoals : live.savingsGoals,
+      snapshot,
+      snapshot.estimatedReturnYear,
+      canonicalEf,
+    );
+  }, [savingsGoals, live.savingsGoals, snapshot, canonicalEf]);
 
   const scenarios = useMemo(
-    () => computeWhatIfScenarios(effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr],
+    () =>
+      computeWhatIfScenarios(
+        effectiveState,
+        snapshot,
+        insuranceInputs,
+        investmentTotalNpr,
+        wealth.liabilitiesNpr,
+        checklistSources,
+      ),
+    [effectiveState, snapshot, insuranceInputs, investmentTotalNpr, wealth.liabilitiesNpr, checklistSources],
   );
 
   const aiInsights = useMemo(
-    () => computeReturnAiInsights(effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr),
-    [effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr],
+    () =>
+      computeReturnAiInsights(
+        effectiveState,
+        snapshot,
+        readinessPct,
+        investmentTotalNpr,
+        wealth.liabilitiesNpr,
+        canonicalEf,
+      ),
+    [effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr, canonicalEf],
   );
 
   const primaryInsight = aiInsights.find((i) => i.id === "save-more") ?? aiInsights[0];
@@ -344,18 +387,23 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <KpiCard
             label="Emergency Fund"
-            value={emergencyRunwayMonths == null ? "—" : `${emergencyRunwayMonths.toFixed(1)} Mo`}
+            value={
+              canonicalEf?.loadState === "unavailable"
+                ? "—"
+                : emergencyRunwayMonths == null
+                  ? "—"
+                  : `${emergencyRunwayMonths.toFixed(2).replace(/\.?0+$/, "")} Mo`
+            }
             hint={
-              emergencyRunwayMonths == null
-                ? "Set reserve in Emergency Fund"
-                : emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
-                  ? "On track"
-                  : "Build runway"
+              canonicalEf?.loadState === "unavailable"
+                ? "Emergency Fund data unavailable"
+                : emergencyRunwayMonths == null
+                  ? "Set reserve in Emergency Fund"
+                  : emergencyFundCompleted
+                    ? "Completed"
+                    : "Build runway"
             }
-            hintPositive={
-              emergencyRunwayMonths != null &&
-              emergencyRunwayMonths >= (effectiveState.emergencyMonthsTarget || 12)
-            }
+            hintPositive={emergencyFundCompleted}
           />
           <KpiCard
             label="FIRE Progress"

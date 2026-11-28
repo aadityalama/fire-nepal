@@ -13,6 +13,7 @@ import type {
 } from "@/lib/emergency-fund/types";
 import { DEFAULT_PROTECTION_MONTHS } from "@/lib/emergency-fund/types";
 import { finiteNonNeg } from "@/lib/emergency-fund/math";
+import { EMERGENCY_FUND_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 
 export const EMERGENCY_FUND_SETTINGS_STORAGE_KEY = "fire-nepal-emergency-fund-settings-v1";
 
@@ -232,6 +233,7 @@ export function saveEmergencyFundSettingsLocal(
       emergencyFundSettingsStorageKey(userId),
       JSON.stringify(sanitizeEmergencyFundSettings(state)),
     );
+    window.dispatchEvent(new Event(EMERGENCY_FUND_MODULE_SYNC_EVENT));
   } catch {
     /* quota / private mode */
   }
