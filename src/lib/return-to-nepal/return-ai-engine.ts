@@ -6,7 +6,11 @@ import {
 import { computePlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { ReturnChecklistSources } from "@/lib/return-to-nepal/return-checklist";
-import { aggregateReadinessPct, computeReturnReadinessScores } from "@/lib/return-to-nepal/return-readiness-scores";
+import {
+  aggregateReadinessPct,
+  computeReturnReadinessScores,
+  projectChecklistSourcesForYear,
+} from "@/lib/return-to-nepal/return-readiness-scores";
 import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
 export type ReturnAiInsight = {
@@ -70,20 +74,38 @@ export function computeWhatIfScenarios(
   ];
   const uniqueYears = [...new Set(candidateYears)].sort((a, b) => a - b);
 
+  const monthlySavingsNpr = Math.max(
+    0,
+    (state.monthlySavingsKrw || 0) * (state.nprPerKrw || 0),
+  );
+
   const scenarios = uniqueYears.map((year) => {
     const trialState = { ...state, targetReturnYear: year };
     const snap = computePlannerSnapshot(trialState);
+    const yearsAhead = Math.max(0, year - nowYear);
+    const projectedSources = checklistSources
+      ? projectChecklistSourcesForYear(checklistSources, {
+          yearsAhead,
+          monthlySavingsNpr,
+          inflationPct: state.nepalInflationPct,
+        })
+      : undefined;
+    const projectedInvestable =
+      projectedSources?.totalInvestmentNpr ??
+      investableNpr + monthlySavingsNpr * 12 * yearsAhead;
     const scores = computeReturnReadinessScores(
       trialState,
       snap,
       insuranceInputs,
-      investableNpr,
+      projectedInvestable,
       liabilitiesNpr,
-      checklistSources,
+      projectedSources,
     );
     const readiness = aggregateReadinessPct(scores);
     const gap = snap.monthlyDeficitNpr;
     const risk = riskFromReadiness(readiness, gap);
+    // Only mark recommended when the year matches the engine estimate AND readiness is not high-risk.
+    const meetsSafety = readiness >= 55 && gap <= snap.monthlyNepalLivingNpr * 0.35;
     return {
       year,
       label: `Return in ${year}`,
@@ -92,17 +114,11 @@ export function computeWhatIfScenarios(
       readinessPct: readiness,
       monthlyGapNpr: gap,
       requiredSavingsNpr: snap.requiredExtraCorpusNpr,
-      recommended: year === recommendedYear,
+      recommended: year === recommendedYear && meetsSafety,
     };
   });
 
-  if (!scenarios.some((s) => s.recommended) && scenarios.length > 0) {
-    const closest = scenarios.reduce((best, cur) =>
-      Math.abs(cur.year - recommendedYear) < Math.abs(best.year - recommendedYear) ? cur : best,
-    );
-    return scenarios.map((s) => ({ ...s, recommended: s.year === closest.year }));
-  }
-
+  // Do not invent a RECOMMENDED badge when no year meets documented safety criteria.
   return scenarios;
 }
 

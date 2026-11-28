@@ -1,9 +1,11 @@
 import type { CashflowDashboardState } from "@/components/cashflow/types";
 import {
   currentMonthKey,
+  sumEligibleLivingExpensesForMonth,
   sumExpensesForMonth,
   sumVisibleIncomeSourcesForMonth,
 } from "@/components/cashflow/cashflow-metrics";
+import { isEligibleLivingExpenseCategory } from "@/lib/finance/categories";
 import { loadPersonalExpenseState } from "@/lib/personal-expense-storage";
 import { loadSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import { computeDashboardSummary } from "@/lib/savings/savings-utils";
@@ -21,6 +23,8 @@ export type CashflowLiveMetrics = {
   monthKey: string;
   monthlyIncome: number;
   monthlyExpense: number;
+  /** Living spend only — excludes Investment / Savings / Emergency contribution categories. */
+  monthlyLivingExpense: number;
   totalSavings: number;
   remainingCash: number;
   netCashflow: number;
@@ -42,6 +46,17 @@ export function readMonthlyExpenseFromModule(monthKey = currentMonthKey()): numb
   return sumExpensesForMonth(expenseState?.expenses ?? [], monthKey);
 }
 
+/** Eligible living expenses only (excludes investment/savings/EF contribution categories). */
+export function readMonthlyLivingExpenseFromModule(monthKey = currentMonthKey()): number {
+  if (typeof window === "undefined") return 0;
+  const expenseState = loadPersonalExpenseState();
+  return sumEligibleLivingExpensesForMonth(
+    expenseState?.expenses ?? [],
+    monthKey,
+    isEligibleLivingExpenseCategory,
+  );
+}
+
 export function computeCashflowLiveMetrics(state: CashflowDashboardState, now = new Date()): CashflowLiveMetrics {
   const monthKey = currentMonthKey(now);
   const prevKey = previousMonthKey(now);
@@ -49,6 +64,7 @@ export function computeCashflowLiveMetrics(state: CashflowDashboardState, now = 
   // (same filter + period amounts — do not amortize yearly as amount/12).
   const monthlyIncome = sumVisibleIncomeSourcesForMonth(state, monthKey);
   const monthlyExpense = readMonthlyExpenseFromModule(monthKey);
+  const monthlyLivingExpense = readMonthlyLivingExpenseFromModule(monthKey);
   const totalSavings = readTotalSavingsFromModule();
   const remainingCash = monthlyIncome - monthlyExpense;
   const netCashflow = remainingCash;
@@ -68,6 +84,7 @@ export function computeCashflowLiveMetrics(state: CashflowDashboardState, now = 
     monthKey,
     monthlyIncome,
     monthlyExpense,
+    monthlyLivingExpense,
     totalSavings,
     remainingCash,
     netCashflow,

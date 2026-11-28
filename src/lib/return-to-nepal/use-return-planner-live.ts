@@ -137,6 +137,7 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   }, [resyncCloud]);
 
   // Same independent budget loader pattern as EmergencyFundDashboard.reloadBudgets.
+  // Preserve last-good rows on transient fetch failure so EF does not flip to DATA UNAVAILABLE.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -149,7 +150,16 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
           setBudgetGate({ forUid: uid, ready: true, failed: false, rows });
         } catch {
           if (cancelled) return;
-          setBudgetGate({ forUid: uid, ready: true, failed: true, rows: [] });
+          setBudgetGate((prev) => {
+            const keepRows = prev.forUid === uid ? prev.rows : [];
+            return {
+              forUid: uid,
+              ready: true,
+              // Hard fail only when we have no rows to size the protection basis.
+              failed: keepRows.length === 0,
+              rows: keepRows,
+            };
+          });
         }
         return;
       }
@@ -235,9 +245,11 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   const emergencyLoadState: CanonicalEmergencyFundLoadState = useMemo(() => {
     if (authLoading) return "loading";
     if (uid && isSupabaseConfigured()) {
-      if (emergencyHydrateError || budgetsFailed) return "unavailable";
-      // Require both EF settings hydrate AND Budget Planner rows (protection basis).
-      // Sync-loop is fixed (silent hydrate cache); waiting on budgetsReady is safe again.
+      if (emergencyHydrateError) return "unavailable";
+      // Budget fetch failure with zero retained rows → unavailable.
+      // If last-good budget rows remain, stay ready and recompute from them.
+      if (budgetsFailed && budgets.length === 0) return "unavailable";
+      // Require both EF settings hydrate AND Budget Planner settle (success or retained rows).
       if (!emergencyHydrated || !emergencyCloudReady || !budgetsReady) return "loading";
       return "ready";
     }
@@ -248,6 +260,7 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     uid,
     emergencyHydrateError,
     budgetsFailed,
+    budgets.length,
     emergencyHydrated,
     emergencyCloudReady,
     budgetsReady,

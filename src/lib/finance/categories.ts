@@ -196,3 +196,13 @@ export function isInvestmentCategory(category: string): boolean {
 export function isLivingExpenseCategory(category: string): boolean {
   return !isInvestmentCategory(category);
 }
+
+/**
+ * Eligible living expenses for FIRE corpus / withdrawal planning.
+ * Excludes investment contributions, savings transfers, and emergency-fund contributions
+ * (those are internal capital movements, not living spend).
+ */
+export function isEligibleLivingExpenseCategory(category: string): boolean {
+  const id = normalizeFinanceCategory(category);
+  return id !== "Investment" && id !== "Savings" && id !== "Emergency";
+}

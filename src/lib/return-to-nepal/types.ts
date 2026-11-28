@@ -23,6 +23,9 @@ export type ConstructionPhaseId = "land" | "foundation" | "structure" | "roof" |
 /** User decision for Nepal housing readiness (Return Checklist). */
 export type HousePlanStatus = "unknown" | "plan_to_buy_build" | "already_own" | "not_needed";
 
+/** Explicit opt-out for optional Return Checklist domains (SSF / Business). */
+export type OptionalPlanStatus = "unknown" | "planning" | "not_applicable";
+
 export type SettlementChecklistId =
   | "schoolAdmissions"
   | "healthNepal"
@@ -75,6 +78,16 @@ export type ReturnToNepalPlannerState = {
    * already_own / not_needed → completed without funding %.
    */
   housePlanStatus: HousePlanStatus;
+  /**
+   * SSF retirement intent for Return Checklist.
+   * not_applicable → excluded from readiness; unknown/planning → use SSF workspace data.
+   */
+  ssfPlanStatus: OptionalPlanStatus;
+  /**
+   * Business capital intent for Return Checklist.
+   * not_applicable → excluded from readiness; unknown/planning → use Saving Goals.
+   */
+  businessPlanStatus: OptionalPlanStatus;
   /** Passive income (monthly NPR at today’s terms — engine inflates for future display where noted) */
   pensionMonthlyNpr: number;
   dividendMonthlyNpr: number;

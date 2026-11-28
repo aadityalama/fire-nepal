@@ -184,7 +184,11 @@ export function computePlannerSnapshot(state: ReturnToNepalPlannerState): Planne
 
   const monthlySaveNpr = state.monthlySavingsKrw * nprPerKrw;
   const annualSaveNpr = monthlySaveNpr * 12;
-  const yearsToCloseGap = annualSaveNpr > 5000 ? targetSavingsGapNpr / annualSaveNpr : 99;
+  // When monthly savings are missing/insufficient, do not invent a 45-year (e.g. 2071)
+  // "recommended" horizon — fall back to the user's preferred target year distance.
+  const preferredYears = Math.max(0.25, state.targetReturnYear - nowYear);
+  const yearsToCloseGap =
+    annualSaveNpr > 5000 ? targetSavingsGapNpr / annualSaveNpr : preferredYears;
   const yearsToReturn = clamp(yearsToCloseGap, 0.25, 45);
   const estimatedReturnYear = nowYear + Math.floor(yearsToReturn);
 

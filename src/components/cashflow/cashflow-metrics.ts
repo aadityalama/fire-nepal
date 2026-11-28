@@ -80,6 +80,22 @@ export function sumExpensesForMonth(expenses: Expense[], monthKey = currentMonth
   }, 0);
 }
 
+/**
+ * Living-expense total for FIRE corpus — excludes Investment, Savings, and Emergency
+ * contribution categories (transfers / capital movements, not living spend).
+ */
+export function sumEligibleLivingExpensesForMonth(
+  expenses: Expense[],
+  monthKey = currentMonthKey(),
+  isEligible: (category: string) => boolean = () => true,
+): number {
+  return expenses.reduce((acc, expense) => {
+    if (!expense.date.startsWith(monthKey)) return acc;
+    if (!isEligible(expense.category)) return acc;
+    return acc + finiteNonNeg(expense.amount);
+  }, 0);
+}
+
 export function sumExpenseCategories(state: CashflowDashboardState): number {
   const keys: ExpenseCategoryKey[] = [
     "rent",

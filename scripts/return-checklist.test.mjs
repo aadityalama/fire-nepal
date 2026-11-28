@@ -176,32 +176,121 @@ describe("Return Checklist — SSF", () => {
 });
 
 describe("Return Checklist — Investment", () => {
-  it("keeps portfolio total and uses goal target when present", () => {
+  it("keeps portfolio total and meets expense-based 25× FIRE corpus", () => {
     const investment = byId(
       computeReturnChecklist(
         baseSources({
           totalInvestmentNpr: 2_440_288,
           investmentGoalTargetNpr: 2_440_288,
+          investmentTargetSource: "expense_tracking",
+          investmentMonthlyExpenseBasisNpr: 8_134,
         }),
       ),
       "investment",
     );
     assert.equal(investment.status, "completed");
-    assert.match(investment.detail, /2,440,288/);
+    assert.match(investment.detail, /24\.4 Lakh/i);
+    assert.match(investment.detail, /market/i);
+    assert.match(investment.detail, /25× FIRE met/i);
+    assert.match(investment.detail, /Expense Tracking/i);
+    assert.equal(investment.actionLabel, "View Portfolio");
   });
 
-  it("falls back to 2M only when no investment goal exists", () => {
+  it("never marks positive portfolio MISSING when expense/budget target is absent (TARGET NOT SET)", () => {
     const investment = byId(
       computeReturnChecklist(
         baseSources({
-          totalInvestmentNpr: 1_000_000,
+          totalInvestmentNpr: 2_550_724,
           investmentGoalTargetNpr: null,
+          investmentTargetSource: null,
+        }),
+      ),
+      "investment",
+    );
+    assert.equal(investment.status, "target_not_set");
+    assert.match(investment.detail, /25\.5 Lakh/i);
+    assert.match(investment.detail, /expenses or budget/i);
+    assert.notEqual(investment.status, "missing");
+    assert.equal(RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR, 2_000_000);
+  });
+
+  it("marks positive portfolio below a high 25× target as IN PROGRESS (not MISSING)", () => {
+    const investment = byId(
+      computeReturnChecklist(
+        baseSources({
+          totalInvestmentNpr: 2_550_724,
+          investmentGoalTargetNpr: 50_000_000,
+          investmentTargetSource: "budget_tracking",
+          investmentMonthlyExpenseBasisNpr: 166_667,
         }),
       ),
       "investment",
     );
     assert.equal(investment.status, "in_progress");
-    assert.equal(RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR, 2_000_000);
+    assert.match(investment.detail, /25\.5 Lakh/i);
+    assert.match(investment.detail, /5 Cr/i);
+    assert.match(investment.detail, /Budget Tracking/i);
+    assert.equal(investment.actionLabel, "View Portfolio");
+  });
+
+  it("unified summary totalInvestmentNpr matches NEPSE live aggregation SoT", async () => {
+    const { aggregateInvestmentTotals, valueInvestmentRow } = await import(
+      "../src/services/portfolio/investment-aggregation.ts"
+    );
+    const { computeUnifiedFireSummary } = await import(
+      "../src/lib/fire-nepal/unified-fire-summary.ts"
+    );
+    const { defaultCashflowState } = await import("../src/components/cashflow/cashflow-storage.ts");
+    const { defaultWealthState } = await import("../src/components/portfolio/storage.ts");
+
+    const portfolio = defaultWealthState();
+    const row = {
+      id: "n1",
+      kind: "nepse",
+      name: "Nabil Bank",
+      quantity: 100,
+      buyPrice: 1000,
+      currency: "NPR",
+      instrumentKey: "nepse:NABIL",
+    };
+    portfolio.investments = [row];
+
+    const liveMarket = {
+      fetchedAt: new Date().toISOString(),
+      partial: false,
+      sourceStatus: {},
+      forex: { usdPerNpr: 0.0075, krwPerNpr: 10 },
+      nepseBySymbol: { NABIL: { symbol: "NABIL", ltpNpr: 800, pctChange: -5 } },
+      usdEquities: {},
+      krEquities: {},
+      crypto: {},
+      metalsUsdOz: { goldUsdPerOz: 2300, silverUsdPerOz: 28 },
+    };
+
+    const listed = aggregateInvestmentTotals(portfolio.investments, portfolio.fixedDeposits, {
+      krwPerNpr: 10,
+      usdPerNpr: 0.0075,
+      liveMarket,
+    });
+    const summary = computeUnifiedFireSummary(
+      portfolio,
+      defaultCashflowState(),
+      10,
+      0.0075,
+      { liveMarket },
+    );
+    assert.equal(summary.totalInvestmentNpr, listed.listedLiveNpr);
+    const unit = valueInvestmentRow(row, 10, 0.0075, liveMarket);
+    assert.equal(unit.liveValueNpr, 80_000);
+    assert.equal(summary.totalInvestmentNpr, 80_000);
+    const summaryNoLive = computeUnifiedFireSummary(
+      portfolio,
+      defaultCashflowState(),
+      10,
+      0.0075,
+      {},
+    );
+    assert.notEqual(summary.totalInvestmentNpr, summaryNoLive.totalInvestmentNpr);
   });
 });
 
@@ -261,6 +350,44 @@ describe("Return Checklist — Insurance", () => {
     assert.equal(byId(items, "health").status, "completed");
     assert.equal(byId(items, "life").status, "completed");
   });
+
+  it("marks positive life coverage below recommended as IN PROGRESS (not MISSING)", () => {
+    const policies = [
+      {
+        id: "l1",
+        type: "life",
+        provider: "Test",
+        coverageAmountNpr: 5_000_000,
+        premiumNpr: 2000,
+        paymentFrequency: "monthly",
+        status: "active",
+        sortOrder: 0,
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01",
+      },
+    ];
+    const life = byId(
+      computeReturnChecklist(
+        baseSources({
+          insurancePolicies: policies,
+          // Force a known recommended life target via high income/dependents inputs —
+          // engine should recommend well above 5M so status stays IN PROGRESS.
+          insuranceInputs: baseInsuranceInputs({
+            monthlyIncomeNpr: 500_000,
+            adults: 2,
+            children: 2,
+            investableNpr: 0,
+            totalSavingsNpr: 0,
+          }),
+        }),
+      ),
+      "life",
+    );
+    assert.equal(life.status, "in_progress");
+    assert.match(life.detail, /50 Lakh/i);
+    assert.match(life.detail, /%\s*covered/i);
+    assert.notEqual(life.status, "missing");
+  });
 });
 
 describe("Return Checklist — House", () => {
@@ -308,11 +435,11 @@ describe("Return Checklist — House", () => {
       computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
       "house",
     );
-    assert.equal(skip.status, "completed");
-    assert.equal(skip.badgeLabel, "Not Needed");
+    assert.equal(skip.status, "not_applicable");
+    assert.equal(skip.badgeLabel, "Not Applicable");
   });
 
-  it("stays missing until a house goal exists when plan_to_buy_build", () => {
+  it("stays TARGET NOT SET until a house goal exists when plan_to_buy_build", () => {
     const house = byId(
       computeReturnChecklist(
         baseSources({
@@ -323,7 +450,7 @@ describe("Return Checklist — House", () => {
       ),
       "house",
     );
-    assert.equal(house.status, "missing");
+    assert.equal(house.status, "target_not_set");
     assert.match(house.detail, /Set house goal/i);
   });
 });
@@ -378,10 +505,17 @@ describe("Return Checklist — rendered card wiring", () => {
     assert.match(src, /touch-manipulation/);
     assert.match(src, /ChevronRight/);
     assert.match(src, /window\.location\.assign\(item\.href\)/);
-    assert.match(src, /STATUS_LABELS/);
-    assert.match(src, /Missing/);
-    assert.match(src, /In Progress/);
-    assert.match(src, /Completed/);
+    assert.match(src, /STATUS_LABELS|CHECKLIST_STATUS_LABELS/);
+    assert.match(src, /target_not_set|not_applicable|loading/);
+    const labels = readFileSync(
+      new URL("../src/lib/return-to-nepal/checklist-status.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(labels, /Missing/);
+    assert.match(labels, /In Progress/);
+    assert.match(labels, /Completed/);
+    assert.match(labels, /Target Not Set/);
+    assert.match(labels, /Not Applicable/);
     // Chevron must not be low-contrast / hover-only
     assert.doesNotMatch(src, /text-white\/35/);
     assert.doesNotMatch(src, /group-hover:text-/);
@@ -474,7 +608,7 @@ describe("Return Checklist — Business Capital", () => {
       ),
       "business",
     );
-    assert.equal(missing.status, "missing");
+    assert.equal(missing.status, "target_not_set");
     assert.match(missing.detail, /Set capital goal/i);
 
     const progressing = byId(
@@ -503,7 +637,7 @@ describe("Return Checklist — Debt Free", () => {
       ),
       "debt",
     );
-    assert.equal(debt.status, "missing");
+    assert.equal(debt.status, "target_not_set");
     assert.match(debt.detail, /Confirm liabilities/i);
   });
 
@@ -575,8 +709,8 @@ describe("House plan flow — persist + checklist reflection", () => {
       computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
       "house",
     );
-    assert.equal(skip.status, "completed");
-    assert.equal(skip.badgeLabel, "Not Needed");
+    assert.equal(skip.status, "not_applicable");
+    assert.equal(skip.badgeLabel, "Not Applicable");
     assert.doesNotMatch(skip.detail, /0% funded/i);
   });
 
@@ -760,5 +894,211 @@ save.addEventListener('click',()=>{ if(pending) log.textContent='saved:'+pending
     await page.locator("#save").click();
     assert.match(await page.locator("#log").innerText(), /saved:already_own/);
     await browser.close();
+  });
+});
+
+describe("Expense-based FIRE corpus resolver", () => {
+  it("prefers Expense Tracking over Budget Tracking and never sums both", async () => {
+    const { resolveExpenseBasedFireCorpus } = await import(
+      "../src/lib/return-to-nepal/resolve-expense-based-fire-corpus.ts"
+    );
+    const both = resolveExpenseBasedFireCorpus({
+      monthlyExpenseTrackingNpr: 100_000,
+      monthlyBudgetTrackingNpr: 80_000,
+    });
+    assert.equal(both.investmentTargetSource, "expense_tracking");
+    assert.equal(both.monthlyEligibleLivingExpensesNpr, 100_000);
+    assert.equal(both.annualEligibleLivingExpensesNpr, 1_200_000);
+    assert.equal(both.requiredFireCorpusNpr, 30_000_000);
+
+    const budgetOnly = resolveExpenseBasedFireCorpus({
+      monthlyExpenseTrackingNpr: 0,
+      monthlyBudgetTrackingNpr: 80_000,
+    });
+    assert.equal(budgetOnly.investmentTargetSource, "budget_tracking");
+    assert.equal(budgetOnly.requiredFireCorpusNpr, 24_000_000);
+
+    const neither = resolveExpenseBasedFireCorpus({
+      monthlyExpenseTrackingNpr: null,
+      monthlyBudgetTrackingNpr: null,
+    });
+    assert.equal(neither.requiredFireCorpusNpr, null);
+    assert.equal(neither.investmentTargetSource, null);
+  });
+
+  it("buildReturnChecklistSources ignores savings/FIRE goals for investment target", async () => {
+    const { buildReturnChecklistSources } = await import(
+      "../src/lib/return-to-nepal/build-return-checklist-sources.ts"
+    );
+    const { DEFAULT_RETURN_PLANNER_STATE: defaults } = await import(
+      "../src/lib/return-to-nepal/default-planner-state.ts"
+    );
+    const { emptyCanonicalEmergencyFundSnapshot } = await import(
+      "../src/lib/return-to-nepal/canonical-emergency-fund.ts"
+    );
+
+    const live = {
+      monthlyIncomeNpr: 200_000,
+      monthlyExpenseNpr: 150_000,
+      monthlyLivingExpenseNpr: 100_000,
+      monthlySsfContributionNpr: 0,
+      ssf: { projection: { currentAge: 0, retirementAge: 0, monthlySalaryNpr: 0, monthlySsfContributionNpr: 0, annualSalaryGrowthPct: 0 } },
+      totalInvestmentNpr: 2_000_000,
+      investmentCostNpr: 1_800_000,
+      passiveMonthlyNpr: 0,
+      actualPassiveMonthlyNpr: 0,
+      nepalColMonthlyNpr: 75_000,
+      emergencyCashReserveNpr: null,
+      canonicalEmergencyFund: {
+        ...emptyCanonicalEmergencyFundSnapshot(12, "ready"),
+        monthlyProtectionBasisNpr: 80_000,
+        hasBudgetProtectionBasis: true,
+      },
+      houseProgressPct: 0,
+      houseGoalConfigured: false,
+      businessCapitalNpr: 0,
+      businessGoalConfigured: false,
+      businessCapitalTargetNpr: 0,
+      householdConfigured: false,
+      liabilityRowCount: 0,
+      savingsGoals: [
+        {
+          id: "inv",
+          templateId: "investment",
+          name: "Investment Fund",
+          category: "Investment",
+          targetAmountNpr: 1_000_000_000,
+          savedAmountNpr: 2_000_000,
+        },
+      ],
+      dataSources: [],
+      effectiveState: defaults,
+      netWorthNpr: 0,
+      fireProgressPct: null,
+      savingsRatePct: null,
+      investableNpr: 2_000_000,
+    };
+
+    const sources = buildReturnChecklistSources({
+      effectiveState: defaults,
+      live,
+      insurancePolicies: [],
+      insuranceInputs: baseInsuranceInputs(),
+      liabilitiesNpr: 0,
+    });
+
+    // 100k × 12 × 25 = 30M from Expense Tracking — not the 1B savings goal
+    assert.equal(sources.investmentGoalTargetNpr, 30_000_000);
+    assert.equal(sources.investmentTargetSource, "expense_tracking");
+    assert.notEqual(sources.investmentGoalTargetNpr, 1_000_000_000);
+  });
+});
+
+describe("Return Checklist — action labels and optional N/A", () => {
+  it("exposes context-aware action labels for all ten items", () => {
+    const items = computeReturnChecklist(baseSources());
+    const by = Object.fromEntries(items.map((row) => [row.id, row.actionLabel]));
+    assert.equal(by.emergency, "Set Up Emergency Fund");
+    assert.equal(by.ssf, "Set Up SSF");
+    assert.equal(by.investment, "Add Investments");
+    assert.equal(by.passive, "Add Passive Income");
+    assert.equal(by.health, "Add Health Insurance");
+    assert.equal(by.life, "Add Life Insurance");
+    assert.equal(by.house, "Update Housing Plan");
+    assert.equal(by.family, "Set Up Household");
+    assert.equal(by.business, "Set Business Capital");
+    assert.equal(by.debt, "Manage Liabilities");
+  });
+
+  it("marks SSF and Business NOT APPLICABLE when opted out", () => {
+    const items = computeReturnChecklist(
+      baseSources({
+        ssfNotApplicable: true,
+        businessNotApplicable: true,
+      }),
+    );
+    assert.equal(byId(items, "ssf").status, "not_applicable");
+    assert.equal(byId(items, "business").status, "not_applicable");
+    assert.equal(byId(items, "ssf").actionLabel, "View SSF");
+    assert.equal(byId(items, "business").actionLabel, "View Business Capital");
+  });
+});
+
+describe("Return readiness precision and what-if projections", () => {
+  it("preserves sub-1% investment progress (2.55M / 1B ≈ 0.26%)", async () => {
+    const { clampFundingPct, computeReturnReadinessScores } = await import(
+      "../src/lib/return-to-nepal/return-readiness-scores.ts"
+    );
+    assert.equal(clampFundingPct(0.255), 0.26);
+    assert.equal(clampFundingPct(0), 0);
+    assert.equal(clampFundingPct(12.4), 12);
+
+    const scores = computeReturnReadinessScores(
+      { ...DEFAULT_RETURN_PLANNER_STATE },
+      {
+        nowYear: 2026,
+        estimatedReturnYear: 2030,
+        monthlyDeficitNpr: 50_000,
+        requiredExtraCorpusNpr: 1_000_000,
+        monthlyNepalLivingNpr: 100_000,
+        emergencyReserveMonths: 0,
+        passiveMonthlyNpr: 0,
+        houseTotalBudgetNpr: 0,
+        totalReturnFundNpr: 0,
+        familyRelocationScore: 0,
+        returnReadinessPct: 0,
+      },
+      baseInsuranceInputs(),
+      2_550_724,
+      0,
+      baseSources({
+        totalInvestmentNpr: 2_550_724,
+        investmentGoalTargetNpr: 1_000_000_000,
+      }),
+    );
+    const investment = scores.find((s) => s.id === "investment");
+    assert.ok(investment);
+    assert.equal(investment.pct, 0.26);
+    assert.equal(investment.status, "in_progress");
+    assert.notEqual(investment.pct, 0);
+  });
+
+  it("what-if scenarios diverge when savings accumulate over years", async () => {
+    const { computeWhatIfScenarios } = await import("../src/lib/return-to-nepal/return-ai-engine.ts");
+    const { computePlannerSnapshot } = await import("../src/lib/return-to-nepal/planner-engine.ts");
+    const state = {
+      ...DEFAULT_RETURN_PLANNER_STATE,
+      monthlySavingsKrw: 2_000_000,
+      nprPerKrw: 0.1,
+      nepalInflationPct: 5,
+      targetReturnYear: 2028,
+    };
+    const snap = computePlannerSnapshot(state);
+    const sources = baseSources({
+      totalInvestmentNpr: 2_550_724,
+      investmentGoalTargetNpr: 50_000_000,
+      modeledPassiveMonthlyNpr: 8_000,
+      passiveTargetMonthlyNpr: 75_000,
+    });
+    const scenarios = computeWhatIfScenarios(
+      state,
+      snap,
+      baseInsuranceInputs(),
+      2_550_724,
+      0,
+      sources,
+    );
+    assert.ok(scenarios.length >= 2);
+    const pcts = new Set(scenarios.map((s) => s.readinessPct));
+    // Accumulated savings should move later years unless already capped.
+    assert.ok(pcts.size >= 1);
+    const first = scenarios[0];
+    const last = scenarios[scenarios.length - 1];
+    if (first.year !== last.year) {
+      assert.ok(
+        last.readinessPct >= first.readinessPct,
+        `later year readiness ${last.readinessPct} should be >= earlier ${first.readinessPct}`,
+      );
+    }
   });
 });

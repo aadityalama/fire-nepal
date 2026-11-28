@@ -8,7 +8,6 @@ import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import {
   RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR,
   RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS,
-  RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR,
   type ReturnChecklistSources,
 } from "@/lib/return-to-nepal/return-checklist";
 import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
@@ -29,16 +28,33 @@ export type ReturnReadinessScore = {
   label: string;
   pct: number;
   status: "strong" | "on_track" | "in_progress" | "missing";
+  /**
+   * When true, this pillar is omitted from the aggregate readiness average
+   * (NOT APPLICABLE / TARGET NOT SET / DATA UNAVAILABLE / LOADING).
+   */
+  excludeFromAggregate?: boolean;
 };
 
+/**
+ * Clamp funding progress for readiness display.
+ * Preserves one-decimal precision below 1% so 2.55M / 1B ≈ 0.26% is not shown as 0%.
+ */
+export function clampFundingPct(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n >= 100) return 100;
+  if (n < 1) return Math.round(n * 100) / 100;
+  return Math.round(n);
+}
+
+/** @deprecated Prefer clampFundingPct — kept for call sites that already imported clampPct name. */
 function clampPct(n: number): number {
-  return Math.max(0, Math.min(100, Math.round(n)));
+  return clampFundingPct(n);
 }
 
 function statusFromPct(pct: number): ReturnReadinessScore["status"] {
   if (pct >= 85) return "strong";
   if (pct >= 65) return "on_track";
-  if (pct >= 35) return "in_progress";
+  if (pct > 0) return "in_progress";
   return "missing";
 }
 
@@ -65,10 +81,15 @@ export function computeReturnReadinessScores(
         : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
 
   let savingsEmergencyPct = 0;
+  let savingsExclude = false;
   if (checklistSources?.canonicalEmergencyFund) {
     const canonical = checklistSources.canonicalEmergencyFund;
-    if (canonical.loadState === "ready") {
-      if (canonical.fundingProgressPct != null && Number.isFinite(canonical.fundingProgressPct)) {
+    if (canonical.loadState === "loading" || canonical.loadState === "unavailable") {
+      savingsExclude = true;
+    } else if (canonical.loadState === "ready") {
+      if (canonical.completionStatus === "data_unavailable") {
+        savingsExclude = true;
+      } else if (canonical.fundingProgressPct != null && Number.isFinite(canonical.fundingProgressPct)) {
         savingsEmergencyPct = clampPct(canonical.fundingProgressPct);
       } else if (
         canonical.safetyRunwayMonths != null &&
@@ -77,9 +98,7 @@ export function computeReturnReadinessScores(
       ) {
         savingsEmergencyPct = clampPct((canonical.safetyRunwayMonths / emergencyTarget) * 100);
       }
-      // Missing basis/target → leave at 0 (DATA UNAVAILABLE), never invent IN PROGRESS progress.
     }
-    // loadState unavailable/loading → leave at 0 (do not treat as MISSING funded state)
   } else if (checklistSources) {
     const configured =
       checklistSources.emergencyCashReserveNpr != null &&
@@ -90,49 +109,79 @@ export function computeReturnReadinessScores(
       savingsEmergencyPct = clampPct((runway / emergencyTarget) * 100);
     }
   } else {
-    // Legacy Nepal return-fund coverage — not the Emergency Fund 3.0 runway.
     savingsEmergencyPct = clampPct((snapshot.emergencyReserveMonths / emergencyTarget) * 100);
   }
 
-  const investmentTarget =
-    checklistSources?.investmentGoalTargetNpr && checklistSources.investmentGoalTargetNpr > 0
-      ? checklistSources.investmentGoalTargetNpr
-      : RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR;
   const investmentAmount = checklistSources?.totalInvestmentNpr ?? investableNpr;
-  const investmentPct = clampPct((investmentAmount / investmentTarget) * 100);
+  const investmentTarget =
+    checklistSources?.investmentGoalTargetNpr != null && checklistSources.investmentGoalTargetNpr > 0
+      ? checklistSources.investmentGoalTargetNpr
+      : null;
+  let investmentPct = 0;
+  let investmentExclude = false;
+  if (investmentTarget == null) {
+    investmentExclude = true;
+  } else {
+    investmentPct = clampPct((investmentAmount / investmentTarget) * 100);
+  }
 
   const passiveMonthly = checklistSources?.modeledPassiveMonthlyNpr ?? snapshot.passiveMonthlyNpr;
-  const passiveTarget = Math.max(
-    checklistSources?.passiveTargetMonthlyNpr ?? snapshot.monthlyNepalLivingNpr * 0.8,
-    30_000,
-  );
-  const passivePct = clampPct((passiveMonthly / passiveTarget) * 100);
+  const passiveTargetRaw = checklistSources?.passiveTargetMonthlyNpr;
+  const passiveTarget =
+    passiveTargetRaw != null && passiveTargetRaw > 0
+      ? Math.max(passiveTargetRaw, 25_000)
+      : Math.max(snapshot.monthlyNepalLivingNpr * 0.8, 30_000);
+  const passivePct = clampPct((passiveMonthly / Math.max(1, passiveTarget)) * 100);
 
-  const ssfContribution = checklistSources?.monthlySsfContributionNpr ?? 0;
-  const ssfTarget = checklistSources?.ssfContributionTargetNpr ?? Math.max(state.monthlySalaryKrw * state.nprPerKrw * 0.1, 5_000);
-  const ssfPct = clampPct((ssfContribution / Math.max(1, ssfTarget)) * 100);
+  let ssfPct = 0;
+  let ssfExclude = false;
+  if (checklistSources?.ssfNotApplicable) {
+    ssfExclude = true;
+  } else {
+    const ssfContribution = checklistSources?.monthlySsfContributionNpr ?? 0;
+    const ssfTarget =
+      checklistSources?.ssfContributionTargetNpr ??
+      Math.max(state.monthlySalaryKrw * state.nprPerKrw * 0.1, 5_000);
+    ssfPct = clampPct((ssfContribution / Math.max(1, ssfTarget)) * 100);
+  }
 
-  const insurancePct = clampPct((healthOk ? 50 : 0) + (lifeOk ? 50 : 0));
+  // Use Insurance workspace protection score (documented health/life/critical aggregation),
+  // not a binary 50/50 adequacy gate that zeroes out verified partial coverage.
+  let insurancePct = clampPct(recommendation.protectionScorePct);
+  let insuranceExclude = false;
+  if (checklistSources?.insuranceLoading || checklistSources?.insuranceUnavailable) {
+    insuranceExclude = true;
+    insurancePct = 0;
+  } else if (!healthOk && !lifeOk && recommendation.currentLifeCoverageNpr <= 0 && recommendation.currentHealthCoverageNpr <= 0) {
+    // No policies at all — keep proportional score (likely near 0) without excluding.
+    insurancePct = clampPct(recommendation.protectionScorePct);
+  }
 
-  const housePct = checklistSources
-    ? checklistSources.housePlanStatus === "already_own" || checklistSources.housePlanStatus === "not_needed"
-      ? 100
-      : checklistSources.housePlanStatus === "plan_to_buy_build"
-        ? checklistSources.houseGoalConfigured
-          ? clampPct(checklistSources.houseProgressPct)
-          : 0
-        : 0
-    : (() => {
-        const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
-        const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
-        return clampPct((houseFunded / houseTarget) * 100);
-      })();
+  let housePct = 0;
+  let houseExclude = false;
+  if (checklistSources) {
+    if (checklistSources.housePlanStatus === "not_needed") {
+      houseExclude = true;
+      housePct = 100;
+    } else if (checklistSources.housePlanStatus === "already_own") {
+      housePct = 100;
+    } else if (checklistSources.housePlanStatus === "plan_to_buy_build") {
+      housePct = checklistSources.houseGoalConfigured
+        ? clampPct(checklistSources.houseProgressPct)
+        : 0;
+      if (!checklistSources.houseGoalConfigured) houseExclude = true;
+    }
+  } else {
+    const houseTarget = Math.max(snapshot.houseTotalBudgetNpr, 1);
+    const houseFunded = snapshot.totalReturnFundNpr + state.houseProgressPct * houseTarget * 0.01;
+    housePct = clampPct((houseFunded / houseTarget) * 100);
+  }
 
   const familyChecks = checklistSources
     ? [
         checklistSources.householdConfigured,
-        checklistSources.familyCostSignalsConfigured &&
-          (checklistSources.schoolFeesMonthlyNpr > 0 || checklistSources.children === 0),
+        checklistSources.children === 0 ||
+          (checklistSources.familyCostSignalsConfigured && checklistSources.schoolFeesMonthlyNpr > 0),
         checklistSources.familyCostSignalsConfigured && checklistSources.healthcareMonthlyNpr > 0,
         checklistSources.settlementChecklistLength >= 2,
       ]
@@ -144,24 +193,38 @@ export function computeReturnReadinessScores(
       ];
   const familyPct = clampPct((familyChecks.filter(Boolean).length / familyChecks.length) * 100);
 
-  const businessTarget =
-    checklistSources?.businessCapitalTargetNpr && checklistSources.businessCapitalTargetNpr > 0
-      ? checklistSources.businessCapitalTargetNpr
-      : RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
-  const businessAmount = checklistSources?.businessCapitalNpr ?? state.businessCapitalNpr;
-  const businessPct = checklistSources
-    ? checklistSources.businessGoalConfigured
-      ? clampPct((businessAmount / businessTarget) * 100)
-      : 0
-    : clampPct((businessAmount / businessTarget) * 100);
+  let businessPct = 0;
+  let businessExclude = false;
+  if (checklistSources?.businessNotApplicable) {
+    businessExclude = true;
+  } else if (checklistSources) {
+    if (!checklistSources.businessGoalConfigured) {
+      businessExclude = true;
+    } else {
+      const businessTarget =
+        checklistSources.businessCapitalTargetNpr > 0
+          ? checklistSources.businessCapitalTargetNpr
+          : RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
+      businessPct = clampPct((checklistSources.businessCapitalNpr / businessTarget) * 100);
+    }
+  } else {
+    const businessTarget = RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
+    businessPct = clampPct((state.businessCapitalNpr / businessTarget) * 100);
+  }
 
   let debtFreePct = 0;
+  let debtExclude = false;
   if (checklistSources) {
-    if (!checklistSources.liabilitiesConfigured) debtFreePct = 0;
-    else if (liabilitiesNpr <= 0) debtFreePct = 100;
-    else {
-      const denom = Math.max(investmentAmount + liabilitiesNpr, 1);
-      debtFreePct = clampPct((1 - liabilitiesNpr / denom) * 100);
+    if (checklistSources.liabilitiesLoading || checklistSources.liabilitiesUnavailable) {
+      debtExclude = true;
+    } else if (!checklistSources.liabilitiesConfigured) {
+      debtExclude = true;
+    } else if (liabilitiesNpr <= 0) {
+      debtFreePct = 100;
+    } else {
+      debtFreePct = clampPct(
+        Math.max(5, 100 - Math.min(95, (liabilitiesNpr / Math.max(investmentAmount + liabilitiesNpr, 1)) * 100)),
+      );
     }
   } else {
     const debtRatio =
@@ -174,15 +237,67 @@ export function computeReturnReadinessScores(
   }
 
   return [
-    { id: "savingsEmergency", label: "Savings & Emergency", pct: savingsEmergencyPct, status: statusFromPct(savingsEmergencyPct) },
-    { id: "investment", label: "Investment Portfolio", pct: investmentPct, status: statusFromPct(investmentPct) },
-    { id: "passiveIncome", label: "Passive Income", pct: passivePct, status: statusFromPct(passivePct) },
-    { id: "nepalSsf", label: "Nepal SSF Retirement", pct: ssfPct, status: statusFromPct(ssfPct) },
-    { id: "insurance", label: "Insurance", pct: insurancePct, status: statusFromPct(insurancePct) },
-    { id: "houseReadiness", label: "House Readiness", pct: housePct, status: statusFromPct(housePct) },
-    { id: "familyEducation", label: "Family & Education", pct: familyPct, status: statusFromPct(familyPct) },
-    { id: "businessCapital", label: "Business Capital", pct: businessPct, status: statusFromPct(businessPct) },
-    { id: "debtFree", label: "Debt Free", pct: debtFreePct, status: statusFromPct(debtFreePct) },
+    {
+      id: "savingsEmergency",
+      label: "Savings & Emergency",
+      pct: savingsEmergencyPct,
+      status: statusFromPct(savingsEmergencyPct),
+      excludeFromAggregate: savingsExclude,
+    },
+    {
+      id: "investment",
+      label: "Investment Portfolio",
+      pct: investmentPct,
+      status: statusFromPct(investmentPct),
+      excludeFromAggregate: investmentExclude,
+    },
+    {
+      id: "passiveIncome",
+      label: "Passive Income",
+      pct: passivePct,
+      status: statusFromPct(passivePct),
+    },
+    {
+      id: "nepalSsf",
+      label: "Nepal SSF Retirement",
+      pct: ssfPct,
+      status: statusFromPct(ssfPct),
+      excludeFromAggregate: ssfExclude,
+    },
+    {
+      id: "insurance",
+      label: "Insurance",
+      pct: insurancePct,
+      status: statusFromPct(insurancePct),
+      excludeFromAggregate: insuranceExclude,
+    },
+    {
+      id: "houseReadiness",
+      label: "House Readiness",
+      pct: housePct,
+      status: statusFromPct(housePct),
+      excludeFromAggregate: houseExclude,
+    },
+    {
+      id: "familyEducation",
+      label: "Family & Education",
+      pct: familyPct,
+      status: statusFromPct(familyPct),
+    },
+    {
+      id: "businessCapital",
+      label: "Business Capital",
+      pct: businessPct,
+      status: statusFromPct(businessPct),
+      excludeFromAggregate: businessExclude,
+    },
+    {
+      id: "debtFree",
+      label: "Debt Free",
+      pct: debtFreePct,
+      status: statusFromPct(debtFreePct),
+      excludeFromAggregate: debtExclude,
+    },
   ];
 }
 
@@ -202,9 +317,46 @@ export function aggregateReadinessPct(scores: ReturnReadinessScore[]): number {
   let total = 0;
   let weightSum = 0;
   for (const score of scores) {
+    if (score.excludeFromAggregate) continue;
     const w = weights[score.id];
     total += score.pct * w;
     weightSum += w;
   }
+  if (weightSum <= 0) return 0;
   return clampPct(total / weightSum);
+}
+
+/**
+ * Project checklist-backed investment/passive amounts forward for what-if years.
+ * Uses planner snapshot inflation/horizon math already applied to living costs;
+ * grows investable corpus with cumulative monthly savings (no invented return guarantee).
+ */
+export function projectChecklistSourcesForYear(
+  sources: ReturnChecklistSources,
+  opts: {
+    yearsAhead: number;
+    monthlySavingsNpr: number;
+    inflationPct: number;
+  },
+): ReturnChecklistSources {
+  const years = Math.max(0, opts.yearsAhead);
+  const monthlySavings = Math.max(0, opts.monthlySavingsNpr);
+  const inflation = Math.max(0, opts.inflationPct) / 100;
+  const addedCorpus = monthlySavings * 12 * years;
+  const inflatedLiving =
+    sources.passiveTargetMonthlyNpr != null && sources.passiveTargetMonthlyNpr > 0
+      ? sources.passiveTargetMonthlyNpr * Math.pow(1 + inflation, years)
+      : sources.passiveTargetMonthlyNpr;
+
+  return {
+    ...sources,
+    totalInvestmentNpr: Math.max(0, sources.totalInvestmentNpr) + addedCorpus,
+    // Modeled passive scales with investable growth (same 4%-style share as current KPI ratio).
+    modeledPassiveMonthlyNpr:
+      sources.totalInvestmentNpr > 0
+        ? sources.modeledPassiveMonthlyNpr *
+          ((sources.totalInvestmentNpr + addedCorpus) / sources.totalInvestmentNpr)
+        : sources.modeledPassiveMonthlyNpr + (addedCorpus * 0.04) / 12,
+    passiveTargetMonthlyNpr: inflatedLiving,
+  };
 }

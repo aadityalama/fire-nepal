@@ -10,6 +10,7 @@ import {
   computeEmergencyFundPlan,
   DEFAULT_EMERGENCY_FUND_MONTHS,
 } from "@/lib/emergency-fund-plan";
+import type { MarketSnapshot } from "@/types/market";
 
 /** Single snapshot of cross-module FIRE Nepal KPIs (pure derived state). */
 export type UnifiedFireSummary = {
@@ -49,6 +50,12 @@ export type ComputeUnifiedFireSummaryOptions = {
    * (no Income / Expense Tracker fallback).
    */
   monthlyProtectionBasisNpr?: number | null;
+  /**
+   * Same realtime market snapshot used by NEPSE Portfolio Dashboard.
+   * When provided, `totalInvestmentNpr` / listed live marks match dashboard Current Value.
+   * When omitted, listed values fall back to non-live marks (do not treat as verified LTP).
+   */
+  liveMarket?: MarketSnapshot | null;
 };
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
@@ -64,7 +71,9 @@ export function computeUnifiedFireSummary(
   usdPerNpr: number,
   options: ComputeUnifiedFireSummaryOptions = {},
 ): UnifiedFireSummary {
-  const wealthTotals = computeWealthTotals(portfolio, krwPerNpr, usdPerNpr);
+  const wealthTotals = computeWealthTotals(portfolio, krwPerNpr, usdPerNpr, {
+    liveMarket: options.liveMarket ?? null,
+  });
   const monthlyIncome = sumIncome(cashflow);
   const monthlyExpenses = monthlyBurn(cashflow);
   const savingsRatePct = cashflowSavingsRatePct(cashflow);
