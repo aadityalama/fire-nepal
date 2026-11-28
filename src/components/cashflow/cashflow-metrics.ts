@@ -19,6 +19,12 @@ export function entryAppliesToMonth(entry: IncomeEntry, monthKey: string): boole
     const [, month] = monthKey.split("-");
     return entry.date.slice(5, 7) === month;
   }
+  if (frequency === "quarterly") {
+    const entryM = Number(entry.date.slice(5, 7));
+    const month = Number(monthKey.slice(5, 7));
+    if (!Number.isFinite(entryM) || !Number.isFinite(month) || entryM < 1 || month < 1) return false;
+    return ((month - entryM) % 3 + 3) % 3 === 0;
+  }
   return entry.date.startsWith(monthKey);
 }
 

@@ -306,8 +306,8 @@ describe("Return Checklist — Passive Income", () => {
       ),
       "passive",
     );
-    assert.match(passive.detail, /12,000\/mo modeled/);
-    assert.match(passive.detail, /3,000\/mo actual/);
+    assert.match(passive.detail, /modeled NPR 12,000\/mo/);
+    assert.match(passive.detail, /Actual NPR 3,000\/mo/);
     assert.equal(passive.status, "in_progress");
   });
 });
@@ -947,6 +947,15 @@ describe("Expense-based FIRE corpus resolver", () => {
       investmentCostNpr: 1_800_000,
       passiveMonthlyNpr: 0,
       actualPassiveMonthlyNpr: 0,
+      periodActualPassiveNpr: 0,
+      cashflowPassive: {
+        recurringPassiveMonthlyNpr: 0,
+        periodActualPassiveNpr: 0,
+        breakdown: [],
+        hasIncomeRecords: false,
+        cashflowDividendInterestMonthlyNpr: 0,
+        cashflowRentalMonthlyNpr: 0,
+      },
       nepalColMonthlyNpr: 75_000,
       emergencyCashReserveNpr: null,
       canonicalEmergencyFund: {

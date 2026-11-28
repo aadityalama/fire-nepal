@@ -1,4 +1,8 @@
-import type { CashflowIncomeTypeId, IncomeFrequency } from "@/lib/cashflow/income-types";
+import type {
+  CashflowIncomeTypeId,
+  IncomeFrequency,
+} from "@/lib/cashflow/income-types";
+import type { IncomeClassOverride } from "@/lib/cashflow/passive-income-from-cashflow";
 
 /** Monthly cashflow dashboard (separate from portfolio v2 storage). */
 export const CASHFLOW_STATE_VERSION = 1 as const;
@@ -9,6 +13,11 @@ export type IncomeEntry = {
   amount: number;
   incomeType: CashflowIncomeTypeId;
   frequency: IncomeFrequency;
+  /**
+   * Explicit stream class for ambiguous types (Business / Freelance / Other / Bonus).
+   * Omit or `"auto"` to use default classification rules.
+   */
+  incomeClass?: IncomeClassOverride;
   /** Last received date (ISO YYYY-MM-DD). */
   date: string;
   note?: string;

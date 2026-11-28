@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { BUDGET_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import {
@@ -34,6 +34,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
 import { collectMarketSymbolsFromPortfolio } from "@/services/portfolio/symbols-from-state";
 
+const CASHFLOW_FETCH_TIMEOUT_MS = 12_000;
+const PORTFOLIO_FETCH_TIMEOUT_MS = 12_000;
+
 function monthlyBasisFromBudgets(budgets: BudgetRecord[], userId?: string | null): number | null {
   if (budgets.length === 0) return null;
   const settings = loadEmergencyFundSettingsLocal(userId);
@@ -57,15 +60,40 @@ function storageTouchesSession(key: string | null, userId?: string | null): bool
   return key === portfolioStorageKey(userId) || key === cashflowStorageKey(userId);
 }
 
+async function fetchWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export type FinanceCloudLoadState = "loading" | "ready" | "unavailable";
+/** @deprecated Prefer FinanceCloudLoadState — kept for existing imports. */
+export type CashflowCloudLoadState = FinanceCloudLoadState;
+
 /**
  * Live unified summary for FIRE Journey.
  * Authenticated: reads portfolio + cashflow from Supabase (cache only after cloud hydrate).
  * Guests: localStorage.
+ *
+ * Portfolio and cashflow hydrate independently so Net Worth never waits on Passive Income
+ * (and vice versa). Every request reaches a terminal state via timeout.
  */
 export function useUnifiedFireSummary(): {
   summary: UnifiedFireSummary;
   portfolio: WealthPortfolioStateV2;
   cashflow: CashflowDashboardState;
+  /** Authenticated cashflow hydrate outcome — never treat unavailable as confirmed zero. */
+  cashflowLoadState: FinanceCloudLoadState;
+  /** Authenticated portfolio hydrate outcome — independent of cashflow. */
+  portfolioLoadState: FinanceCloudLoadState;
   ratesLoading: boolean;
   resync: () => void;
 } {
@@ -73,46 +101,112 @@ export function useUnifiedFireSummary(): {
   const uid = user?.id;
   const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => defaultWealthState());
   const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => defaultCashflowState());
+  const [cashflowLoadState, setCashflowLoadState] = useState<FinanceCloudLoadState>("loading");
+  const [portfolioLoadState, setPortfolioLoadState] = useState<FinanceCloudLoadState>("loading");
   const [monthlyProtectionBasisNpr, setMonthlyProtectionBasisNpr] = useState<number | null>(null);
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
   const [ratesLoading, setRatesLoading] = useState(true);
+  const resyncGenerationRef = useRef(0);
 
   const resync = useCallback(() => {
+    const generation = ++resyncGenerationRef.current;
+
     if (!uid || !isSupabaseConfigured()) {
       setPortfolio(loadWealthPortfolioState(uid));
       setCashflow(loadCashflowState(uid));
+      setCashflowLoadState("ready");
+      setPortfolioLoadState("ready");
       setMonthlyProtectionBasisNpr(null);
       return;
     }
 
+    // Soft refresh: keep last-good SUCCESS UI; Retry after UNAVAILABLE re-enters LOADING.
+    setCashflowLoadState((prev) => (prev === "ready" ? "ready" : "loading"));
+    setPortfolioLoadState((prev) => (prev === "ready" ? "ready" : "loading"));
+
+    // --- Portfolio (Net Worth) — independent of cashflow ---
     void (async () => {
       try {
-        const [cfRes, remotePortfolio, budgets] = await Promise.all([
-          fetch("/api/cashflow", { credentials: "include", cache: "no-store" }).then(
-            (r) =>
-              r.json() as Promise<{
+        const remotePortfolio = await fetchWithTimeout(
+          loadWealthPortfolioFromSupabase(getSupabaseBrowserClient(), uid),
+          PORTFOLIO_FETCH_TIMEOUT_MS,
+          "portfolio",
+        );
+        if (generation !== resyncGenerationRef.current) return;
+        setPortfolio(remotePortfolio ?? defaultWealthState());
+        setPortfolioLoadState("ready");
+      } catch (error) {
+        if (generation !== resyncGenerationRef.current) return;
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[unified-fire-summary] portfolio hydrate failed", error);
+        }
+        // Keep last-good portfolio; do not invent zeros.
+        setPortfolioLoadState("unavailable");
+      }
+    })();
+
+    // --- Cashflow (Passive Income) — independent of portfolio ---
+    void (async () => {
+      try {
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const abortTimer =
+          controller != null
+            ? setTimeout(() => controller.abort(), CASHFLOW_FETCH_TIMEOUT_MS)
+            : undefined;
+        let cfRes: { httpOk: boolean; ok: boolean; snapshot?: { state: CashflowDashboardState } | null };
+        try {
+          cfRes = await fetchWithTimeout(
+            fetch("/api/cashflow", {
+              credentials: "include",
+              cache: "no-store",
+              signal: controller?.signal,
+            }).then(async (r) => {
+              const json = (await r.json()) as {
                 ok: boolean;
                 snapshot?: { state: CashflowDashboardState } | null;
-              }>,
-          ),
-          loadWealthPortfolioFromSupabase(getSupabaseBrowserClient(), uid),
-          fetchBudgetRecords().catch(() => [] as BudgetRecord[]),
-        ]);
-        setPortfolio(remotePortfolio ?? defaultWealthState());
-        setCashflow(
-          cfRes.ok && cfRes.snapshot?.state
-            ? sanitizeCashflowState(cfRes.snapshot.state)
-            : defaultCashflowState(),
-        );
-        setMonthlyProtectionBasisNpr(monthlyBasisFromBudgets(budgets, uid));
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[unified-fire-summary] cloud resync failed", error);
+              };
+              return { httpOk: r.ok, ...json };
+            }),
+            CASHFLOW_FETCH_TIMEOUT_MS,
+            "cashflow",
+          );
+        } finally {
+          if (abortTimer != null) clearTimeout(abortTimer);
         }
-        setPortfolio(defaultWealthState());
-        setCashflow(defaultCashflowState());
-        setMonthlyProtectionBasisNpr(null);
+        if (generation !== resyncGenerationRef.current) return;
+        if (cfRes.httpOk && cfRes.ok) {
+          setCashflow(
+            cfRes.snapshot?.state
+              ? sanitizeCashflowState(cfRes.snapshot.state)
+              : defaultCashflowState(),
+          );
+          setCashflowLoadState("ready");
+        } else {
+          setCashflowLoadState("unavailable");
+        }
+      } catch (error) {
+        if (generation !== resyncGenerationRef.current) return;
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[unified-fire-summary] cashflow hydrate failed", error);
+        }
+        setCashflowLoadState("unavailable");
+      }
+    })();
+
+    // --- Budgets (EF protection basis) — best-effort, non-blocking ---
+    void (async () => {
+      try {
+        const budgets = await fetchWithTimeout(
+          fetchBudgetRecords().catch(() => [] as BudgetRecord[]),
+          CASHFLOW_FETCH_TIMEOUT_MS,
+          "budgets",
+        );
+        if (generation !== resyncGenerationRef.current) return;
+        setMonthlyProtectionBasisNpr(monthlyBasisFromBudgets(budgets, uid));
+      } catch {
+        if (generation !== resyncGenerationRef.current) return;
+        // Keep last-good basis.
       }
     })();
   }, [uid]);
@@ -196,5 +290,13 @@ export function useUnifiedFireSummary(): {
     [portfolio, cashflow, krwPerNpr, usdPerNpr, monthlyProtectionBasisNpr, liveMarket],
   );
 
-  return { summary, portfolio, cashflow, ratesLoading, resync };
+  return {
+    summary,
+    portfolio,
+    cashflow,
+    cashflowLoadState,
+    portfolioLoadState,
+    ratesLoading,
+    resync,
+  };
 }

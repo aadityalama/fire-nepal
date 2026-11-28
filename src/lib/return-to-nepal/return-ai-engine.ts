@@ -129,9 +129,18 @@ export function computeReturnAiInsights(
   investableNpr: number,
   liabilitiesNpr: number,
   canonicalEmergencyFund?: CanonicalEmergencyFundSnapshot | null,
+  checklistSources?: ReturnChecklistSources | null,
 ): ReturnAiInsight[] {
   const insights: ReturnAiInsight[] = [];
   const nowYear = snapshot.nowYear;
+  const actualPassiveMonthlyNpr =
+    checklistSources && !checklistSources.cashflowUnavailable && !checklistSources.cashflowLoading
+      ? Math.max(0, checklistSources.actualPassiveMonthlyNpr)
+      : null;
+  const passiveTargetMonthlyNpr =
+    checklistSources?.passiveTargetMonthlyNpr != null && checklistSources.passiveTargetMonthlyNpr > 0
+      ? checklistSources.passiveTargetMonthlyNpr
+      : null;
 
   const requiredEfMonths =
     canonicalEmergencyFund?.requiredProtectionMonths &&
@@ -153,16 +162,37 @@ export function computeReturnAiInsights(
 
   const canReturnToday =
     readinessPct >= 78 && snapshot.monthlyDeficitNpr <= 0 && efReady;
+  const actualPassiveHint =
+    actualPassiveMonthlyNpr != null && actualPassiveMonthlyNpr > 0
+      ? ` Cashflow actual passive is ${formatNprShort(actualPassiveMonthlyNpr)}/mo${
+          passiveTargetMonthlyNpr != null
+            ? ` vs ${formatNprShort(passiveTargetMonthlyNpr)}/mo expense target`
+            : ""
+        }.`
+      : "";
   insights.push({
     id: "return-today",
     title: "Can I Return Today?",
     body: canReturnToday
-      ? `Yes — your passive income covers Nepal living costs with ${efRunwayLabel}.`
+      ? `Yes — your passive income covers Nepal living costs with ${efRunwayLabel}.${actualPassiveHint}`
       : readinessPct >= 55
-        ? `Not yet — close a ${formatNprShort(snapshot.monthlyDeficitNpr)}/mo gap and build ${requiredEfMonths} months emergency reserve first.`
-        : `Not yet — you are ${readinessPct}% ready. Focus on savings rate and passive income first.`,
+        ? `Not yet — close a ${formatNprShort(snapshot.monthlyDeficitNpr)}/mo gap and build ${requiredEfMonths} months emergency reserve first.${actualPassiveHint}`
+        : `Not yet — you are ${readinessPct}% ready. Focus on savings rate and passive income first.${actualPassiveHint}`,
     tone: canReturnToday ? "positive" : "caution",
   });
+
+  if (
+    actualPassiveMonthlyNpr != null &&
+    passiveTargetMonthlyNpr != null &&
+    actualPassiveMonthlyNpr >= passiveTargetMonthlyNpr
+  ) {
+    insights.push({
+      id: "passive-cashflow",
+      title: "Passive Income Goal",
+      body: `Verified Cashflow passive ${formatNprShort(actualPassiveMonthlyNpr)}/mo meets your ${formatNprShort(passiveTargetMonthlyNpr)}/mo expense target (modeled investment income stays separate).`,
+      tone: "positive",
+    });
+  }
 
   if (snapshot.monthlyDeficitNpr > 0) {
     const corpusNeed = snapshot.requiredExtraCorpusNpr;

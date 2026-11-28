@@ -83,7 +83,15 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
 } {
   const { user, loading: authLoading } = useProductAuth();
   const uid = user?.id;
-  const { summary, portfolio, cashflow, ratesLoading, resync: resyncCloud } = useUnifiedFireSummary();
+  const {
+    summary,
+    portfolio,
+    cashflow,
+    cashflowLoadState,
+    portfolioLoadState,
+    ratesLoading,
+    resync: resyncCloud,
+  } = useUnifiedFireSummary();
   const { plan: colPlan } = useColPlanState();
   const [tick, setTick] = useState(0);
   const [savings, setSavings] = useState<SavingsWorkspaceState>(() => sanitizeSavingsWorkspaceState(null));
@@ -306,6 +314,10 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
 
     return {
       ...base,
+      cashflowLoading: cashflowLoadState === "loading",
+      cashflowUnavailable: cashflowLoadState === "unavailable",
+      portfolioLoading: portfolioLoadState === "loading",
+      portfolioUnavailable: portfolioLoadState === "unavailable",
       emergencyCashReserveNpr:
         canonicalEmergencyFund.loadState === "ready" && canonicalEmergencyFund.hasReserveData
           ? canonicalEmergencyFund.currentEmergencyReserveNpr
@@ -319,6 +331,8 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     stored,
     portfolio,
     cashflow,
+    cashflowLoadState,
+    portfolioLoadState,
     summary,
     ratesLoading,
     colPlan,

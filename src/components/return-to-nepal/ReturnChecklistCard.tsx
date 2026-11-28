@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { CHECKLIST_STATUS_LABELS, type ChecklistStatus } from "@/lib/return-to-nepal/checklist-status";
 import type { ReturnChecklistItem } from "@/lib/return-to-nepal/return-checklist";
 
@@ -30,7 +31,7 @@ export type ReturnChecklistCardProps = {
  *
  * Uses a stretched native <a> over the entire card so taps anywhere navigate.
  * Content is pointer-events-none so nested text/badge never steal the hit target.
- * Optional N/A controls re-enable pointer events and stop navigation.
+ * Optional N/A / breakdown controls re-enable pointer events and stop navigation.
  */
 export function ReturnChecklistCard({
   item,
@@ -42,6 +43,12 @@ export function ReturnChecklistCard({
     Boolean(onMarkNotApplicable) &&
     (item.status === "missing" || item.status === "target_not_set" || item.status === "in_progress");
   const showClearNa = Boolean(onClearNotApplicable) && item.status === "not_applicable";
+  const hasBreakdown = Boolean(item.breakdownLines && item.breakdownLines.length > 0);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const barPct =
+    item.coveragePct != null && Number.isFinite(item.coveragePct)
+      ? Math.max(0, Math.min(100, item.coveragePct))
+      : null;
 
   return (
     <li className="relative list-none">
@@ -59,7 +66,6 @@ export function ReturnChecklistCard({
           style={{ WebkitTapHighlightColor: "rgba(16, 185, 129, 0.22)" }}
           onClick={(event) => {
             // Hard navigate: Next soft-nav can silently no-op in some mobile WebViews/PWAs.
-            // Acceptance: tap anywhere on the card must leave this page for the destination.
             event.preventDefault();
             window.location.assign(item.href);
           }}
@@ -69,18 +75,31 @@ export function ReturnChecklistCard({
           </span>
         </a>
 
-        {/* Visual content: never captures pointer events (except explicit N/A controls) */}
-        <div className="pointer-events-none relative z-10 flex min-h-[56px] w-full items-center justify-between gap-3 px-3 py-2.5">
+        {/* Visual content: never captures pointer events (except explicit controls) */}
+        <div className="pointer-events-none relative z-10 flex min-h-[56px] w-full items-start justify-between gap-3 px-3 py-2.5">
           <div className="min-w-0 flex-1 pr-1">
             <p className="text-sm font-bold leading-snug text-white">{item.label}</p>
-            <p className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-snug text-white/40">
+            <p
+              className={`mt-0.5 text-[11px] font-semibold leading-snug text-white/40 ${
+                item.id === "passive" ? "line-clamp-4 sm:line-clamp-none" : "line-clamp-2"
+              }`}
+            >
               {item.detail}
             </p>
+            {barPct != null ? (
+              <div className="mt-2 h-1.5 w-full max-w-[16rem] overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-emerald-400/80"
+                  style={{ width: `${barPct}%` }}
+                  data-testid={`return-checklist-bar-${item.id}`}
+                />
+              </div>
+            ) : null}
             <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300/70">
               {item.actionLabel}
             </p>
-            {(showMarkNa || showClearNa) && (
-              <div className="pointer-events-auto relative z-30 mt-1.5">
+            {(showMarkNa || showClearNa || hasBreakdown) && (
+              <div className="pointer-events-auto relative z-30 mt-1.5 flex flex-wrap items-center gap-2">
                 {showMarkNa ? (
                   <button
                     type="button"
@@ -109,8 +128,54 @@ export function ReturnChecklistCard({
                     Include again
                   </button>
                 ) : null}
+                {hasBreakdown ? (
+                  <button
+                    type="button"
+                    data-testid={`return-checklist-breakdown-${item.id}`}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200/80 ring-1 ring-emerald-400/20 hover:bg-emerald-500/10"
+                    aria-expanded={breakdownOpen}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setBreakdownOpen((open) => !open);
+                    }}
+                  >
+                    Sources
+                    <ChevronDown
+                      size={12}
+                      className={`transition ${breakdownOpen ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </button>
+                ) : null}
               </div>
             )}
+            {hasBreakdown && breakdownOpen ? (
+              <ul
+                className="pointer-events-none mt-2 space-y-1 rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2"
+                data-testid={`return-checklist-breakdown-list-${item.id}`}
+              >
+                {item.breakdownLines!.map((line) => (
+                  <li
+                    key={`${line.label}-${line.value}`}
+                    className="flex items-start justify-between gap-3 text-[10px] font-semibold"
+                  >
+                    <span
+                      className={
+                        line.tone === "passive"
+                          ? "text-emerald-200/80"
+                          : line.tone === "active"
+                            ? "text-amber-200/80"
+                            : "text-white/45"
+                      }
+                    >
+                      {line.label}
+                    </span>
+                    <span className="shrink-0 text-right text-white/70">{line.value}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2 self-start pt-0.5">
             <span
@@ -119,7 +184,6 @@ export function ReturnChecklistCard({
             >
               {badgeText}
             </span>
-            {/* Always-visible action affordance (not hover-only / not low-contrast) */}
             <span
               className="grid h-8 w-8 place-items-center rounded-lg bg-white/12 text-white ring-1 ring-white/25"
               aria-hidden

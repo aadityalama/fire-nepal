@@ -1,9 +1,13 @@
 import type { CashflowDashboardState } from "@/components/cashflow/types";
-import { sumIncome } from "@/components/cashflow/cashflow-metrics";
+import { currentMonthKey, sumIncome } from "@/components/cashflow/cashflow-metrics";
 import type { WealthTotals } from "@/components/portfolio/calculations";
 import { passiveIncomeMonthlyNpr } from "@/components/portfolio/calculations";
 import type { SimpleMoneyLine, WealthPortfolioStateV2 } from "@/components/portfolio/types";
 import { computeCashflowLiveMetrics } from "@/lib/cashflow/cashflow-live-metrics";
+import {
+  computeCashflowPassiveIncomeSnapshot,
+  type CashflowPassiveIncomeSnapshot,
+} from "@/lib/cashflow/passive-income-from-cashflow";
 import type { ColPlanState } from "@/lib/nepal-col-dashboard";
 import { computeColSnapshot, defaultColPlan } from "@/lib/nepal-col-dashboard";
 import { nprToKrw } from "@/lib/exchange-rate";
@@ -44,10 +48,26 @@ export type ReturnPlannerLiveBundle = {
   totalInvestmentNpr: number;
   /** Listed investment cost basis (NEPSE "Total Investment" / cost). */
   investmentCostNpr: number;
-  /** Modeled passive — same as Return KPI (4% investable/12 + dividends + FD). */
+  /**
+   * Modeled investment income only — 4% of investable / 12 + portfolio FD interest.
+   * Does not include Cashflow rental/dividends (those are actual).
+   */
   passiveMonthlyNpr: number;
-  /** Recorded cash passive lines (pension + dividend + FD + rental + SWP). */
+  /**
+   * Recurring eligible Cashflow passive (rental, dividends, etc.) + optional SWP.
+   * Source of truth for Passive Income Goal coverage — never invents zero on load failure
+   * (callers must gate with cashflow load state).
+   */
   actualPassiveMonthlyNpr: number;
+  /** Passive cash received in the current reporting month from Cashflow. */
+  periodActualPassiveNpr: number;
+  /** Full Cashflow passive snapshot for breakdown UI. */
+  cashflowPassive: CashflowPassiveIncomeSnapshot;
+  cashflowLoading?: boolean;
+  cashflowUnavailable?: boolean;
+  /** Portfolio / Net Worth hydrate — independent of cashflow. */
+  portfolioLoading?: boolean;
+  portfolioUnavailable?: boolean;
   nepalColMonthlyNpr: number;
   monthlySsfContributionNpr: number;
   ssf: SsfPensionWorkspaceState;
@@ -162,11 +182,15 @@ export function buildEffectiveReturnPlannerState(
         ? Math.round(nprToKrw(monthlyIncomeNpr - monthlyExpenseNpr, krwPerNpr))
         : stored.monthlySavingsKrw;
 
-  const dividendMonthlyNpr = Math.max(0, cashflow.income.dividendIncome ?? 0);
-  const rentalMonthlyNpr = Math.max(0, cashflow.income.rentalIncome ?? 0);
+  const monthKey = currentMonthKey();
+  const cashflowPassive = computeCashflowPassiveIncomeSnapshot(cashflow, monthKey);
+  // Prefer Cashflow Income Center entries; fall back to legacy keys via the snapshot.
+  const dividendMonthlyNpr = cashflowPassive.cashflowDividendInterestMonthlyNpr;
+  const rentalMonthlyNpr = cashflowPassive.cashflowRentalMonthlyNpr;
   const fdMonthlyNpr = wealth.fixedDepositsEstimatedMonthlyIncomeNpr;
+  // Modeled = portfolio withdrawal rule + FD interest only (no Cashflow rental/dividends).
   const passiveMonthlyNpr = passiveIncomeMonthlyNpr(wealth.investableNpr, {
-    monthlyCashDividendNpr: dividendMonthlyNpr,
+    monthlyCashDividendNpr: 0,
     monthlyFixedDepositInterestNpr: fdMonthlyNpr,
   });
 
@@ -264,7 +288,12 @@ export function buildEffectiveReturnPlannerState(
     furnitureBudgetNpr,
     homeLoanPrincipalNpr,
     houseProgressPct,
-    pensionMonthlyNpr: Math.max(ssfProjection.estimatedMonthlyPensionNpr, ssf.projection.monthlySsfContributionNpr),
+    // Planner timeline still uses SSF projected pension; checklist actual passive does not.
+    pensionMonthlyNpr: Math.max(
+      ssfProjection.estimatedMonthlyPensionNpr,
+      ssf.projection.monthlySsfContributionNpr,
+      stored.pensionMonthlyNpr,
+    ),
     dividendMonthlyNpr,
     fdMonthlyNpr,
     rentalMonthlyNpr,
@@ -283,12 +312,9 @@ export function buildEffectiveReturnPlannerState(
     debtReviewed: stored.debtReviewed || liabilityRowCount > 0 || liabilitiesNpr > 0,
   };
 
+  // Verified recurring passive from Cashflow only (+ optional user SWP). Never add modeled FD/4%.
   const actualPassiveMonthlyNpr =
-    effectiveState.pensionMonthlyNpr +
-    effectiveState.dividendMonthlyNpr +
-    effectiveState.fdMonthlyNpr +
-    effectiveState.rentalMonthlyNpr +
-    effectiveState.swpMonthlyNpr;
+    cashflowPassive.recurringPassiveMonthlyNpr + Math.max(0, stored.swpMonthlyNpr);
 
   return {
     effectiveState,
@@ -303,6 +329,8 @@ export function buildEffectiveReturnPlannerState(
     investmentCostNpr: wealth.investmentsCostNpr,
     passiveMonthlyNpr,
     actualPassiveMonthlyNpr,
+    periodActualPassiveNpr: cashflowPassive.periodActualPassiveNpr,
+    cashflowPassive,
     nepalColMonthlyNpr: colSnap.total > 0 ? colSnap.total : 0,
     monthlySsfContributionNpr: ssf.projection.monthlySsfContributionNpr,
     ssf,
