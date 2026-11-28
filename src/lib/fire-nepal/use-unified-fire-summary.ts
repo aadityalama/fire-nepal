@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
+import { BUDGET_MODULE_SYNC_EVENT } from "@/lib/cashflow/live-sync-events";
 import {
   cashflowStorageKey,
   defaultCashflowState,
@@ -143,9 +144,11 @@ export function useUnifiedFireSummary(): {
     const onExternal = () => resync();
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
     window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+    window.addEventListener(BUDGET_MODULE_SYNC_EVENT, onExternal);
     return () => {
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, onExternal);
       window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, onExternal);
+      window.removeEventListener(BUDGET_MODULE_SYNC_EVENT, onExternal);
     };
   }, [resync]);
 

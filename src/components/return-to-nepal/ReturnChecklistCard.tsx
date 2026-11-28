@@ -8,6 +8,7 @@ const STATUS_STYLES: Record<ChecklistStatus, string> = {
   on_track: "bg-teal-500/15 text-teal-200 ring-teal-400/25",
   in_progress: "bg-amber-500/15 text-amber-200 ring-amber-400/25",
   missing: "bg-rose-500/15 text-rose-200 ring-rose-400/25",
+  data_unavailable: "bg-slate-500/20 text-slate-200 ring-slate-400/30",
 };
 
 const STATUS_LABELS: Record<ChecklistStatus, string> = {
@@ -15,6 +16,7 @@ const STATUS_LABELS: Record<ChecklistStatus, string> = {
   on_track: "On Track",
   in_progress: "In Progress",
   missing: "Missing",
+  data_unavailable: "Data Unavailable",
 };
 
 /**

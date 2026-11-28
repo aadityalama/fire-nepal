@@ -5,10 +5,20 @@ import {
 } from "@/lib/insurance/insurance-engine";
 import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
 import { sumCoverageByType } from "@/lib/insurance/insurance-utils";
+import {
+  formatEmergencyRunwayDetail,
+  type CanonicalEmergencyFundSnapshot,
+  type CanonicalEmergencyFundStatus,
+} from "@/lib/return-to-nepal/canonical-emergency-fund";
 import { returnChecklistHref } from "@/lib/return-to-nepal/return-checklist-routes";
 import type { HousePlanStatus, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
-export type ChecklistStatus = "completed" | "on_track" | "in_progress" | "missing";
+export type ChecklistStatus =
+  | "completed"
+  | "on_track"
+  | "in_progress"
+  | "missing"
+  | "data_unavailable";
 
 export type ReturnChecklistItem = {
   id: string;
@@ -24,12 +34,20 @@ export type ReturnChecklistItem = {
 /** Canonical inputs for Return Checklist — no localStorage reads inside the pure compute. */
 export type ReturnChecklistSources = {
   state: ReturnToNepalPlannerState;
-  /** Saved emergency cash reserve (cashflow.emergencyCashReserve). Null/undefined = not configured. */
+  /**
+   * @deprecated Prefer `canonicalEmergencyFund`. Legacy reserve mirror.
+   * Null/undefined = not configured when canonical snapshot is absent.
+   */
   emergencyCashReserveNpr: number | null | undefined;
-  /** Monthly burn used for runway (cashflow monthly expenses). */
+  /**
+   * @deprecated Prefer `canonicalEmergencyFund.monthlyProtectionBasisNpr`.
+   * Legacy monthly burn (cashflow / COL) — not used when canonical is ready.
+   */
   emergencyMonthlyBurnNpr: number;
   /** Explicit months target; falsy → fallback 12. */
   emergencyMonthsTarget: number;
+  /** Authoritative Emergency Fund 3.0 snapshot when loaded by the Return Planner. */
+  canonicalEmergencyFund?: CanonicalEmergencyFundSnapshot | null;
   /** Live/cloud SSF monthly contribution. */
   monthlySsfContributionNpr: number;
   /** Target contribution for 100% SSF (e.g. ~10% of income). */
@@ -83,6 +101,89 @@ export function deriveChecklistStatus(pct: number): ChecklistStatus {
   return "missing";
 }
 
+function checklistStatusFromCanonical(
+  status: CanonicalEmergencyFundStatus,
+): ChecklistStatus {
+  if (status === "data_unavailable") return "data_unavailable";
+  if (status === "completed") return "completed";
+  if (status === "in_progress") return "in_progress";
+  return "missing";
+}
+
+function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  const canonical = sources.canonicalEmergencyFund;
+  const emergencyTarget =
+    sources.emergencyMonthsTarget > 0
+      ? sources.emergencyMonthsTarget
+      : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
+
+  // Loading is not a failure — never show false DATA UNAVAILABLE while hydrating.
+  if (canonical && canonical.loadState === "loading") {
+    return {
+      status: "on_track",
+      detail: "Verifying Emergency Fund…",
+      badgeLabel: "Loading",
+    };
+  }
+
+  if (canonical && canonical.loadState === "unavailable") {
+    return {
+      status: "data_unavailable",
+      detail: "Could not verify Emergency Fund",
+      badgeLabel: "Data Unavailable",
+    };
+  }
+
+  if (canonical && canonical.loadState === "ready") {
+    if (canonical.completionStatus === "data_unavailable") {
+      return {
+        status: "data_unavailable",
+        detail:
+          !canonical.hasBudgetProtectionBasis || canonical.emergencyFundTargetNpr == null
+            ? "Budget protection basis unavailable"
+            : "Could not verify Emergency Fund",
+        badgeLabel: "Data Unavailable",
+      };
+    }
+    return {
+      status: checklistStatusFromCanonical(canonical.completionStatus),
+      detail:
+        canonical.completionStatus === "missing"
+          ? "Set emergency reserve in Emergency Fund"
+          : formatEmergencyRunwayDetail(canonical.safetyRunwayMonths),
+      badgeLabel: undefined,
+    };
+  }
+
+  // Legacy path (tests / callers without canonical snapshot).
+  const emergencyConfigured =
+    sources.emergencyCashReserveNpr != null && Number.isFinite(sources.emergencyCashReserveNpr);
+  const emergencyReserve = emergencyConfigured ? Math.max(0, sources.emergencyCashReserveNpr!) : 0;
+  const burn = Math.max(0, sources.emergencyMonthlyBurnNpr);
+  const emergencyRunwayMonths = burn > 0 ? emergencyReserve / burn : emergencyConfigured ? emergencyTarget * 2 : 0;
+  const emergencyPct = emergencyConfigured ? (emergencyRunwayMonths / emergencyTarget) * 100 : 0;
+
+  if (!emergencyConfigured) {
+    return {
+      status: "missing",
+      detail: "Set emergency reserve in Emergency Fund",
+    };
+  }
+
+  // Align legacy path with COMPLETED / IN_PROGRESS / MISSING (no on_track for EF).
+  let status: ChecklistStatus = "missing";
+  if (emergencyReserve > 0 && emergencyPct >= 100) status = "completed";
+  else if (emergencyReserve > 0) status = "in_progress";
+
+  return {
+    status,
+    detail: `${emergencyRunwayMonths.toFixed(1)} mo runway`,
+  };
+}
+
 function coverageProgressPct(current: number, recommended: number): number {
   if (recommended <= 0) return current > 0 ? 100 : 0;
   return Math.min(100, (current / (recommended * 0.7)) * 100);
@@ -116,8 +217,6 @@ function houseChecklistFields(sources: ReturnChecklistSources): Pick<
  */
 export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnChecklistItem[] {
   const {
-    emergencyCashReserveNpr,
-    emergencyMonthlyBurnNpr,
     emergencyMonthsTarget,
     monthlySsfContributionNpr,
     ssfContributionTargetNpr,
@@ -142,13 +241,14 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     liabilitiesConfigured,
   } = sources;
 
-  const emergencyTarget = emergencyMonthsTarget > 0 ? emergencyMonthsTarget : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
-  const emergencyConfigured =
-    emergencyCashReserveNpr != null && Number.isFinite(emergencyCashReserveNpr);
-  const emergencyReserve = emergencyConfigured ? Math.max(0, emergencyCashReserveNpr) : 0;
-  const burn = Math.max(0, emergencyMonthlyBurnNpr);
-  const emergencyRunwayMonths = burn > 0 ? emergencyReserve / burn : emergencyConfigured ? emergencyTarget * 2 : 0;
-  const emergencyPct = emergencyConfigured ? (emergencyRunwayMonths / emergencyTarget) * 100 : 0;
+  const emergencyTarget =
+    sources.canonicalEmergencyFund?.requiredProtectionMonths &&
+    sources.canonicalEmergencyFund.requiredProtectionMonths > 0
+      ? sources.canonicalEmergencyFund.requiredProtectionMonths
+      : emergencyMonthsTarget > 0
+        ? emergencyMonthsTarget
+        : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
+  const emergencyFields = buildEmergencyChecklistFields(sources);
 
   const ssfTarget = Math.max(1, ssfContributionTargetNpr);
   const ssfPct = (Math.max(0, monthlySsfContributionNpr) / ssfTarget) * 100;
@@ -196,10 +296,9 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     {
       id: "emergency",
       label: `Emergency Fund (${emergencyTarget} Months)`,
-      status: deriveChecklistStatus(emergencyPct),
-      detail: emergencyConfigured
-        ? `${emergencyRunwayMonths.toFixed(1)} mo runway`
-        : "Set emergency reserve in Emergency Fund",
+      status: emergencyFields.status,
+      detail: emergencyFields.detail,
+      badgeLabel: emergencyFields.badgeLabel,
     },
     {
       id: "ssf",

@@ -168,7 +168,7 @@ export function ReturnToNepalChrome({
                 light ? "border-slate-200/80 bg-white/80 text-slate-900" : "border-white/[0.14] bg-gradient-to-br from-white/[0.08] to-white/[0.03] fn-txt-secondary"
               }`}
             >
-              <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-600" : "fn-txt-muted"}`}>Emergency runway</span>
+              <span className={`block text-[10px] font-bold uppercase tracking-[0.14em] ${light ? "text-slate-600" : "fn-txt-muted"}`}>Nepal living cover</span>
               <span className={`text-[clamp(1.05rem,3.8vw+0.2rem,1.125rem)] font-black tabular-nums ${light ? "text-slate-900" : "fn-txt-kpi"}`}>
                 {snapshot.emergencyReserveMonths.toFixed(1)} mo
               </span>

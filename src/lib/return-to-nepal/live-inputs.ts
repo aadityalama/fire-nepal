@@ -18,6 +18,10 @@ import type { SavingsGoal } from "@/lib/savings/savings-types";
 import { computePensionProjection } from "@/lib/ssf-pension/projection";
 import type { SsfPensionWorkspaceState } from "@/lib/ssf-pension/storage";
 import type { UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
+import {
+  emptyCanonicalEmergencyFundSnapshot,
+  type CanonicalEmergencyFundSnapshot,
+} from "@/lib/return-to-nepal/canonical-emergency-fund";
 import type { LifestyleMode, NepalCityId, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
 export type ReturnPlannerLiveBundle = {
@@ -36,7 +40,13 @@ export type ReturnPlannerLiveBundle = {
   nepalColMonthlyNpr: number;
   monthlySsfContributionNpr: number;
   ssf: SsfPensionWorkspaceState;
+  /**
+   * @deprecated Prefer `canonicalEmergencyFund.currentEmergencyReserveNpr`.
+   * Kept as a convenience mirror of the canonical reserve when available.
+   */
   emergencyCashReserveNpr: number | null;
+  /** Emergency Fund 3.0 canonical snapshot (authoritative for Return Planner EF UI). */
+  canonicalEmergencyFund: CanonicalEmergencyFundSnapshot;
   houseProgressPct: number;
   houseGoalConfigured: boolean;
   businessCapitalNpr: number;
@@ -155,7 +165,6 @@ export function buildEffectiveReturnPlannerState(
     annualSalaryGrowthPct: ssf.projection.annualSalaryGrowthPct,
   });
 
-  const emergencyGoal = findGoal(savingsGoals, [/emergency/i]);
   const houseGoal = findHouseSavingsGoal(savingsGoals);
   const educationGoal = findGoal(savingsGoals, [/education|child|school/i]);
   const businessGoal = findBusinessCapitalGoal(savingsGoals);
@@ -213,12 +222,15 @@ export function buildEffectiveReturnPlannerState(
   if (ssf.projection.monthlySsfContributionNpr > 0) dataSources.push("SSF Pension");
   if (summary.emergencyFundCoverageMonths !== null) dataSources.push("Emergency Fund");
 
+  /**
+   * Legacy fallback only — Return Planner live hook overwrites this with the
+   * canonical Emergency Fund 3.0 ledger + budget protection basis snapshot.
+   * Do not use savings-goal balances as the Emergency Fund reserve (double-count risk).
+   */
   const emergencyCashReserveNpr =
     cashflow.emergencyCashReserve != null && Number.isFinite(cashflow.emergencyCashReserve)
       ? Math.max(0, cashflow.emergencyCashReserve)
-      : emergencyGoal && emergencyGoal.savedAmountNpr > 0
-        ? emergencyGoal.savedAmountNpr
-        : null;
+      : null;
 
   const effectiveState: ReturnToNepalPlannerState = {
     ...stored,
@@ -280,6 +292,7 @@ export function buildEffectiveReturnPlannerState(
     monthlySsfContributionNpr: ssf.projection.monthlySsfContributionNpr,
     ssf,
     emergencyCashReserveNpr,
+    canonicalEmergencyFund: emptyCanonicalEmergencyFundSnapshot(emergencyMonthsTarget || 12, "loading"),
     houseProgressPct,
     houseGoalConfigured,
     businessCapitalNpr,

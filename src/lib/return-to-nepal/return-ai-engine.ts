@@ -1,8 +1,13 @@
+import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
+import {
+  formatCanonicalRunwayMonths,
+  type CanonicalEmergencyFundSnapshot,
+} from "@/lib/return-to-nepal/canonical-emergency-fund";
 import { computePlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
 import type { PlannerSnapshot } from "@/lib/return-to-nepal/planner-engine";
-import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
+import type { ReturnChecklistSources } from "@/lib/return-to-nepal/return-checklist";
 import { aggregateReadinessPct, computeReturnReadinessScores } from "@/lib/return-to-nepal/return-readiness-scores";
-import type { InsuranceEngineInputs } from "@/lib/insurance/insurance-types";
+import type { ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
 export type ReturnAiInsight = {
   id: string;
@@ -54,6 +59,7 @@ export function computeWhatIfScenarios(
   insuranceInputs: InsuranceEngineInputs,
   investableNpr: number,
   liabilitiesNpr: number,
+  checklistSources?: ReturnChecklistSources,
 ): WhatIfScenario[] {
   const nowYear = baseSnapshot.nowYear;
   const recommendedYear = baseSnapshot.estimatedReturnYear;
@@ -67,7 +73,14 @@ export function computeWhatIfScenarios(
   const scenarios = uniqueYears.map((year) => {
     const trialState = { ...state, targetReturnYear: year };
     const snap = computePlannerSnapshot(trialState);
-    const scores = computeReturnReadinessScores(trialState, snap, insuranceInputs, investableNpr, liabilitiesNpr);
+    const scores = computeReturnReadinessScores(
+      trialState,
+      snap,
+      insuranceInputs,
+      investableNpr,
+      liabilitiesNpr,
+      checklistSources,
+    );
     const readiness = aggregateReadinessPct(scores);
     const gap = snap.monthlyDeficitNpr;
     const risk = riskFromReadiness(readiness, gap);
@@ -99,18 +112,38 @@ export function computeReturnAiInsights(
   readinessPct: number,
   investableNpr: number,
   liabilitiesNpr: number,
+  canonicalEmergencyFund?: CanonicalEmergencyFundSnapshot | null,
 ): ReturnAiInsight[] {
   const insights: ReturnAiInsight[] = [];
   const nowYear = snapshot.nowYear;
 
-  const canReturnToday = readinessPct >= 78 && snapshot.monthlyDeficitNpr <= 0;
+  const requiredEfMonths =
+    canonicalEmergencyFund?.requiredProtectionMonths &&
+    canonicalEmergencyFund.requiredProtectionMonths > 0
+      ? canonicalEmergencyFund.requiredProtectionMonths
+      : state.emergencyMonthsTarget > 0
+        ? state.emergencyMonthsTarget
+        : 12;
+  const efRunwayLabel =
+    canonicalEmergencyFund?.loadState === "ready" &&
+    canonicalEmergencyFund.safetyRunwayMonths != null &&
+    Number.isFinite(canonicalEmergencyFund.safetyRunwayMonths)
+      ? `${formatCanonicalRunwayMonths(canonicalEmergencyFund.safetyRunwayMonths)} months Emergency Fund runway`
+      : `${snapshot.emergencyReserveMonths.toFixed(1)} months Nepal living cover`;
+  const efReady =
+    canonicalEmergencyFund?.loadState === "ready"
+      ? canonicalEmergencyFund.completionStatus === "completed"
+      : snapshot.emergencyReserveMonths >= requiredEfMonths;
+
+  const canReturnToday =
+    readinessPct >= 78 && snapshot.monthlyDeficitNpr <= 0 && efReady;
   insights.push({
     id: "return-today",
     title: "Can I Return Today?",
     body: canReturnToday
-      ? `Yes — your passive income covers Nepal living costs with ${snapshot.emergencyReserveMonths.toFixed(1)} months runway.`
+      ? `Yes — your passive income covers Nepal living costs with ${efRunwayLabel}.`
       : readinessPct >= 55
-        ? `Not yet — close a ${formatNprShort(snapshot.monthlyDeficitNpr)}/mo gap and build ${state.emergencyMonthsTarget} months emergency reserve first.`
+        ? `Not yet — close a ${formatNprShort(snapshot.monthlyDeficitNpr)}/mo gap and build ${requiredEfMonths} months emergency reserve first.`
         : `Not yet — you are ${readinessPct}% ready. Focus on savings rate and passive income first.`,
     tone: canReturnToday ? "positive" : "caution",
   });
