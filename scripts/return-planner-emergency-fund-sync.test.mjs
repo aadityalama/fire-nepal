@@ -530,6 +530,27 @@ describe("Return Planner live loader reuses Emergency Fund dashboard hydrate pat
     assert.match(src, /if \(authLoading\) return/);
     assert.doesNotMatch(src, /fetchModuleSnapshot<unknown>\("emergency_fund"/);
   });
+
+  it("keeps hydrate-cache writes silent to prevent infinite LOADING loops", () => {
+    const live = readFileSync(
+      new URL("../src/lib/return-to-nepal/use-return-planner-live.ts", import.meta.url),
+      "utf8",
+    );
+    const settings = readFileSync(
+      new URL("../src/lib/emergency-fund/settings.ts", import.meta.url),
+      "utf8",
+    );
+    const dashboard = readFileSync(
+      new URL("../src/components/emergency-fund/EmergencyFundDashboard.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(live, /emitSync:\s*false/);
+    assert.match(live, /emergencyCloudReady/);
+    assert.doesNotMatch(live, /!budgetsReady\) return "loading"/);
+    assert.match(settings, /emitSync\?:/);
+    assert.match(settings, /notifyEmergencyFundModuleSync/);
+    assert.match(dashboard, /notifyEmergencyFundModuleSync\(\)/);
+  });
 });
 
 describe("Case I — isolation shape (no cross-user fields in snapshot)", () => {

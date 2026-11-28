@@ -66,6 +66,7 @@ import {
   createTransactionId,
   defaultEmergencyFundSettings,
   loadEmergencyFundSettingsLocal,
+  notifyEmergencyFundModuleSync,
   sanitizeEmergencyFundSettings,
   saveEmergencyFundSettingsLocal,
 } from "@/lib/emergency-fund/settings";
@@ -681,6 +682,7 @@ export function EmergencyFundDashboard() {
           lastSuccessfulSyncAt: new Date().toISOString(),
         }));
         await persistReserve(nextLedger.designatedReserveNpr);
+        notifyEmergencyFundModuleSync();
         setTxAmount("");
         setTxNote("");
         setTxMode(null);
@@ -706,6 +708,7 @@ export function EmergencyFundDashboard() {
 
   const setProtectionMode = (mode: ProtectionMode) => {
     setSettings((prev) => ({ ...prev, protectionMode: mode }));
+    notifyEmergencyFundModuleSync();
   };
 
   const setProtectionMonths = (months: number, custom = false) => {
@@ -714,6 +717,7 @@ export function EmergencyFundDashboard() {
       protectionMonths: Math.max(1, Math.min(60, months)),
       useCustomProtectionMonths: custom,
     }));
+    notifyEmergencyFundModuleSync();
   };
 
   const toggleEssential = (id: string) => {

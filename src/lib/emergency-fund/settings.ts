@@ -223,9 +223,19 @@ export function loadEmergencyFundSettingsLocal(userId?: string | null): Emergenc
   }
 }
 
+export type SaveEmergencyFundLocalOptions = {
+  /**
+   * When true, broadcast EMERGENCY_FUND_MODULE_SYNC_EVENT.
+   * Default false — cloud hydrate / cache writes must stay silent or Return Planner
+   * re-hydrate listeners create an infinite loading loop.
+   */
+  emitSync?: boolean;
+};
+
 export function saveEmergencyFundSettingsLocal(
   state: EmergencyFundSettingsState,
   userId?: string | null,
+  options?: SaveEmergencyFundLocalOptions,
 ): void {
   if (typeof window === "undefined") return;
   try {
@@ -233,10 +243,18 @@ export function saveEmergencyFundSettingsLocal(
       emergencyFundSettingsStorageKey(userId),
       JSON.stringify(sanitizeEmergencyFundSettings(state)),
     );
-    window.dispatchEvent(new Event(EMERGENCY_FUND_MODULE_SYNC_EVENT));
+    if (options?.emitSync) {
+      window.dispatchEvent(new Event(EMERGENCY_FUND_MODULE_SYNC_EVENT));
+    }
   } catch {
     /* quota / private mode */
   }
+}
+
+/** Explicit cross-module notify after user-initiated EF mutations (not hydrate cache writes). */
+export function notifyEmergencyFundModuleSync(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(EMERGENCY_FUND_MODULE_SYNC_EVENT));
 }
 
 export function clearEmergencyFundSettingsLocal(userId?: string | null): void {
