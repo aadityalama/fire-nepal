@@ -1,4 +1,4 @@
-import { findInvestmentSavingsGoal } from "@/lib/return-to-nepal/checklist-goal-matchers";
+import { resolveExpenseBasedFireCorpus } from "@/lib/return-to-nepal/resolve-expense-based-fire-corpus";
 import type { ReturnChecklistSources } from "@/lib/return-to-nepal/return-checklist";
 import type { ReturnPlannerLiveBundle } from "@/lib/return-to-nepal/live-inputs";
 import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
@@ -14,14 +14,10 @@ export function buildReturnChecklistSources(args: {
   insurancePolicies: InsurancePolicy[];
   insuranceInputs: InsuranceEngineInputs;
   liabilitiesNpr: number;
-  /** Optional FIRE / profile investment goal (NPR). Used only when no Investment savings goal. */
-  fireGoalNpr?: number | null;
   insuranceLoading?: boolean;
   insuranceUnavailable?: boolean;
   liabilitiesLoading?: boolean;
   liabilitiesUnavailable?: boolean;
-  ssfNotApplicable?: boolean;
-  businessNotApplicable?: boolean;
 }): ReturnChecklistSources {
   const {
     effectiveState,
@@ -29,27 +25,23 @@ export function buildReturnChecklistSources(args: {
     insurancePolicies,
     insuranceInputs,
     liabilitiesNpr,
-    fireGoalNpr,
     insuranceLoading,
     insuranceUnavailable,
     liabilitiesLoading,
     liabilitiesUnavailable,
-    ssfNotApplicable,
-    businessNotApplicable,
   } = args;
 
-  const investmentGoal = findInvestmentSavingsGoal(live.savingsGoals);
-  // Prefer dedicated Investment savings goal. FIRE goal is an explicit alternate target —
-  // never invent a silent numeric fallback for status classification.
-  let investmentGoalTargetNpr: number | null = null;
-  let investmentTargetSource: "savings_goal" | "fire_goal" | null = null;
-  if (investmentGoal && investmentGoal.targetAmountNpr > 0) {
-    investmentGoalTargetNpr = investmentGoal.targetAmountNpr;
-    investmentTargetSource = "savings_goal";
-  } else if (fireGoalNpr != null && fireGoalNpr > 0) {
-    investmentGoalTargetNpr = fireGoalNpr;
-    investmentTargetSource = "fire_goal";
-  }
+  const canonical = live.canonicalEmergencyFund;
+  const budgetBasisNpr =
+    canonical?.monthlyProtectionBasisNpr != null && canonical.monthlyProtectionBasisNpr > 0
+      ? canonical.monthlyProtectionBasisNpr
+      : null;
+
+  // Expense-based 25× FIRE corpus — never Savings Goals or profile FIRE goals.
+  const fireCorpus = resolveExpenseBasedFireCorpus({
+    monthlyExpenseTrackingNpr: live.monthlyLivingExpenseNpr > 0 ? live.monthlyLivingExpenseNpr : null,
+    monthlyBudgetTrackingNpr: budgetBasisNpr,
+  });
 
   const incomeNpr = live.monthlyIncomeNpr;
   const ssfContributionTargetNpr = Math.max(incomeNpr * 0.1, 5_000);
@@ -62,7 +54,6 @@ export function buildReturnChecklistSources(args: {
     (live.householdConfigured &&
       (effectiveState.schoolFeesMonthlyNpr > 0 || effectiveState.healthcareMonthlyNpr > 0));
 
-  const canonical = live.canonicalEmergencyFund;
   const emergencyMonthsTarget =
     canonical?.requiredProtectionMonths && canonical.requiredProtectionMonths > 0
       ? canonical.requiredProtectionMonths
@@ -88,8 +79,8 @@ export function buildReturnChecklistSources(args: {
         : live.emergencyCashReserveNpr,
     // Prefer Budget Planner monthly protection basis; never silently use Nepal COL as EF burn.
     emergencyMonthlyBurnNpr:
-      canonical?.monthlyProtectionBasisNpr != null && canonical.monthlyProtectionBasisNpr > 0
-        ? canonical.monthlyProtectionBasisNpr
+      budgetBasisNpr != null
+        ? budgetBasisNpr
         : live.monthlyExpenseNpr > 0
           ? live.monthlyExpenseNpr
           : Math.max(1, live.nepalColMonthlyNpr),
@@ -98,11 +89,12 @@ export function buildReturnChecklistSources(args: {
     monthlySsfContributionNpr: live.monthlySsfContributionNpr,
     ssfContributionTargetNpr,
     ssfWorkspace: live.ssf,
-    ssfNotApplicable: Boolean(ssfNotApplicable),
+    ssfNotApplicable: effectiveState.ssfPlanStatus === "not_applicable",
     totalInvestmentNpr: live.totalInvestmentNpr,
     investmentCostNpr: live.investmentCostNpr,
-    investmentGoalTargetNpr,
-    investmentTargetSource,
+    investmentGoalTargetNpr: fireCorpus.requiredFireCorpusNpr,
+    investmentTargetSource: fireCorpus.investmentTargetSource,
+    investmentMonthlyExpenseBasisNpr: fireCorpus.monthlyEligibleLivingExpensesNpr,
     modeledPassiveMonthlyNpr: live.passiveMonthlyNpr,
     actualPassiveMonthlyNpr: live.actualPassiveMonthlyNpr,
     passiveTargetMonthlyNpr: colPassiveTarget,
@@ -123,7 +115,7 @@ export function buildReturnChecklistSources(args: {
     businessCapitalNpr: live.businessCapitalNpr,
     businessGoalConfigured: live.businessGoalConfigured,
     businessCapitalTargetNpr: live.businessCapitalTargetNpr,
-    businessNotApplicable: Boolean(businessNotApplicable),
+    businessNotApplicable: effectiveState.businessPlanStatus === "not_applicable",
     liabilitiesNpr: Math.max(0, liabilitiesNpr),
     liabilitiesConfigured: effectiveState.debtReviewed || live.liabilityRowCount > 0,
     liabilitiesLoading: Boolean(liabilitiesLoading),

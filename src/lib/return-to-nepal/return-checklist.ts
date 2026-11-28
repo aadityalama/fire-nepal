@@ -30,6 +30,8 @@ export type ReturnChecklistItem = {
   href: string;
   /** Optional badge override (e.g. Not Needed). */
   badgeLabel?: string;
+  /** Context-aware CTA shown on the card (e.g. Update Emergency Fund). */
+  actionLabel: string;
 };
 
 /** Canonical inputs for Return Checklist — no localStorage reads inside the pure compute. */
@@ -68,12 +70,14 @@ export type ReturnChecklistSources = {
   /** Listed cost basis (NEPSE "Total Investment"). Optional for detail. */
   investmentCostNpr?: number | null;
   /**
-   * Explicit investment goal target (savings Investment goal or user FIRE goal).
-   * Null = no valid target configured — never invent a silent fallback for status.
+   * Expense-based FIRE corpus target (monthly eligible living × 12 × 25).
+   * Null = Expense Tracking and Budget Tracking both lack a valid basis.
    */
   investmentGoalTargetNpr: number | null;
   /** Where investmentGoalTargetNpr came from (for transparent UI). */
-  investmentTargetSource?: "savings_goal" | "fire_goal" | null;
+  investmentTargetSource?: "expense_tracking" | "budget_tracking" | null;
+  /** Monthly eligible living expenses used for the 25× corpus (when known). */
+  investmentMonthlyExpenseBasisNpr?: number | null;
   /**
    * Modeled monthly passive income — same formula as Return KPI
    * (`passiveIncomeMonthlyNpr`: 4% investable/12 + dividends + FD interest).
@@ -300,10 +304,23 @@ function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
       ? ` · cost ${formatNprCompact(cost).replace(/^NPR\s+/, "")}`
       : "";
 
+  const sourceHint =
+    sources.investmentTargetSource === "expense_tracking"
+      ? " · 25× Expense Tracking"
+      : sources.investmentTargetSource === "budget_tracking"
+        ? " · 25× Budget Tracking"
+        : "";
+  const monthlyBasis =
+    sources.investmentMonthlyExpenseBasisNpr != null && sources.investmentMonthlyExpenseBasisNpr > 0
+      ? sources.investmentMonthlyExpenseBasisNpr
+      : null;
+  const monthlyHint =
+    monthlyBasis != null ? ` · living ${formatNprCompact(monthlyBasis).replace(/^NPR\s+/, "")}/mo` : "";
+
   if (status === "target_not_set") {
     return {
       status,
-      detail: `${marketLabel} market${costSuffix} · set investment target`,
+      detail: `${marketLabel} market${costSuffix} · set expenses or budget for 25× FIRE target`,
       badgeLabel: "Target Not Set",
     };
   }
@@ -313,22 +330,16 @@ function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
   if (status === "completed") {
     return {
       status,
-      detail: `${marketLabel} market${costSuffix} · target met`,
+      detail: `${marketLabel} market${costSuffix} · 25× FIRE met${sourceHint}${monthlyHint}`,
     };
   }
   const targetLabel = formatNprCompact(target!);
   const pct =
     target! > 0 ? Math.max(0, Math.min(100, Math.round((market / target!) * 10000) / 100)) : 0;
   const pctLabel = pct > 0 && pct < 1 ? pct.toFixed(2) : String(Math.round(pct));
-  const sourceHint =
-    sources.investmentTargetSource === "fire_goal"
-      ? " · FIRE goal"
-      : sources.investmentTargetSource === "savings_goal"
-        ? " · savings goal"
-        : "";
   return {
     status,
-    detail: `${marketLabel} / ${targetLabel.replace(/^NPR\s+/, "")}${costSuffix} · ${pctLabel}%${sourceHint}`,
+    detail: `${marketLabel} / ${targetLabel.replace(/^NPR\s+/, "")}${costSuffix} · ${pctLabel}%${sourceHint}${monthlyHint}`,
   };
 }
 
@@ -597,6 +608,52 @@ function buildDebtChecklistFields(sources: ReturnChecklistSources): Pick<
   };
 }
 
+/** Context-aware CTA for checklist cards — must match real workspace destinations. */
+export function checklistActionLabel(id: string, status: ChecklistStatus): string {
+  switch (id) {
+    case "emergency":
+      return status === "missing" || status === "target_not_set"
+        ? "Set Up Emergency Fund"
+        : status === "data_unavailable"
+          ? "Retry Emergency Fund"
+          : "Update Emergency Fund";
+    case "ssf":
+      return status === "not_applicable"
+        ? "View SSF"
+        : status === "missing" || status === "target_not_set"
+          ? "Set Up SSF"
+          : "Update SSF";
+    case "investment":
+      return status === "missing" ? "Add Investments" : "View Portfolio";
+    case "passive":
+      return status === "completed" ? "View Passive Income" : "Add Passive Income";
+    case "health":
+      return status === "completed" || status === "in_progress" || status === "on_track"
+        ? "View Health Insurance"
+        : "Add Health Insurance";
+    case "life":
+      return status === "missing" || status === "target_not_set"
+        ? "Add Life Insurance"
+        : "View Life Insurance";
+    case "house":
+      return status === "not_applicable" || status === "completed"
+        ? "View Housing Plan"
+        : "Update Housing Plan";
+    case "family":
+      return status === "completed" ? "View Household" : "Set Up Household";
+    case "business":
+      return status === "not_applicable"
+        ? "View Business Capital"
+        : status === "target_not_set" || status === "missing"
+          ? "Set Business Capital"
+          : "Update Business Capital";
+    case "debt":
+      return "Manage Liabilities";
+    default:
+      return "Open workspace";
+  }
+}
+
 /**
  * Pure Return Checklist compute — all I/O must be resolved into `sources` first.
  */
@@ -620,7 +677,7 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
   const businessFields = buildBusinessChecklistFields(sources);
   const debtFields = buildDebtChecklistFields(sources);
 
-  const items: Omit<ReturnChecklistItem, "href">[] = [
+  const items: Omit<ReturnChecklistItem, "href" | "actionLabel">[] = [
     {
       id: "emergency",
       label: `Emergency Fund (${emergencyTarget} Months)`,
@@ -696,5 +753,6 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
   return items.map((item) => ({
     ...item,
     href: returnChecklistHref(item.id),
+    actionLabel: checklistActionLabel(item.id, item.status),
   }));
 }

@@ -44,7 +44,6 @@ import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary
 import { ReturnChecklistCard } from "@/components/return-to-nepal/ReturnChecklistCard";
 import { ReturnToNepalHero } from "@/components/return-to-nepal/ReturnToNepalHero";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
-import { useCurrentUserProfile } from "@/hooks/useCurrentUserProfile";
 import { fetchSavingsWorkspace } from "@/lib/savings/savings-api";
 import { loadSavingsWorkspaceState, sanitizeSavingsWorkspaceState } from "@/lib/savings/savings-storage";
 import type { SavingsGoal } from "@/lib/savings/savings-types";
@@ -133,10 +132,18 @@ function RoadmapIcon({ icon }: { icon: "shield" | "home" | "chart" | "education"
 }
 
 export function ReturnToNepalPlannerDashboard() {
-  const { effectiveState, snapshot, live, patch, state, cloudReady, hydrateError, retryHydrate } =
-    useReturnToNepalPlanner();
+  const {
+    effectiveState,
+    snapshot,
+    live,
+    patch,
+    state,
+    cloudReady,
+    hydrateError,
+    retryHydrate,
+    resync,
+  } = useReturnToNepalPlanner();
   const { user } = useProductAuth();
-  const { profile } = useCurrentUserProfile();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
   const { policies: insurancePolicies, loading: insuranceLoading } = useInsurancePoliciesLive();
   const { summary, portfolio } = useUnifiedFireSummary();
@@ -204,18 +211,9 @@ export function ReturnToNepalPlannerDashboard() {
         insurancePolicies,
         insuranceInputs,
         liabilitiesNpr: wealth.liabilitiesNpr,
-        fireGoalNpr: profile?.fireGoalAmount ?? null,
         insuranceLoading,
       }),
-    [
-      effectiveState,
-      live,
-      insurancePolicies,
-      insuranceInputs,
-      wealth.liabilitiesNpr,
-      profile?.fireGoalAmount,
-      insuranceLoading,
-    ],
+    [effectiveState, live, insurancePolicies, insuranceInputs, wealth.liabilitiesNpr, insuranceLoading],
   );
 
   const readinessScores = useMemo(
@@ -538,11 +536,48 @@ export function ReturnToNepalPlannerDashboard() {
           </div>
 
           <div id="return-checklist" className={`${GLASS} scroll-mt-24 p-5 sm:p-6`}>
-            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-100/45">Return Checklist</h2>
-            <p className="mt-1 text-[11px] font-semibold text-white/35">Tap a card to open &amp; edit</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-emerald-100/45">
+                  Return Checklist
+                </h2>
+                <p className="mt-1 text-[11px] font-semibold text-white/35">Tap a card to open &amp; edit</p>
+              </div>
+              {checklist.some((item) => item.status === "data_unavailable") ? (
+                <button
+                  type="button"
+                  data-testid="return-checklist-retry"
+                  onClick={() => {
+                    retryHydrate();
+                    resync();
+                  }}
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-300/25 bg-slate-500/15 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-100"
+                >
+                  <RefreshCw size={14} aria-hidden />
+                  Retry data
+                </button>
+              ) : null}
+            </div>
             <ul className="mt-4 space-y-3" data-testid="return-checklist-list">
               {checklist.map((item) => (
-                <ReturnChecklistCard key={item.id} item={item} />
+                <ReturnChecklistCard
+                  key={item.id}
+                  item={item}
+                  onMarkNotApplicable={
+                    item.id === "ssf"
+                      ? () => patch({ ssfPlanStatus: "not_applicable" })
+                      : item.id === "business"
+                        ? () => patch({ businessPlanStatus: "not_applicable" })
+                        : undefined
+                  }
+                  onClearNotApplicable={
+                    item.id === "ssf" && state.ssfPlanStatus === "not_applicable"
+                      ? () => patch({ ssfPlanStatus: "unknown" })
+                      : item.id === "business" && state.businessPlanStatus === "not_applicable"
+                        ? () => patch({ businessPlanStatus: "unknown" })
+                        : undefined
+                  }
+                />
               ))}
             </ul>
           </div>

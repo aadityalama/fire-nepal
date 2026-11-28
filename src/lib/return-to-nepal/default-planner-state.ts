@@ -28,6 +28,8 @@ export const DEFAULT_RETURN_PLANNER_STATE: ReturnToNepalPlannerState = {
   houseProgressPct: 0,
   completedPhases: [],
   housePlanStatus: "unknown",
+  ssfPlanStatus: "unknown",
+  businessPlanStatus: "unknown",
   pensionMonthlyNpr: 0,
   dividendMonthlyNpr: 0,
   fdMonthlyNpr: 0,

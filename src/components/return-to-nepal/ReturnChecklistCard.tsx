@@ -17,15 +17,31 @@ const STATUS_STYLES: Record<ChecklistStatus, string> = {
 
 const STATUS_LABELS = CHECKLIST_STATUS_LABELS;
 
+export type ReturnChecklistCardProps = {
+  item: ReturnChecklistItem;
+  /** Explicit NOT APPLICABLE for optional domains (SSF / Business). */
+  onMarkNotApplicable?: () => void;
+  /** Clear NOT APPLICABLE and reopen the requirement. */
+  onClearNotApplicable?: () => void;
+};
+
 /**
  * Full-card tappable checklist row for mobile + desktop.
  *
  * Uses a stretched native <a> over the entire card so taps anywhere navigate.
  * Content is pointer-events-none so nested text/badge never steal the hit target.
- * Avoids next/link soft-nav edge cases that can silently no-op on some mobile WebViews.
+ * Optional N/A controls re-enable pointer events and stop navigation.
  */
-export function ReturnChecklistCard({ item }: { item: ReturnChecklistItem }) {
+export function ReturnChecklistCard({
+  item,
+  onMarkNotApplicable,
+  onClearNotApplicable,
+}: ReturnChecklistCardProps) {
   const badgeText = item.badgeLabel ?? STATUS_LABELS[item.status];
+  const showMarkNa =
+    Boolean(onMarkNotApplicable) &&
+    (item.status === "missing" || item.status === "target_not_set" || item.status === "in_progress");
+  const showClearNa = Boolean(onClearNotApplicable) && item.status === "not_applicable";
 
   return (
     <li className="relative list-none">
@@ -38,7 +54,7 @@ export function ReturnChecklistCard({ item }: { item: ReturnChecklistItem }) {
           href={item.href}
           data-testid={`return-checklist-${item.id}`}
           data-href={item.href}
-          aria-label={`Open ${item.label} — ${badgeText}`}
+          aria-label={`${item.actionLabel} — ${item.label} (${badgeText})`}
           className="absolute inset-0 z-20 touch-manipulation"
           style={{ WebkitTapHighlightColor: "rgba(16, 185, 129, 0.22)" }}
           onClick={(event) => {
@@ -49,21 +65,57 @@ export function ReturnChecklistCard({ item }: { item: ReturnChecklistItem }) {
           }}
         >
           <span className="sr-only">
-            Open {item.label} ({badgeText})
+            {item.actionLabel}: {item.label} ({badgeText})
           </span>
         </a>
 
-        {/* Visual content: never captures pointer events */}
+        {/* Visual content: never captures pointer events (except explicit N/A controls) */}
         <div className="pointer-events-none relative z-10 flex min-h-[56px] w-full items-center justify-between gap-3 px-3 py-2.5">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pr-1">
             <p className="text-sm font-bold leading-snug text-white">{item.label}</p>
             <p className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-snug text-white/40">
               {item.detail}
             </p>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300/70">
+              {item.actionLabel}
+            </p>
+            {(showMarkNa || showClearNa) && (
+              <div className="pointer-events-auto relative z-30 mt-1.5">
+                {showMarkNa ? (
+                  <button
+                    type="button"
+                    data-testid={`return-checklist-na-${item.id}`}
+                    className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white/55 ring-1 ring-white/15 hover:bg-white/10 hover:text-white/80"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onMarkNotApplicable?.();
+                    }}
+                  >
+                    Not applicable
+                  </button>
+                ) : null}
+                {showClearNa ? (
+                  <button
+                    type="button"
+                    data-testid={`return-checklist-clear-na-${item.id}`}
+                    className="rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300/80 ring-1 ring-emerald-400/25 hover:bg-emerald-500/10"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onClearNotApplicable?.();
+                    }}
+                  >
+                    Include again
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 self-start pt-0.5">
             <span
-              className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${STATUS_STYLES[item.status]}`}
+              className={`max-w-[7.5rem] shrink-0 truncate rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ${STATUS_STYLES[item.status]}`}
+              title={badgeText}
             >
               {badgeText}
             </span>

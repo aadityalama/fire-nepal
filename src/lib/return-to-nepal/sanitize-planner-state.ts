@@ -19,5 +19,17 @@ export function sanitizeReturnPlannerState(raw: unknown): ReturnToNepalPlannerSt
       parsed.housePlanStatus === "unknown"
         ? parsed.housePlanStatus
         : DEFAULT_RETURN_PLANNER_STATE.housePlanStatus,
+    ssfPlanStatus:
+      parsed.ssfPlanStatus === "planning" ||
+      parsed.ssfPlanStatus === "not_applicable" ||
+      parsed.ssfPlanStatus === "unknown"
+        ? parsed.ssfPlanStatus
+        : DEFAULT_RETURN_PLANNER_STATE.ssfPlanStatus,
+    businessPlanStatus:
+      parsed.businessPlanStatus === "planning" ||
+      parsed.businessPlanStatus === "not_applicable" ||
+      parsed.businessPlanStatus === "unknown"
+        ? parsed.businessPlanStatus
+        : DEFAULT_RETURN_PLANNER_STATE.businessPlanStatus,
   };
 }

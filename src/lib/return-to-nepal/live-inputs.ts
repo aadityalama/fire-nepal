@@ -31,6 +31,11 @@ export type ReturnPlannerLiveBundle = {
   savingsRatePct: number | null;
   monthlyIncomeNpr: number;
   monthlyExpenseNpr: number;
+  /**
+   * Eligible living expenses from Expense Tracking (excludes investment/savings/EF transfers).
+   * 0 when Expense Tracking has no living spend for the current month.
+   */
+  monthlyLivingExpenseNpr: number;
   investableNpr: number;
   /**
    * Listed investment current value — same field as Portfolio / NEPSE Current Value
@@ -146,6 +151,8 @@ export function buildEffectiveReturnPlannerState(
   const monthlyIncomeNpr =
     live.monthlyIncome > 0 ? live.monthlyIncome : Math.max(0, onboarding.salaryMonthlyNpr);
   const monthlyExpenseNpr = live.monthlyExpense > 0 ? live.monthlyExpense : summary.monthlyExpenses;
+  // Prefer filtered living expenses from Expense Tracking; never invent from COL/cashflow categories.
+  const monthlyLivingExpenseNpr = live.monthlyLivingExpense > 0 ? live.monthlyLivingExpense : 0;
   const monthlySalaryKrw =
     monthlyIncomeNpr > 0 ? Math.round(nprToKrw(monthlyIncomeNpr, krwPerNpr)) : stored.monthlySalaryKrw;
   const monthlySavingsKrw =
@@ -290,6 +297,7 @@ export function buildEffectiveReturnPlannerState(
     savingsRatePct: summary.savingsRatePct ?? live.savingsRatePct,
     monthlyIncomeNpr,
     monthlyExpenseNpr,
+    monthlyLivingExpenseNpr,
     investableNpr: wealth.investableNpr,
     totalInvestmentNpr: wealth.totalInvestmentNpr,
     investmentCostNpr: wealth.investmentsCostNpr,
