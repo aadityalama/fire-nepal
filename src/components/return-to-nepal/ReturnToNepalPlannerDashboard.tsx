@@ -422,8 +422,22 @@ export function ReturnToNepalPlannerDashboard() {
         <div className="-mx-4 mb-5 flex gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
           <KpiCard
             label="Net Worth"
-            value={formatNprInteger(live.netWorthNpr)}
-            hint={nwMomPct != null ? `${formatPct(nwMomPct)} vs last month` : "From portfolio"}
+            value={
+              live.portfolioUnavailable && !(live.netWorthNpr > 0)
+                ? "—"
+                : live.portfolioLoading && !(live.netWorthNpr > 0)
+                  ? "…"
+                  : formatNprInteger(live.netWorthNpr)
+            }
+            hint={
+              live.portfolioUnavailable && !(live.netWorthNpr > 0)
+                ? "Portfolio data unavailable"
+                : live.portfolioLoading && !(live.netWorthNpr > 0)
+                  ? "Verifying portfolio…"
+                  : nwMomPct != null
+                    ? `${formatPct(nwMomPct)} vs last month`
+                    : "From portfolio"
+            }
             hintPositive={nwMomPct != null && nwMomPct >= 0}
           />
           <KpiCard

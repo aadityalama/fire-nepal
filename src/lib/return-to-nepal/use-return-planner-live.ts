@@ -88,6 +88,7 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     portfolio,
     cashflow,
     cashflowLoadState,
+    portfolioLoadState,
     ratesLoading,
     resync: resyncCloud,
   } = useUnifiedFireSummary();
@@ -315,6 +316,8 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
       ...base,
       cashflowLoading: cashflowLoadState === "loading",
       cashflowUnavailable: cashflowLoadState === "unavailable",
+      portfolioLoading: portfolioLoadState === "loading",
+      portfolioUnavailable: portfolioLoadState === "unavailable",
       emergencyCashReserveNpr:
         canonicalEmergencyFund.loadState === "ready" && canonicalEmergencyFund.hasReserveData
           ? canonicalEmergencyFund.currentEmergencyReserveNpr
@@ -329,6 +332,7 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     portfolio,
     cashflow,
     cashflowLoadState,
+    portfolioLoadState,
     summary,
     ratesLoading,
     colPlan,

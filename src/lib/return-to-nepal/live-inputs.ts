@@ -65,6 +65,9 @@ export type ReturnPlannerLiveBundle = {
   cashflowPassive: CashflowPassiveIncomeSnapshot;
   cashflowLoading?: boolean;
   cashflowUnavailable?: boolean;
+  /** Portfolio / Net Worth hydrate — independent of cashflow. */
+  portfolioLoading?: boolean;
+  portfolioUnavailable?: boolean;
   nepalColMonthlyNpr: number;
   monthlySsfContributionNpr: number;
   ssf: SsfPensionWorkspaceState;

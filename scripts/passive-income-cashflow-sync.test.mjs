@@ -68,6 +68,26 @@ function baseSources(overrides = {}) {
   };
 }
 
+describe("Unified FIRE summary — independent hydrates", () => {
+  it("does not couple portfolio + cashflow in a single Promise.all", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const src = readFileSync(join(root, "src/lib/fire-nepal/use-unified-fire-summary.ts"), "utf8");
+    assert.match(src, /independent of cashflow/i);
+    assert.match(src, /independent of portfolio/i);
+    assert.match(src, /CASHFLOW_FETCH_TIMEOUT_MS/);
+    assert.match(src, /PORTFOLIO_FETCH_TIMEOUT_MS/);
+    // Regression: a shared Promise.all([cashflow, portfolio, …]) blocked Net Worth forever.
+    assert.equal(
+      /Promise\.all\(\[\s*fetch\("\/api\/cashflow"/.test(src),
+      false,
+      "cashflow must not share Promise.all with portfolio",
+    );
+  });
+});
+
 describe("Income classification defaults", () => {
   it("classifies rental and dividend as passive; salary as active; bonus as one-time", () => {
     assert.equal(defaultIncomeStreamClass("rental", "monthly"), "passive");
@@ -233,6 +253,27 @@ describe("Dashboard KPI binds to checklist actual passive", () => {
     assert.equal(unavailable.value, "—");
     assert.match(unavailable.hint, /Could not verify/i);
   });
+
+  it("shows loading only while verifying and no last-good actual", async () => {
+    const { resolvePassiveIncomeKpiDisplay } = await import(
+      "../src/lib/return-to-nepal/passive-income-kpi.ts"
+    );
+    const loading = resolvePassiveIncomeKpiDisplay({
+      actualPassiveMonthlyNpr: 0,
+      modeledPassiveMonthlyNpr: 7_026,
+      cashflowLoading: true,
+    });
+    assert.equal(loading.value, "…");
+    assert.match(loading.hint, /Verifying Cashflow/i);
+
+    // Stale last-good actual stays visible during soft refresh.
+    const soft = resolvePassiveIncomeKpiDisplay({
+      actualPassiveMonthlyNpr: 550_000,
+      modeledPassiveMonthlyNpr: 7_026,
+      cashflowLoading: true,
+    });
+    assert.match(soft.value, /5,?50,000/);
+  });
 });
 
 describe("Return Checklist — Passive Income Goal", () => {
@@ -275,6 +316,36 @@ describe("Return Checklist — Passive Income Goal", () => {
       }),
     ).find((row) => row.id === "passive");
     assert.ok(passive);
+    assert.equal(passive.status, "data_unavailable");
+    assert.equal(passive.badgeLabel, "Data Unavailable");
+  });
+
+  it("shows LOADING while cashflow hydrate is pending (never stuck as MISSING)", () => {
+    const passive = computeReturnChecklist(
+      baseSources({
+        cashflowLoading: true,
+        actualPassiveMonthlyNpr: 0,
+        modeledPassiveMonthlyNpr: 7_026,
+        passiveTargetMonthlyNpr: 80_000,
+      }),
+    ).find((row) => row.id === "passive");
+    assert.ok(passive);
+    assert.equal(passive.status, "loading");
+    assert.equal(passive.badgeLabel, "Loading");
+  });
+
+  it("reaches terminal UNAVAILABLE after timeout/failure (not infinite LOADING)", () => {
+    const passive = computeReturnChecklist(
+      baseSources({
+        cashflowLoading: false,
+        cashflowUnavailable: true,
+        actualPassiveMonthlyNpr: 0,
+        modeledPassiveMonthlyNpr: 7_026,
+        passiveTargetMonthlyNpr: 109_000,
+      }),
+    ).find((row) => row.id === "passive");
+    assert.ok(passive);
+    assert.notEqual(passive.status, "loading");
     assert.equal(passive.status, "data_unavailable");
   });
 
