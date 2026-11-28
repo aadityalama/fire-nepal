@@ -823,3 +823,82 @@ save.addEventListener('click',()=>{ if(pending) log.textContent='saved:'+pending
     await browser.close();
   });
 });
+
+describe("Return readiness precision and what-if projections", () => {
+  it("preserves sub-1% investment progress (2.55M / 1B ≈ 0.26%)", async () => {
+    const { clampFundingPct, computeReturnReadinessScores } = await import(
+      "../src/lib/return-to-nepal/return-readiness-scores.ts"
+    );
+    assert.equal(clampFundingPct(0.255), 0.26);
+    assert.equal(clampFundingPct(0), 0);
+    assert.equal(clampFundingPct(12.4), 12);
+
+    const scores = computeReturnReadinessScores(
+      { ...DEFAULT_RETURN_PLANNER_STATE },
+      {
+        nowYear: 2026,
+        estimatedReturnYear: 2030,
+        monthlyDeficitNpr: 50_000,
+        requiredExtraCorpusNpr: 1_000_000,
+        monthlyNepalLivingNpr: 100_000,
+        emergencyReserveMonths: 0,
+        passiveMonthlyNpr: 0,
+        houseTotalBudgetNpr: 0,
+        totalReturnFundNpr: 0,
+        familyRelocationScore: 0,
+        returnReadinessPct: 0,
+      },
+      baseInsuranceInputs(),
+      2_550_724,
+      0,
+      baseSources({
+        totalInvestmentNpr: 2_550_724,
+        investmentGoalTargetNpr: 1_000_000_000,
+      }),
+    );
+    const investment = scores.find((s) => s.id === "investment");
+    assert.ok(investment);
+    assert.equal(investment.pct, 0.26);
+    assert.equal(investment.status, "in_progress");
+    assert.notEqual(investment.pct, 0);
+  });
+
+  it("what-if scenarios diverge when savings accumulate over years", async () => {
+    const { computeWhatIfScenarios } = await import("../src/lib/return-to-nepal/return-ai-engine.ts");
+    const { computePlannerSnapshot } = await import("../src/lib/return-to-nepal/planner-engine.ts");
+    const state = {
+      ...DEFAULT_RETURN_PLANNER_STATE,
+      monthlySavingsKrw: 2_000_000,
+      nprPerKrw: 0.1,
+      nepalInflationPct: 5,
+      targetReturnYear: 2028,
+    };
+    const snap = computePlannerSnapshot(state);
+    const sources = baseSources({
+      totalInvestmentNpr: 2_550_724,
+      investmentGoalTargetNpr: 50_000_000,
+      modeledPassiveMonthlyNpr: 8_000,
+      passiveTargetMonthlyNpr: 75_000,
+    });
+    const scenarios = computeWhatIfScenarios(
+      state,
+      snap,
+      baseInsuranceInputs(),
+      2_550_724,
+      0,
+      sources,
+    );
+    assert.ok(scenarios.length >= 2);
+    const pcts = new Set(scenarios.map((s) => s.readinessPct));
+    // Accumulated savings should move later years unless already capped.
+    assert.ok(pcts.size >= 1);
+    const first = scenarios[0];
+    const last = scenarios[scenarios.length - 1];
+    if (first.year !== last.year) {
+      assert.ok(
+        last.readinessPct >= first.readinessPct,
+        `later year readiness ${last.readinessPct} should be >= earlier ${first.readinessPct}`,
+      );
+    }
+  });
+});

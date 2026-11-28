@@ -31,14 +31,24 @@ export type ReturnReadinessScore = {
   /**
    * When true, this pillar is omitted from the aggregate readiness average
    * (NOT APPLICABLE / TARGET NOT SET / DATA UNAVAILABLE / LOADING).
-   * Prevents optional gaps from unfairly lowering the score and prevents
-   * unknown data from inventing optimistic progress.
    */
   excludeFromAggregate?: boolean;
 };
 
+/**
+ * Clamp funding progress for readiness display.
+ * Preserves one-decimal precision below 1% so 2.55M / 1B ≈ 0.26% is not shown as 0%.
+ */
+export function clampFundingPct(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n >= 100) return 100;
+  if (n < 1) return Math.round(n * 100) / 100;
+  return Math.round(n);
+}
+
+/** @deprecated Prefer clampFundingPct — kept for call sites that already imported clampPct name. */
 function clampPct(n: number): number {
-  return Math.max(0, Math.min(100, Math.round(n)));
+  return clampFundingPct(n);
 }
 
 function statusFromPct(pct: number): ReturnReadinessScore["status"] {
@@ -110,9 +120,7 @@ export function computeReturnReadinessScores(
   let investmentPct = 0;
   let investmentExclude = false;
   if (investmentTarget == null) {
-    // Positive portfolio without a target must not invent a silent 2M goal.
     investmentExclude = true;
-    investmentPct = investmentAmount > 0 ? 0 : 0;
   } else {
     investmentPct = clampPct((investmentAmount / investmentTarget) * 100);
   }
@@ -137,11 +145,16 @@ export function computeReturnReadinessScores(
     ssfPct = clampPct((ssfContribution / Math.max(1, ssfTarget)) * 100);
   }
 
-  let insurancePct = clampPct((healthOk ? 50 : 0) + (lifeOk ? 50 : 0));
+  // Use Insurance workspace protection score (documented health/life/critical aggregation),
+  // not a binary 50/50 adequacy gate that zeroes out verified partial coverage.
+  let insurancePct = clampPct(recommendation.protectionScorePct);
   let insuranceExclude = false;
   if (checklistSources?.insuranceLoading || checklistSources?.insuranceUnavailable) {
     insuranceExclude = true;
     insurancePct = 0;
+  } else if (!healthOk && !lifeOk && recommendation.currentLifeCoverageNpr <= 0 && recommendation.currentHealthCoverageNpr <= 0) {
+    // No policies at all — keep proportional score (likely near 0) without excluding.
+    insurancePct = clampPct(recommendation.protectionScorePct);
   }
 
   let housePct = 0;
@@ -209,7 +222,6 @@ export function computeReturnReadinessScores(
     } else if (liabilitiesNpr <= 0) {
       debtFreePct = 100;
     } else {
-      // Outstanding debt → in progress; never claim COMPLETED via ratio.
       debtFreePct = clampPct(
         Math.max(5, 100 - Math.min(95, (liabilitiesNpr / Math.max(investmentAmount + liabilitiesNpr, 1)) * 100)),
       );
@@ -312,4 +324,39 @@ export function aggregateReadinessPct(scores: ReturnReadinessScore[]): number {
   }
   if (weightSum <= 0) return 0;
   return clampPct(total / weightSum);
+}
+
+/**
+ * Project checklist-backed investment/passive amounts forward for what-if years.
+ * Uses planner snapshot inflation/horizon math already applied to living costs;
+ * grows investable corpus with cumulative monthly savings (no invented return guarantee).
+ */
+export function projectChecklistSourcesForYear(
+  sources: ReturnChecklistSources,
+  opts: {
+    yearsAhead: number;
+    monthlySavingsNpr: number;
+    inflationPct: number;
+  },
+): ReturnChecklistSources {
+  const years = Math.max(0, opts.yearsAhead);
+  const monthlySavings = Math.max(0, opts.monthlySavingsNpr);
+  const inflation = Math.max(0, opts.inflationPct) / 100;
+  const addedCorpus = monthlySavings * 12 * years;
+  const inflatedLiving =
+    sources.passiveTargetMonthlyNpr != null && sources.passiveTargetMonthlyNpr > 0
+      ? sources.passiveTargetMonthlyNpr * Math.pow(1 + inflation, years)
+      : sources.passiveTargetMonthlyNpr;
+
+  return {
+    ...sources,
+    totalInvestmentNpr: Math.max(0, sources.totalInvestmentNpr) + addedCorpus,
+    // Modeled passive scales with investable growth (same 4%-style share as current KPI ratio).
+    modeledPassiveMonthlyNpr:
+      sources.totalInvestmentNpr > 0
+        ? sources.modeledPassiveMonthlyNpr *
+          ((sources.totalInvestmentNpr + addedCorpus) / sources.totalInvestmentNpr)
+        : sources.modeledPassiveMonthlyNpr + (addedCorpus * 0.04) / 12,
+    passiveTargetMonthlyNpr: inflatedLiving,
+  };
 }

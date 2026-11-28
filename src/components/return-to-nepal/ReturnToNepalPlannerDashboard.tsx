@@ -75,9 +75,22 @@ function KpiCard({
   );
 }
 
+function formatPillarPct(score: ReturnReadinessScore): string {
+  if (score.excludeFromAggregate) return "—";
+  const pct = score.pct;
+  if (pct > 0 && pct < 1) return `${pct.toFixed(2)}%`;
+  if (Number.isInteger(pct)) return `${pct}%`;
+  return `${pct}%`;
+}
+
 function PillarRow({ score }: { score: ReturnReadinessScore }) {
+  const unavailable = Boolean(score.excludeFromAggregate);
   const icon =
-    score.pct >= 75 ? (
+    unavailable ? (
+      <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-500/20 text-slate-300">
+        <span className="h-2 w-2 rounded-full bg-slate-400" />
+      </span>
+    ) : score.pct >= 75 ? (
       <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/20 text-emerald-300">
         <Check size={13} strokeWidth={3} />
       </span>
@@ -92,7 +105,13 @@ function PillarRow({ score }: { score: ReturnReadinessScore }) {
         {icon}
         <span className="truncate text-sm font-bold text-white/90">{score.label}</span>
       </div>
-      <span className="shrink-0 text-sm font-black tabular-nums text-emerald-300">{score.pct}%</span>
+      <span
+        className={`shrink-0 text-sm font-black tabular-nums ${
+          unavailable ? "text-slate-400" : "text-emerald-300"
+        }`}
+      >
+        {formatPillarPct(score)}
+      </span>
     </div>
   );
 }
