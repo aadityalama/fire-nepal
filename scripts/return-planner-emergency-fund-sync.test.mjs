@@ -6,6 +6,7 @@
  * Run: npx tsx --test scripts/return-planner-emergency-fund-sync.test.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { defaultCashflowState } from "../src/components/cashflow/cashflow-storage.ts";
 import { defaultEmergencyFundSettings } from "../src/lib/emergency-fund/settings.ts";
@@ -328,6 +329,21 @@ describe("Case H — load failure is DATA UNAVAILABLE (not MISSING)", () => {
     assert.equal(emergency.badgeLabel, "Data Unavailable");
     assert.match(emergency.detail, /Could not verify/i);
   });
+
+  it("does not show DATA UNAVAILABLE while EF is still loading", () => {
+    const snap = computeCanonicalEmergencyFundForReturn({
+      settings: defaultEmergencyFundSettings(),
+      budgets: [],
+      cashflow: defaultCashflowState(),
+      savingsGoals: [],
+      requiredProtectionMonths: 12,
+      loadState: "loading",
+    });
+    const emergency = checklistFromCanonical(snap).find((i) => i.id === "emergency");
+    assert.notEqual(emergency.status, "data_unavailable");
+    assert.equal(emergency.badgeLabel, "Loading");
+    assert.match(emergency.detail, /Verifying/i);
+  });
 });
 
 describe("Case J — Return Planner keeps 12-month requirement when EF workspace period differs", () => {
@@ -499,6 +515,20 @@ describe("Dependent Return Planner features use canonical funding", () => {
     );
     assert.equal(roadmap.some((m) => /emergency/i.test(m.label)), false);
     assert.equal(roadmap.some((m) => /house/i.test(m.label)), true);
+  });
+});
+
+describe("Return Planner live loader reuses Emergency Fund dashboard hydrate path", () => {
+  it("waits on auth and uses useCloudDocumentState(emergency_fund)", () => {
+    const src = readFileSync(
+      new URL("../src/lib/return-to-nepal/use-return-planner-live.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(src, /useCloudDocumentState/);
+    assert.match(src, /moduleKey:\s*"emergency_fund"/);
+    assert.match(src, /loading:\s*authLoading/);
+    assert.match(src, /if \(authLoading\) return/);
+    assert.doesNotMatch(src, /fetchModuleSnapshot<unknown>\("emergency_fund"/);
   });
 });
 

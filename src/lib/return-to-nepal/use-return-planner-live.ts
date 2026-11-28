@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CASHFLOW_EXTERNAL_SYNC_EVENT } from "@/components/cashflow/portfolio-dividend-sync";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
+import { useCloudDocumentState } from "@/hooks/useCloudDocumentState";
 import { useColPlanState } from "@/hooks/useColPlanState";
 import { fetchBudgetRecords } from "@/lib/budget/budget-api";
 import type { BudgetRecord } from "@/lib/budget/types";
@@ -14,12 +15,14 @@ import {
   SAVINGS_MODULE_SYNC_EVENT,
 } from "@/lib/cashflow/live-sync-events";
 import {
+  clearEmergencyFundSettingsLocal,
   defaultEmergencyFundSettings,
   loadEmergencyFundSettingsLocal,
   sanitizeEmergencyFundSettings,
+  saveEmergencyFundSettingsLocal,
 } from "@/lib/emergency-fund/settings";
-import type { EmergencyFundSettingsState } from "@/lib/emergency-fund/types";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
+import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
 import { fetchModuleSnapshot, invalidateModuleSnapshotCache } from "@/lib/module-snapshots/api";
 import { loadProductOnboarding } from "@/lib/product-onboarding-storage";
@@ -45,129 +48,156 @@ import {
 } from "@/lib/ssf-pension/storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-type EmergencyFundLivePayload = {
-  settings: EmergencyFundSettingsState;
-  budgets: BudgetRecord[];
-  loadState: CanonicalEmergencyFundLoadState;
-};
-
 /**
  * Live Return Planner inputs — auto-merges Income, Expenses, Portfolio, COL, Savings, SSF,
- * and canonical Emergency Fund 3.0 (budget basis + ledger reserve).
- * Authenticated: portfolio/cashflow/COL/SSF/savings/EF come from Supabase-backed APIs/hooks.
+ * and canonical Emergency Fund 3.0.
+ *
+ * Emergency Fund settings use the same `useCloudDocumentState("emergency_fund")` path as the
+ * Emergency Fund dashboard (auth-gated hydrate, cloud SoT, optional local cache).
  */
 export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   bundle: ReturnPlannerLiveBundle;
   tick: number;
   resync: () => void;
 } {
-  const { user } = useProductAuth();
+  const { user, loading: authLoading } = useProductAuth();
   const uid = user?.id;
   const { summary, portfolio, cashflow, ratesLoading, resync: resyncCloud } = useUnifiedFireSummary();
   const { plan: colPlan } = useColPlanState();
   const [tick, setTick] = useState(0);
   const [savings, setSavings] = useState<SavingsWorkspaceState>(() => sanitizeSavingsWorkspaceState(null));
   const [ssf, setSsf] = useState<SsfPensionWorkspaceState>(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
-  const [emergencyPayload, setEmergencyPayload] = useState<EmergencyFundLivePayload>(() => ({
-    settings: defaultEmergencyFundSettings(),
-    budgets: [],
-    loadState: "loading",
-  }));
+  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
+  const [budgetsReady, setBudgetsReady] = useState(false);
+  const [budgetsFailed, setBudgetsFailed] = useState(false);
+
+  // Same persisted loader as EmergencyFundDashboard — do not invent a parallel fetch path.
+  const {
+    state: emergencySettings,
+    hydrated: emergencyHydrated,
+    cloudReady: emergencyCloudReady,
+    hydrateError: emergencyHydrateError,
+    retryHydrate: retryEmergencyHydrate,
+  } = useCloudDocumentState({
+    moduleKey: "emergency_fund",
+    getDefault: defaultEmergencyFundSettings,
+    sanitize: sanitizeEmergencyFundSettings,
+    loadLocal: () => loadEmergencyFundSettingsLocal(uid),
+    saveLocal: (next) => saveEmergencyFundSettingsLocal(next, uid),
+    clearLocal: () => clearEmergencyFundSettingsLocal(uid),
+    saveDebounceMs: 600,
+  });
 
   const resync = useCallback(() => {
     setTick((n) => n + 1);
     resyncCloud();
-  }, [resyncCloud]);
+    if (emergencyHydrateError) retryEmergencyHydrate();
+  }, [resyncCloud, emergencyHydrateError, retryEmergencyHydrate]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // Match Emergency Fund dashboard: never hit cloud APIs while auth is unresolved.
+      if (authLoading) return;
+
       if (uid && isSupabaseConfigured()) {
-        // Force-refresh EF snapshot so Return Planner does not reuse a stale TTL cache
-        // after Emergency Fund deposits / mode / period changes.
-        invalidateModuleSnapshotCache("emergency_fund");
-
-        const [savingsResult, ssfResult, efResult, budgetsResult] = await Promise.allSettled([
-          fetchSavingsWorkspace(),
-          fetchModuleSnapshot<unknown>("ssf_pension"),
-          fetchModuleSnapshot<unknown>("emergency_fund", { force: true }),
-          fetchBudgetRecords(),
-        ]);
-        if (cancelled) return;
-
-        if (savingsResult.status === "fulfilled") {
-          setSavings(savingsResult.value ?? sanitizeSavingsWorkspaceState(null));
-        } else {
-          setSavings(sanitizeSavingsWorkspaceState(null));
-        }
-
-        if (ssfResult.status === "fulfilled") {
+        try {
+          const [remoteSavings, remoteSsf] = await Promise.all([
+            fetchSavingsWorkspace(),
+            fetchModuleSnapshot<unknown>("ssf_pension"),
+          ]);
+          if (cancelled) return;
+          setSavings(remoteSavings ?? sanitizeSavingsWorkspaceState(null));
           setSsf(
-            ssfResult.value == null
+            remoteSsf == null
               ? DEFAULT_SSF_PENSION_WORKSPACE_STATE
-              : sanitizeSsfPensionWorkspace(ssfResult.value),
+              : sanitizeSsfPensionWorkspace(remoteSsf),
           );
-        } else {
-          setSsf(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
+        } catch {
+          if (!cancelled) {
+            setSavings(sanitizeSavingsWorkspaceState(null));
+            setSsf(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
+          }
         }
 
-        // EF load failure must surface as DATA UNAVAILABLE — never as a false MISSING.
-        if (efResult.status === "fulfilled") {
-          setEmergencyPayload({
-            settings:
-              efResult.value == null
-                ? defaultEmergencyFundSettings()
-                : sanitizeEmergencyFundSettings(efResult.value),
-            budgets: budgetsResult.status === "fulfilled" ? budgetsResult.value : [],
-            loadState: "ready",
-          });
-        } else {
-          setEmergencyPayload({
-            settings: defaultEmergencyFundSettings(),
-            budgets: [],
-            loadState: "unavailable",
-          });
+        try {
+          const rows = await fetchBudgetRecords();
+          if (cancelled) return;
+          setBudgets(rows);
+          setBudgetsFailed(false);
+          setBudgetsReady(true);
+        } catch {
+          if (cancelled) return;
+          // Budget failure alone must not mark EF DATA UNAVAILABLE — keep prior rows if any.
+          setBudgetsFailed(true);
+          setBudgetsReady(true);
         }
         return;
       }
+
       if (!cancelled) {
         setSavings(loadSavingsWorkspaceState());
         setSsf(loadSsfPensionWorkspace());
-        setEmergencyPayload({
-          settings: loadEmergencyFundSettingsLocal(uid),
-          budgets: [],
-          loadState: "ready",
-        });
+        setBudgets([]);
+        setBudgetsFailed(false);
+        setBudgetsReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [uid, tick]);
+  }, [uid, tick, authLoading]);
 
   useEffect(() => {
     const bump = () => resync();
-    // Module sync events only — avoid focus/visibility storms on mobile browsers
-    // that re-fire when the address bar shows/hides and can loop cloud fetches.
+    const bumpEmergency = () => {
+      // EF ledger/mode/period changed elsewhere — force the shared cloud document to re-hydrate.
+      invalidateModuleSnapshotCache("emergency_fund");
+      retryEmergencyHydrate();
+      resync();
+    };
     window.addEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
     window.addEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
     window.addEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
     window.addEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, bump);
-    window.addEventListener(EMERGENCY_FUND_MODULE_SYNC_EVENT, bump);
+    window.addEventListener(EMERGENCY_FUND_MODULE_SYNC_EVENT, bumpEmergency);
     window.addEventListener(BUDGET_MODULE_SYNC_EVENT, bump);
+    window.addEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, bump);
     return () => {
       window.removeEventListener(EXPENSE_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(SAVINGS_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(INSURANCE_MODULE_SYNC_EVENT, bump);
       window.removeEventListener(CASHFLOW_EXTERNAL_SYNC_EVENT, bump);
-      window.removeEventListener(EMERGENCY_FUND_MODULE_SYNC_EVENT, bump);
+      window.removeEventListener(EMERGENCY_FUND_MODULE_SYNC_EVENT, bumpEmergency);
       window.removeEventListener(BUDGET_MODULE_SYNC_EVENT, bump);
+      window.removeEventListener(FINANCE_CLOUD_CACHE_READY_EVENT, bump);
     };
-  }, [resync]);
+  }, [resync, retryEmergencyHydrate]);
+
+  const emergencyLoadState: CanonicalEmergencyFundLoadState = useMemo(() => {
+    if (authLoading) return "loading";
+    if (uid && isSupabaseConfigured()) {
+      if (emergencyHydrateError) return "unavailable";
+      // cloudReady flips true after success OR failure; hydrateError distinguishes failure.
+      if (!emergencyHydrated || !emergencyCloudReady || !budgetsReady) return "loading";
+      return "ready";
+    }
+    // Guest: local settings are authoritative once shell hydrated.
+    if (!emergencyHydrated || !budgetsReady) return "loading";
+    return "ready";
+  }, [
+    authLoading,
+    uid,
+    emergencyHydrateError,
+    emergencyHydrated,
+    emergencyCloudReady,
+    budgetsReady,
+  ]);
 
   const bundle = useMemo((): ReturnPlannerLiveBundle => {
     void tick;
     void ratesLoading;
+    void budgetsFailed;
     const wealth = summary.wealthTotals;
     const onboarding = loadProductOnboarding();
     const krwPerNpr = FALLBACK_KRW_PER_NPR;
@@ -190,20 +220,21 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
         : RETURN_PLANNER_DEFAULT_EMERGENCY_MONTHS;
 
     const canonicalEmergencyFund =
-      emergencyPayload.loadState === "loading"
+      emergencyLoadState === "loading"
         ? emptyCanonicalEmergencyFundSnapshot(requiredMonths, "loading")
-        : computeCanonicalEmergencyFundForReturn({
-            settings: emergencyPayload.settings,
-            budgets: emergencyPayload.budgets,
-            cashflow,
-            savingsGoals: savings.goals,
-            requiredProtectionMonths: requiredMonths,
-            loadState: emergencyPayload.loadState,
-          });
+        : emergencyLoadState === "unavailable"
+          ? emptyCanonicalEmergencyFundSnapshot(requiredMonths, "unavailable")
+          : computeCanonicalEmergencyFundForReturn({
+              settings: emergencySettings,
+              budgets,
+              cashflow,
+              savingsGoals: savings.goals,
+              requiredProtectionMonths: requiredMonths,
+              loadState: "ready",
+            });
 
     return {
       ...base,
-      // Prefer canonical EF ledger reserve for all Return Planner consumers.
       emergencyCashReserveNpr:
         canonicalEmergencyFund.loadState === "ready" && canonicalEmergencyFund.hasReserveData
           ? canonicalEmergencyFund.currentEmergencyReserveNpr
@@ -212,7 +243,21 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
             : base.emergencyCashReserveNpr,
       canonicalEmergencyFund,
     };
-  }, [tick, stored, portfolio, cashflow, summary, ratesLoading, colPlan, savings, ssf, emergencyPayload]);
+  }, [
+    tick,
+    stored,
+    portfolio,
+    cashflow,
+    summary,
+    ratesLoading,
+    colPlan,
+    savings,
+    ssf,
+    emergencySettings,
+    budgets,
+    budgetsFailed,
+    emergencyLoadState,
+  ]);
 
   return { bundle, tick, resync };
 }

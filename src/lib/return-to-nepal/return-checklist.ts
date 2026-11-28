@@ -120,7 +120,16 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
       ? sources.emergencyMonthsTarget
       : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
 
-  if (canonical && (canonical.loadState === "unavailable" || canonical.loadState === "loading")) {
+  // Loading is not a failure — never show false DATA UNAVAILABLE while hydrating.
+  if (canonical && canonical.loadState === "loading") {
+    return {
+      status: "on_track",
+      detail: "Verifying Emergency Fund…",
+      badgeLabel: "Loading",
+    };
+  }
+
+  if (canonical && canonical.loadState === "unavailable") {
     return {
       status: "data_unavailable",
       detail: "Could not verify Emergency Fund",

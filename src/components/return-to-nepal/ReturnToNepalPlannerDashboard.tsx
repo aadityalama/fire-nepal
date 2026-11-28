@@ -213,6 +213,7 @@ export function ReturnToNepalPlannerDashboard() {
     if (canonicalEf?.loadState === "ready") {
       return canonicalEf.safetyRunwayMonths;
     }
+    // While loading, keep KPI blank — do not flash a false MISSING/unavailable runway.
     if (canonicalEf?.loadState === "unavailable" || canonicalEf?.loadState === "loading") {
       return null;
     }
@@ -388,20 +389,24 @@ export function ReturnToNepalPlannerDashboard() {
           <KpiCard
             label="Emergency Fund"
             value={
-              canonicalEf?.loadState === "unavailable"
-                ? "—"
-                : emergencyRunwayMonths == null
+              canonicalEf?.loadState === "loading"
+                ? "…"
+                : canonicalEf?.loadState === "unavailable"
                   ? "—"
-                  : `${emergencyRunwayMonths.toFixed(2).replace(/\.?0+$/, "")} Mo`
+                  : emergencyRunwayMonths == null
+                    ? "—"
+                    : `${emergencyRunwayMonths.toFixed(2).replace(/\.?0+$/, "")} Mo`
             }
             hint={
-              canonicalEf?.loadState === "unavailable"
-                ? "Emergency Fund data unavailable"
-                : emergencyRunwayMonths == null
-                  ? "Set reserve in Emergency Fund"
-                  : emergencyFundCompleted
-                    ? "Completed"
-                    : "Build runway"
+              canonicalEf?.loadState === "loading"
+                ? "Verifying Emergency Fund…"
+                : canonicalEf?.loadState === "unavailable"
+                  ? "Emergency Fund data unavailable"
+                  : emergencyRunwayMonths == null
+                    ? "Set reserve in Emergency Fund"
+                    : emergencyFundCompleted
+                      ? "Completed"
+                      : "Build runway"
             }
             hintPositive={emergencyFundCompleted}
           />
