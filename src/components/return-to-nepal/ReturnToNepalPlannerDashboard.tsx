@@ -119,7 +119,7 @@ export function ReturnToNepalPlannerDashboard() {
   const { user } = useProductAuth();
   const { profile } = useCurrentUserProfile();
   const { inputs: insuranceInputs, tick: insuranceTick } = useInsuranceEngineInputs();
-  const { policies: insurancePolicies } = useInsurancePoliciesLive();
+  const { policies: insurancePolicies, loading: insuranceLoading } = useInsurancePoliciesLive();
   const { summary, portfolio } = useUnifiedFireSummary();
   const wealth = summary.wealthTotals;
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
@@ -186,8 +186,17 @@ export function ReturnToNepalPlannerDashboard() {
         insuranceInputs,
         liabilitiesNpr: wealth.liabilitiesNpr,
         fireGoalNpr: profile?.fireGoalAmount ?? null,
+        insuranceLoading,
       }),
-    [effectiveState, live, insurancePolicies, insuranceInputs, wealth.liabilitiesNpr, profile?.fireGoalAmount],
+    [
+      effectiveState,
+      live,
+      insurancePolicies,
+      insuranceInputs,
+      wealth.liabilitiesNpr,
+      profile?.fireGoalAmount,
+      insuranceLoading,
+    ],
   );
 
   const readinessScores = useMemo(

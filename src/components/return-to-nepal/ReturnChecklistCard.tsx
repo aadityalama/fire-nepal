@@ -1,23 +1,21 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import type { ChecklistStatus, ReturnChecklistItem } from "@/lib/return-to-nepal/return-checklist";
+import { CHECKLIST_STATUS_LABELS, type ChecklistStatus } from "@/lib/return-to-nepal/checklist-status";
+import type { ReturnChecklistItem } from "@/lib/return-to-nepal/return-checklist";
 
 const STATUS_STYLES: Record<ChecklistStatus, string> = {
   completed: "bg-emerald-500/20 text-emerald-300 ring-emerald-400/30",
   on_track: "bg-teal-500/15 text-teal-200 ring-teal-400/25",
   in_progress: "bg-amber-500/15 text-amber-200 ring-amber-400/25",
   missing: "bg-rose-500/15 text-rose-200 ring-rose-400/25",
+  target_not_set: "bg-sky-500/15 text-sky-200 ring-sky-400/25",
+  not_applicable: "bg-zinc-500/20 text-zinc-200 ring-zinc-400/30",
   data_unavailable: "bg-slate-500/20 text-slate-200 ring-slate-400/30",
+  loading: "bg-teal-500/10 text-teal-100/80 ring-teal-400/20",
 };
 
-const STATUS_LABELS: Record<ChecklistStatus, string> = {
-  completed: "Completed",
-  on_track: "On Track",
-  in_progress: "In Progress",
-  missing: "Missing",
-  data_unavailable: "Data Unavailable",
-};
+const STATUS_LABELS = CHECKLIST_STATUS_LABELS;
 
 /**
  * Full-card tappable checklist row for mobile + desktop.
@@ -58,8 +56,10 @@ export function ReturnChecklistCard({ item }: { item: ReturnChecklistItem }) {
         {/* Visual content: never captures pointer events */}
         <div className="pointer-events-none relative z-10 flex min-h-[56px] w-full items-center justify-between gap-3 px-3 py-2.5">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-white">{item.label}</p>
-            <p className="truncate text-[11px] font-semibold text-white/40">{item.detail}</p>
+            <p className="text-sm font-bold leading-snug text-white">{item.label}</p>
+            <p className="mt-0.5 line-clamp-2 text-[11px] font-semibold leading-snug text-white/40">
+              {item.detail}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span

@@ -4,21 +4,22 @@ import {
   hasAdequateLifeInsurance,
 } from "@/lib/insurance/insurance-engine";
 import type { InsuranceEngineInputs, InsurancePolicy } from "@/lib/insurance/insurance-types";
-import { sumCoverageByType } from "@/lib/insurance/insurance-utils";
+import { formatNprCompact, sumCoverageByType } from "@/lib/insurance/insurance-utils";
 import {
   formatEmergencyRunwayDetail,
   type CanonicalEmergencyFundSnapshot,
   type CanonicalEmergencyFundStatus,
 } from "@/lib/return-to-nepal/canonical-emergency-fund";
+import {
+  deriveFundingStatus,
+  type ChecklistStatus,
+} from "@/lib/return-to-nepal/checklist-status";
 import { returnChecklistHref } from "@/lib/return-to-nepal/return-checklist-routes";
+import { computePensionProjection } from "@/lib/ssf-pension/projection";
+import type { SsfPensionWorkspaceState } from "@/lib/ssf-pension/storage";
 import type { HousePlanStatus, ReturnToNepalPlannerState } from "@/lib/return-to-nepal/types";
 
-export type ChecklistStatus =
-  | "completed"
-  | "on_track"
-  | "in_progress"
-  | "missing"
-  | "data_unavailable";
+export type { ChecklistStatus } from "@/lib/return-to-nepal/checklist-status";
 
 export type ReturnChecklistItem = {
   id: string;
@@ -52,9 +53,19 @@ export type ReturnChecklistSources = {
   monthlySsfContributionNpr: number;
   /** Target contribution for 100% SSF (e.g. ~10% of income). */
   ssfContributionTargetNpr: number;
+  /** Full SSF workspace when available — never invent eligibility rules. */
+  ssfWorkspace?: SsfPensionWorkspaceState | null;
+  /**
+   * Explicit opt-out. Until a planner control exists, remains false.
+   * Reserved for NOT APPLICABLE when the user excludes SSF.
+   */
+  ssfNotApplicable?: boolean;
   /** Listed investment portfolio total (canonical wealth totalInvestmentNpr). */
   totalInvestmentNpr: number;
-  /** Investment goal target; falsy → fallback 2_000_000 only when no goal exists. */
+  /**
+   * Explicit investment goal target (savings Investment goal or user FIRE goal).
+   * Null = no valid target configured — never invent a silent fallback for status.
+   */
   investmentGoalTargetNpr: number | null;
   /**
    * Modeled monthly passive income — same formula as Return KPI
@@ -63,10 +74,14 @@ export type ReturnChecklistSources = {
   modeledPassiveMonthlyNpr: number;
   /** Cash passive lines only (dividends + FD + rental + pension + SWP) — actual recorded. */
   actualPassiveMonthlyNpr: number;
-  /** Passive goal target (typically Nepal COL or floor). */
-  passiveTargetMonthlyNpr: number;
+  /** Passive goal target (typically Nepal COL or floor). Null = not configured. */
+  passiveTargetMonthlyNpr: number | null;
   insurancePolicies: InsurancePolicy[];
   insuranceInputs: InsuranceEngineInputs;
+  /** True while insurance policies are still hydrating. */
+  insuranceLoading?: boolean;
+  /** True when insurance hydrate failed. */
+  insuranceUnavailable?: boolean;
   /** Single canonical house funded % (0–100). */
   houseProgressPct: number;
   /** Whether a house savings goal (or progress source) exists. */
@@ -84,20 +99,29 @@ export type ReturnChecklistSources = {
   businessCapitalNpr: number;
   businessGoalConfigured: boolean;
   businessCapitalTargetNpr: number;
+  /**
+   * Explicit opt-out for business capital. Reserved; false until planner control exists.
+   */
+  businessNotApplicable?: boolean;
   liabilitiesNpr: number;
   /** True once the user has added liability rows or acknowledged debt status. */
   liabilitiesConfigured: boolean;
+  /** True while portfolio/wealth liabilities are still hydrating. */
+  liabilitiesLoading?: boolean;
+  liabilitiesUnavailable?: boolean;
 };
 
 export const RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS = 12;
+/** Display-only reference — never used alone to invent COMPLETED/MISSING status. */
 export const RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR = 2_000_000;
 export const RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR = 1_000_000;
 export const RETURN_CHECKLIST_FALLBACK_PASSIVE_FLOOR_NPR = 25_000;
 
+/** @deprecated Use deriveFundingStatus — kept for older call sites/tests. */
 export function deriveChecklistStatus(pct: number): ChecklistStatus {
   if (pct >= 100) return "completed";
   if (pct >= 75) return "on_track";
-  if (pct >= 35) return "in_progress";
+  if (pct > 0) return "in_progress";
   return "missing";
 }
 
@@ -110,6 +134,10 @@ function checklistStatusFromCanonical(
   return "missing";
 }
 
+function formatNpr(amount: number): string {
+  return Math.round(amount).toLocaleString("en-NP");
+}
+
 function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
   ReturnChecklistItem,
   "status" | "detail" | "badgeLabel"
@@ -120,10 +148,9 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
       ? sources.emergencyMonthsTarget
       : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
 
-  // Loading is not a failure — never show false DATA UNAVAILABLE while hydrating.
   if (canonical && canonical.loadState === "loading") {
     return {
-      status: "on_track",
+      status: "loading",
       detail: "Verifying Emergency Fund…",
       badgeLabel: "Loading",
     };
@@ -163,7 +190,8 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
     sources.emergencyCashReserveNpr != null && Number.isFinite(sources.emergencyCashReserveNpr);
   const emergencyReserve = emergencyConfigured ? Math.max(0, sources.emergencyCashReserveNpr!) : 0;
   const burn = Math.max(0, sources.emergencyMonthlyBurnNpr);
-  const emergencyRunwayMonths = burn > 0 ? emergencyReserve / burn : emergencyConfigured ? emergencyTarget * 2 : 0;
+  const emergencyRunwayMonths =
+    burn > 0 ? emergencyReserve / burn : emergencyConfigured ? emergencyTarget * 2 : 0;
   const emergencyPct = emergencyConfigured ? (emergencyRunwayMonths / emergencyTarget) * 100 : 0;
 
   if (!emergencyConfigured) {
@@ -173,7 +201,6 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
     };
   }
 
-  // Align legacy path with COMPLETED / IN_PROGRESS / MISSING (no on_track for EF).
   let status: ChecklistStatus = "missing";
   if (emergencyReserve > 0 && emergencyPct >= 100) status = "completed";
   else if (emergencyReserve > 0) status = "in_progress";
@@ -184,9 +211,204 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
   };
 }
 
-function coverageProgressPct(current: number, recommended: number): number {
-  if (recommended <= 0) return current > 0 ? 100 : 0;
-  return Math.min(100, (current / (recommended * 0.7)) * 100);
+function ssfPlanConfigured(sources: ReturnChecklistSources): boolean {
+  if (sources.monthlySsfContributionNpr > 0) return true;
+  const ws = sources.ssfWorkspace;
+  if (!ws) return false;
+  const p = ws.projection;
+  return (
+    p.monthlySsfContributionNpr > 0 ||
+    p.monthlySalaryNpr > 0 ||
+    (p.currentAge > 0 && p.retirementAge > p.currentAge)
+  );
+}
+
+function buildSsfChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  if (sources.ssfNotApplicable) {
+    return {
+      status: "not_applicable",
+      detail: "SSF excluded from retirement plan",
+      badgeLabel: "Not Applicable",
+    };
+  }
+
+  const configured = ssfPlanConfigured(sources);
+  const contrib = Math.max(0, sources.monthlySsfContributionNpr);
+  const target =
+    sources.ssfContributionTargetNpr > 0 ? sources.ssfContributionTargetNpr : null;
+
+  if (!configured) {
+    return {
+      status: "missing",
+      detail: "Set up in SSF workspace",
+    };
+  }
+
+  const status = deriveFundingStatus({
+    actual: contrib,
+    target,
+    requirementApplies: true,
+  });
+
+  let detail = `NPR ${formatNpr(contrib)}/mo`;
+  const ws = sources.ssfWorkspace;
+  if (ws && ws.projection.currentAge > 0 && ws.projection.retirementAge > ws.projection.currentAge) {
+    const projection = computePensionProjection(ws.projection);
+    if (projection.estimatedMonthlyPensionNpr > 0) {
+      detail += ` · est. pension NPR ${formatNpr(projection.estimatedMonthlyPensionNpr)}/mo`;
+    }
+  } else if (target != null && contrib < target) {
+    detail += ` · target NPR ${formatNpr(target)}/mo`;
+  }
+
+  return { status, detail };
+}
+
+function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  const actual = Math.max(0, sources.totalInvestmentNpr);
+  const target =
+    sources.investmentGoalTargetNpr != null && sources.investmentGoalTargetNpr > 0
+      ? sources.investmentGoalTargetNpr
+      : null;
+
+  const status = deriveFundingStatus({
+    actual,
+    target,
+    requirementApplies: true,
+  });
+
+  if (status === "target_not_set") {
+    return {
+      status,
+      detail: `NPR ${formatNpr(actual)} · set investment target`,
+      badgeLabel: "Target Not Set",
+    };
+  }
+  if (status === "missing") {
+    return { status, detail: "Add investments" };
+  }
+  if (status === "completed") {
+    return {
+      status,
+      detail: `NPR ${formatNpr(actual)} · target met`,
+    };
+  }
+  return {
+    status,
+    detail: `NPR ${formatNpr(actual)} · target NPR ${formatNpr(target!)}`,
+  };
+}
+
+function buildPassiveChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  const modeled = Math.max(0, sources.modeledPassiveMonthlyNpr);
+  const actual = Math.max(0, sources.actualPassiveMonthlyNpr);
+  const rawTarget = sources.passiveTargetMonthlyNpr;
+  const target =
+    rawTarget != null && rawTarget > 0
+      ? Math.max(rawTarget, RETURN_CHECKLIST_FALLBACK_PASSIVE_FLOOR_NPR)
+      : null;
+
+  // Progress uses modeled (aligned with Return KPI) while detail keeps actual separate.
+  const status = deriveFundingStatus({
+    actual: modeled,
+    target,
+    requirementApplies: true,
+  });
+
+  const detail = `NPR ${formatNpr(modeled)}/mo modeled · NPR ${formatNpr(actual)}/mo actual${
+    target != null ? ` · target NPR ${formatNpr(target)}/mo` : ""
+  }`;
+
+  if (status === "target_not_set") {
+    return { status, detail, badgeLabel: "Target Not Set" };
+  }
+  return { status, detail };
+}
+
+function buildInsuranceTypeFields(
+  sources: ReturnChecklistSources,
+  type: "health" | "life",
+): Pick<ReturnChecklistItem, "status" | "detail" | "badgeLabel"> {
+  if (sources.insuranceLoading) {
+    return {
+      status: "loading",
+      detail: type === "health" ? "Verifying health cover…" : "Verifying life cover…",
+      badgeLabel: "Loading",
+    };
+  }
+  if (sources.insuranceUnavailable) {
+    return {
+      status: "data_unavailable",
+      detail: "Could not verify Insurance workspace",
+      badgeLabel: "Data Unavailable",
+    };
+  }
+
+  const recommendation = computeInsuranceRecommendation(
+    sources.insurancePolicies,
+    sources.insuranceInputs,
+  );
+  const recommended =
+    type === "health"
+      ? recommendation.recommendedHealthCoverageNpr
+      : recommendation.recommendedLifeCoverageNpr;
+  const adequate =
+    type === "health"
+      ? hasAdequateHealthInsurance(sources.insurancePolicies, recommended)
+      : hasAdequateLifeInsurance(sources.insurancePolicies, recommended);
+  const coverage = sumCoverageByType(sources.insurancePolicies, type);
+  const hasPolicy = sources.insurancePolicies.some(
+    (p) => p.type === type && p.status !== "expired" && p.status !== "lapsed",
+  );
+
+  if (adequate) {
+    return {
+      status: "completed",
+      detail:
+        type === "health"
+          ? `${formatNprCompact(coverage)} coverage · on track`
+          : `${formatNprCompact(coverage)} coverage · family protection locked`,
+    };
+  }
+
+  const status = deriveFundingStatus({
+    actual: coverage,
+    target: recommended > 0 ? recommended : null,
+    requirementApplies: true,
+  });
+
+  if (!hasPolicy || coverage <= 0) {
+    return {
+      status: "missing",
+      detail: "Open Insurance workspace",
+    };
+  }
+
+  if (status === "target_not_set") {
+    return {
+      status,
+      detail: `${formatNprCompact(coverage)} coverage · set coverage target`,
+      badgeLabel: "Target Not Set",
+    };
+  }
+
+  // Match Insurance workspace: actual / recommended + % covered (never MISSING for positive cover).
+  const coveredPct =
+    recommended > 0 ? Math.max(0, Math.min(100, Math.round((coverage / recommended) * 100))) : 0;
+  const recommendedCompact = formatNprCompact(recommended).replace(/^NPR\s+/, "");
+  return {
+    status: status === "completed" ? "completed" : "in_progress",
+    detail: `${formatNprCompact(coverage)} / ${recommendedCompact} · ${coveredPct}% covered`,
+  };
 }
 
 function houseChecklistFields(sources: ReturnChecklistSources): Pick<
@@ -198,35 +420,38 @@ function houseChecklistFields(sources: ReturnChecklistSources): Pick<
     return { status: "completed", detail: "Already own a house", badgeLabel: "Completed" };
   }
   if (housePlanStatus === "not_needed") {
-    return { status: "completed", detail: "House purchase not needed", badgeLabel: "Not Needed" };
+    return {
+      status: "not_applicable",
+      detail: "House purchase not needed",
+      badgeLabel: "Not Applicable",
+    };
   }
   if (housePlanStatus === "plan_to_buy_build") {
     if (!houseGoalConfigured) {
-      return { status: "missing", detail: "Set house goal in Savings" };
+      return {
+        status: "target_not_set",
+        detail: "Set house goal in Savings",
+        badgeLabel: "Target Not Set",
+      };
     }
+    const status = deriveFundingStatus({
+      actual: houseProgressPct,
+      target: 100,
+      requirementApplies: true,
+    });
     return {
-      status: deriveChecklistStatus(houseProgressPct),
+      status,
       detail: `${houseProgressPct.toFixed(0)}% funded`,
     };
   }
   return { status: "missing", detail: "Choose your house plan" };
 }
 
-/**
- * Pure Return Checklist compute — all I/O must be resolved into `sources` first.
- */
-export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnChecklistItem[] {
+function buildFamilyChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
   const {
-    emergencyMonthsTarget,
-    monthlySsfContributionNpr,
-    ssfContributionTargetNpr,
-    totalInvestmentNpr,
-    investmentGoalTargetNpr,
-    modeledPassiveMonthlyNpr,
-    actualPassiveMonthlyNpr,
-    passiveTargetMonthlyNpr,
-    insurancePolicies,
-    insuranceInputs,
     adults,
     children,
     householdConfigured,
@@ -234,63 +459,139 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     healthcareMonthlyNpr,
     familyCostSignalsConfigured,
     settlementChecklistLength,
-    businessCapitalNpr,
-    businessGoalConfigured,
-    businessCapitalTargetNpr,
-    liabilitiesNpr,
-    liabilitiesConfigured,
   } = sources;
 
+  if (!householdConfigured) {
+    return {
+      status: "missing",
+      detail: "Set household in Cost of Living",
+    };
+  }
+
+  // No dependents → education funding is not required (verified N/A signal).
+  const schoolOk =
+    children === 0
+      ? true
+      : familyCostSignalsConfigured && schoolFeesMonthlyNpr > 0;
+  const healthCostOk = familyCostSignalsConfigured && healthcareMonthlyNpr > 0;
+  const settlementOk = settlementChecklistLength >= 2;
+
+  const signals = [schoolOk, healthCostOk, settlementOk];
+  const met = signals.filter(Boolean).length;
+  const detail =
+    children === 0
+      ? `${adults} adults · no dependents`
+      : `${adults} adults · ${children} children`;
+
+  if (met === signals.length) {
+    return { status: "completed", detail };
+  }
+  if (met > 0 || familyCostSignalsConfigured) {
+    return { status: "in_progress", detail };
+  }
+  return { status: "in_progress", detail: `${detail} · complete settlement plan` };
+}
+
+function buildBusinessChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  if (sources.businessNotApplicable) {
+    return {
+      status: "not_applicable",
+      detail: "Business not part of return plan",
+      badgeLabel: "Not Applicable",
+    };
+  }
+
+  if (!sources.businessGoalConfigured) {
+    return {
+      status: "target_not_set",
+      detail: "Set capital goal or mark not applicable",
+      badgeLabel: "Target Not Set",
+    };
+  }
+
+  const target =
+    sources.businessCapitalTargetNpr > 0
+      ? sources.businessCapitalTargetNpr
+      : RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
+  const actual = Math.max(0, sources.businessCapitalNpr);
+  const status = deriveFundingStatus({
+    actual,
+    target,
+    requirementApplies: true,
+  });
+
+  if (status === "missing") {
+    return {
+      status,
+      detail: "Business goal set — add savings",
+    };
+  }
+  return {
+    status,
+    detail: `NPR ${formatNpr(actual)} · target NPR ${formatNpr(target)}`,
+  };
+}
+
+function buildDebtChecklistFields(sources: ReturnChecklistSources): Pick<
+  ReturnChecklistItem,
+  "status" | "detail" | "badgeLabel"
+> {
+  if (sources.liabilitiesLoading) {
+    return {
+      status: "loading",
+      detail: "Verifying liabilities…",
+      badgeLabel: "Loading",
+    };
+  }
+  if (sources.liabilitiesUnavailable) {
+    return {
+      status: "data_unavailable",
+      detail: "Could not verify liabilities",
+      badgeLabel: "Data Unavailable",
+    };
+  }
+  if (!sources.liabilitiesConfigured) {
+    return {
+      status: "target_not_set",
+      detail: "Confirm liabilities in Portfolio",
+      badgeLabel: "Target Not Set",
+    };
+  }
+  const liabilities = Math.max(0, sources.liabilitiesNpr);
+  if (liabilities <= 0) {
+    return { status: "completed", detail: "No liabilities" };
+  }
+  return {
+    status: "in_progress",
+    detail: `NPR ${formatNpr(liabilities)} liabilities`,
+  };
+}
+
+/**
+ * Pure Return Checklist compute — all I/O must be resolved into `sources` first.
+ */
+export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnChecklistItem[] {
   const emergencyTarget =
     sources.canonicalEmergencyFund?.requiredProtectionMonths &&
     sources.canonicalEmergencyFund.requiredProtectionMonths > 0
       ? sources.canonicalEmergencyFund.requiredProtectionMonths
-      : emergencyMonthsTarget > 0
-        ? emergencyMonthsTarget
+      : sources.emergencyMonthsTarget > 0
+        ? sources.emergencyMonthsTarget
         : RETURN_CHECKLIST_FALLBACK_EMERGENCY_MONTHS;
+
   const emergencyFields = buildEmergencyChecklistFields(sources);
-
-  const ssfTarget = Math.max(1, ssfContributionTargetNpr);
-  const ssfPct = (Math.max(0, monthlySsfContributionNpr) / ssfTarget) * 100;
-
-  const investmentTarget =
-    investmentGoalTargetNpr != null && investmentGoalTargetNpr > 0
-      ? investmentGoalTargetNpr
-      : RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR;
-  const investmentPct = (Math.max(0, totalInvestmentNpr) / investmentTarget) * 100;
-
-  const passiveTarget = Math.max(passiveTargetMonthlyNpr, RETURN_CHECKLIST_FALLBACK_PASSIVE_FLOOR_NPR);
-  const passivePct = (Math.max(0, modeledPassiveMonthlyNpr) / passiveTarget) * 100;
-
-  const recommendation = computeInsuranceRecommendation(insurancePolicies, insuranceInputs);
-  const healthOk = hasAdequateHealthInsurance(insurancePolicies, recommendation.recommendedHealthCoverageNpr);
-  const lifeOk = hasAdequateLifeInsurance(insurancePolicies, recommendation.recommendedLifeCoverageNpr);
-  const healthCoverage = sumCoverageByType(insurancePolicies, "health");
-  const lifeCoverage = sumCoverageByType(insurancePolicies, "life");
-  const healthPct = healthOk ? 100 : coverageProgressPct(healthCoverage, recommendation.recommendedHealthCoverageNpr);
-  const lifePct = lifeOk ? 100 : coverageProgressPct(lifeCoverage, recommendation.recommendedLifeCoverageNpr);
-
+  const ssfFields = buildSsfChecklistFields(sources);
+  const investmentFields = buildInvestmentChecklistFields(sources);
+  const passiveFields = buildPassiveChecklistFields(sources);
+  const healthFields = buildInsuranceTypeFields(sources, "health");
+  const lifeFields = buildInsuranceTypeFields(sources, "life");
   const house = houseChecklistFields(sources);
-
-  const schoolOk =
-    familyCostSignalsConfigured && (schoolFeesMonthlyNpr > 0 || (householdConfigured && children === 0));
-  const healthCostOk = familyCostSignalsConfigured && healthcareMonthlyNpr > 0;
-  const settlementOk = settlementChecklistLength >= 2;
-  const familyPct =
-    ((schoolOk ? 1 : 0) + (healthCostOk ? 1 : 0) + (settlementOk ? 1 : 0) + (householdConfigured ? 1 : 0)) / 4;
-
-  const businessTarget =
-    businessCapitalTargetNpr > 0 ? businessCapitalTargetNpr : RETURN_CHECKLIST_FALLBACK_BUSINESS_TARGET_NPR;
-  const businessPct = businessGoalConfigured ? (businessCapitalNpr / businessTarget) * 100 : 0;
-
-  let debtPct = 0;
-  if (!liabilitiesConfigured) {
-    debtPct = 0;
-  } else if (liabilitiesNpr <= 0) {
-    debtPct = 100;
-  } else {
-    debtPct = Math.max(0, 100 - Math.min(100, (liabilitiesNpr / Math.max(totalInvestmentNpr + liabilitiesNpr, 1)) * 100));
-  }
+  const familyFields = buildFamilyChecklistFields(sources);
+  const businessFields = buildBusinessChecklistFields(sources);
+  const debtFields = buildDebtChecklistFields(sources);
 
   const items: Omit<ReturnChecklistItem, "href">[] = [
     {
@@ -303,46 +604,37 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     {
       id: "ssf",
       label: "Nepal SSF Retirement",
-      status: deriveChecklistStatus(ssfPct),
-      detail:
-        monthlySsfContributionNpr > 0
-          ? `NPR ${Math.round(monthlySsfContributionNpr).toLocaleString("en-NP")}/mo`
-          : "Set up in SSF workspace",
+      status: ssfFields.status,
+      detail: ssfFields.detail,
+      badgeLabel: ssfFields.badgeLabel,
     },
     {
       id: "investment",
       label: "Investment Portfolio",
-      status: deriveChecklistStatus(investmentPct),
-      detail:
-        totalInvestmentNpr > 0
-          ? `NPR ${Math.round(totalInvestmentNpr).toLocaleString("en-NP")}`
-          : "Add investments",
+      status: investmentFields.status,
+      detail: investmentFields.detail,
+      badgeLabel: investmentFields.badgeLabel,
     },
     {
       id: "passive",
       label: "Passive Income Goal",
-      status: deriveChecklistStatus(passivePct),
-      detail: `NPR ${Math.round(modeledPassiveMonthlyNpr).toLocaleString("en-NP")}/mo modeled · NPR ${Math.round(actualPassiveMonthlyNpr).toLocaleString("en-NP")}/mo actual`,
+      status: passiveFields.status,
+      detail: passiveFields.detail,
+      badgeLabel: passiveFields.badgeLabel,
     },
     {
       id: "health",
       label: "Health Insurance",
-      status: healthOk ? "completed" : deriveChecklistStatus(healthPct),
-      detail: healthOk
-        ? "Coverage on track"
-        : insurancePolicies.some((p) => p.type === "health")
-          ? `NPR ${Math.round(healthCoverage).toLocaleString("en-NP")} coverage`
-          : "Open Insurance workspace",
+      status: healthFields.status,
+      detail: healthFields.detail,
+      badgeLabel: healthFields.badgeLabel,
     },
     {
       id: "life",
       label: "Life Insurance",
-      status: lifeOk ? "completed" : deriveChecklistStatus(lifePct),
-      detail: lifeOk
-        ? "Family protection locked"
-        : insurancePolicies.some((p) => p.type === "life")
-          ? `NPR ${Math.round(lifeCoverage).toLocaleString("en-NP")} coverage`
-          : "Open Insurance workspace",
+      status: lifeFields.status,
+      detail: lifeFields.detail,
+      badgeLabel: lifeFields.badgeLabel,
     },
     {
       id: "house",
@@ -354,30 +646,23 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
     {
       id: "family",
       label: "Family & Education",
-      status: deriveChecklistStatus(familyPct * 100),
-      detail: householdConfigured
-        ? `${adults} adults · ${children} children`
-        : "Set household in Cost of Living",
+      status: familyFields.status,
+      detail: familyFields.detail,
+      badgeLabel: familyFields.badgeLabel,
     },
     {
       id: "business",
       label: "Business Capital",
-      status: deriveChecklistStatus(businessPct),
-      detail: businessGoalConfigured
-        ? businessCapitalNpr > 0
-          ? `NPR ${Math.round(businessCapitalNpr).toLocaleString("en-NP")}`
-          : "Business goal set — add savings"
-        : "Set capital goal",
+      status: businessFields.status,
+      detail: businessFields.detail,
+      badgeLabel: businessFields.badgeLabel,
     },
     {
       id: "debt",
       label: "Debt Free Status",
-      status: deriveChecklistStatus(debtPct),
-      detail: !liabilitiesConfigured
-        ? "Confirm liabilities in Portfolio"
-        : liabilitiesNpr > 0
-          ? `NPR ${Math.round(liabilitiesNpr).toLocaleString("en-NP")} liabilities`
-          : "No liabilities",
+      status: debtFields.status,
+      detail: debtFields.detail,
+      badgeLabel: debtFields.badgeLabel,
     },
   ];
 

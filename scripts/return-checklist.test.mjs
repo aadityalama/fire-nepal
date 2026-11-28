@@ -190,18 +190,34 @@ describe("Return Checklist — Investment", () => {
     assert.match(investment.detail, /2,440,288/);
   });
 
-  it("falls back to 2M only when no investment goal exists", () => {
+  it("never marks positive portfolio MISSING when target is absent (TARGET NOT SET)", () => {
     const investment = byId(
       computeReturnChecklist(
         baseSources({
-          totalInvestmentNpr: 1_000_000,
+          totalInvestmentNpr: 2_550_724,
           investmentGoalTargetNpr: null,
         }),
       ),
       "investment",
     );
-    assert.equal(investment.status, "in_progress");
+    assert.equal(investment.status, "target_not_set");
+    assert.match(investment.detail, /2,550,724/);
+    assert.notEqual(investment.status, "missing");
     assert.equal(RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR, 2_000_000);
+  });
+
+  it("marks positive portfolio below a high target as IN PROGRESS (not MISSING)", () => {
+    const investment = byId(
+      computeReturnChecklist(
+        baseSources({
+          totalInvestmentNpr: 2_550_724,
+          investmentGoalTargetNpr: 50_000_000,
+        }),
+      ),
+      "investment",
+    );
+    assert.equal(investment.status, "in_progress");
+    assert.match(investment.detail, /2,550,724/);
   });
 });
 
@@ -261,6 +277,44 @@ describe("Return Checklist — Insurance", () => {
     assert.equal(byId(items, "health").status, "completed");
     assert.equal(byId(items, "life").status, "completed");
   });
+
+  it("marks positive life coverage below recommended as IN PROGRESS (not MISSING)", () => {
+    const policies = [
+      {
+        id: "l1",
+        type: "life",
+        provider: "Test",
+        coverageAmountNpr: 5_000_000,
+        premiumNpr: 2000,
+        paymentFrequency: "monthly",
+        status: "active",
+        sortOrder: 0,
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01",
+      },
+    ];
+    const life = byId(
+      computeReturnChecklist(
+        baseSources({
+          insurancePolicies: policies,
+          // Force a known recommended life target via high income/dependents inputs —
+          // engine should recommend well above 5M so status stays IN PROGRESS.
+          insuranceInputs: baseInsuranceInputs({
+            monthlyIncomeNpr: 500_000,
+            adults: 2,
+            children: 2,
+            investableNpr: 0,
+            totalSavingsNpr: 0,
+          }),
+        }),
+      ),
+      "life",
+    );
+    assert.equal(life.status, "in_progress");
+    assert.match(life.detail, /50 Lakh/i);
+    assert.match(life.detail, /%\s*covered/i);
+    assert.notEqual(life.status, "missing");
+  });
 });
 
 describe("Return Checklist — House", () => {
@@ -308,11 +362,11 @@ describe("Return Checklist — House", () => {
       computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
       "house",
     );
-    assert.equal(skip.status, "completed");
-    assert.equal(skip.badgeLabel, "Not Needed");
+    assert.equal(skip.status, "not_applicable");
+    assert.equal(skip.badgeLabel, "Not Applicable");
   });
 
-  it("stays missing until a house goal exists when plan_to_buy_build", () => {
+  it("stays TARGET NOT SET until a house goal exists when plan_to_buy_build", () => {
     const house = byId(
       computeReturnChecklist(
         baseSources({
@@ -323,7 +377,7 @@ describe("Return Checklist — House", () => {
       ),
       "house",
     );
-    assert.equal(house.status, "missing");
+    assert.equal(house.status, "target_not_set");
     assert.match(house.detail, /Set house goal/i);
   });
 });
@@ -378,10 +432,17 @@ describe("Return Checklist — rendered card wiring", () => {
     assert.match(src, /touch-manipulation/);
     assert.match(src, /ChevronRight/);
     assert.match(src, /window\.location\.assign\(item\.href\)/);
-    assert.match(src, /STATUS_LABELS/);
-    assert.match(src, /Missing/);
-    assert.match(src, /In Progress/);
-    assert.match(src, /Completed/);
+    assert.match(src, /STATUS_LABELS|CHECKLIST_STATUS_LABELS/);
+    assert.match(src, /target_not_set|not_applicable|loading/);
+    const labels = readFileSync(
+      new URL("../src/lib/return-to-nepal/checklist-status.ts", import.meta.url),
+      "utf8",
+    );
+    assert.match(labels, /Missing/);
+    assert.match(labels, /In Progress/);
+    assert.match(labels, /Completed/);
+    assert.match(labels, /Target Not Set/);
+    assert.match(labels, /Not Applicable/);
     // Chevron must not be low-contrast / hover-only
     assert.doesNotMatch(src, /text-white\/35/);
     assert.doesNotMatch(src, /group-hover:text-/);
@@ -474,7 +535,7 @@ describe("Return Checklist — Business Capital", () => {
       ),
       "business",
     );
-    assert.equal(missing.status, "missing");
+    assert.equal(missing.status, "target_not_set");
     assert.match(missing.detail, /Set capital goal/i);
 
     const progressing = byId(
@@ -503,7 +564,7 @@ describe("Return Checklist — Debt Free", () => {
       ),
       "debt",
     );
-    assert.equal(debt.status, "missing");
+    assert.equal(debt.status, "target_not_set");
     assert.match(debt.detail, /Confirm liabilities/i);
   });
 
@@ -575,8 +636,8 @@ describe("House plan flow — persist + checklist reflection", () => {
       computeReturnChecklist(baseSources({ housePlanStatus: "not_needed", houseProgressPct: 0 })),
       "house",
     );
-    assert.equal(skip.status, "completed");
-    assert.equal(skip.badgeLabel, "Not Needed");
+    assert.equal(skip.status, "not_applicable");
+    assert.equal(skip.badgeLabel, "Not Applicable");
     assert.doesNotMatch(skip.detail, /0% funded/i);
   });
 

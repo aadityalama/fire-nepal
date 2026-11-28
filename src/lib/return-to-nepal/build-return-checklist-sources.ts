@@ -14,11 +14,33 @@ export function buildReturnChecklistSources(args: {
   insurancePolicies: InsurancePolicy[];
   insuranceInputs: InsuranceEngineInputs;
   liabilitiesNpr: number;
-  /** Optional FIRE / profile investment goal (NPR). */
+  /** Optional FIRE / profile investment goal (NPR). Used only when no Investment savings goal. */
   fireGoalNpr?: number | null;
+  insuranceLoading?: boolean;
+  insuranceUnavailable?: boolean;
+  liabilitiesLoading?: boolean;
+  liabilitiesUnavailable?: boolean;
+  ssfNotApplicable?: boolean;
+  businessNotApplicable?: boolean;
 }): ReturnChecklistSources {
-  const { effectiveState, live, insurancePolicies, insuranceInputs, liabilitiesNpr, fireGoalNpr } = args;
+  const {
+    effectiveState,
+    live,
+    insurancePolicies,
+    insuranceInputs,
+    liabilitiesNpr,
+    fireGoalNpr,
+    insuranceLoading,
+    insuranceUnavailable,
+    liabilitiesLoading,
+    liabilitiesUnavailable,
+    ssfNotApplicable,
+    businessNotApplicable,
+  } = args;
+
   const investmentGoal = findInvestmentSavingsGoal(live.savingsGoals);
+  // Prefer dedicated Investment savings goal. FIRE goal is an explicit alternate target —
+  // never invent a silent numeric fallback for status classification.
   const investmentGoalTargetNpr =
     investmentGoal && investmentGoal.targetAmountNpr > 0
       ? investmentGoal.targetAmountNpr
@@ -45,6 +67,16 @@ export function buildReturnChecklistSources(args: {
         ? effectiveState.emergencyMonthsTarget
         : 12;
 
+  const colPassiveTarget =
+    live.nepalColMonthlyNpr > 0
+      ? Math.max(
+          live.nepalColMonthlyNpr,
+          effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr,
+        )
+      : effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr > 0
+        ? effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr
+        : null;
+
   return {
     state: effectiveState,
     emergencyCashReserveNpr:
@@ -62,16 +94,17 @@ export function buildReturnChecklistSources(args: {
     canonicalEmergencyFund: canonical,
     monthlySsfContributionNpr: live.monthlySsfContributionNpr,
     ssfContributionTargetNpr,
+    ssfWorkspace: live.ssf,
+    ssfNotApplicable: Boolean(ssfNotApplicable),
     totalInvestmentNpr: live.totalInvestmentNpr,
     investmentGoalTargetNpr,
     modeledPassiveMonthlyNpr: live.passiveMonthlyNpr,
     actualPassiveMonthlyNpr: live.actualPassiveMonthlyNpr,
-    passiveTargetMonthlyNpr: Math.max(
-      live.nepalColMonthlyNpr,
-      effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr,
-    ),
+    passiveTargetMonthlyNpr: colPassiveTarget,
     insurancePolicies,
     insuranceInputs,
+    insuranceLoading: Boolean(insuranceLoading),
+    insuranceUnavailable: Boolean(insuranceUnavailable),
     houseProgressPct: live.houseProgressPct,
     houseGoalConfigured: live.houseGoalConfigured,
     housePlanStatus: effectiveState.housePlanStatus ?? "unknown",
@@ -85,7 +118,10 @@ export function buildReturnChecklistSources(args: {
     businessCapitalNpr: live.businessCapitalNpr,
     businessGoalConfigured: live.businessGoalConfigured,
     businessCapitalTargetNpr: live.businessCapitalTargetNpr,
+    businessNotApplicable: Boolean(businessNotApplicable),
     liabilitiesNpr: Math.max(0, liabilitiesNpr),
     liabilitiesConfigured: effectiveState.debtReviewed || live.liabilityRowCount > 0,
+    liabilitiesLoading: Boolean(liabilitiesLoading),
+    liabilitiesUnavailable: Boolean(liabilitiesUnavailable),
   };
 }
