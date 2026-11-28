@@ -60,13 +60,20 @@ export type ReturnChecklistSources = {
    * Reserved for NOT APPLICABLE when the user excludes SSF.
    */
   ssfNotApplicable?: boolean;
-  /** Listed investment portfolio total (canonical wealth totalInvestmentNpr). */
+  /**
+   * Listed investment current market value — same SoT as NEPSE Portfolio
+   * Current Value when live marks are applied (`wealth.totalInvestmentNpr`).
+   */
   totalInvestmentNpr: number;
+  /** Listed cost basis (NEPSE "Total Investment"). Optional for detail. */
+  investmentCostNpr?: number | null;
   /**
    * Explicit investment goal target (savings Investment goal or user FIRE goal).
    * Null = no valid target configured — never invent a silent fallback for status.
    */
   investmentGoalTargetNpr: number | null;
+  /** Where investmentGoalTargetNpr came from (for transparent UI). */
+  investmentTargetSource?: "savings_goal" | "fire_goal" | null;
   /**
    * Modeled monthly passive income — same formula as Return KPI
    * (`passiveIncomeMonthlyNpr`: 4% investable/12 + dividends + FD interest).
@@ -271,22 +278,32 @@ function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
   ReturnChecklistItem,
   "status" | "detail" | "badgeLabel"
 > {
-  const actual = Math.max(0, sources.totalInvestmentNpr);
+  const market = Math.max(0, sources.totalInvestmentNpr);
+  const cost =
+    sources.investmentCostNpr != null && Number.isFinite(sources.investmentCostNpr)
+      ? Math.max(0, sources.investmentCostNpr)
+      : null;
   const target =
     sources.investmentGoalTargetNpr != null && sources.investmentGoalTargetNpr > 0
       ? sources.investmentGoalTargetNpr
       : null;
 
   const status = deriveFundingStatus({
-    actual,
+    actual: market,
     target,
     requirementApplies: true,
   });
 
+  const marketLabel = formatNprCompact(market);
+  const costSuffix =
+    cost != null && Math.abs(cost - market) > 1
+      ? ` · cost ${formatNprCompact(cost).replace(/^NPR\s+/, "")}`
+      : "";
+
   if (status === "target_not_set") {
     return {
       status,
-      detail: `NPR ${formatNpr(actual)} · set investment target`,
+      detail: `${marketLabel} market${costSuffix} · set investment target`,
       badgeLabel: "Target Not Set",
     };
   }
@@ -296,12 +313,22 @@ function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
   if (status === "completed") {
     return {
       status,
-      detail: `NPR ${formatNpr(actual)} · target met`,
+      detail: `${marketLabel} market${costSuffix} · target met`,
     };
   }
+  const targetLabel = formatNprCompact(target!);
+  const pct =
+    target! > 0 ? Math.max(0, Math.min(100, Math.round((market / target!) * 10000) / 100)) : 0;
+  const pctLabel = pct > 0 && pct < 1 ? pct.toFixed(2) : String(Math.round(pct));
+  const sourceHint =
+    sources.investmentTargetSource === "fire_goal"
+      ? " · FIRE goal"
+      : sources.investmentTargetSource === "savings_goal"
+        ? " · savings goal"
+        : "";
   return {
     status,
-    detail: `NPR ${formatNpr(actual)} · target NPR ${formatNpr(target!)}`,
+    detail: `${marketLabel} / ${targetLabel.replace(/^NPR\s+/, "")}${costSuffix} · ${pctLabel}%${sourceHint}`,
   };
 }
 

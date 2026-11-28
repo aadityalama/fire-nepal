@@ -41,12 +41,15 @@ export function buildReturnChecklistSources(args: {
   const investmentGoal = findInvestmentSavingsGoal(live.savingsGoals);
   // Prefer dedicated Investment savings goal. FIRE goal is an explicit alternate target —
   // never invent a silent numeric fallback for status classification.
-  const investmentGoalTargetNpr =
-    investmentGoal && investmentGoal.targetAmountNpr > 0
-      ? investmentGoal.targetAmountNpr
-      : fireGoalNpr != null && fireGoalNpr > 0
-        ? fireGoalNpr
-        : null;
+  let investmentGoalTargetNpr: number | null = null;
+  let investmentTargetSource: "savings_goal" | "fire_goal" | null = null;
+  if (investmentGoal && investmentGoal.targetAmountNpr > 0) {
+    investmentGoalTargetNpr = investmentGoal.targetAmountNpr;
+    investmentTargetSource = "savings_goal";
+  } else if (fireGoalNpr != null && fireGoalNpr > 0) {
+    investmentGoalTargetNpr = fireGoalNpr;
+    investmentTargetSource = "fire_goal";
+  }
 
   const incomeNpr = live.monthlyIncomeNpr;
   const ssfContributionTargetNpr = Math.max(incomeNpr * 0.1, 5_000);
@@ -97,7 +100,9 @@ export function buildReturnChecklistSources(args: {
     ssfWorkspace: live.ssf,
     ssfNotApplicable: Boolean(ssfNotApplicable),
     totalInvestmentNpr: live.totalInvestmentNpr,
+    investmentCostNpr: live.investmentCostNpr,
     investmentGoalTargetNpr,
+    investmentTargetSource,
     modeledPassiveMonthlyNpr: live.passiveMonthlyNpr,
     actualPassiveMonthlyNpr: live.actualPassiveMonthlyNpr,
     passiveTargetMonthlyNpr: colPassiveTarget,

@@ -25,12 +25,14 @@ import {
 import { loadEmergencyFundSettingsLocal } from "@/lib/emergency-fund/settings";
 import { computeUnifiedFireSummary, type UnifiedFireSummary } from "@/lib/fire-nepal/unified-fire-summary";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
+import { useMarketData } from "@/hooks/use-market-data";
 import { FALLBACK_USD_PER_NPR, fetchNprCrossRates } from "@/lib/portfolio-convert";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { useProductAuth } from "@/contexts/ProductAuthContext";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { loadWealthPortfolioFromSupabase } from "@/services/portfolio-supabase";
+import { collectMarketSymbolsFromPortfolio } from "@/services/portfolio/symbols-from-state";
 
 function monthlyBasisFromBudgets(budgets: BudgetRecord[], userId?: string | null): number | null {
   if (budgets.length === 0) return null;
@@ -169,12 +171,29 @@ export function useUnifiedFireSummary(): {
     };
   }, []);
 
+  // Same market feed as NEPSE Portfolio Dashboard — marks listed holdings to LTP.
+  const { symbolsCsv, cryptoCsv } = useMemo(() => {
+    const pack = collectMarketSymbolsFromPortfolio(portfolio);
+    return {
+      symbolsCsv: pack.yahoo.join(","),
+      cryptoCsv: pack.cryptoIds.join(","),
+    };
+  }, [portfolio]);
+
+  const { snapshot: liveMarket } = useMarketData({
+    symbolsCsv,
+    cryptoCsv,
+    pollMs: 60_000,
+    enabled: !loading && portfolio.investments.length > 0,
+  });
+
   const summary = useMemo(
     () =>
       computeUnifiedFireSummary(portfolio, cashflow, krwPerNpr, usdPerNpr, {
         monthlyProtectionBasisNpr,
+        liveMarket,
       }),
-    [portfolio, cashflow, krwPerNpr, usdPerNpr, monthlyProtectionBasisNpr],
+    [portfolio, cashflow, krwPerNpr, usdPerNpr, monthlyProtectionBasisNpr, liveMarket],
   );
 
   return { summary, portfolio, cashflow, ratesLoading, resync };

@@ -32,7 +32,13 @@ export type ReturnPlannerLiveBundle = {
   monthlyIncomeNpr: number;
   monthlyExpenseNpr: number;
   investableNpr: number;
+  /**
+   * Listed investment current value — same field as Portfolio / NEPSE Current Value
+   * when live market marks are applied (`wealth.totalInvestmentNpr` / `investmentsLiveNpr`).
+   */
   totalInvestmentNpr: number;
+  /** Listed investment cost basis (NEPSE "Total Investment" / cost). */
+  investmentCostNpr: number;
   /** Modeled passive — same as Return KPI (4% investable/12 + dividends + FD). */
   passiveMonthlyNpr: number;
   /** Recorded cash passive lines (pension + dividend + FD + rental + SWP). */
@@ -286,6 +292,7 @@ export function buildEffectiveReturnPlannerState(
     monthlyExpenseNpr,
     investableNpr: wealth.investableNpr,
     totalInvestmentNpr: wealth.totalInvestmentNpr,
+    investmentCostNpr: wealth.investmentsCostNpr,
     passiveMonthlyNpr,
     actualPassiveMonthlyNpr,
     nepalColMonthlyNpr: colSnap.total > 0 ? colSnap.total : 0,

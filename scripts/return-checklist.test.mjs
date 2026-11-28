@@ -187,7 +187,8 @@ describe("Return Checklist — Investment", () => {
       "investment",
     );
     assert.equal(investment.status, "completed");
-    assert.match(investment.detail, /2,440,288/);
+    assert.match(investment.detail, /24\.4 Lakh/i);
+    assert.match(investment.detail, /market/i);
   });
 
   it("never marks positive portfolio MISSING when target is absent (TARGET NOT SET)", () => {
@@ -201,7 +202,7 @@ describe("Return Checklist — Investment", () => {
       "investment",
     );
     assert.equal(investment.status, "target_not_set");
-    assert.match(investment.detail, /2,550,724/);
+    assert.match(investment.detail, /25\.5 Lakh/i);
     assert.notEqual(investment.status, "missing");
     assert.equal(RETURN_CHECKLIST_FALLBACK_INVESTMENT_TARGET_NPR, 2_000_000);
   });
@@ -217,7 +218,68 @@ describe("Return Checklist — Investment", () => {
       "investment",
     );
     assert.equal(investment.status, "in_progress");
-    assert.match(investment.detail, /2,550,724/);
+    assert.match(investment.detail, /25\.5 Lakh/i);
+    assert.match(investment.detail, /5 Cr/i);
+  });
+
+  it("unified summary totalInvestmentNpr matches NEPSE live aggregation SoT", async () => {
+    const { aggregateInvestmentTotals, valueInvestmentRow } = await import(
+      "../src/services/portfolio/investment-aggregation.ts"
+    );
+    const { computeUnifiedFireSummary } = await import(
+      "../src/lib/fire-nepal/unified-fire-summary.ts"
+    );
+    const { defaultCashflowState } = await import("../src/components/cashflow/cashflow-storage.ts");
+    const { defaultWealthState } = await import("../src/components/portfolio/storage.ts");
+
+    const portfolio = defaultWealthState();
+    const row = {
+      id: "n1",
+      kind: "nepse",
+      name: "Nabil Bank",
+      quantity: 100,
+      buyPrice: 1000,
+      currency: "NPR",
+      instrumentKey: "nepse:NABIL",
+    };
+    portfolio.investments = [row];
+
+    const liveMarket = {
+      fetchedAt: new Date().toISOString(),
+      partial: false,
+      sourceStatus: {},
+      forex: { usdPerNpr: 0.0075, krwPerNpr: 10 },
+      nepseBySymbol: { NABIL: { symbol: "NABIL", ltpNpr: 800, pctChange: -5 } },
+      usdEquities: {},
+      krEquities: {},
+      crypto: {},
+      metalsUsdOz: { goldUsdPerOz: 2300, silverUsdPerOz: 28 },
+    };
+
+    const listed = aggregateInvestmentTotals(portfolio.investments, portfolio.fixedDeposits, {
+      krwPerNpr: 10,
+      usdPerNpr: 0.0075,
+      liveMarket,
+    });
+    const summary = computeUnifiedFireSummary(
+      portfolio,
+      defaultCashflowState(),
+      10,
+      0.0075,
+      { liveMarket },
+    );
+    assert.equal(summary.totalInvestmentNpr, listed.listedLiveNpr);
+    const unit = valueInvestmentRow(row, 10, 0.0075, liveMarket);
+    assert.equal(unit.liveValueNpr, 80_000);
+    assert.equal(summary.totalInvestmentNpr, 80_000);
+    const summaryNoLive = computeUnifiedFireSummary(
+      portfolio,
+      defaultCashflowState(),
+      10,
+      0.0075,
+      {},
+    );
+    assert.notEqual(summary.totalInvestmentNpr, summaryNoLive.totalInvestmentNpr);
   });
 });
 
