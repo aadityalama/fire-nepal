@@ -82,12 +82,21 @@ function sanitizeIncomeEntry(raw: unknown): IncomeEntry | null {
   if (typeof o.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.date)) return null;
   const incomeType = normalizeIncomeType(String(o.incomeType ?? "other"));
   const frequency = normalizeIncomeFrequency(o);
+  const incomeClassRaw = o.incomeClass;
+  const incomeClass =
+    incomeClassRaw === "passive" ||
+    incomeClassRaw === "active" ||
+    incomeClassRaw === "one_time" ||
+    incomeClassRaw === "auto"
+      ? incomeClassRaw
+      : undefined;
   return {
     id: o.id.trim(),
     name: o.name.trim(),
     amount,
     incomeType,
     frequency,
+    ...(incomeClass ? { incomeClass } : {}),
     date: o.date,
     note: typeof o.note === "string" && o.note.trim() ? o.note.trim() : undefined,
     createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),

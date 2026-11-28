@@ -1,4 +1,4 @@
-export type IncomeFrequency = "once" | "weekly" | "monthly" | "yearly";
+export type IncomeFrequency = "once" | "weekly" | "monthly" | "quarterly" | "yearly";
 
 export type CashflowIncomeTypeId =
   | "salary"
@@ -29,6 +29,7 @@ export const INCOME_FREQUENCY_OPTIONS: { id: IncomeFrequency; label: string }[] 
   { id: "once", label: "One-time" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
+  { id: "quarterly", label: "Quarterly" },
   { id: "yearly", label: "Yearly" },
 ];
 

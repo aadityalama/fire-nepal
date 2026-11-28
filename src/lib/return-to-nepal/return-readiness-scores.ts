@@ -125,13 +125,31 @@ export function computeReturnReadinessScores(
     investmentPct = clampPct((investmentAmount / investmentTarget) * 100);
   }
 
-  const passiveMonthly = checklistSources?.modeledPassiveMonthlyNpr ?? snapshot.passiveMonthlyNpr;
+  // Prefer verified Cashflow recurring passive; modeled alone must not drive readiness to 100%.
+  const passiveMonthly =
+    checklistSources?.actualPassiveMonthlyNpr != null
+      ? checklistSources.actualPassiveMonthlyNpr
+      : snapshot.passiveMonthlyNpr;
   const passiveTargetRaw = checklistSources?.passiveTargetMonthlyNpr;
   const passiveTarget =
     passiveTargetRaw != null && passiveTargetRaw > 0
-      ? Math.max(passiveTargetRaw, 25_000)
+      ? passiveTargetRaw
       : Math.max(snapshot.monthlyNepalLivingNpr * 0.8, 30_000);
-  const passivePct = clampPct((passiveMonthly / Math.max(1, passiveTarget)) * 100);
+  let passivePct = clampPct((passiveMonthly / Math.max(1, passiveTarget)) * 100);
+  let passiveExclude = false;
+  if (checklistSources?.cashflowLoading || checklistSources?.cashflowUnavailable) {
+    passiveExclude = true;
+    passivePct = 0;
+  } else if (
+    checklistSources &&
+    passiveTargetRaw == null &&
+    !(checklistSources.actualPassiveMonthlyNpr > 0)
+  ) {
+    // No expense/budget target and no verified passive — exclude rather than invent a floor.
+    if (!(snapshot.monthlyNepalLivingNpr > 0)) {
+      passiveExclude = true;
+    }
+  }
 
   let ssfPct = 0;
   let ssfExclude = false;
@@ -256,6 +274,7 @@ export function computeReturnReadinessScores(
       label: "Passive Income",
       pct: passivePct,
       status: statusFromPct(passivePct),
+      excludeFromAggregate: passiveExclude,
     },
     {
       id: "nepalSsf",

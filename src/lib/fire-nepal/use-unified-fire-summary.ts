@@ -57,6 +57,8 @@ function storageTouchesSession(key: string | null, userId?: string | null): bool
   return key === portfolioStorageKey(userId) || key === cashflowStorageKey(userId);
 }
 
+export type CashflowCloudLoadState = "loading" | "ready" | "unavailable";
+
 /**
  * Live unified summary for FIRE Journey.
  * Authenticated: reads portfolio + cashflow from Supabase (cache only after cloud hydrate).
@@ -66,6 +68,8 @@ export function useUnifiedFireSummary(): {
   summary: UnifiedFireSummary;
   portfolio: WealthPortfolioStateV2;
   cashflow: CashflowDashboardState;
+  /** Authenticated cashflow hydrate outcome — never treat unavailable as confirmed zero. */
+  cashflowLoadState: CashflowCloudLoadState;
   ratesLoading: boolean;
   resync: () => void;
 } {
@@ -73,6 +77,7 @@ export function useUnifiedFireSummary(): {
   const uid = user?.id;
   const [portfolio, setPortfolio] = useState<WealthPortfolioStateV2>(() => defaultWealthState());
   const [cashflow, setCashflow] = useState<CashflowDashboardState>(() => defaultCashflowState());
+  const [cashflowLoadState, setCashflowLoadState] = useState<CashflowCloudLoadState>("loading");
   const [monthlyProtectionBasisNpr, setMonthlyProtectionBasisNpr] = useState<number | null>(null);
   const [krwPerNpr, setKrwPerNpr] = useState(FALLBACK_KRW_PER_NPR);
   const [usdPerNpr, setUsdPerNpr] = useState(FALLBACK_USD_PER_NPR);
@@ -82,37 +87,48 @@ export function useUnifiedFireSummary(): {
     if (!uid || !isSupabaseConfigured()) {
       setPortfolio(loadWealthPortfolioState(uid));
       setCashflow(loadCashflowState(uid));
+      setCashflowLoadState("ready");
       setMonthlyProtectionBasisNpr(null);
       return;
     }
+
+    setCashflowLoadState((prev) => (prev === "ready" ? "ready" : "loading"));
 
     void (async () => {
       try {
         const [cfRes, remotePortfolio, budgets] = await Promise.all([
           fetch("/api/cashflow", { credentials: "include", cache: "no-store" }).then(
-            (r) =>
-              r.json() as Promise<{
+            async (r) => {
+              const json = (await r.json()) as {
                 ok: boolean;
                 snapshot?: { state: CashflowDashboardState } | null;
-              }>,
+              };
+              return { httpOk: r.ok, ...json };
+            },
           ),
           loadWealthPortfolioFromSupabase(getSupabaseBrowserClient(), uid),
           fetchBudgetRecords().catch(() => [] as BudgetRecord[]),
         ]);
         setPortfolio(remotePortfolio ?? defaultWealthState());
-        setCashflow(
-          cfRes.ok && cfRes.snapshot?.state
-            ? sanitizeCashflowState(cfRes.snapshot.state)
-            : defaultCashflowState(),
-        );
+        if (cfRes.httpOk && cfRes.ok) {
+          // Successful retrieval — empty snapshot means confirmed no cashflow rows, not failure.
+          setCashflow(
+            cfRes.snapshot?.state
+              ? sanitizeCashflowState(cfRes.snapshot.state)
+              : defaultCashflowState(),
+          );
+          setCashflowLoadState("ready");
+        } else {
+          // Keep last-good cashflow; mark unavailable so callers do not treat as zero.
+          setCashflowLoadState("unavailable");
+        }
         setMonthlyProtectionBasisNpr(monthlyBasisFromBudgets(budgets, uid));
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error("[unified-fire-summary] cloud resync failed", error);
         }
-        setPortfolio(defaultWealthState());
-        setCashflow(defaultCashflowState());
-        setMonthlyProtectionBasisNpr(null);
+        // Preserve last-good portfolio/cashflow — never invent zeros on transport failure.
+        setCashflowLoadState("unavailable");
       }
     })();
   }, [uid]);
@@ -196,5 +212,5 @@ export function useUnifiedFireSummary(): {
     [portfolio, cashflow, krwPerNpr, usdPerNpr, monthlyProtectionBasisNpr, liveMarket],
   );
 
-  return { summary, portfolio, cashflow, ratesLoading, resync };
+  return { summary, portfolio, cashflow, cashflowLoadState, ratesLoading, resync };
 }

@@ -61,6 +61,8 @@ export function buildReturnChecklistSources(args: {
         ? effectiveState.emergencyMonthsTarget
         : 12;
 
+  // Prefer expense/budget living basis (same as FIRE corpus); COL only as last resort.
+  const expenseBasedPassiveTarget = fireCorpus.monthlyEligibleLivingExpensesNpr;
   const colPassiveTarget =
     live.nepalColMonthlyNpr > 0
       ? Math.max(
@@ -70,6 +72,7 @@ export function buildReturnChecklistSources(args: {
       : effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr > 0
         ? effectiveState.schoolFeesMonthlyNpr + effectiveState.healthcareMonthlyNpr
         : null;
+  const passiveTargetMonthlyNpr = expenseBasedPassiveTarget ?? colPassiveTarget;
 
   return {
     state: effectiveState,
@@ -97,7 +100,12 @@ export function buildReturnChecklistSources(args: {
     investmentMonthlyExpenseBasisNpr: fireCorpus.monthlyEligibleLivingExpensesNpr,
     modeledPassiveMonthlyNpr: live.passiveMonthlyNpr,
     actualPassiveMonthlyNpr: live.actualPassiveMonthlyNpr,
-    passiveTargetMonthlyNpr: colPassiveTarget,
+    periodActualPassiveNpr: live.periodActualPassiveNpr ?? live.actualPassiveMonthlyNpr,
+    passiveIncomeBreakdown: live.cashflowPassive?.breakdown ?? [],
+    cashflowHasIncomeRecords: Boolean(live.cashflowPassive?.hasIncomeRecords),
+    cashflowLoading: Boolean(live.cashflowLoading),
+    cashflowUnavailable: Boolean(live.cashflowUnavailable),
+    passiveTargetMonthlyNpr,
     insurancePolicies,
     insuranceInputs,
     insuranceLoading: Boolean(insuranceLoading),

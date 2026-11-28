@@ -251,6 +251,8 @@ export function useCashflowPersistedState(userId?: string | null): UseCashflowPe
       } catch {
         /* quota */
       }
+      // Notify Return Planner / unified FIRE consumers — same event as portfolio dividend sync.
+      window.dispatchEvent(new Event(CASHFLOW_EXTERNAL_SYNC_EVENT));
     },
     [setState, userId],
   );

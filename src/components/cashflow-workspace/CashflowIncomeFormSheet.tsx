@@ -11,12 +11,17 @@ import {
   type CashflowIncomeTypeId,
   type IncomeFrequency,
 } from "@/lib/cashflow/income-types";
+import {
+  incomeTypeNeedsClassOverride,
+  type IncomeClassOverride,
+} from "@/lib/cashflow/passive-income-from-cashflow";
 
 export type IncomeFormState = {
   name: string;
   amount: string;
   incomeType: CashflowIncomeTypeId;
   frequency: IncomeFrequency;
+  incomeClass: IncomeClassOverride;
   date: string;
   note: string;
 };
@@ -27,6 +32,7 @@ export function defaultIncomeForm(todayIso: string): IncomeFormState {
     amount: "",
     incomeType: "salary",
     frequency: "monthly",
+    incomeClass: "auto",
     date: todayIso,
     note: "",
   };
@@ -47,6 +53,7 @@ export function incomeFormFromEntry(entry: IncomeEntry): IncomeFormState {
     amount: String(entry.amount),
     incomeType: entry.incomeType,
     frequency: normalizeIncomeFrequency(entry),
+    incomeClass: entry.incomeClass ?? "auto",
     date: entry.date,
     note: entry.note ?? "",
   };
@@ -56,11 +63,13 @@ export function parseIncomeForm(form: IncomeFormState): Omit<IncomeEntry, "id" |
   const amount = Number(form.amount.replace(/,/g, "").trim());
   if (!form.name.trim() || !Number.isFinite(amount) || amount <= 0) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return null;
+  const needsClass = incomeTypeNeedsClassOverride(form.incomeType);
   return {
     name: form.name.trim(),
     amount: Math.round(amount),
     incomeType: form.incomeType,
     frequency: form.frequency,
+    ...(needsClass && form.incomeClass !== "auto" ? { incomeClass: form.incomeClass } : {}),
     date: form.date,
     note: form.note.trim() || undefined,
   };
@@ -173,6 +182,34 @@ export function CashflowIncomeFormSheet({
                     ))}
                   </div>
                 </Field>
+
+                {incomeTypeNeedsClassOverride(form.incomeType) ? (
+                  <Field label="Income class (for Passive Income Goal)">
+                    <div className="grid grid-cols-2 gap-2">
+                      {(
+                        [
+                          { id: "auto" as const, label: "Auto" },
+                          { id: "passive" as const, label: "Passive" },
+                          { id: "active" as const, label: "Active" },
+                          { id: "one_time" as const, label: "One-time" },
+                        ] as const
+                      ).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setForm((current) => ({ ...current, incomeClass: option.id }))}
+                          className={`min-h-[44px] rounded-2xl border px-3 text-sm font-black ${
+                            form.incomeClass === option.id
+                              ? "border-lime-300/60 bg-lime-300/18 text-white"
+                              : "border-white/10 bg-white/[0.04] text-emerald-100/75"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                ) : null}
 
                 <Field label="Date">
                   <input

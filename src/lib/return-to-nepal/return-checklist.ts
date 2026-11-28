@@ -10,6 +10,7 @@ import {
   type CanonicalEmergencyFundSnapshot,
   type CanonicalEmergencyFundStatus,
 } from "@/lib/return-to-nepal/canonical-emergency-fund";
+import type { PassiveIncomeBreakdownLine } from "@/lib/cashflow/passive-income-from-cashflow";
 import {
   deriveFundingStatus,
   type ChecklistStatus,
@@ -32,6 +33,10 @@ export type ReturnChecklistItem = {
   badgeLabel?: string;
   /** Context-aware CTA shown on the card (e.g. Update Emergency Fund). */
   actionLabel: string;
+  /** Optional coverage % (may exceed 100; UI bar caps at 100). */
+  coveragePct?: number | null;
+  /** Expandable income / funding breakdown lines. */
+  breakdownLines?: Array<{ label: string; value: string; tone?: "passive" | "active" | "muted" }>;
 };
 
 /** Canonical inputs for Return Checklist — no localStorage reads inside the pure compute. */
@@ -79,13 +84,22 @@ export type ReturnChecklistSources = {
   /** Monthly eligible living expenses used for the 25× corpus (when known). */
   investmentMonthlyExpenseBasisNpr?: number | null;
   /**
-   * Modeled monthly passive income — same formula as Return KPI
-   * (`passiveIncomeMonthlyNpr`: 4% investable/12 + dividends + FD interest).
+   * Modeled investment income (4% investable/12 + portfolio FD) — never qualifies COMPLETED alone.
    */
   modeledPassiveMonthlyNpr: number;
-  /** Cash passive lines only (dividends + FD + rental + pension + SWP) — actual recorded. */
+  /** Recurring eligible Cashflow passive (rental, dividends, classified passive, + SWP). */
   actualPassiveMonthlyNpr: number;
-  /** Passive goal target (typically Nepal COL or floor). Null = not configured. */
+  /** Passive cash received in the reporting month (Cashflow). */
+  periodActualPassiveNpr?: number;
+  /** Income breakdown lines for expandable UI. */
+  passiveIncomeBreakdown?: PassiveIncomeBreakdownLine[];
+  /** True when Cashflow confirmed income records exist (any class). */
+  cashflowHasIncomeRecords?: boolean;
+  /** Authenticated cashflow still hydrating. */
+  cashflowLoading?: boolean;
+  /** Authenticated cashflow retrieval failed. */
+  cashflowUnavailable?: boolean;
+  /** Passive goal target (expense-based monthly living when available). Null = not configured. */
   passiveTargetMonthlyNpr: number | null;
   insurancePolicies: InsurancePolicy[];
   insuranceInputs: InsuranceEngineInputs;
@@ -345,31 +359,119 @@ function buildInvestmentChecklistFields(sources: ReturnChecklistSources): Pick<
 
 function buildPassiveChecklistFields(sources: ReturnChecklistSources): Pick<
   ReturnChecklistItem,
-  "status" | "detail" | "badgeLabel"
+  "status" | "detail" | "badgeLabel" | "coveragePct" | "breakdownLines"
 > {
-  const modeled = Math.max(0, sources.modeledPassiveMonthlyNpr);
-  const actual = Math.max(0, sources.actualPassiveMonthlyNpr);
-  const rawTarget = sources.passiveTargetMonthlyNpr;
-  const target =
-    rawTarget != null && rawTarget > 0
-      ? Math.max(rawTarget, RETURN_CHECKLIST_FALLBACK_PASSIVE_FLOOR_NPR)
-      : null;
+  if (sources.cashflowLoading) {
+    return {
+      status: "loading",
+      detail: "Verifying Cashflow income…",
+      badgeLabel: "Loading",
+    };
+  }
+  if (sources.cashflowUnavailable) {
+    return {
+      status: "data_unavailable",
+      detail: "Could not verify Cashflow income",
+      badgeLabel: "Data Unavailable",
+    };
+  }
 
-  // Progress uses modeled (aligned with Return KPI) while detail keeps actual separate.
-  const status = deriveFundingStatus({
-    actual: modeled,
+  const modeled = Math.max(0, sources.modeledPassiveMonthlyNpr);
+  const recurring = Math.max(0, sources.actualPassiveMonthlyNpr);
+  const period =
+    sources.periodActualPassiveNpr != null && Number.isFinite(sources.periodActualPassiveNpr)
+      ? Math.max(0, sources.periodActualPassiveNpr)
+      : recurring;
+  const rawTarget = sources.passiveTargetMonthlyNpr;
+  const target = rawTarget != null && rawTarget > 0 ? rawTarget : null;
+
+  // COMPLETED only from verified recurring Cashflow passive — never modeled alone / one-time.
+  let status = deriveFundingStatus({
+    actual: recurring,
     target,
     requirementApplies: true,
   });
 
-  const detail = `NPR ${formatNpr(modeled)}/mo modeled · NPR ${formatNpr(actual)}/mo actual${
-    target != null ? ` · target NPR ${formatNpr(target)}/mo` : ""
+  // Modeled-only progress: IN PROGRESS when cashflow has no recurring passive yet.
+  if (status === "missing" && modeled > 0) {
+    status = "in_progress";
+  }
+
+  const coveragePct =
+    target != null && target > 0
+      ? Math.round((recurring / target) * 10000) / 100
+      : null;
+  const coverageLabel =
+    coveragePct == null
+      ? ""
+      : coveragePct > 0 && coveragePct < 1
+        ? ` · ${coveragePct.toFixed(2)}%`
+        : ` · ${Math.round(coveragePct)}%`;
+  const gapNpr = target != null && target > recurring ? target - recurring : 0;
+  const gap = gapNpr > 0 ? ` · gap NPR ${formatNpr(gapNpr)}` : "";
+
+  const detail = `Actual NPR ${formatNpr(recurring)}/mo · period NPR ${formatNpr(period)} · modeled NPR ${formatNpr(modeled)}/mo${
+    target != null ? ` · target NPR ${formatNpr(target)}/mo${coverageLabel}${gap}` : ""
   }`;
 
-  if (status === "target_not_set") {
-    return { status, detail, badgeLabel: "Target Not Set" };
+  const breakdownLines: NonNullable<ReturnChecklistItem["breakdownLines"]> = [
+    {
+      label: "Recurring passive",
+      value: `NPR ${formatNpr(recurring)}/mo`,
+      tone: "passive",
+    },
+    {
+      label: "Period received",
+      value: `NPR ${formatNpr(period)}`,
+      tone: "passive",
+    },
+    {
+      label: "Modeled investment",
+      value: `NPR ${formatNpr(modeled)}/mo`,
+      tone: "muted",
+    },
+  ];
+  if (target != null) {
+    breakdownLines.push({
+      label: "Monthly expense target",
+      value: `NPR ${formatNpr(target)}/mo`,
+      tone: "muted",
+    });
+    if (coveragePct != null) {
+      breakdownLines.push({
+        label: "Coverage",
+        value: `${coveragePct > 0 && coveragePct < 1 ? coveragePct.toFixed(2) : Math.round(coveragePct)}%`,
+        tone: "passive",
+      });
+    }
+    if (gapNpr > 0) {
+      breakdownLines.push({
+        label: "Remaining gap",
+        value: `NPR ${formatNpr(gapNpr)}/mo`,
+        tone: "active",
+      });
+    }
   }
-  return { status, detail };
+  for (const line of sources.passiveIncomeBreakdown ?? []) {
+    breakdownLines.push({
+      label: `${line.name} (${line.streamClass})`,
+      value:
+        line.streamClass === "passive" && line.recurringMonthlyNpr > 0
+          ? `NPR ${formatNpr(line.recurringMonthlyNpr)}/mo`
+          : `NPR ${formatNpr(line.periodReceivedNpr)}`,
+      tone:
+        line.streamClass === "passive"
+          ? "passive"
+          : line.streamClass === "one_time"
+            ? "muted"
+            : "active",
+    });
+  }
+
+  if (status === "target_not_set") {
+    return { status, detail, badgeLabel: "Target Not Set", coveragePct, breakdownLines };
+  }
+  return { status, detail, coveragePct, breakdownLines };
 }
 
 function buildInsuranceTypeFields(
@@ -626,7 +728,11 @@ export function checklistActionLabel(id: string, status: ChecklistStatus): strin
     case "investment":
       return status === "missing" ? "Add Investments" : "View Portfolio";
     case "passive":
-      return status === "completed" ? "View Passive Income" : "Add Passive Income";
+      return status === "missing" || status === "target_not_set"
+        ? "Add Passive Income"
+        : status === "data_unavailable"
+          ? "Retry Passive Income"
+          : "Manage Passive Income";
     case "health":
       return status === "completed" || status === "in_progress" || status === "on_track"
         ? "View Health Insurance"
@@ -705,6 +811,8 @@ export function computeReturnChecklist(sources: ReturnChecklistSources): ReturnC
       status: passiveFields.status,
       detail: passiveFields.detail,
       badgeLabel: passiveFields.badgeLabel,
+      coveragePct: passiveFields.coveragePct,
+      breakdownLines: passiveFields.breakdownLines,
     },
     {
       id: "health",
