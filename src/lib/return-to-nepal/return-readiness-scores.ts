@@ -76,9 +76,8 @@ export function computeReturnReadinessScores(
         emergencyTarget > 0
       ) {
         savingsEmergencyPct = clampPct((canonical.safetyRunwayMonths / emergencyTarget) * 100);
-      } else if (canonical.hasReserveData && (canonical.currentEmergencyReserveNpr ?? 0) > 0) {
-        savingsEmergencyPct = 35; // reserve exists but basis/target not yet sized
       }
+      // Missing basis/target → leave at 0 (DATA UNAVAILABLE), never invent IN PROGRESS progress.
     }
     // loadState unavailable/loading → leave at 0 (do not treat as MISSING funded state)
   } else if (checklistSources) {

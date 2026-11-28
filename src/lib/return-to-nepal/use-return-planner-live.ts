@@ -21,6 +21,7 @@ import {
   sanitizeEmergencyFundSettings,
   saveEmergencyFundSettingsLocal,
 } from "@/lib/emergency-fund/settings";
+import type { EmergencyFundSettingsState } from "@/lib/emergency-fund/types";
 import { FALLBACK_KRW_PER_NPR } from "@/lib/exchange-rate";
 import { FINANCE_CLOUD_CACHE_READY_EVENT } from "@/lib/finance/hydrate-authenticated-finance-cache";
 import { useUnifiedFireSummary } from "@/lib/fire-nepal/use-unified-fire-summary";
@@ -72,8 +73,8 @@ async function fetchBudgetsWithTimeout(): Promise<BudgetRecord[]> {
  * and canonical Emergency Fund 3.0.
  *
  * Emergency Fund settings use the same `useCloudDocumentState("emergency_fund")` path as the
- * Emergency Fund dashboard. Hydrate-cache writes stay silent (no sync event) so listeners cannot
- * re-enter hydrate and leave the checklist stuck on LOADING.
+ * Emergency Fund dashboard. Budgets use the same `fetchBudgetRecords()` API as the dashboard,
+ * loaded independently so savings/SSF latency cannot block the protection basis.
  */
 export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   bundle: ReturnPlannerLiveBundle;
@@ -87,9 +88,19 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   const [tick, setTick] = useState(0);
   const [savings, setSavings] = useState<SavingsWorkspaceState>(() => sanitizeSavingsWorkspaceState(null));
   const [ssf, setSsf] = useState<SsfPensionWorkspaceState>(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
-  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
-  const [budgetsReady, setBudgetsReady] = useState(false);
-  const [budgetsFailed, setBudgetsFailed] = useState(false);
+  // Keyed by uid so account switches drop prior rows without a sync setState-in-effect reset.
+  const [budgetGate, setBudgetGate] = useState<{
+    forUid: string | undefined;
+    ready: boolean;
+    failed: boolean;
+    rows: BudgetRecord[];
+  }>({ forUid: undefined, ready: false, failed: false, rows: [] });
+  const budgetsReady = budgetGate.forUid === uid && budgetGate.ready;
+  const budgetsFailed = budgetGate.forUid === uid && budgetGate.failed;
+  const budgets = useMemo(
+    () => (budgetGate.forUid === uid ? budgetGate.rows : []),
+    [budgetGate.forUid, budgetGate.rows, uid],
+  );
   const emergencySyncBusyRef = useRef(false);
 
   const loadEmergencyLocal = useCallback(
@@ -97,12 +108,9 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     [uid],
   );
   // Silent cache write — never emit sync here (hydrate would loop forever).
-  const saveEmergencyLocal = useCallback(
-    (next: ReturnType<typeof defaultEmergencyFundSettings>) => {
-      saveEmergencyFundSettingsLocal(next, uid, { emitSync: false });
-    },
-    [uid],
-  );
+  const saveEmergencyLocal = useCallback((next: EmergencyFundSettingsState) => {
+    saveEmergencyFundSettingsLocal(next, uid, { emitSync: false });
+  }, [uid]);
   const clearEmergencyLocal = useCallback(() => {
     clearEmergencyFundSettingsLocal(uid);
   }, [uid]);
@@ -128,6 +136,34 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     resyncCloud();
   }, [resyncCloud]);
 
+  // Same independent budget loader pattern as EmergencyFundDashboard.reloadBudgets.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (authLoading) return;
+
+      if (uid && isSupabaseConfigured()) {
+        try {
+          const rows = await fetchBudgetsWithTimeout();
+          if (cancelled) return;
+          setBudgetGate({ forUid: uid, ready: true, failed: false, rows });
+        } catch {
+          if (cancelled) return;
+          setBudgetGate({ forUid: uid, ready: true, failed: true, rows: [] });
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setBudgetGate({ forUid: uid, ready: true, failed: false, rows: [] });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, tick, authLoading]);
+
+  // Savings + SSF — independent of budgets so they cannot block EF runway.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -152,27 +188,12 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
             setSsf(DEFAULT_SSF_PENSION_WORKSPACE_STATE);
           }
         }
-
-        try {
-          const rows = await fetchBudgetsWithTimeout();
-          if (cancelled) return;
-          setBudgets(rows);
-          setBudgetsFailed(false);
-          setBudgetsReady(true);
-        } catch {
-          if (cancelled) return;
-          setBudgetsFailed(true);
-          setBudgetsReady(true);
-        }
         return;
       }
 
       if (!cancelled) {
         setSavings(loadSavingsWorkspaceState());
         setSsf(loadSsfPensionWorkspace());
-        setBudgets([]);
-        setBudgetsFailed(false);
-        setBudgetsReady(true);
       }
     })();
     return () => {
@@ -184,7 +205,6 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     const bump = () => resync();
     const bumpEmergency = () => {
       // User-initiated EF notify only (emitSync from dashboard mutations).
-      // Guard against overlapping retries; never chain off silent hydrate cache writes.
       if (emergencySyncBusyRef.current) return;
       emergencySyncBusyRef.current = true;
       invalidateModuleSnapshotCache("emergency_fund");
@@ -215,21 +235,27 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
   const emergencyLoadState: CanonicalEmergencyFundLoadState = useMemo(() => {
     if (authLoading) return "loading";
     if (uid && isSupabaseConfigured()) {
-      if (emergencyHydrateError) return "unavailable";
-      // EF settings cloud hydrate is the readiness gate. Budgets may arrive later and
-      // recalculate runway — do not block forever on budgetsReady (cancelled fetches).
-      if (!emergencyHydrated || !emergencyCloudReady) return "loading";
+      if (emergencyHydrateError || budgetsFailed) return "unavailable";
+      // Require both EF settings hydrate AND Budget Planner rows (protection basis).
+      // Sync-loop is fixed (silent hydrate cache); waiting on budgetsReady is safe again.
+      if (!emergencyHydrated || !emergencyCloudReady || !budgetsReady) return "loading";
       return "ready";
     }
-    if (!emergencyHydrated) return "loading";
+    if (!emergencyHydrated || !budgetsReady) return "loading";
     return "ready";
-  }, [authLoading, uid, emergencyHydrateError, emergencyHydrated, emergencyCloudReady]);
+  }, [
+    authLoading,
+    uid,
+    emergencyHydrateError,
+    budgetsFailed,
+    emergencyHydrated,
+    emergencyCloudReady,
+    budgetsReady,
+  ]);
 
   const bundle = useMemo((): ReturnPlannerLiveBundle => {
     void tick;
     void ratesLoading;
-    void budgetsReady;
-    void budgetsFailed;
     const wealth = summary.wealthTotals;
     const onboarding = loadProductOnboarding();
     const krwPerNpr = FALLBACK_KRW_PER_NPR;
@@ -287,8 +313,6 @@ export function useReturnPlannerLive(stored: ReturnToNepalPlannerState): {
     ssf,
     emergencySettings,
     budgets,
-    budgetsReady,
-    budgetsFailed,
     emergencyLoadState,
   ]);
 

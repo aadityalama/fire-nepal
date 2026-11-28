@@ -291,7 +291,8 @@ describe("Case G — protection mode change synchronizes basis", () => {
     assert.equal(snap.monthlyProtectionBasisNpr, null);
     assert.equal(snap.safetyRunwayMonths, null);
     assert.equal(snap.hasReserveData, true);
-    assert.equal(snap.completionStatus, "in_progress");
+    // Zero/invalid basis must never be IN PROGRESS — required inputs are incomplete.
+    assert.equal(snap.completionStatus, "data_unavailable");
     assert.notEqual(formatEmergencyRunwayDetail(snap.safetyRunwayMonths), "Infinity mo runway");
   });
 
@@ -546,10 +547,45 @@ describe("Return Planner live loader reuses Emergency Fund dashboard hydrate pat
     );
     assert.match(live, /emitSync:\s*false/);
     assert.match(live, /emergencyCloudReady/);
-    assert.doesNotMatch(live, /!budgetsReady\) return "loading"/);
+    assert.match(live, /!budgetsReady\) return "loading"/);
+    assert.match(live, /fetchBudgetRecords|fetchBudgetsWithTimeout/);
     assert.match(settings, /emitSync\?:/);
     assert.match(settings, /notifyEmergencyFundModuleSync/);
     assert.match(dashboard, /notifyEmergencyFundModuleSync\(\)/);
+  });
+});
+
+describe("Missing monthly basis is DATA UNAVAILABLE (never IN PROGRESS)", () => {
+  it("ready load with reserve but no budgets → data_unavailable + no runway label as progress", () => {
+    const snap = computeCanonicalEmergencyFundForReturn({
+      settings: settingsWithReserve(FIXTURE_RESERVE_FULL),
+      budgets: [],
+      cashflow: cashflowWith(null),
+      savingsGoals: [],
+      requiredProtectionMonths: 12,
+      loadState: "ready",
+    });
+    assert.equal(snap.hasBudgetProtectionBasis, false);
+    assert.equal(snap.safetyRunwayMonths, null);
+    assert.equal(snap.completionStatus, "data_unavailable");
+    const emergency = checklistFromCanonical(snap).find((i) => i.id === "emergency");
+    assert.equal(emergency.status, "data_unavailable");
+    assert.equal(emergency.badgeLabel, "Data Unavailable");
+    assert.match(emergency.detail, /basis unavailable|Could not verify/i);
+    assert.notEqual(emergency.status, "in_progress");
+  });
+
+  it("deriveCanonicalEmergencyFundStatus rejects null target as data_unavailable", () => {
+    assert.equal(
+      deriveCanonicalEmergencyFundStatus({
+        loadState: "ready",
+        currentEmergencyReserveNpr: FIXTURE_RESERVE_FULL,
+        emergencyFundTargetNpr: null,
+        hasReserveData: true,
+        hasBudgetProtectionBasis: false,
+      }),
+      "data_unavailable",
+    );
   });
 });
 

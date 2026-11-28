@@ -98,25 +98,34 @@ function linkedSavingsTotal(
 /**
  * Map canonical funding state → Return Checklist / badge status.
  * Uses unrounded comparisons for completion.
+ *
+ * Never classifies a missing/invalid protection basis or target as IN PROGRESS.
  */
 export function deriveCanonicalEmergencyFundStatus(input: {
   loadState: CanonicalEmergencyFundLoadState;
   currentEmergencyReserveNpr: number | null;
   emergencyFundTargetNpr: number | null;
   hasReserveData: boolean;
+  /** When false/omitted with a null target, required inputs are incomplete. */
+  hasBudgetProtectionBasis?: boolean;
 }): CanonicalEmergencyFundStatus {
   if (input.loadState === "unavailable") return "data_unavailable";
   if (input.loadState === "loading") return "data_unavailable";
+
+  const target = input.emergencyFundTargetNpr;
+  const hasValidTarget = target != null && Number.isFinite(target) && target > 0;
+  const hasBasis =
+    input.hasBudgetProtectionBasis === true ||
+    (input.hasBudgetProtectionBasis !== false && hasValidTarget);
+  if (!hasBasis || !hasValidTarget) {
+    return "data_unavailable";
+  }
+
   if (!input.hasReserveData || input.currentEmergencyReserveNpr == null) {
     return "missing";
   }
   const reserve = input.currentEmergencyReserveNpr;
   if (!(reserve > 0)) return "missing";
-  const target = input.emergencyFundTargetNpr;
-  if (target == null || !(target > 0)) {
-    // Reserve exists but target cannot be sized yet — treat as in progress, not missing.
-    return "in_progress";
-  }
   if (reserve >= target) return "completed";
   return "in_progress";
 }
@@ -215,12 +224,14 @@ export function computeCanonicalEmergencyFundForReturn(
 
   const hasReserveData = hasLedgerOrCashflow || currentEmergencyReserveNpr > 0;
   const reserveForStatus = hasReserveData ? currentEmergencyReserveNpr : null;
+  const hasBudgetProtectionBasis = monthlyProtectionBasisNpr != null;
 
   const completionStatus = deriveCanonicalEmergencyFundStatus({
     loadState: "ready",
     currentEmergencyReserveNpr: reserveForStatus,
     emergencyFundTargetNpr: core?.emergencyFundTargetNpr ?? null,
     hasReserveData,
+    hasBudgetProtectionBasis,
   });
 
   return {
@@ -238,7 +249,7 @@ export function computeCanonicalEmergencyFundForReturn(
     isFullyFunded: core?.isFullyFunded ?? false,
     completionStatus,
     lastUpdatedAt: settings.lastSuccessfulSyncAt,
-    hasBudgetProtectionBasis: monthlyProtectionBasisNpr != null,
+    hasBudgetProtectionBasis,
     hasReserveData,
   };
 }

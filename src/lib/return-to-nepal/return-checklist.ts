@@ -138,16 +138,23 @@ function buildEmergencyChecklistFields(sources: ReturnChecklistSources): Pick<
   }
 
   if (canonical && canonical.loadState === "ready") {
+    if (canonical.completionStatus === "data_unavailable") {
+      return {
+        status: "data_unavailable",
+        detail:
+          !canonical.hasBudgetProtectionBasis || canonical.emergencyFundTargetNpr == null
+            ? "Budget protection basis unavailable"
+            : "Could not verify Emergency Fund",
+        badgeLabel: "Data Unavailable",
+      };
+    }
     return {
       status: checklistStatusFromCanonical(canonical.completionStatus),
       detail:
         canonical.completionStatus === "missing"
           ? "Set emergency reserve in Emergency Fund"
           : formatEmergencyRunwayDetail(canonical.safetyRunwayMonths),
-      badgeLabel:
-        canonical.completionStatus === "data_unavailable"
-          ? "Data Unavailable"
-          : undefined,
+      badgeLabel: undefined,
     };
   }
 
