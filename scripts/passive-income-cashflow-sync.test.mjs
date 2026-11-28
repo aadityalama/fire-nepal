@@ -210,6 +210,31 @@ describe("Cashflow passive snapshot", () => {
   });
 });
 
+describe("Dashboard KPI binds to checklist actual passive", () => {
+  it("shows actual as primary and modeled as secondary (never sums them)", async () => {
+    const { resolvePassiveIncomeKpiDisplay } = await import(
+      "../src/lib/return-to-nepal/passive-income-kpi.ts"
+    );
+    const kpi = resolvePassiveIncomeKpiDisplay({
+      actualPassiveMonthlyNpr: 550_000,
+      modeledPassiveMonthlyNpr: 7_026,
+    });
+    assert.match(kpi.value, /5,?50,000/);
+    assert.match(kpi.hint, /Actual · Cashflow synced/i);
+    assert.match(kpi.hintSecondary, /Modeled:.*7,?026\/month/);
+    assert.ok(!/7,?026/.test(kpi.value));
+    assert.equal(kpi.hintPositive, true);
+
+    const unavailable = resolvePassiveIncomeKpiDisplay({
+      actualPassiveMonthlyNpr: 0,
+      modeledPassiveMonthlyNpr: 7_026,
+      cashflowUnavailable: true,
+    });
+    assert.equal(unavailable.value, "—");
+    assert.match(unavailable.hint, /Could not verify/i);
+  });
+});
+
 describe("Return Checklist — Passive Income Goal", () => {
   it("marks COMPLETED when recurring passive meets expense target", () => {
     const passive = computeReturnChecklist(

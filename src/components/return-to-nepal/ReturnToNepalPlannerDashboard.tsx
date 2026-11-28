@@ -32,6 +32,7 @@ import {
 } from "@/lib/return-to-nepal/return-ai-engine";
 import { computeReturnChecklist } from "@/lib/return-to-nepal/return-checklist";
 import { buildReturnChecklistSources } from "@/lib/return-to-nepal/build-return-checklist-sources";
+import { resolvePassiveIncomeKpiDisplay } from "@/lib/return-to-nepal/passive-income-kpi";
 import { computeReturnRoadmap } from "@/lib/return-to-nepal/return-roadmap";
 import {
   aggregateReadinessPct,
@@ -56,19 +57,34 @@ function KpiCard({
   label,
   value,
   hint,
+  hintSecondary,
   hintPositive,
+  testId,
 }: {
   label: string;
   value: string;
   hint?: string;
+  /** Optional second line (e.g. modeled passive kept separate from actual). */
+  hintSecondary?: string;
   hintPositive?: boolean;
+  testId?: string;
 }) {
   return (
-    <div className={`${GLASS} min-w-[148px] flex-1 p-3.5 sm:min-w-0 sm:p-4`}>
+    <div
+      className={`${GLASS} min-w-[148px] flex-1 p-3.5 sm:min-w-0 sm:p-4`}
+      data-testid={testId}
+    >
       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-100/45">{label}</p>
-      <p className="mt-2 truncate text-[clamp(1rem,3.5vw,1.15rem)] font-black tracking-[-0.04em] text-white">{value}</p>
+      <p className="mt-2 text-[clamp(0.95rem,3.2vw,1.15rem)] font-black tracking-[-0.04em] text-white leading-tight break-words">
+        {value}
+      </p>
       {hint ? (
-        <p className={`mt-1 text-[10px] font-bold ${hintPositive ? "text-emerald-400" : "text-emerald-100/40"}`}>{hint}</p>
+        <p className={`mt-1 text-[10px] font-bold ${hintPositive ? "text-emerald-400" : "text-emerald-100/40"}`}>
+          {hint}
+        </p>
+      ) : null}
+      {hintSecondary ? (
+        <p className="mt-0.5 text-[10px] font-semibold text-emerald-100/40">{hintSecondary}</p>
       ) : null}
     </div>
   );
@@ -294,8 +310,17 @@ export function ReturnToNepalPlannerDashboard() {
         investmentTotalNpr,
         wealth.liabilitiesNpr,
         canonicalEf,
+        checklistSources,
       ),
-    [effectiveState, snapshot, readinessPct, investmentTotalNpr, wealth.liabilitiesNpr, canonicalEf],
+    [
+      effectiveState,
+      snapshot,
+      readinessPct,
+      investmentTotalNpr,
+      wealth.liabilitiesNpr,
+      canonicalEf,
+      checklistSources,
+    ],
   );
 
   const primaryInsight = aiInsights.find((i) => i.id === "save-more") ?? aiInsights[0];
@@ -403,23 +428,14 @@ export function ReturnToNepalPlannerDashboard() {
           />
           <KpiCard
             label="Monthly Passive Income"
-            value={
-              live.cashflowUnavailable
-                ? "—"
-                : live.cashflowLoading && !(live.actualPassiveMonthlyNpr > 0)
-                  ? "…"
-                  : formatNprInteger(live.actualPassiveMonthlyNpr)
-            }
-            hint={
-              live.cashflowUnavailable
-                ? "Could not verify Cashflow income"
-                : live.cashflowLoading && !(live.actualPassiveMonthlyNpr > 0)
-                  ? "Verifying Cashflow…"
-                  : live.actualPassiveMonthlyNpr > 0
-                    ? `Cashflow actual · modeled ${formatNprInteger(live.passiveMonthlyNpr)}`
-                    : `No Cashflow passive yet · modeled ${formatNprInteger(live.passiveMonthlyNpr)}`
-            }
-            hintPositive={live.actualPassiveMonthlyNpr > 0}
+            testId="return-kpi-monthly-passive"
+            {...resolvePassiveIncomeKpiDisplay({
+              // Exact same resolved fields as Return Checklist Passive Income Goal.
+              actualPassiveMonthlyNpr: checklistSources.actualPassiveMonthlyNpr,
+              modeledPassiveMonthlyNpr: checklistSources.modeledPassiveMonthlyNpr,
+              cashflowLoading: checklistSources.cashflowLoading,
+              cashflowUnavailable: checklistSources.cashflowUnavailable,
+            })}
           />
           <KpiCard
             label="Nepal Monthly Cost"
